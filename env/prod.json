@@ -1,0 +1,5 @@
+{
+  "ENV": "prod",
+  "BASE_URL": "https://api.queerloop.app/v1",
+  "USE_MOCK_API": false
+}

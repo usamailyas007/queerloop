@@ -1,0 +1,5 @@
+{
+  "ENV": "staging",
+  "BASE_URL": "https://staging-api.queerloop.app/v1",
+  "USE_MOCK_API": true
+}

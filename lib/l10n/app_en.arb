@@ -1,0 +1,18 @@
+{
+  "@@locale": "en",
+
+  "adminTitle": "Admin",
+  "@adminTitle": {
+    "description": "Sidebar heading in the admin console"
+  },
+
+  "adminDashboard": "Dashboard",
+  "@adminDashboard": {
+    "description": "Admin sidebar destination"
+  },
+
+  "adminSettings": "Settings",
+  "@adminSettings": {
+    "description": "Admin sidebar destination"
+  }
+}

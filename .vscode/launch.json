@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "App (staging)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": ["--dart-define-from-file", "env/staging.json"]
+    },
+    {
+      "name": "App (prod)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "flutterMode": "release",
+      "args": ["--dart-define-from-file", "env/prod.json"]
+    },
+    {
+      "name": "Admin (staging)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_admin.dart",
+      "args": ["--dart-define-from-file", "env/staging.json"]
+    },
+    {
+      "name": "Admin (prod)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_admin.dart",
+      "flutterMode": "release",
+      "args": ["--dart-define-from-file", "env/prod.json"]
+    }
+  ]
+}
