@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_text_field.dart';
 
 class InterestsBottomSheet extends StatefulWidget {
   const InterestsBottomSheet({
@@ -256,28 +258,12 @@ class _InterestsBottomSheetState extends State<InterestsBottomSheet> {
 
               const SizedBox(height: AppSpacing.lg),
 
-              // Search Bar Field
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.cardBackground,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.1),
-                  ),
-                ),
-                child: TextField(
-                  onChanged: (String val) =>
-                      setState(() => _searchQuery = val),
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  decoration: const InputDecoration(
-                    hintText: 'Search interests',
-                    hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
-                    icon: Icon(Icons.search_rounded,
-                        color: Colors.white38, size: 20),
-                    border: InputBorder.none,
-                  ),
-                ),
+              // Search Bar Field using AppTextField
+              AppTextField(
+                hintText: 'Search interests',
+                prefixIconPath: AppIcons.searchSvg,
+                onChanged: (String val) =>
+                    setState(() => _searchQuery = val),
               ),
 
               const SizedBox(height: AppSpacing.lg),

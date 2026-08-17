@@ -9,9 +9,13 @@ import '../../../core/theme/app_text_styles.dart';
 
 import '../widgets/logout_confirmation_modal_dialog.dart';
 import 'blocked_accounts_screen.dart';
+import 'delete_account_screen.dart';
 import 'edit_profile_screen.dart';
+import 'muted_accounts_screen.dart';
 import 'notifications_settings_screen.dart';
+import 'privacy_policy_screen.dart';
 import 'privacy_settings_screen.dart';
+import 'terms_of_service_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
@@ -263,7 +267,7 @@ class SettingsScreen extends StatelessWidget {
                       Navigator.push<void>(
                         context,
                         MaterialPageRoute<void>(
-                          builder: (_) => const BlockedAccountsScreen(),
+                          builder: (_) => const MutedAccountsScreen(),
                         ),
                       );
                     },
@@ -307,7 +311,14 @@ class SettingsScreen extends StatelessWidget {
                       size: 18,
                     ),
                     title: 'Terms & Conditions',
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push<void>(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => const TermsOfServiceScreen(),
+                        ),
+                      );
+                    },
                   ),
                   _buildOptionTile(
                     iconWidget: const Icon(
@@ -316,7 +327,14 @@ class SettingsScreen extends StatelessWidget {
                       size: 18,
                     ),
                     title: 'Privacy Policy',
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push<void>(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => const PrivacyPolicyScreen(),
+                        ),
+                      );
+                    },
                   ),
 
                   const SizedBox(height: AppSpacing.xxl),
@@ -369,7 +387,14 @@ class SettingsScreen extends StatelessWidget {
                   // Delete Account Text Button
                   Center(
                     child: GestureDetector(
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push<void>(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => const DeleteAccountScreen(),
+                          ),
+                        );
+                      },
                       child: Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: Text(

@@ -30,7 +30,7 @@ class PrivacyOptionCard extends StatelessWidget {
           vertical: AppSpacing.lg,
         ),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1B26),
+          color: isSelected ? const Color(0xFF0D2A30) : const Color(0xFF1E1B26),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
@@ -8,64 +9,68 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 
-class BlockedUserItem {
-  const BlockedUserItem({
+class MutedUserItem {
+  const MutedUserItem({
     required this.username,
-    required this.blockedDate,
+    required this.mutedDate,
     required this.avatarAsset,
   });
 
   final String username;
-  final String blockedDate;
+  final String mutedDate;
   final String avatarAsset;
 }
 
-class BlockedAccountsScreen extends StatefulWidget {
-  const BlockedAccountsScreen({super.key});
+class MutedAccountsScreen extends StatefulWidget {
+  const MutedAccountsScreen({super.key});
 
   @override
-  State<BlockedAccountsScreen> createState() => _BlockedAccountsScreenState();
+  State<MutedAccountsScreen> createState() => _MutedAccountsScreenState();
 }
 
-class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
+class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
   String _searchQuery = '';
 
-  final List<BlockedUserItem> _blockedUsers = <BlockedUserItem>[
-    const BlockedUserItem(
-      username: '@dg_returns',
-      blockedDate: 'Blocked 12 Jun',
+  final List<MutedUserItem> _mutedUsers = <MutedUserItem>[
+    const MutedUserItem(
+      username: '@nightowl_j',
+      mutedDate: 'Muted 9 Jul',
       avatarAsset: AppImages.user1,
     ),
-    const BlockedUserItem(
-      username: '@hexnine1',
-      blockedDate: 'Blocked 3 Jun',
+    const MutedUserItem(
+      username: '@ramble.rae',
+      mutedDate: 'Muted 2 Jul',
       avatarAsset: AppImages.user2,
     ),
-    const BlockedUserItem(
-      username: '@m.callahan',
-      blockedDate: 'Blocked 28 May',
+    const MutedUserItem(
+      username: '@quietriot',
+      mutedDate: 'Muted 21 Jun',
       avatarAsset: AppImages.user3,
-    ),
-    const BlockedUserItem(
-      username: '@truth_ftw',
-      blockedDate: 'Blocked 19 May',
-      avatarAsset: AppImages.user4,
     ),
   ];
 
-  void _unblockUser(BlockedUserItem user) {
+  void _unmuteUser(MutedUserItem user) {
     setState(() {
-      _blockedUsers.remove(user);
+      _mutedUsers.remove(user);
     });
 
     AppSnackBar.show(
       context,
-      title: '${user.username} unblocked',
-      subtitle: 'They can now find your profile and message you',
+      title: '${user.username} unmuted',
+      subtitle: 'You will now see their posts in your feed',
+      icon: SvgPicture.asset(
+        AppIcons.mute,
+        width: 18,
+        height: 18,
+        colorFilter: const ColorFilter.mode(
+          AppColors.gradientCyan,
+          BlendMode.srcIn,
+        ),
+      ),
       actionLabel: 'Undo',
       onAction: () {
         setState(() {
-          _blockedUsers.add(user);
+          _mutedUsers.add(user);
         });
       },
     );
@@ -73,7 +78,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final List<BlockedUserItem> filtered = _blockedUsers.where((BlockedUserItem user) {
+    final List<MutedUserItem> filtered = _mutedUsers.where((MutedUserItem user) {
       return _searchQuery.isEmpty ||
           user.username.toLowerCase().contains(_searchQuery.toLowerCase());
     }).toList();
@@ -109,7 +114,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                   ),
                   Expanded(
                     child: Text(
-                      'Blocked accounts',
+                      'Muted accounts',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleMedium.copyWith(
                         color: Colors.white,
@@ -130,7 +135,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                 children: <Widget>[
                   // Search Bar Input Field using AppTextField
                   AppTextField(
-                    hintText: 'Search blocked accounts',
+                    hintText: 'Search muted accounts',
                     prefixIconPath: AppIcons.searchSvg,
                     onChanged: (String val) =>
                         setState(() => _searchQuery = val),
@@ -140,7 +145,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
 
                   // Subtitle Description
                   Text(
-                    "Blocked people can't find your profile, message you, or see anything you post. They are not told.",
+                    "Muted accounts can still see and interact with your posts — you just won't see theirs.",
                     style: AppTextStyles.bodySmall.copyWith(
                       color: Colors.white54,
                       fontSize: 13,
@@ -150,19 +155,19 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
 
                   const SizedBox(height: AppSpacing.lg),
 
-                  // Blocked Accounts List
+                  // Muted Accounts List
                   if (filtered.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 40),
                       child: Center(
                         child: Text(
-                          'No blocked accounts found.',
+                          'No muted accounts found.',
                           style: TextStyle(color: Colors.white38, fontSize: 14),
                         ),
                       ),
                     )
                   else
-                    ...filtered.map((BlockedUserItem user) {
+                    ...filtered.map((MutedUserItem user) {
                       return Container(
                         margin: const EdgeInsets.only(bottom: AppSpacing.md),
                         child: Row(
@@ -178,7 +183,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                             ),
                             const SizedBox(width: AppSpacing.md),
 
-                            // Username & Blocked Date
+                            // Username & Muted Date
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,7 +198,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    user.blockedDate,
+                                    user.mutedDate,
                                     style: AppTextStyles.bodySmall.copyWith(
                                       color: Colors.white38,
                                       fontSize: 12,
@@ -203,9 +208,9 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                               ),
                             ),
 
-                            // Unblock Button
+                            // Unmute Button
                             GestureDetector(
-                              onTap: () => _unblockUser(user),
+                              onTap: () => _unmuteUser(user),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16,
@@ -219,7 +224,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                                   ),
                                 ),
                                 child: Text(
-                                  'Unblock',
+                                  'Unmute',
                                   style: AppTextStyles.bodyMedium.copyWith(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w700,

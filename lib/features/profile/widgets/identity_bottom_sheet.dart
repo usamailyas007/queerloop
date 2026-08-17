@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_text_field.dart';
 
 class IdentityBottomSheet extends StatefulWidget {
   const IdentityBottomSheet({
@@ -302,37 +303,14 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
               ),
               const SizedBox(height: AppSpacing.sm),
 
-              Container(
-                padding: const EdgeInsets.only(
-                  left: 14,
-                  right: 8,
-                  top: 4,
-                  bottom: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.cardBackground,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.1),
-                  ),
-                ),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: TextField(
-                        controller: _customController,
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 14),
-                        onSubmitted: (_) => _addCustom(),
-                        decoration: const InputDecoration(
-                          hintText: 'Add a label in your words',
-                          hintStyle:
-                              TextStyle(color: Colors.white38, fontSize: 14),
-                          border: InputBorder.none,
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
+              AppTextField(
+                controller: _customController,
+                hintText: 'Add a label in your words',
+                onSubmitted: (_) => _addCustom(),
+                suffixIcon: UnconstrainedBox(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
                       onTap: _addCustom,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -353,7 +331,7 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
 

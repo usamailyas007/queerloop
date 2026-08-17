@@ -5,6 +5,7 @@ import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/app_text_field.dart';
 import '../widgets/identity_bottom_sheet.dart';
 import '../widgets/interests_bottom_sheet.dart';
 import '../widgets/pronouns_bottom_sheet.dart';
@@ -245,57 +246,67 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   const SizedBox(height: AppSpacing.xl),
 
                   // 1. DISPLAY NAME
-                  _buildFieldBox(
-                    label: 'DISPLAY NAME',
-                    child: TextField(
-                      controller: _nameController,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white,
-                        fontSize: 14,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'DISPLAY NAME',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: Colors.white54,
+                          letterSpacing: 1.2,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
+                      const SizedBox(height: AppSpacing.xs),
+                      AppTextField(
+                        controller: _nameController,
                       ),
-                    ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
                   ),
 
                   // 2. USERNAME
-                  _buildFieldBox(
-                    label: 'USERNAME',
-                    child: TextField(
-                      controller: _usernameController,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white,
-                        fontSize: 14,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'USERNAME',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: Colors.white54,
+                          letterSpacing: 1.2,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
+                      const SizedBox(height: AppSpacing.xs),
+                      AppTextField(
+                        controller: _usernameController,
                       ),
-                    ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
                   ),
 
                   // 3. BIO
-                  _buildFieldBox(
-                    label: 'BIO',
-                    child: TextField(
-                      controller: _bioController,
-                      maxLines: 3,
-                      minLines: 2,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white,
-                        fontSize: 14,
-                        height: 1.35,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'BIO',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: Colors.white54,
+                          letterSpacing: 1.2,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
+                      const SizedBox(height: AppSpacing.xs),
+                      AppTextField(
+                        controller: _bioController,
+                        maxLines: 3,
                       ),
-                    ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
                   ),
 
                   // 4. PRONOUNS

@@ -4,6 +4,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../create_post/widgets/custom_gradient_switch.dart';
+import '../../profile_setup/screens/allow_messages_from_screen.dart';
+import '../../profile_setup/screens/profile_visibility_screen.dart';
+import 'who_can_comment_screen.dart';
 
 class PrivacySettingsScreen extends StatefulWidget {
   const PrivacySettingsScreen({super.key});
@@ -20,9 +23,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   bool _showActivityStatus = true;
   bool _sendReadReceipts = true;
 
-  final String _whoCanMessage = 'People I follow';
-  final String _whoCanComment = 'Everyone';
-  final String _profileVisibility = 'People I follow';
+  String _whoCanMessage = 'People I follow';
+  String _whoCanComment = 'Everyone';
+  String _profileVisibility = 'People I follow';
 
   Widget _buildCardToggle({
     required String title,
@@ -237,17 +240,49 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                   _buildCardSelector(
                     title: 'Who can message me',
                     subtitle: _whoCanMessage,
-                    onTap: () {},
+                    onTap: () async {
+                      final dynamic res = await Navigator.push<dynamic>(
+                        context,
+                        MaterialPageRoute<dynamic>(
+                          builder: (_) => const AllowMessagesFromScreen(),
+                        ),
+                      );
+                      if (res is String) {
+                        setState(() => _whoCanMessage = res);
+                      }
+                    },
                   ),
                   _buildCardSelector(
                     title: 'Who can comment',
                     subtitle: _whoCanComment,
-                    onTap: () {},
+                    onTap: () async {
+                      final String? res = await Navigator.push<String>(
+                        context,
+                        MaterialPageRoute<String>(
+                          builder: (_) => WhoCanCommentScreen(
+                            initialSelection: _whoCanComment,
+                          ),
+                        ),
+                      );
+                      if (res != null) {
+                        setState(() => _whoCanComment = res);
+                      }
+                    },
                   ),
                   _buildCardSelector(
                     title: 'Profile Visibility',
                     subtitle: _profileVisibility,
-                    onTap: () {},
+                    onTap: () async {
+                      final dynamic res = await Navigator.push<dynamic>(
+                        context,
+                        MaterialPageRoute<dynamic>(
+                          builder: (_) => const ProfileVisibilityScreen(),
+                        ),
+                      );
+                      if (res is String) {
+                        setState(() => _profileVisibility = res);
+                      }
+                    },
                   ),
 
                   const SizedBox(height: AppSpacing.lg),
