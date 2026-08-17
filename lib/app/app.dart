@@ -1,13 +1,17 @@
-// User app root: theme, provider wiring, and the non-prod env ribbon.
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:provider/single_child_widget.dart';
 
 import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
 import '../core/theme/app_theme.dart';
 import '../features/auth/auth_provider.dart';
+import '../features/home/provider/home_feed_provider.dart';
+import '../features/profile_setup/provider/profile_setup_provider.dart';
+import '../features/splash_welcome/provider/splash_provider.dart';
+import '../l10n/app_localizations.dart';
 import 'router.dart';
+import 'routes.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -15,20 +19,27 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [
-        Provider<ApiClient>(
-          create: (BuildContext context) => ApiClient(),
-        ),
+      providers: <SingleChildWidget>[
+        Provider<ApiClient>(create: (_) => ApiClient()),
         ChangeNotifierProvider<AuthProvider>(
-          create: (BuildContext context) => AuthProvider(
-            client: context.read<ApiClient>(),
-          ),
+          create: (BuildContext ctx) =>
+              AuthProvider(client: ctx.read<ApiClient>()),
         ),
+        ChangeNotifierProvider<SplashProvider>(
+            create: (_) => SplashProvider()),
+        ChangeNotifierProvider<ProfileSetupProvider>(
+            create: (_) => ProfileSetupProvider()),
+        ChangeNotifierProvider<HomeFeedProvider>(
+            create: (_) => HomeFeedProvider()),
       ],
       child: MaterialApp(
         title: 'QueerLoop+',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.app,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routes: AppRoutes.routes,
+        onGenerateRoute: AppRoutes.onGenerateRoute,
         builder: (BuildContext context, Widget? child) {
           return GestureDetector(
             behavior: HitTestBehavior.translucent,

@@ -1,12 +1,21 @@
-// User sign in form.
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_social_button.dart';
+import '../../../core/widgets/app_switch.dart';
+import '../../../core/widgets/app_text_field.dart';
+import '../../../l10n/app_localizations.dart';
 import '../auth_provider.dart';
+import '../widgets/auth_back_button.dart';
+import '../widgets/auth_divider.dart';
+import '../widgets/auth_footer_link.dart';
+import '../widgets/auth_header.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,8 +25,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  bool _staySignedIn = true;
 
   @override
   void dispose() {
@@ -27,15 +38,23 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _submit() {
-    context.read<AuthProvider>().signIn(
-          email: _emailController.text,
-          password: _passwordController.text,
-        );
+    if (_formKey.currentState?.validate() ?? false) {
+      context.read<AuthProvider>().signIn(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.home,
+        (Route<dynamic> route) => false,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final String? error = context.select<AuthProvider, String?>(
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final String? authError = context.select<AuthProvider, String?>(
       (AuthProvider provider) => provider.error,
     );
     final bool isBusy = context.select<AuthProvider, bool>(
@@ -43,52 +62,168 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.screenPaddingHorizontal,
+          ),
+          child: Form(
+            key: _formKey,
             child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Text('Sign in', style: AppTextStyles.titleLarge),
+                const SizedBox(height: AppSpacing.md),
+                const AuthBackButton(),
+                const SizedBox(height: AppSpacing.xxxlg),
+
+                AuthHeader(
+                  title: l10n.authWelcomeBack,
+                  subtitle: l10n.authWelcomeSub,
+                ),
+
                 const SizedBox(height: AppSpacing.xl),
-                TextField(
+
+                AppTextField(
                   controller: _emailController,
                   enabled: !isBusy,
+                  hintText: l10n.authEmailPlaceholder,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(hintText: 'Email'),
+                  textInputAction: TextInputAction.next,
+                  prefixIconPath: AppIcons.mail,
+                  validator: (String? value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return l10n.authEnterEmailError;
+                    }
+                    final bool isValidEmail = RegExp(
+                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                    ).hasMatch(value.trim());
+                    if (!isValidEmail) {
+                      return l10n.authEnterValidEmailError;
+                    }
+                    return null;
+                  },
                 ),
+
                 const SizedBox(height: AppSpacing.md),
-                TextField(
+
+                AppTextField(
                   controller: _passwordController,
                   enabled: !isBusy,
-                  obscureText: true,
-                  onSubmitted: (String _) => _submit(),
-                  decoration: const InputDecoration(hintText: 'Password'),
+                  hintText: '•••••••••',
+                  isPassword: true,
+                  textInputAction: TextInputAction.done,
+                  prefixIconPath: AppIcons.password,
+                  onSubmitted: (_) => _submit(),
+                  validator: (String? value) {
+                    if (value == null || value.isEmpty) {
+                      return l10n.authEnterPasswordError;
+                    }
+                    if (value.length < 6) {
+                      return l10n.authPasswordLengthError;
+                    }
+                    return null;
+                  },
                 ),
-                if (error != null) ...<Widget>[
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    error,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.danger,
+
+                const SizedBox(height: AppSpacing.lg),
+
+                Row(
+                  children: <Widget>[
+                    AppSwitch(
+                      value: _staySignedIn,
+                      onChanged: (bool value) {
+                        setState(() {
+                          _staySignedIn = value;
+                        });
+                      },
                     ),
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.xl),
-                ElevatedButton(
-                  onPressed: isBusy ? null : _submit,
-                  child: isBusy
-                      ? const SizedBox(
-                          width: AppSizes.iconSm,
-                          height: AppSizes.iconSm,
-                          child: CircularProgressIndicator(
-                            strokeWidth: AppSizes.borderWidth * 2,
-                          ),
-                        )
-                      : const Text('Continue'),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      l10n.authStaySignedIn,
+                      style: AppTextStyles.staySignedInText,
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pushNamed(context, AppRoutes.forgotPassword);
+                      },
+                      child: Text(
+                        l10n.authForgotPassword,
+                        style: AppTextStyles.forgotPasswordLink,
+                      ),
+                    ),
+                  ],
                 ),
+
+                if (authError != null) ...<Widget>[
+                  const SizedBox(height: AppSpacing.md),
+                  Text(authError, style: AppTextStyles.inputErrorText),
+                ],
+
+                const SizedBox(height: AppSpacing.xl),
+
+                AppGradientButton(
+                  text: l10n.authLogIn,
+                  isLoading: isBusy,
+                  onPressed: _submit,
+                ),
+
+                const SizedBox(height: AppSpacing.lg),
+
+                AuthDivider(text: l10n.authOr),
+
+                const SizedBox(height: AppSpacing.lg),
+
+                // ── Social Login Row ─────────────────────────────────────
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: AppSocialButton(
+                        text: l10n.authApple,
+                        iconPath: AppIcons.apple,
+                        onPressed: () {},
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: AppSocialButton(
+                        text: l10n.authGoogle,
+                        iconPath: AppIcons.google,
+                        onPressed: () {},
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: AppSpacing.xxxxxl),
+
+                AuthFooterLink(
+                  normalText: l10n.authJustLooking,
+                  highlightedText: l10n.authBrowseAsGuest,
+                  highlightGradient: AppColors.primaryGradientButton,
+                  onTap: () {
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      AppRoutes.home,
+                      (Route<dynamic> route) => false,
+                      arguments: true,
+                    );
+                  },
+                ),
+
+                const SizedBox(height: AppSpacing.sm),
+
+                AuthFooterLink(
+                  normalText: l10n.authNewHere,
+                  highlightedText: l10n.authCreateAnAccount,
+                  highlightColor: AppColors.gradientPink,
+                  onTap: () {
+                    Navigator.pushNamed(context, AppRoutes.register);
+                  },
+                ),
+
+                const SizedBox(height: AppSpacing.xl),
               ],
             ),
           ),

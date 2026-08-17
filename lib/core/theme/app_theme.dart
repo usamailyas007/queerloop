@@ -1,5 +1,6 @@
 // Builds the ThemeData for the user app and the admin console.
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
@@ -15,15 +16,41 @@ abstract final class AppTheme {
     final ColorScheme scheme = ColorScheme.fromSeed(
       seedColor: AppColors.primary,
       primary: AppColors.primary,
-      surface: AppColors.surface,
+      surface: AppColors.background,
       error: AppColors.danger,
+      brightness: Brightness.dark,
     );
 
     return ThemeData(
       useMaterial3: true,
+      brightness: Brightness.dark,
+      fontFamily: 'HankenGrotesk',
       colorScheme: scheme,
       scaffoldBackgroundColor: scaffoldBackground,
+      canvasColor: scaffoldBackground,
+      dialogTheme: DialogThemeData(
+        backgroundColor: scaffoldBackground,
+      ),
       dividerColor: AppColors.divider,
+
+      // Smooth Dark Page Transitions with Zero White Flicker
+      pageTransitionsTheme: PageTransitionsTheme(
+        builders: <TargetPlatform, PageTransitionsBuilder>{
+          TargetPlatform.android: const CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: const CupertinoPageTransitionsBuilder(),
+        },
+      ),
+
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: scaffoldBackground,
+        modalBackgroundColor: scaffoldBackground,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.xl),
+          ),
+        ),
+      ),
       textTheme: const TextTheme(
         displayLarge: AppTextStyles.displayLarge,
         titleLarge: AppTextStyles.titleLarge,
@@ -53,7 +80,7 @@ abstract final class AppTheme {
         elevation: AppSpacing.none,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           side: const BorderSide(
             color: AppColors.border,
             width: AppSizes.borderWidth,
