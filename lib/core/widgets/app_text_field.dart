@@ -27,6 +27,7 @@ class AppTextField extends StatefulWidget {
     this.autofillHints,
     this.maxLines = 1,
     this.maxLength,
+    this.fillColor,
   });
 
   final TextEditingController? controller;
@@ -48,6 +49,7 @@ class AppTextField extends StatefulWidget {
   final Iterable<String>? autofillHints;
   final int? maxLines;
   final int? maxLength;
+  final Color? fillColor;
 
   @override
   State<AppTextField> createState() => _AppTextFieldState();
@@ -149,7 +151,7 @@ class _AppTextFieldState extends State<AppTextField> {
           fontWeight: FontWeight.w500,
         ),
         filled: true,
-        fillColor: const Color(0xFF1E1B26),
+        fillColor: widget.fillColor ?? const Color(0xFF1E1B26),
         counterText: '',
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,

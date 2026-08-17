@@ -7,6 +7,7 @@ import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_outline_button.dart';
+import '../../profile/screens/edit_profile_screen.dart';
 import '../../profile/screens/followers_following_screen.dart';
 import '../../profile/screens/notifications_screen.dart';
 import '../../profile/screens/settings_screen.dart';
@@ -165,7 +166,14 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                         Expanded(
                           child: AppOutlineButton(
                             text: 'Edit profile',
-                            onPressed: () {},
+                            onPressed: () {
+                              Navigator.push<void>(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const EditProfileScreen(),
+                                ),
+                              );
+                            },
                           ),
                         ),
                         const SizedBox(width: AppSpacing.md),

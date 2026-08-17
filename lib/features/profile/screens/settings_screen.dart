@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
@@ -346,7 +347,11 @@ class SettingsScreen extends StatelessWidget {
                         context,
                         username: '@ashinorbit',
                         onConfirmLogout: () {
-                          Navigator.pop(context);
+                          Navigator.pushNamedAndRemoveUntil(
+                            context,
+                            AppRoutes.login,
+                            (Route<dynamic> route) => false,
+                          );
                         },
                       );
                     },
