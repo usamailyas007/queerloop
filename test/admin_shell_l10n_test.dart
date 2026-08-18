@@ -1,10 +1,10 @@
-// Verifies AdminShell renders ARB strings for the active locale.
+// Verifies ModeratorShell renders ARB strings for the active locale.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:queerloop/admin/admin_auth_provider.dart';
-import 'package:queerloop/admin/admin_shell.dart';
+import 'package:queerloop/admin/moderator/moderator_shell.dart';
 import 'package:queerloop/l10n/app_localizations.dart';
 
 Widget wrap(Locale locale) {
@@ -14,7 +14,7 @@ Widget wrap(Locale locale) {
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: const AdminShell(),
+      home: const ModeratorShell(),
     ),
   );
 }

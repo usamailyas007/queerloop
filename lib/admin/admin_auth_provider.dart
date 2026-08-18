@@ -4,12 +4,16 @@ import 'package:flutter/foundation.dart';
 
 enum AdminAuthStatus { unknown, signedOut, signedIn }
 
+enum AdminRole { moderator, admin }
+
 class AdminAuthProvider extends ChangeNotifier {
   AdminAuthStatus _status = AdminAuthStatus.unknown;
+  AdminRole _role = AdminRole.moderator;
   String? _email;
   String? _error;
 
   AdminAuthStatus get status => _status;
+  AdminRole get role => _role;
   String? get email => _email;
   String? get error => _error;
   bool get isSignedIn => _status == AdminAuthStatus.signedIn;
@@ -31,6 +35,7 @@ class AdminAuthProvider extends ChangeNotifier {
 
     _error = null;
     _email = email.trim().toLowerCase();
+    _role = _email!.contains('admin') ? AdminRole.admin : AdminRole.moderator;
     _status = AdminAuthStatus.signedIn;
     notifyListeners();
     return true;
@@ -39,6 +44,7 @@ class AdminAuthProvider extends ChangeNotifier {
   void signOut() {
     _email = null;
     _error = null;
+    _role = AdminRole.moderator;
     _status = AdminAuthStatus.signedOut;
     notifyListeners();
   }

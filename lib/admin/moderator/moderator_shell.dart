@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme/app_images.dart';
-import '../core/theme/app_spacing.dart';
-import 'screens/action_log_screen.dart';
-import 'screens/admin_dashboard_screen.dart';
-import 'screens/reports_queue_screen.dart';
+import '../../core/theme/app_images.dart';
+import '../../core/theme/app_spacing.dart';
+import 'moderator_action_log_screen.dart';
+import 'moderator_dashboard_screen.dart';
+import 'moderator_reports_queue_screen.dart';
 
-class AdminShell extends StatefulWidget {
-  const AdminShell({super.key});
+class ModeratorShell extends StatefulWidget {
+  const ModeratorShell({super.key});
 
   @override
-  State<AdminShell> createState() => _AdminShellState();
+  State<ModeratorShell> createState() => _ModeratorShellState();
 }
 
-class _AdminShellState extends State<AdminShell> {
+class _ModeratorShellState extends State<ModeratorShell> {
   int _selectedIndex = 0;
 
   void _select(int index) {
@@ -25,9 +25,9 @@ class _AdminShellState extends State<AdminShell> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> screens = <Widget>[
-      AdminDashboardScreen(onOpenQueue: () => _select(1)),
-      const ReportsQueueScreen(),
-      const ActionLogScreen(),
+      ModeratorDashboardScreen(onOpenQueue: () => _select(1)),
+      const ModeratorReportsQueueScreen(),
+      const ModeratorActionLogScreen(),
     ];
 
     return Scaffold(
@@ -35,7 +35,7 @@ class _AdminShellState extends State<AdminShell> {
       body: Row(
         children: <Widget>[
           // ── Sidebar Navigation Drawer ─────────────────────────────────────
-          _AdminSidebar(
+          _ModeratorSidebar(
             selectedIndex: _selectedIndex,
             onSelected: _select,
           ),
@@ -53,8 +53,8 @@ class _AdminShellState extends State<AdminShell> {
   }
 }
 
-class _AdminSidebar extends StatelessWidget {
-  const _AdminSidebar({
+class _ModeratorSidebar extends StatelessWidget {
+  const _ModeratorSidebar({
     required this.selectedIndex,
     required this.onSelected,
   });

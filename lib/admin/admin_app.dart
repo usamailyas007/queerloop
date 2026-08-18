@@ -8,8 +8,9 @@ import '../core/theme/app_spacing.dart';
 import '../core/theme/app_theme.dart';
 import '../l10n/app_localizations.dart';
 import 'admin_auth_provider.dart';
+import 'admin_login_screen.dart';
 import 'admin_shell.dart';
-import 'screens/admin_login_screen.dart';
+import 'moderator/moderator_shell.dart';
 
 class AdminApp extends StatelessWidget {
   const AdminApp({super.key});
@@ -46,15 +47,19 @@ class _AdminRouter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AdminAuthStatus status =
-        context.select<AdminAuthProvider, AdminAuthStatus>(
-      (AdminAuthProvider provider) => provider.status,
+    final (AdminAuthStatus, AdminRole) state =
+        context.select<AdminAuthProvider, (AdminAuthStatus, AdminRole)>(
+      (AdminAuthProvider provider) => (provider.status, provider.role),
     );
+    final (AdminAuthStatus status, AdminRole role) = state;
 
     return switch (status) {
       AdminAuthStatus.unknown => const _AdminSplash(),
       AdminAuthStatus.signedOut => const AdminLoginScreen(),
-      AdminAuthStatus.signedIn => const AdminShell(),
+      AdminAuthStatus.signedIn => switch (role) {
+          AdminRole.admin => const AdminShell(),
+          AdminRole.moderator => const ModeratorShell(),
+        },
     };
   }
 }

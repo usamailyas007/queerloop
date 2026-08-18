@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/theme/app_spacing.dart';
-import '../../core/theme/app_text_styles.dart';
-import '../../core/widgets/app_text_field.dart';
-import '../admin_auth_provider.dart';
+import '../core/theme/app_images.dart';
+import '../core/widgets/app_gradient_button.dart';
+import '../core/widgets/app_text_field.dart';
+import 'admin_auth_provider.dart';
 
-class ModeratorLoginScreen extends StatefulWidget {
-  const ModeratorLoginScreen({super.key});
+class AdminLoginScreen extends StatefulWidget {
+  const AdminLoginScreen({super.key});
 
   @override
-  State<ModeratorLoginScreen> createState() => _ModeratorLoginScreenState();
+  State<AdminLoginScreen> createState() => _AdminLoginScreenState();
 }
 
-class _ModeratorLoginScreenState extends State<ModeratorLoginScreen> {
+class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final TextEditingController _emailController =
       TextEditingController(text: 'you@queerloop.app');
   final TextEditingController _passwordController = TextEditingController();
@@ -35,193 +35,167 @@ class _ModeratorLoginScreenState extends State<ModeratorLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0D15),
-      body: Center(
-        child: SingleChildScrollView(
-          child: Container(
-            width: 440,
-            padding: const EdgeInsets.all(AppSpacing.xxl),
-            margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: const Color(0xFF16131D),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  blurRadius: 30,
-                  offset: const Offset(0, 15),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const SizedBox(height: AppSpacing.sm),
-
-                // Brand Logo (Infinity Symbol)
-                CustomPaint(
-                  size: const Size(48, 24),
-                  painter: _InfinityLogoPainter(),
-                ),
-
-                const SizedBox(height: AppSpacing.xl),
-
-                // Title: Sign in
-                Text(
-                  'Sign in',
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 22,
-                  ),
-                ),
-
-                const SizedBox(height: 6),
-
-                // Subtitle
-                Text(
-                  'Enter your email and password to continue.',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: Colors.white54,
-                    fontSize: 13,
-                  ),
-                ),
-
-                const SizedBox(height: AppSpacing.xxl),
-
-                // Email Input Field
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Email',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    AppTextField(
-                      controller: _emailController,
-                      hintText: 'you@queerloop.app',
-                      keyboardType: TextInputType.emailAddress,
-                      fillColor: const Color(0xFF1D1927),
-                      prefixIcon: const Icon(
-                        Icons.mail_outline_rounded,
-                        color: Colors.white38,
-                        size: 20,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: AppSpacing.lg),
-
-                // Password Input Field
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Password',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    AppTextField(
-                      controller: _passwordController,
-                      hintText: 'Enter your password',
-                      isPassword: true,
-                      fillColor: const Color(0xFF1D1927),
-                      prefixIcon: const Icon(
-                        Icons.lock_outline_rounded,
-                        color: Colors.white38,
-                        size: 20,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: AppSpacing.xxl),
-
-                // Sign in Button
-                GestureDetector(
-                  onTap: _submit,
-                  child: Container(
-                    width: double.infinity,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: <Color>[
-                          Color(0xFFFF4B8B),
-                          Color(0xFF9D4EDD),
-                          Color(0xFF00E5FF),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: <BoxShadow>[
-                        BoxShadow(
-                          color: const Color(0xFFFF4B8B).withValues(alpha: 0.3),
-                          blurRadius: 15,
-                          offset: const Offset(0, 6),
-                        ),
+      backgroundColor: const Color(0xFF18181B),
+      body: Stack(
+        children: <Widget>[
+          // Soft pink glow behind the card, top-center.
+          Positioned(
+            top: -520,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: IgnorePointer(
+                child: Container(
+                  width: 1728,
+                  height: 1192,
+                  decoration: const BoxDecoration(
+                    gradient: RadialGradient(
+                      radius: 0.6,
+                      colors: <Color>[
+                        Color(0x21FF3B77),
+                        Color(0x00FF3B77),
                       ],
                     ),
-                    child: const Center(
-                      child: Text(
-                        'Sign in →',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 960),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 90),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141119),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.18),
+                    ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        blurRadius: 90,
+                        offset: const Offset(0, 40),
+                        spreadRadius: -30,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: SizedBox(
+                      width: 400,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Image.asset(AppImages.logo, width: 76, height: 29),
+
+                          const SizedBox(height: 13),
+
+                          const Text(
+                            'Sign in',
+                            style: TextStyle(
+                              color: Color(0xFFF3EFF7),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 24,
+                              letterSpacing: -0.48,
+                            ),
+                          ),
+
+                          const SizedBox(height: 6),
+
+                          const Text(
+                            'Enter your email and password to continue.',
+                            style: TextStyle(
+                              color: Color(0xFFA79FB8),
+                              fontSize: 12.5,
+                            ),
+                          ),
+
+                          const SizedBox(height: 22),
+
+                          // Email Input Field
+                          const Text(
+                            'Email',
+                            style: TextStyle(
+                              color: Color(0xFFF3EFF7),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          AppTextField(
+                            controller: _emailController,
+                            hintText: 'you@queerloop.app',
+                            keyboardType: TextInputType.emailAddress,
+                            fillColor: Colors.white.withValues(alpha: 0.04),
+                            prefixIcon: const Icon(
+                              Icons.mail_outline_rounded,
+                              color: Color(0xFFA79FB8),
+                              size: 17,
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Password Input Field
+                          const Text(
+                            'Password',
+                            style: TextStyle(
+                              color: Color(0xFFF3EFF7),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          AppTextField(
+                            controller: _passwordController,
+                            hintText: 'Enter your password',
+                            isPassword: true,
+                            fillColor: Colors.white.withValues(alpha: 0.04),
+                            prefixIcon: const Icon(
+                              Icons.lock_outline_rounded,
+                              color: Color(0xFFA79FB8),
+                              size: 17,
+                            ),
+                          ),
+
+                          const SizedBox(height: 22),
+
+                          // Sign in Button
+                          AppGradientButton(
+                            text: 'Sign in →',
+                            height: 48,
+                            borderRadius: BorderRadius.circular(13),
+                            gradient: const LinearGradient(
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                              colors: <Color>[
+                                Color(0xFFFF3B77),
+                                Color(0xFF8B5CFF),
+                              ],
+                            ),
+                            textStyle: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              letterSpacing: -0.14,
+                            ),
+                            onPressed: _submit,
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-
-                const SizedBox(height: AppSpacing.md),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
-}
-
-class _InfinityLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..shader = const LinearGradient(
-        colors: <Color>[
-          Color(0xFF00E5FF),
-          Color(0xFFFF4B8B),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.0;
-
-    final Path path = Path();
-    final double w = size.width;
-    final double h = size.height;
-
-    path.moveTo(w * 0.5, h * 0.5);
-    path.cubicTo(w * 0.7, 0, w, 0, w, h * 0.5);
-    path.cubicTo(w, h, w * 0.7, h, w * 0.5, h * 0.5);
-    path.cubicTo(w * 0.3, 0, 0, 0, 0, h * 0.5);
-    path.cubicTo(0, h, w * 0.3, h, w * 0.5, h * 0.5);
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
