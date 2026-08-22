@@ -8,22 +8,24 @@ import '../../core/widgets/app_text_field.dart';
 import '../admin_icons.dart';
 import 'admin_conversation_history_screen.dart';
 
-class _PastQuestion {
-  const _PastQuestion({required this.question, required this.answers});
-
-  final String question;
-  final String answers;
+String _formatCompactCount(int n) {
+  if (n >= 1000) {
+    return '${(n / 1000).toStringAsFixed(1)}K';
+  }
+  return '$n';
 }
 
 class AdminConversationOverviewScreen extends StatefulWidget {
   const AdminConversationOverviewScreen({
-    required this.liveQuestion,
+    required this.questions,
     required this.onOpenHistory,
+    required this.onPublish,
     super.key,
   });
 
-  final ConversationQuestion liveQuestion;
+  final List<ConversationQuestion> questions;
   final VoidCallback onOpenHistory;
+  final ValueChanged<String> onPublish;
 
   @override
   State<AdminConversationOverviewScreen> createState() =>
@@ -32,23 +34,19 @@ class AdminConversationOverviewScreen extends StatefulWidget {
 
 class _AdminConversationOverviewScreenState
     extends State<AdminConversationOverviewScreen> {
-  late final TextEditingController _questionController =
-      TextEditingController(text: widget.liveQuestion.question);
+  late final TextEditingController _questionController = TextEditingController(
+    text: _liveQuestion.question,
+  );
 
-  static const List<_PastQuestion> _pastQuestions = <_PastQuestion>[
-    _PastQuestion(
-      question: "What's a small act of pride you did today?",
-      answers: '1.8K answers',
-    ),
-    _PastQuestion(
-      question: 'Who was your first queer friend?',
-      answers: '2.6K answers',
-    ),
-    _PastQuestion(
-      question: 'What song makes you feel most yourself?',
-      answers: '3.1K answers',
-    ),
-  ];
+  ConversationQuestion get _liveQuestion => widget.questions.firstWhere(
+    (ConversationQuestion q) => q.isLive,
+    orElse: () => widget.questions.first,
+  );
+
+  List<ConversationQuestion> get _pastQuestions => widget.questions
+      .where((ConversationQuestion q) => !q.isLive)
+      .take(3)
+      .toList();
 
   @override
   void dispose() {
@@ -169,7 +167,8 @@ class _AdminConversationOverviewScreenState
                                     fontWeight: FontWeight.w800,
                                     fontSize: 13,
                                   ),
-                                  onPressed: () {},
+                                  onPressed: () =>
+                                      widget.onPublish(_questionController.text),
                                 ),
                               ),
                             ),
@@ -210,7 +209,7 @@ class _AdminConversationOverviewScreenState
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '${NumberFormat.decimalPattern().format(widget.liveQuestion.answers)} answers so far',
+                                        '${NumberFormat.decimalPattern().format(_liveQuestion.answers)} answers so far',
                                         style: const TextStyle(
                                           color: Color(0xFF635C72),
                                           fontSize: 11,
@@ -270,7 +269,7 @@ class _AdminConversationOverviewScreenState
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    widget.liveQuestion.question,
+                                    _liveQuestion.question,
                                     style: const TextStyle(
                                       color: Color(0xFFF3EFF7),
                                       fontWeight: FontWeight.w700,
@@ -292,7 +291,7 @@ class _AdminConversationOverviewScreenState
                               ),
                             ),
                             const SizedBox(height: AppSpacing.sm),
-                            for (final _PastQuestion q in _pastQuestions)
+                            for (final ConversationQuestion q in _pastQuestions)
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 6,
@@ -309,7 +308,7 @@ class _AdminConversationOverviewScreenState
                                       ),
                                     ),
                                     Text(
-                                      q.answers,
+                                      '${_formatCompactCount(q.answers)} answers',
                                       style: const TextStyle(
                                         color: Color(0xFF635C72),
                                         fontSize: 12,

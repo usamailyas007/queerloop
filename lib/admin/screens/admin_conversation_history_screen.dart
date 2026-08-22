@@ -3,14 +3,13 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_gradient_button.dart';
-import '../../core/widgets/app_outline_button.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../admin_icons.dart';
 import 'admin_conversation_answers_screen.dart';
 import 'admin_conversation_overview_screen.dart';
 
 class ConversationQuestion {
-  const ConversationQuestion({
+  ConversationQuestion({
     required this.question,
     required this.sentLive,
     required this.answers,
@@ -24,7 +23,7 @@ class ConversationQuestion {
   final int answers;
   final int topAnswerLikes;
   final int reports;
-  final bool isLive;
+  bool isLive;
 }
 
 enum _ConversationView { overview, history, answers }
@@ -39,11 +38,11 @@ class AdminConversationHistoryScreen extends StatefulWidget {
 
 class _AdminConversationHistoryScreenState
     extends State<AdminConversationHistoryScreen> {
-  _ConversationView _view = _ConversationView.overview;
+  _ConversationView _view = _ConversationView.history;
   ConversationQuestion? _selectedQuestion;
   String _searchQuery = '';
 
-  static const List<ConversationQuestion> _questions = <ConversationQuestion>[
+  final List<ConversationQuestion> _questions = <ConversationQuestion>[
     ConversationQuestion(
       question: 'What does chosen family mean to you?',
       sentLive: '2 Aug',
@@ -117,13 +116,38 @@ class _AdminConversationHistoryScreenState
     setState(() => _view = _ConversationView.history);
   }
 
+  void _publishQuestion(String text) {
+    final String trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    setState(() {
+      for (final ConversationQuestion q in _questions) {
+        q.isLive = false;
+      }
+      _questions.insert(
+        0,
+        ConversationQuestion(
+          question: trimmed,
+          sentLive: 'Today',
+          answers: 0,
+          topAnswerLikes: 0,
+          reports: 0,
+          isLive: true,
+        ),
+      );
+      _view = _ConversationView.history;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     switch (_view) {
       case _ConversationView.overview:
         return AdminConversationOverviewScreen(
-          liveQuestion: _questions.first,
+          questions: _questions,
           onOpenHistory: _openHistory,
+          onPublish: _publishQuestion,
         );
       case _ConversationView.answers:
         return AdminConversationAnswersScreen(
@@ -192,16 +216,6 @@ class _AdminConversationHistoryScreenState
                       fillColor: const Color(0xFF141119),
                       onChanged: (String val) =>
                           setState(() => _searchQuery = val),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  SizedBox(
-                    width: 90,
-                    child: AppOutlineButton(
-                      text: 'History',
-                      height: 44,
-                      backgroundColor: const Color(0xFF1C1824),
-                      onPressed: _openHistory,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
