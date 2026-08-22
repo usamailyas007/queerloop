@@ -194,7 +194,7 @@ class _AdminConversationHistoryScreenState
                           style: TextStyle(
                             color: Color(0xFFF3EFF7),
                             fontWeight: FontWeight.w700,
-                            fontSize: 24,
+                            fontSize: 26,
                           ),
                         ),
                         SizedBox(height: 4),
@@ -264,13 +264,10 @@ class _AdminConversationHistoryScreenState
                           Expanded(flex: 4, child: _Header('QUESTION')),
                           Expanded(flex: 2, child: _Header('SENT LIVE')),
                           Expanded(flex: 2, child: _Header('ANSWERS')),
-                          Expanded(
-                            flex: 2,
-                            child: _Header('TOP ANSWER LIKES'),
-                          ),
+                          Expanded(flex: 2, child: _Header('TOP ANSWER LIKES')),
                           Expanded(flex: 1, child: _Header('REPORTS')),
                           Expanded(flex: 2, child: _Header('STATUS')),
-                          SizedBox(width: 90),
+                          SizedBox(width: 110),
                         ],
                       ),
                     ),
@@ -293,12 +290,15 @@ class _AdminConversationHistoryScreenState
                             children: <Widget>[
                               Expanded(
                                 flex: 4,
-                                child: Text(
-                                  q.question,
-                                  style: const TextStyle(
-                                    color: Color(0xFFF3EFF7),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 5.0),
+                                  child: Text(
+                                    q.question,
+                                    style: const TextStyle(
+                                      color: Color(0xFFF3EFF7),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.5,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -308,29 +308,34 @@ class _AdminConversationHistoryScreenState
                                   q.sentLive,
                                   style: const TextStyle(
                                     color: Color(0xFF948CA3),
-                                    fontSize: 13,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w400,
                                   ),
                                 ),
                               ),
                               Expanded(
                                 flex: 2,
                                 child: Text(
-                                  NumberFormat.decimalPattern()
-                                      .format(q.answers),
+                                  NumberFormat.decimalPattern().format(
+                                    q.answers,
+                                  ),
                                   style: const TextStyle(
                                     color: Color(0xFF948CA3),
-                                    fontSize: 13,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w400,
                                   ),
                                 ),
                               ),
                               Expanded(
                                 flex: 2,
                                 child: Text(
-                                  NumberFormat.decimalPattern()
-                                      .format(q.topAnswerLikes),
+                                  NumberFormat.decimalPattern().format(
+                                    q.topAnswerLikes,
+                                  ),
                                   style: const TextStyle(
                                     color: Color(0xFF948CA3),
-                                    fontSize: 13,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w400,
                                   ),
                                 ),
                               ),
@@ -387,15 +392,31 @@ class _AdminConversationHistoryScreenState
                                 ),
                               ),
                               SizedBox(
-                                width: 90,
+                                width: 110,
                                 child: GestureDetector(
                                   onTap: () => _openAnswers(q),
-                                  child: const Text(
-                                    'View answers',
-                                    style: TextStyle(
-                                      color: Color(0xFF4CC9FF),
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1C1824),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.09,
+                                        ),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'View answers',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Color(0xFFF3EFF7),
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -471,7 +492,7 @@ class _Header extends StatelessWidget {
       label,
       style: const TextStyle(
         color: Color(0xFF635C72),
-        fontSize: 11,
+        fontSize: 9.5,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,
       ),

@@ -114,72 +114,72 @@ class _AdminConversationOverviewScreenState
 
               const SizedBox(height: AppSpacing.xl),
 
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(
-                      flex: 11,
-                      child: Container(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF141119),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.09),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            const Text(
-                              "Today's question",
-                              style: TextStyle(
-                                color: Color(0xFFF3EFF7),
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.lg),
-                            const Text(
-                              'Question',
-                              style: TextStyle(
-                                color: Color(0xFF948CA3),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            AppTextField(
-                              controller: _questionController,
-                              fillColor: const Color(0xFF1C1824),
-                            ),
-                            const Spacer(),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: SizedBox(
-                                width: 190,
-                                height: 44,
-                                child: AppGradientButton(
-                                  text: 'Publish to everyone',
-                                  textStyle: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 13,
-                                  ),
-                                  onPressed: () =>
-                                      widget.onPublish(_questionController.text),
-                                ),
-                              ),
-                            ),
-                          ],
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    flex: 11,
+                    child: Container(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141119),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.09),
                         ),
                       ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          const Text(
+                            "Today's question",
+                            style: TextStyle(
+                              color: Color(0xFFF3EFF7),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          const Text(
+                            'Question',
+                            style: TextStyle(
+                              color: Color(0xFF948CA3),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          AppTextField(
+                            controller: _questionController,
+                            fillColor: const Color(0xFF1C1824),
+                          ),
+                          const SizedBox(height: AppSpacing.xl),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: SizedBox(
+                              width: 190,
+                              height: 44,
+                              child: AppGradientButton(
+                                text: 'Publish to everyone',
+                                textStyle: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13,
+                                ),
+                                onPressed: () =>
+                                    widget.onPublish(_questionController.text),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      flex: 10,
-                      child: Container(
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    flex: 10,
+                    child: Container(
                         padding: const EdgeInsets.all(AppSpacing.lg),
                         decoration: BoxDecoration(
                           color: const Color(0xFF141119),
@@ -323,7 +323,6 @@ class _AdminConversationOverviewScreenState
                     ),
                   ],
                 ),
-              ),
             ],
           ),
         ),

@@ -50,7 +50,8 @@ class AdminConversationAnswersScreen extends StatelessWidget {
     _Answer(
       handle: '@rowankeeps',
       avatar: AppImages.user2,
-      answer: "My roommates threw me a party the week I came out. That's family.",
+      answer:
+          "My roommates threw me a party the week I came out. That's family.",
       likes: 388,
       postedAgo: '3h',
     ),
@@ -192,8 +193,8 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                         vertical: AppSpacing.sm,
                       ),
                       decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
+                        border: Border.symmetric(
+                          horizontal: BorderSide(
                             color: Colors.white.withValues(alpha: 0.06),
                           ),
                         ),
@@ -280,20 +281,14 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                                   vertical: 6,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: a.isFlagged
-                                      ? const Color(
-                                          0xFFFF3B77,
-                                        ).withValues(alpha: 0.14)
-                                      : const Color(0xFF1C1824),
+                                  color: const Color(0xFF1C1824),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: a.isFlagged
                                         ? const Color(
-                                            0xFFFF3B77,
+                                            0xFFFF8080,
                                           ).withValues(alpha: 0.4)
-                                        : Colors.white.withValues(
-                                            alpha: 0.09,
-                                          ),
+                                        : Colors.white.withValues(alpha: 0.09),
                                   ),
                                 ),
                                 child: Text(
@@ -301,7 +296,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: a.isFlagged
-                                        ? const Color(0xFFFF3B77)
+                                        ? const Color(0xFFFF8080)
                                         : const Color(0xFFF3EFF7),
                                     fontWeight: FontWeight.w700,
                                     fontSize: 11,
