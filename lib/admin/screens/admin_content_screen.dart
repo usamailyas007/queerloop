@@ -433,7 +433,7 @@ class _MiniButton extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            color: danger ? const Color(0xFFFF3B77) : Colors.white,
+            color: danger ? const Color(0xFFFF3B77) : const Color(0xFFF3EFF7),
             fontWeight: FontWeight.w700,
             fontSize: 11,
           ),

@@ -206,8 +206,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                 _statusLabels[i],
                                 style: TextStyle(
                                   color: _statusFilter == i
-                                      ? Colors.white
-                                      : Color(0xFF948CA3),
+                                      ? const Color(0xFFF3EFF7)
+                                      : const Color(0xFF948CA3),
                                   fontWeight: FontWeight.w600,
                                   fontSize: 13,
                                 ),
@@ -342,7 +342,7 @@ class _UserRow extends StatelessWidget {
       _UserStatus.active => ('Active', const Color(0xFF3FE0AE)),
       _UserStatus.suspended => (
           user.suspendedFor ?? 'Suspended',
-          const Color(0xFFD97706)
+          const Color(0xFFFFB45C)
         ),
       _UserStatus.banned => ('Banned', const Color(0xFFFF3B77)),
     };
