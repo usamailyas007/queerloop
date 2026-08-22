@@ -127,7 +127,7 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                         Text(
                           'Communities',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFFF3EFF7),
                             fontWeight: FontWeight.w700,
                             fontSize: 24,
                           ),
@@ -135,7 +135,7 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                         SizedBox(height: 4),
                         Text(
                           '7 groups · assign moderators and rules per group',
-                          style: TextStyle(color: Colors.white54, fontSize: 13),
+                          style: TextStyle(color: Color(0xFF948CA3), fontSize: 13),
                         ),
                       ],
                     ),
@@ -155,10 +155,10 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
 
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF16131D),
+                  color: const Color(0xFF141119),
                   borderRadius: BorderRadius.circular(20),
                   border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      Border.all(color: Colors.white.withValues(alpha: 0.09)),
                 ),
                 child: Column(
                   children: <Widget>[
@@ -215,7 +215,7 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                                     Text(
                                       c.name,
                                       style: const TextStyle(
-                                        color: Colors.white,
+                                        color: Color(0xFFF3EFF7),
                                         fontWeight: FontWeight.w700,
                                         fontSize: 13,
                                       ),
@@ -227,13 +227,13 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                                 flex: 2,
                                 child: Text(c.members,
                                     style: const TextStyle(
-                                        color: Colors.white70, fontSize: 13)),
+                                        color: Color(0xFF948CA3), fontSize: 13)),
                               ),
                               Expanded(
                                 flex: 2,
                                 child: Text(c.posts,
                                     style: const TextStyle(
-                                        color: Colors.white70, fontSize: 13)),
+                                        color: Color(0xFF948CA3), fontSize: 13)),
                               ),
                               Expanded(
                                 flex: 1,
@@ -241,8 +241,8 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                                   c.reports,
                                   style: TextStyle(
                                     color: int.parse(c.reports) > 50
-                                        ? const Color(0xFFD97706)
-                                        : Colors.white70,
+                                        ? const Color(0xFFFFB45C)
+                                        : Color(0xFF948CA3),
                                     fontWeight: int.parse(c.reports) > 50
                                         ? FontWeight.w700
                                         : FontWeight.w400,
@@ -254,7 +254,7 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                                 flex: 2,
                                 child: Text(c.moderators,
                                     style: const TextStyle(
-                                        color: Colors.white70, fontSize: 13)),
+                                        color: Color(0xFF948CA3), fontSize: 13)),
                               ),
                               Expanded(
                                 flex: 2,
@@ -265,14 +265,14 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                                         horizontal: 10, vertical: 3),
                                     decoration: BoxDecoration(
                                       color: (c.membersOnly
-                                              ? const Color(0xFF9333EA)
-                                              : const Color(0xFF16A34A))
+                                              ? const Color(0xFF8B5CFF)
+                                              : const Color(0xFF3FE0AE))
                                           .withValues(alpha: 0.2),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color: (c.membersOnly
-                                                ? const Color(0xFF9333EA)
-                                                : const Color(0xFF16A34A))
+                                                ? const Color(0xFF8B5CFF)
+                                                : const Color(0xFF3FE0AE))
                                             .withValues(alpha: 0.4),
                                       ),
                                     ),
@@ -280,8 +280,8 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                                       c.membersOnly ? 'Members only' : 'Public',
                                       style: TextStyle(
                                         color: c.membersOnly
-                                            ? const Color(0xFF9333EA)
-                                            : const Color(0xFF16A34A),
+                                            ? const Color(0xFF8B5CFF)
+                                            : const Color(0xFF3FE0AE),
                                         fontWeight: FontWeight.w700,
                                         fontSize: 11,
                                       ),
@@ -315,7 +315,7 @@ class _Header extends StatelessWidget {
     return Text(
       label,
       style: const TextStyle(
-        color: Colors.white38,
+        color: Color(0xFF635C72),
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,

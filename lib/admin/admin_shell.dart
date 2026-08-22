@@ -10,8 +10,10 @@ import 'screens/admin_analytics_screen.dart';
 import 'screens/admin_announcements_screen.dart';
 import 'screens/admin_communities_screen.dart';
 import 'screens/admin_content_screen.dart';
+import 'screens/admin_conversation_history_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/admin_moderators_screen.dart';
+import 'screens/admin_spotlight_screen.dart';
 import 'screens/admin_users_screen.dart';
 
 class AdminShell extends StatefulWidget {
@@ -40,6 +42,8 @@ class _AdminShellState extends State<AdminShell> {
       const AdminCommunitiesScreen(),
       const AdminAnalyticsScreen(),
       const AdminAnnouncementsScreen(),
+      const AdminConversationHistoryScreen(),
+      const AdminSpotlightScreen(),
     ];
 
     return Scaffold(
@@ -65,14 +69,32 @@ class _AdminSidebar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
-  static const List<_NavItem> _items = <_NavItem>[
-    _NavItem(iconPath: AdminIcons.chart, label: 'Dashboard'),
-    _NavItem(iconPath: AdminIcons.users, label: 'Users'),
-    _NavItem(iconPath: AdminIcons.shield, label: 'Moderators'),
-    _NavItem(iconPath: AdminIcons.image, label: 'Content'),
-    _NavItem(iconPath: AdminIcons.globe, label: 'Communities'),
-    _NavItem(iconPath: AdminIcons.chart, label: 'Analytics'),
-    _NavItem(iconPath: AdminIcons.megaphone, label: 'Announcements'),
+  static const List<_NavSection> _sections = <_NavSection>[
+    _NavSection(
+      title: 'PLATFORM',
+      items: <_NavItem>[
+        _NavItem(iconPath: AdminIcons.chart, label: 'Dashboard'),
+        _NavItem(iconPath: AdminIcons.users, label: 'Users'),
+        _NavItem(iconPath: AdminIcons.shield, label: 'Moderators'),
+        _NavItem(iconPath: AdminIcons.image, label: 'Content'),
+        _NavItem(iconPath: AdminIcons.globe, label: 'Communities'),
+        _NavItem(iconPath: AdminIcons.chart, label: 'Analytics'),
+        _NavItem(iconPath: AdminIcons.megaphone, label: 'Announcements'),
+      ],
+    ),
+    _NavSection(
+      title: 'ENGAGEMENT',
+      items: <_NavItem>[
+        _NavItem(
+          materialIcon: Icons.forum_outlined,
+          label: 'Conversation of the day',
+        ),
+        _NavItem(
+          materialIcon: Icons.auto_awesome_outlined,
+          label: 'Community spotlight',
+        ),
+      ],
+    ),
   ];
 
   @override
@@ -113,26 +135,11 @@ class _AdminSidebar extends StatelessWidget {
 
           const SizedBox(height: AppSpacing.lg),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-            child: Text(
-              'PLATFORM',
-              style: TextStyle(
-                color: const Color(0xFF635C72),
-                fontSize: 9.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.9,
-              ),
+          Expanded(
+            child: SingleChildScrollView(
+              child: _buildSections(),
             ),
           ),
-
-          const SizedBox(height: AppSpacing.sm),
-
-          // Sidebar Navigation Items
-          for (int i = 0; i < _items.length; i++)
-            _buildSidebarItem(index: i, item: _items[i]),
-
-          const Spacer(),
 
           // Bottom Divider
           Divider(color: Colors.white.withValues(alpha: 0.09)),
@@ -194,8 +201,38 @@ class _AdminSidebar extends StatelessWidget {
     );
   }
 
+  Widget _buildSections() {
+    int index = 0;
+    final List<Widget> children = <Widget>[];
+    for (final _NavSection section in _sections) {
+      children.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          child: Text(
+            section.title,
+            style: const TextStyle(
+              color: Color(0xFF635C72),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.9,
+            ),
+          ),
+        ),
+      );
+      children.add(const SizedBox(height: AppSpacing.sm));
+      for (final _NavItem item in section.items) {
+        children.add(_buildSidebarItem(index: index, item: item));
+        index++;
+      }
+      children.add(const SizedBox(height: AppSpacing.lg));
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
+  }
+
   Widget _buildSidebarItem({required int index, required _NavItem item}) {
     final bool isSelected = selectedIndex == index;
+    final Color iconColor =
+        isSelected ? const Color(0xFFF3EFF7) : const Color(0xFF948CA3);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.xs),
@@ -212,17 +249,15 @@ class _AdminSidebar extends StatelessWidget {
           ),
           child: Row(
             children: <Widget>[
-              SvgPicture.asset(
-                item.iconPath,
-                width: 16,
-                height: 16,
-                colorFilter: ColorFilter.mode(
-                  isSelected
-                      ? const Color(0xFFF3EFF7)
-                      : const Color(0xFF948CA3),
-                  BlendMode.srcIn,
-                ),
-              ),
+              if (item.iconPath != null)
+                SvgPicture.asset(
+                  item.iconPath!,
+                  width: 16,
+                  height: 16,
+                  colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+                )
+              else
+                Icon(item.materialIcon, size: 16, color: iconColor),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -244,9 +279,17 @@ class _AdminSidebar extends StatelessWidget {
   }
 }
 
-class _NavItem {
-  const _NavItem({required this.iconPath, required this.label});
+class _NavSection {
+  const _NavSection({required this.title, required this.items});
 
-  final String iconPath;
+  final String title;
+  final List<_NavItem> items;
+}
+
+class _NavItem {
+  const _NavItem({this.iconPath, this.materialIcon, required this.label});
+
+  final String? iconPath;
+  final IconData? materialIcon;
   final String label;
 }

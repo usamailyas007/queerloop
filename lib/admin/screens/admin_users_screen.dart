@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_icons.dart';
 import '../../core/theme/app_images.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_outline_button.dart';
 import '../../core/widgets/app_text_field.dart';
+import '../admin_icons.dart';
 
 enum _UserStatus { active, suspended, banned }
 
@@ -155,7 +155,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                         const Text(
                           'Users',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFFF3EFF7),
                             fontWeight: FontWeight.w700,
                             fontSize: 24,
                           ),
@@ -164,7 +164,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                         Text(
                           '${_users.length} accounts · $suspendedCount currently suspended',
                           style: const TextStyle(
-                              color: Colors.white54, fontSize: 13),
+                              color: Color(0xFF948CA3), fontSize: 13),
                         ),
                       ],
                     ),
@@ -173,8 +173,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     width: 240,
                     child: AppTextField(
                       hintText: 'Search by username, email or report ID',
-                      prefixIconPath: AppIcons.searchSvg,
-                      fillColor: const Color(0xFF191622),
+                      prefixIconPath: AdminIcons.search,
+                      fillColor: const Color(0xFF141119),
                       onChanged: (String val) =>
                           setState(() => _searchQuery = val),
                     ),
@@ -183,10 +183,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   Container(
                     padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF191622),
+                      color: const Color(0xFF141119),
                       borderRadius: BorderRadius.circular(12),
                       border:
-                          Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                          Border.all(color: Colors.white.withValues(alpha: 0.09)),
                     ),
                     child: Row(
                       children: <Widget>[
@@ -207,7 +207,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                 style: TextStyle(
                                   color: _statusFilter == i
                                       ? Colors.white
-                                      : Colors.white54,
+                                      : Color(0xFF948CA3),
                                   fontWeight: FontWeight.w600,
                                   fontSize: 13,
                                 ),
@@ -234,10 +234,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF16131D),
+                    color: const Color(0xFF141119),
                     borderRadius: BorderRadius.circular(20),
                     border:
-                        Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                        Border.all(color: Colors.white.withValues(alpha: 0.09)),
                   ),
                   child: Column(
                     children: <Widget>[
@@ -312,7 +312,7 @@ class _ColumnHeader extends StatelessWidget {
     return Text(
       label,
       style: const TextStyle(
-        color: Colors.white38,
+        color: Color(0xFF635C72),
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,
@@ -339,12 +339,12 @@ class _UserRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (String label, Color color) = switch (user.status) {
-      _UserStatus.active => ('Active', const Color(0xFF16A34A)),
+      _UserStatus.active => ('Active', const Color(0xFF3FE0AE)),
       _UserStatus.suspended => (
           user.suspendedFor ?? 'Suspended',
           const Color(0xFFD97706)
         ),
-      _UserStatus.banned => ('Banned', const Color(0xFFDC2626)),
+      _UserStatus.banned => ('Banned', const Color(0xFFFF3B77)),
     };
 
     return Padding(
@@ -371,7 +371,7 @@ class _UserRow extends StatelessWidget {
                       Text(
                         user.handle,
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: Color(0xFFF3EFF7),
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                         ),
@@ -379,7 +379,7 @@ class _UserRow extends StatelessWidget {
                       Text(
                         user.pronoun,
                         style: const TextStyle(
-                            color: Colors.white38, fontSize: 11),
+                            color: Color(0xFF635C72), fontSize: 11),
                       ),
                     ],
                   ),
@@ -390,19 +390,19 @@ class _UserRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: Text(user.joined,
-                style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                style: const TextStyle(color: Color(0xFF948CA3), fontSize: 13)),
           ),
           Expanded(
             flex: 1,
             child: Text('${user.posts}',
-                style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                style: const TextStyle(color: Color(0xFF948CA3), fontSize: 13)),
           ),
           Expanded(
             flex: 2,
             child: Text(
               '${user.reports}',
               style: TextStyle(
-                color: user.reports > 5 ? const Color(0xFFDC2626) : Colors.white70,
+                color: user.reports > 5 ? const Color(0xFFFF3B77) : Color(0xFF948CA3),
                 fontWeight: user.reports > 5 ? FontWeight.w700 : FontWeight.w400,
                 fontSize: 13,
               ),
@@ -431,7 +431,7 @@ class _UserRow extends StatelessWidget {
           SizedBox(
             width: 110,
             child: PopupMenuButton<String>(
-              color: const Color(0xFF1D1927),
+              color: const Color(0xFF1C1824),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
                 side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
@@ -449,7 +449,7 @@ class _UserRow extends StatelessWidget {
                 const PopupMenuItem<String>(
                   value: 'active',
                   child: Text('Active',
-                      style: TextStyle(color: Colors.white, fontSize: 13)),
+                      style: TextStyle(color: Color(0xFFF3EFF7), fontSize: 13)),
                 ),
                 const PopupMenuDivider(),
                 for (final String option in suspendOptions)
@@ -457,21 +457,21 @@ class _UserRow extends StatelessWidget {
                     value: option,
                     child: Text(option,
                         style:
-                            const TextStyle(color: Colors.white70, fontSize: 13)),
+                            const TextStyle(color: Color(0xFF948CA3), fontSize: 13)),
                   ),
                 const PopupMenuDivider(),
                 const PopupMenuItem<String>(
                   value: 'ban',
                   child: Text('Ban permanently',
                       style: TextStyle(
-                          color: Color(0xFFDC2626), fontSize: 13)),
+                          color: Color(0xFFFF3B77), fontSize: 13)),
                 ),
               ],
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1D1927),
+                  color: const Color(0xFF1C1824),
                   borderRadius: BorderRadius.circular(14),
                   border:
                       Border.all(color: Colors.white.withValues(alpha: 0.12)),
@@ -481,11 +481,11 @@ class _UserRow extends StatelessWidget {
                   children: <Widget>[
                     Text('Manage',
                         style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFFF3EFF7),
                             fontWeight: FontWeight.w700,
                             fontSize: 12)),
                     SizedBox(width: 4),
-                    Icon(Icons.expand_more, size: 16, color: Colors.white70),
+                    Icon(Icons.expand_more, size: 16, color: Color(0xFF948CA3)),
                   ],
                 ),
               ),

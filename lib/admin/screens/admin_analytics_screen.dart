@@ -29,7 +29,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
 
   static const List<_PostShare> _postShares = <_PostShare>[
     _PostShare(label: 'Short video', percent: 64, color: Color(0xFFFF4B8B)),
-    _PostShare(label: 'Text posts', percent: 24, color: Color(0xFF9333EA)),
+    _PostShare(label: 'Text posts', percent: 24, color: Color(0xFF8B5CFF)),
     _PostShare(label: 'Image posts', percent: 12, color: Color(0xFF00E5FF)),
   ];
 
@@ -70,7 +70,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                         Text(
                           'Analytics',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFFF3EFF7),
                             fontWeight: FontWeight.w700,
                             fontSize: 24,
                           ),
@@ -78,7 +78,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                         SizedBox(height: 4),
                         Text(
                           '1 July - 2 August 2026',
-                          style: TextStyle(color: Colors.white54, fontSize: 13),
+                          style: TextStyle(color: Color(0xFF948CA3), fontSize: 13),
                         ),
                       ],
                     ),
@@ -86,10 +86,10 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                   Container(
                     padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF191622),
+                      color: const Color(0xFF141119),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.08)),
+                          color: Colors.white.withValues(alpha: 0.09)),
                     ),
                     child: Row(
                       children: <Widget>[
@@ -116,8 +116,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                                 label,
                                 style: TextStyle(
                                   color: _rangeIndex == i
-                                      ? Colors.white
-                                      : Colors.white54,
+                                      ? Color(0xFFF3EFF7)
+                                      : Color(0xFF948CA3),
                                   fontWeight: FontWeight.w600,
                                   fontSize: 13,
                                 ),
@@ -159,7 +159,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                       label: 'Posts per person',
                       value: '2.4',
                       delta: 'Weekly average',
-                      deltaColor: Colors.white38,
+                      deltaColor: Color(0xFF635C72),
                       iconPath: AdminIcons.image,
                       iconColor: Color(0xFF7C6BFF),
                     ),
@@ -170,9 +170,9 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                       label: 'Reports per 1k posts',
                       value: '14.3',
                       delta: '-1.8 vs June',
-                      deltaColor: Color(0xFFD97706),
+                      deltaColor: Color(0xFFFFB45C),
                       iconPath: AdminIcons.shield,
-                      iconColor: Color(0xFFD97706),
+                      iconColor: Color(0xFFFFB45C),
                     ),
                   ),
                 ],
@@ -188,10 +188,10 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(AppSpacing.lg),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF16131D),
+                          color: const Color(0xFF141119),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.08)),
+                              color: Colors.white.withValues(alpha: 0.09)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,7 +199,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                             const Text(
                               'What people post',
                               style: TextStyle(
-                                  color: Colors.white,
+                                  color: Color(0xFFF3EFF7),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14),
                             ),
@@ -218,11 +218,11 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                                       children: <Widget>[
                                         Text(share.label,
                                             style: const TextStyle(
-                                                color: Colors.white70,
+                                                color: Color(0xFF948CA3),
                                                 fontSize: 13)),
                                         Text('${share.percent}%',
                                             style: const TextStyle(
-                                                color: Colors.white,
+                                                color: Color(0xFFF3EFF7),
                                                 fontSize: 12,
                                                 fontWeight:
                                                     FontWeight.w700)),
@@ -234,8 +234,9 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                                       child: LinearProgressIndicator(
                                         value: share.percent / 100,
                                         minHeight: 6,
-                                        backgroundColor: Colors.white
-                                            .withValues(alpha: 0.06),
+                                        backgroundColor: const Color(
+                                          0xFF1C1824,
+                                        ),
                                         valueColor:
                                             AlwaysStoppedAnimation<Color>(
                                                 share.color),
@@ -248,7 +249,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                             const Text(
                               'Top hashtags',
                               style: TextStyle(
-                                  color: Colors.white,
+                                  color: Color(0xFFF3EFF7),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14),
                             ),
@@ -263,7 +264,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 12, vertical: 6),
                                     textStyle: const TextStyle(
-                                        color: Colors.white70, fontSize: 12),
+                                        color: Color(0xFF948CA3), fontSize: 12),
                                   ),
                               ],
                             ),
@@ -276,10 +277,10 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(AppSpacing.lg),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF16131D),
+                          color: const Color(0xFF141119),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.08)),
+                              color: Colors.white.withValues(alpha: 0.09)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,7 +288,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                             const Text(
                               'Safety outcomes · 30 days',
                               style: TextStyle(
-                                  color: Colors.white,
+                                  color: Color(0xFFF3EFF7),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14),
                             ),
@@ -303,12 +304,12 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                                   children: <Widget>[
                                     Text(label,
                                         style: const TextStyle(
-                                            color: Colors.white70,
+                                            color: Color(0xFF948CA3),
                                             fontSize: 13)),
                                     Text(
                                       value,
                                       style: TextStyle(
-                                        color: color ?? Colors.white,
+                                        color: color ?? const Color(0xFFF3EFF7),
                                         fontWeight: FontWeight.w700,
                                         fontSize: 13,
                                       ),

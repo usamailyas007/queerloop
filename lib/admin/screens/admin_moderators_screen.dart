@@ -118,7 +118,7 @@ class _AdminModeratorsScreenState extends State<AdminModeratorsScreen> {
                         Text(
                           'Moderators',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFFF3EFF7),
                             fontWeight: FontWeight.w700,
                             fontSize: 24,
                           ),
@@ -126,7 +126,7 @@ class _AdminModeratorsScreenState extends State<AdminModeratorsScreen> {
                         SizedBox(height: 4),
                         Text(
                           '9 active · covering 3 time zones',
-                          style: TextStyle(color: Colors.white54, fontSize: 13),
+                          style: TextStyle(color: Color(0xFF948CA3), fontSize: 13),
                         ),
                       ],
                     ),
@@ -146,10 +146,10 @@ class _AdminModeratorsScreenState extends State<AdminModeratorsScreen> {
 
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF16131D),
+                  color: const Color(0xFF141119),
                   borderRadius: BorderRadius.circular(20),
                   border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      Border.all(color: Colors.white.withValues(alpha: 0.09)),
                 ),
                 child: Column(
                   children: <Widget>[
@@ -215,7 +215,7 @@ class _AdminModeratorsScreenState extends State<AdminModeratorsScreen> {
                                           Text(
                                             '${mod.name} · ${mod.modId}',
                                             style: const TextStyle(
-                                              color: Colors.white,
+                                              color: Color(0xFFF3EFF7),
                                               fontWeight: FontWeight.w700,
                                               fontSize: 13,
                                             ),
@@ -223,7 +223,7 @@ class _AdminModeratorsScreenState extends State<AdminModeratorsScreen> {
                                           Text(
                                             mod.email,
                                             style: const TextStyle(
-                                                color: Colors.white38,
+                                                color: Color(0xFF635C72),
                                                 fontSize: 11),
                                           ),
                                         ],
@@ -236,19 +236,19 @@ class _AdminModeratorsScreenState extends State<AdminModeratorsScreen> {
                                 flex: 2,
                                 child: Text(mod.communities,
                                     style: const TextStyle(
-                                        color: Colors.white70, fontSize: 13)),
+                                        color: Color(0xFF948CA3), fontSize: 13)),
                               ),
                               Expanded(
                                 flex: 2,
                                 child: Text(mod.resolved,
                                     style: const TextStyle(
-                                        color: Colors.white70, fontSize: 13)),
+                                        color: Color(0xFF948CA3), fontSize: 13)),
                               ),
                               Expanded(
                                 flex: 2,
                                 child: Text(mod.avgResponse,
                                     style: const TextStyle(
-                                        color: Colors.white70, fontSize: 13)),
+                                        color: Color(0xFF948CA3), fontSize: 13)),
                               ),
                               Expanded(
                                 flex: 1,
@@ -257,8 +257,8 @@ class _AdminModeratorsScreenState extends State<AdminModeratorsScreen> {
                                   style: TextStyle(
                                     color: mod.reversed != '0' &&
                                             mod.reversed != '—'
-                                        ? const Color(0xFFDC2626)
-                                        : Colors.white70,
+                                        ? const Color(0xFFFF3B77)
+                                        : Color(0xFF948CA3),
                                     fontWeight: FontWeight.w600,
                                     fontSize: 13,
                                   ),
@@ -270,7 +270,7 @@ class _AdminModeratorsScreenState extends State<AdminModeratorsScreen> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 14, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF1D1927),
+                                    color: const Color(0xFF1C1824),
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
                                         color: Colors.white
@@ -280,7 +280,7 @@ class _AdminModeratorsScreenState extends State<AdminModeratorsScreen> {
                                     mod.pending ? 'Resend' : 'Sent',
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
-                                      color: Colors.white,
+                                      color: Color(0xFFF3EFF7),
                                       fontWeight: FontWeight.w700,
                                       fontSize: 12,
                                     ),
@@ -313,7 +313,7 @@ class _Header extends StatelessWidget {
     return Text(
       label,
       style: const TextStyle(
-        color: Colors.white38,
+        color: Color(0xFF635C72),
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,

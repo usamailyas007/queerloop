@@ -7,47 +7,26 @@ import '../../core/widgets/app_outline_button.dart';
 import '../../core/widgets/app_tag_chip.dart';
 import '../../core/widgets/app_text_field.dart';
 
-class AdminInviteModeratorScreen extends StatefulWidget {
-  const AdminInviteModeratorScreen({required this.onBack, super.key});
+class AdminAddQuestionScreen extends StatefulWidget {
+  const AdminAddQuestionScreen({required this.onBack, super.key});
 
   final VoidCallback onBack;
 
   @override
-  State<AdminInviteModeratorScreen> createState() =>
-      _AdminInviteModeratorScreenState();
+  State<AdminAddQuestionScreen> createState() =>
+      _AdminAddQuestionScreenState();
 }
 
-class _AdminInviteModeratorScreenState
-    extends State<AdminInviteModeratorScreen> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final Set<String> _selectedCommunities = <String>{'Lesbian', 'Transgender'};
+class _AdminAddQuestionScreenState extends State<AdminAddQuestionScreen> {
+  final TextEditingController _questionController = TextEditingController();
+  int _audienceIndex = 0;
 
-  static const List<String> _communities = <String>[
-    'Lesbian',
-    'Gay',
-    'Bisexual',
-    'Transgender',
-    'Non-binary',
-    'Queer',
-    'General',
-  ];
+  static const List<String> _audiences = <String>['Everyone', 'One community'];
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _questionController.dispose();
     super.dispose();
-  }
-
-  void _toggleCommunity(String name) {
-    setState(() {
-      if (_selectedCommunities.contains(name)) {
-        _selectedCommunities.remove(name);
-      } else {
-        _selectedCommunities.add(name);
-      }
-    });
   }
 
   @override
@@ -68,14 +47,17 @@ class _AdminInviteModeratorScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         const Text(
-                          'Moderators /',
-                          style: TextStyle(color: Color(0xFF635C72), fontSize: 12),
+                          'Conversation of the day /',
+                          style: TextStyle(
+                            color: Color(0xFF635C72),
+                            fontSize: 12,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Invite moderator',
+                          'Publish new question',
                           style: AppTextStyles.titleMedium.copyWith(
-                            color: Color(0xFFF3EFF7),
+                            color: const Color(0xFFF3EFF7),
                             fontWeight: FontWeight.w700,
                             fontSize: 24,
                           ),
@@ -88,6 +70,7 @@ class _AdminInviteModeratorScreenState
                     child: AppOutlineButton(
                       text: 'Cancel',
                       height: 40,
+                      backgroundColor: const Color(0xFF1C1824),
                       onPressed: widget.onBack,
                     ),
                   ),
@@ -102,68 +85,50 @@ class _AdminInviteModeratorScreenState
                 decoration: BoxDecoration(
                   color: const Color(0xFF141119),
                   borderRadius: BorderRadius.circular(20),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.09)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.09),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     const Text(
-                      'Work email',
+                      'Question',
                       style: TextStyle(
-                          color: Color(0xFF948CA3),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600),
+                        color: Color(0xFF948CA3),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     AppTextField(
-                      controller: _emailController,
-                      hintText: 'name@queerloop.app',
-                      keyboardType: TextInputType.emailAddress,
+                      controller: _questionController,
+                      hintText: "What's a queer joy moment from this week?",
                       fillColor: const Color(0xFF1C1824),
-                      prefixIcon: const Icon(Icons.mail_outline_rounded,
-                          color: Color(0xFF635C72), size: 20),
+                      maxLines: 2,
                     ),
 
                     const SizedBox(height: AppSpacing.lg),
 
                     const Text(
-                      'Password',
+                      'Audience',
                       style: TextStyle(
-                          color: Color(0xFF948CA3),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    AppTextField(
-                      controller: _passwordController,
-                      hintText: 'Enter password',
-                      isPassword: true,
-                      fillColor: const Color(0xFF1C1824),
-                      prefixIcon: const Icon(Icons.lock_outline_rounded,
-                          color: Color(0xFF635C72), size: 20),
-                    ),
-
-                    const SizedBox(height: AppSpacing.lg),
-
-                    const Text(
-                      'Assign communities',
-                      style: TextStyle(
-                          color: Color(0xFF948CA3),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600),
+                        color: Color(0xFF948CA3),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    Row(
                       children: <Widget>[
-                        for (final String name in _communities)
+                        for (int i = 0; i < _audiences.length; i++) ...<Widget>[
+                          if (i > 0) const SizedBox(width: 8),
                           AppTagChip(
-                            label: name,
-                            isSelected: _selectedCommunities.contains(name),
-                            onTap: () => _toggleCommunity(name),
+                            label: _audiences[i],
+                            isSelected: _audienceIndex == i,
+                            onTap: () => setState(() => _audienceIndex = i),
                           ),
+                        ],
                       ],
                     ),
 
@@ -174,13 +139,14 @@ class _AdminInviteModeratorScreenState
                         Expanded(
                           child: AppOutlineButton(
                             text: 'Cancel',
+                            backgroundColor: const Color(0xFF1C1824),
                             onPressed: widget.onBack,
                           ),
                         ),
                         const SizedBox(width: AppSpacing.md),
                         Expanded(
                           child: AppGradientButton(
-                            text: 'Send invite',
+                            text: 'Publish',
                             onPressed: widget.onBack,
                           ),
                         ),

@@ -10,27 +10,37 @@ import '../../core/widgets/app_outline_button.dart';
 import '../../core/widgets/app_tag_chip.dart';
 import '../../core/widgets/app_text_field.dart';
 
-class AdminAddCommunityScreen extends StatefulWidget {
-  const AdminAddCommunityScreen({required this.onBack, super.key});
+class AdminSpotlightFormScreen extends StatefulWidget {
+  const AdminSpotlightFormScreen({required this.onBack, super.key});
 
   final VoidCallback onBack;
 
   @override
-  State<AdminAddCommunityScreen> createState() =>
-      _AdminAddCommunityScreenState();
+  State<AdminSpotlightFormScreen> createState() =>
+      _AdminSpotlightFormScreenState();
 }
 
-class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
+class _AdminSpotlightFormScreenState extends State<AdminSpotlightFormScreen> {
+  final TextEditingController _handleController = TextEditingController();
+  final TextEditingController _storyController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
   Uint8List? _pickedImageBytes;
-  bool _isPublic = true;
+  String _selectedCommunity = 'Lesbian';
+
+  static const List<String> _communities = <String>[
+    'Lesbian',
+    'Gay',
+    'Bisexual',
+    'Transgender',
+    'Non-binary',
+    'Queer',
+    'General',
+  ];
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
+    _handleController.dispose();
+    _storyController.dispose();
     super.dispose();
   }
 
@@ -47,7 +57,7 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF18181B),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -60,22 +70,20 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         const Text(
-                          'Communities /',
-                          style: TextStyle(color: Color(0xFF635C72), fontSize: 12),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Add community',
-                          style: AppTextStyles.titleMedium.copyWith(
-                            color: Color(0xFFF3EFF7),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 24,
+                          'Community spotlight /',
+                          style: TextStyle(
+                            color: Color(0xFF635C72),
+                            fontSize: 12,
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
-                          "Creates a new group tab in the app's Communities section",
-                          style: TextStyle(color: Color(0xFF948CA3), fontSize: 13),
+                        Text(
+                          'New spotlight',
+                          style: AppTextStyles.titleMedium.copyWith(
+                            color: const Color(0xFFF3EFF7),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 24,
+                          ),
                         ),
                       ],
                     ),
@@ -85,6 +93,7 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                     child: AppOutlineButton(
                       text: 'Cancel',
                       height: 40,
+                      backgroundColor: const Color(0xFF1C1824),
                       onPressed: widget.onBack,
                     ),
                   ),
@@ -99,58 +108,27 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF141119),
                   borderRadius: BorderRadius.circular(20),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.09)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.09),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     const Text(
-                      'Community name',
+                      'Member photo',
                       style: TextStyle(
-                          color: Color(0xFF948CA3),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    AppTextField(
-                      controller: _nameController,
-                      hintText: 'e.g. Asexual',
-                      fillColor: const Color(0xFF1C1824),
-                    ),
-
-                    const SizedBox(height: AppSpacing.lg),
-
-                    const Text(
-                      'Short description',
-                      style: TextStyle(
-                          color: Color(0xFF948CA3),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    AppTextField(
-                      controller: _descriptionController,
-                      hintText: "Shown on the community's about page",
-                      fillColor: const Color(0xFF1C1824),
-                      maxLines: 3,
-                    ),
-
-                    const SizedBox(height: AppSpacing.lg),
-
-                    const Text(
-                      'Community image',
-                      style: TextStyle(
-                          color: Color(0xFF948CA3),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600),
+                        color: Color(0xFF948CA3),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     GestureDetector(
                       onTap: _pickImage,
                       child: Container(
                         width: double.infinity,
-                        height: 120,
+                        height: 140,
                         decoration: BoxDecoration(
                           color: const Color(0xFF1C1824),
                           borderRadius: BorderRadius.circular(16),
@@ -163,51 +141,94 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                             ? const Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: <Widget>[
-                                  Icon(Icons.file_upload_outlined,
-                                      color: Color(0xFF948CA3), size: 22),
+                                  Icon(
+                                    Icons.file_upload_outlined,
+                                    color: Color(0xFF948CA3),
+                                    size: 22,
+                                  ),
                                   SizedBox(height: 8),
                                   Text(
-                                    'Upload image',
+                                    'Upload photo',
                                     style: TextStyle(
-                                        color: Color(0xFF948CA3), fontSize: 13),
+                                      color: Color(0xFF948CA3),
+                                      fontSize: 13,
+                                    ),
                                   ),
                                   SizedBox(height: 2),
                                   Text(
-                                    'PNG, JPG or SVG · Max 2 MB',
+                                    'PNG or JPG · Max 2 MB',
                                     style: TextStyle(
-                                        color: Color(0xFF635C72), fontSize: 11),
+                                      color: Color(0xFF635C72),
+                                      fontSize: 11,
+                                    ),
                                   ),
                                 ],
                               )
-                            : Image.memory(_pickedImageBytes!,
-                                fit: BoxFit.cover),
+                            : Image.memory(
+                                _pickedImageBytes!,
+                                fit: BoxFit.cover,
+                              ),
                       ),
                     ),
 
                     const SizedBox(height: AppSpacing.lg),
 
                     const Text(
-                      'Visibility',
+                      'Member handle',
                       style: TextStyle(
-                          color: Color(0xFF948CA3),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600),
+                        color: Color(0xFF948CA3),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    AppTextField(
+                      controller: _handleController,
+                      hintText: '@rowankeeps',
+                      fillColor: const Color(0xFF1C1824),
+                    ),
+
+                    const SizedBox(height: AppSpacing.lg),
+
+                    const Text(
+                      'Community',
+                      style: TextStyle(
+                        color: Color(0xFF948CA3),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: <Widget>[
-                        AppTagChip(
-                          label: 'Public',
-                          isSelected: _isPublic,
-                          onTap: () => setState(() => _isPublic = true),
-                        ),
-                        const SizedBox(width: 8),
-                        AppTagChip(
-                          label: 'Members only',
-                          isSelected: !_isPublic,
-                          onTap: () => setState(() => _isPublic = false),
-                        ),
+                        for (final String name in _communities)
+                          AppTagChip(
+                            label: name,
+                            isSelected: _selectedCommunity == name,
+                            onTap: () =>
+                                setState(() => _selectedCommunity = name),
+                          ),
                       ],
+                    ),
+
+                    const SizedBox(height: AppSpacing.lg),
+
+                    const Text(
+                      'Their story',
+                      style: TextStyle(
+                        color: Color(0xFF948CA3),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    AppTextField(
+                      controller: _storyController,
+                      hintText: 'Shown alongside their photo on Discover',
+                      fillColor: const Color(0xFF1C1824),
+                      maxLines: 3,
                     ),
 
                     const SizedBox(height: AppSpacing.xxl),
@@ -217,13 +238,14 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                         Expanded(
                           child: AppOutlineButton(
                             text: 'Cancel',
+                            backgroundColor: const Color(0xFF1C1824),
                             onPressed: widget.onBack,
                           ),
                         ),
                         const SizedBox(width: AppSpacing.md),
                         Expanded(
                           child: AppGradientButton(
-                            text: 'Create community',
+                            text: 'Publish spotlight',
                             onPressed: widget.onBack,
                           ),
                         ),
