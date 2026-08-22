@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/theme/app_images.dart';
 import '../../core/theme/app_spacing.dart';
@@ -174,7 +175,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'View all ${question.answers}',
+                          'View all ${NumberFormat.decimalPattern().format(question.answers)}',
                           style: const TextStyle(
                             color: Color(0xFF4CC9FF),
                             fontWeight: FontWeight.w600,

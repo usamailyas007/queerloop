@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_gradient_button.dart';
 import '../../core/widgets/app_outline_button.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../admin_icons.dart';
-import 'admin_add_question_screen.dart';
 import 'admin_conversation_answers_screen.dart';
+import 'admin_conversation_overview_screen.dart';
 
 class ConversationQuestion {
   const ConversationQuestion({
@@ -26,7 +27,7 @@ class ConversationQuestion {
   final bool isLive;
 }
 
-enum _ConversationView { history, answers, addQuestion }
+enum _ConversationView { overview, history, answers }
 
 class AdminConversationHistoryScreen extends StatefulWidget {
   const AdminConversationHistoryScreen({super.key});
@@ -38,7 +39,7 @@ class AdminConversationHistoryScreen extends StatefulWidget {
 
 class _AdminConversationHistoryScreenState
     extends State<AdminConversationHistoryScreen> {
-  _ConversationView _view = _ConversationView.history;
+  _ConversationView _view = _ConversationView.overview;
   ConversationQuestion? _selectedQuestion;
   String _searchQuery = '';
 
@@ -108,25 +109,28 @@ class _AdminConversationHistoryScreenState
     });
   }
 
-  void _openAddQuestion() {
-    setState(() => _view = _ConversationView.addQuestion);
+  void _openOverview() {
+    setState(() => _view = _ConversationView.overview);
   }
 
-  void _backToHistory() {
+  void _openHistory() {
     setState(() => _view = _ConversationView.history);
   }
 
   @override
   Widget build(BuildContext context) {
     switch (_view) {
+      case _ConversationView.overview:
+        return AdminConversationOverviewScreen(
+          liveQuestion: _questions.first,
+          onOpenHistory: _openHistory,
+        );
       case _ConversationView.answers:
         return AdminConversationAnswersScreen(
           question: _selectedQuestion!,
-          onBack: _backToHistory,
-          onPublishNew: _openAddQuestion,
+          onBack: _openHistory,
+          onPublishNew: _openOverview,
         );
-      case _ConversationView.addQuestion:
-        return AdminAddQuestionScreen(onBack: _backToHistory);
       case _ConversationView.history:
         return _buildHistory();
     }
@@ -197,7 +201,7 @@ class _AdminConversationHistoryScreenState
                       text: 'History',
                       height: 44,
                       backgroundColor: const Color(0xFF1C1824),
-                      onPressed: _backToHistory,
+                      onPressed: _openHistory,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -211,7 +215,7 @@ class _AdminConversationHistoryScreenState
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
                       ),
-                      onPressed: _openAddQuestion,
+                      onPressed: _openOverview,
                     ),
                   ),
                 ],
@@ -297,7 +301,8 @@ class _AdminConversationHistoryScreenState
                               Expanded(
                                 flex: 2,
                                 child: Text(
-                                  '${q.answers}',
+                                  NumberFormat.decimalPattern()
+                                      .format(q.answers),
                                   style: const TextStyle(
                                     color: Color(0xFF948CA3),
                                     fontSize: 13,
@@ -307,7 +312,8 @@ class _AdminConversationHistoryScreenState
                               Expanded(
                                 flex: 2,
                                 child: Text(
-                                  '${q.topAnswerLikes}',
+                                  NumberFormat.decimalPattern()
+                                      .format(q.topAnswerLikes),
                                   style: const TextStyle(
                                     color: Color(0xFF948CA3),
                                     fontSize: 13,
