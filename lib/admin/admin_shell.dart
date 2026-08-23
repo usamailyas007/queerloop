@@ -232,7 +232,7 @@ class _AdminSidebar extends StatelessWidget {
   Widget _buildSidebarItem({required int index, required _NavItem item}) {
     final bool isSelected = selectedIndex == index;
     final Color iconColor =
-        isSelected ? const Color(0xFFF3EFF7) : const Color(0xFF948CA3);
+        isSelected ? const Color(0xFF00E5FF) : const Color(0xFF948CA3);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.xs),
