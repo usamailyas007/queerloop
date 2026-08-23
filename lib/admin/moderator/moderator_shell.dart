@@ -4,9 +4,9 @@ import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_images.dart';
 import '../../core/theme/app_spacing.dart';
-import 'moderator_action_log_screen.dart';
-import 'moderator_dashboard_screen.dart';
-import 'moderator_reports_queue_screen.dart';
+import 'action_log/screens/moderator_action_log_screen.dart';
+import 'dashboard/screens/moderator_dashboard_screen.dart';
+import 'reports_queue/screens/moderator_reports_queue_screen.dart';
 
 class ModeratorShell extends StatefulWidget {
   const ModeratorShell({super.key});

@@ -7,8 +7,8 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_theme.dart';
 import '../l10n/app_localizations.dart';
-import 'admin_auth_provider.dart';
-import 'admin_login_screen.dart';
+import 'auth/provider/admin_auth_provider.dart';
+import 'auth/screens/admin_login_screen.dart';
 import 'admin_shell.dart';
 import 'moderator/moderator_shell.dart';
 

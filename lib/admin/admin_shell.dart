@@ -5,17 +5,17 @@ import '../core/widgets/app_user_avatar.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_images.dart';
 import '../core/theme/app_spacing.dart';
-import 'admin_auth_provider.dart';
+import 'auth/provider/admin_auth_provider.dart';
 import 'admin_icons.dart';
-import 'screens/admin_analytics_screen.dart';
-import 'screens/admin_announcements_screen.dart';
-import 'screens/admin_communities_screen.dart';
-import 'screens/admin_content_screen.dart';
-import 'screens/admin_conversation_history_screen.dart';
-import 'screens/admin_dashboard_screen.dart';
-import 'screens/admin_moderators_screen.dart';
-import 'screens/admin_spotlight_screen.dart';
-import 'screens/admin_users_screen.dart';
+import 'analytics/screens/admin_analytics_screen.dart';
+import 'announcements/screens/admin_announcements_screen.dart';
+import 'communities/screens/admin_communities_screen.dart';
+import 'content/screens/admin_content_screen.dart';
+import 'conversation_of_the_day/screens/admin_conversation_history_screen.dart';
+import 'dashboard/screens/admin_dashboard_screen.dart';
+import 'moderators/screens/admin_moderators_screen.dart';
+import 'community_spotlight/screens/admin_spotlight_screen.dart';
+import 'users/screens/admin_users_screen.dart';
 
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});

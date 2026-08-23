@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:queerloop/admin/admin_auth_provider.dart';
+import 'package:queerloop/admin/auth/provider/admin_auth_provider.dart';
 import 'package:queerloop/admin/moderator/moderator_shell.dart';
 import 'package:queerloop/l10n/app_localizations.dart';
 
