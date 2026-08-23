@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/widgets/app_user_avatar.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_images.dart';
 import '../../core/theme/app_spacing.dart';
@@ -138,7 +140,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         _users.where((_AdminUser u) => u.status == _UserStatus.suspended).length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -155,7 +157,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                         const Text(
                           'Users',
                           style: TextStyle(
-                            color: Color(0xFFF3EFF7),
+                            color: AppColors.adminTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 24,
                           ),
@@ -164,7 +166,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                         Text(
                           '${_users.length} accounts · $suspendedCount currently suspended',
                           style: const TextStyle(
-                              color: Color(0xFF948CA3), fontSize: 13),
+                              color: AppColors.adminTextSecondary, fontSize: 13),
                         ),
                       ],
                     ),
@@ -174,7 +176,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     child: AppTextField(
                       hintText: 'Search by username, email or report ID',
                       prefixIconPath: AdminIcons.search,
-                      fillColor: const Color(0xFF141119),
+                      fillColor: AppColors.adminSurface,
                       onChanged: (String val) =>
                           setState(() => _searchQuery = val),
                     ),
@@ -183,10 +185,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   Container(
                     padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF141119),
+                      color: AppColors.adminSurface,
                       borderRadius: BorderRadius.circular(12),
                       border:
-                          Border.all(color: Colors.white.withValues(alpha: 0.09)),
+                          Border.all(color: AppColors.adminBorder),
                     ),
                     child: Row(
                       children: <Widget>[
@@ -198,7 +200,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                   horizontal: 14, vertical: 7),
                               decoration: BoxDecoration(
                                 color: _statusFilter == i
-                                    ? const Color(0xFF2C2738)
+                                    ? AppColors.moderatorChipSelected
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(9),
                               ),
@@ -206,8 +208,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                 _statusLabels[i],
                                 style: TextStyle(
                                   color: _statusFilter == i
-                                      ? const Color(0xFFF3EFF7)
-                                      : const Color(0xFF948CA3),
+                                      ? AppColors.adminTextPrimary
+                                      : AppColors.adminTextSecondary,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 13,
                                 ),
@@ -234,10 +236,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF141119),
+                    color: AppColors.adminSurface,
                     borderRadius: BorderRadius.circular(20),
                     border:
-                        Border.all(color: Colors.white.withValues(alpha: 0.09)),
+                        Border.all(color: AppColors.adminBorder),
                   ),
                   child: Column(
                     children: <Widget>[
@@ -249,7 +251,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                         decoration: BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
-                                color: Colors.white.withValues(alpha: 0.06)),
+                                color: AppColors.adminDivider),
                           ),
                         ),
                         child: const Row(
@@ -273,7 +275,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                           itemCount: filtered.length,
                           separatorBuilder: (_, _) => Divider(
                             height: 1,
-                            color: Colors.white.withValues(alpha: 0.04),
+                            color: AppColors.adminRowDivider,
                           ),
                           itemBuilder: (_, int index) {
                             final _AdminUser user = filtered[index];
@@ -312,7 +314,7 @@ class _ColumnHeader extends StatelessWidget {
     return Text(
       label,
       style: const TextStyle(
-        color: Color(0xFF635C72),
+        color: AppColors.adminTextMuted,
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,
@@ -339,12 +341,12 @@ class _UserRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (String label, Color color) = switch (user.status) {
-      _UserStatus.active => ('Active', const Color(0xFF3FE0AE)),
+      _UserStatus.active => ('Active', AppColors.adminTeal),
       _UserStatus.suspended => (
           user.suspendedFor ?? 'Suspended',
-          const Color(0xFFFFB45C)
+          AppColors.adminOrange
         ),
-      _UserStatus.banned => ('Banned', const Color(0xFFFF3B77)),
+      _UserStatus.banned => ('Banned', AppColors.adminPink),
     };
 
     return Padding(
@@ -358,9 +360,10 @@ class _UserRow extends StatelessWidget {
             flex: 3,
             child: Row(
               children: <Widget>[
-                ClipOval(
-                  child: Image.asset(user.avatar,
-                      width: 34, height: 34, fit: BoxFit.cover),
+                AppUserAvatar(
+                  imageAsset: user.avatar,
+                  size: 34,
+                  hasGradientBorder: false,
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
@@ -371,7 +374,7 @@ class _UserRow extends StatelessWidget {
                       Text(
                         user.handle,
                         style: const TextStyle(
-                          color: Color(0xFFF3EFF7),
+                          color: AppColors.adminTextPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                         ),
@@ -379,7 +382,7 @@ class _UserRow extends StatelessWidget {
                       Text(
                         user.pronoun,
                         style: const TextStyle(
-                            color: Color(0xFF635C72), fontSize: 11),
+                            color: AppColors.adminTextMuted, fontSize: 11),
                       ),
                     ],
                   ),
@@ -390,19 +393,19 @@ class _UserRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: Text(user.joined,
-                style: const TextStyle(color: Color(0xFF948CA3), fontSize: 13)),
+                style: const TextStyle(color: AppColors.adminTextSecondary, fontSize: 13)),
           ),
           Expanded(
             flex: 1,
             child: Text('${user.posts}',
-                style: const TextStyle(color: Color(0xFF948CA3), fontSize: 13)),
+                style: const TextStyle(color: AppColors.adminTextSecondary, fontSize: 13)),
           ),
           Expanded(
             flex: 2,
             child: Text(
               '${user.reports}',
               style: TextStyle(
-                color: user.reports > 5 ? const Color(0xFFFF3B77) : Color(0xFF948CA3),
+                color: user.reports > 5 ? AppColors.adminPink : AppColors.adminTextSecondary,
                 fontWeight: user.reports > 5 ? FontWeight.w700 : FontWeight.w400,
                 fontSize: 13,
               ),
@@ -431,10 +434,10 @@ class _UserRow extends StatelessWidget {
           SizedBox(
             width: 110,
             child: PopupMenuButton<String>(
-              color: const Color(0xFF1C1824),
+              color: AppColors.adminSurfaceAlt,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                side: BorderSide(color: AppColors.adminButtonBorder),
               ),
               onSelected: (String value) {
                 if (value == 'active') {
@@ -449,7 +452,7 @@ class _UserRow extends StatelessWidget {
                 const PopupMenuItem<String>(
                   value: 'active',
                   child: Text('Active',
-                      style: TextStyle(color: Color(0xFFF3EFF7), fontSize: 13)),
+                      style: TextStyle(color: AppColors.adminTextPrimary, fontSize: 13)),
                 ),
                 const PopupMenuDivider(),
                 for (final String option in suspendOptions)
@@ -457,35 +460,35 @@ class _UserRow extends StatelessWidget {
                     value: option,
                     child: Text(option,
                         style:
-                            const TextStyle(color: Color(0xFF948CA3), fontSize: 13)),
+                            const TextStyle(color: AppColors.adminTextSecondary, fontSize: 13)),
                   ),
                 const PopupMenuDivider(),
                 const PopupMenuItem<String>(
                   value: 'ban',
                   child: Text('Ban permanently',
                       style: TextStyle(
-                          color: Color(0xFFFF3B77), fontSize: 13)),
+                          color: AppColors.adminPink, fontSize: 13)),
                 ),
               ],
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1C1824),
+                  color: AppColors.adminSurfaceAlt,
                   borderRadius: BorderRadius.circular(14),
                   border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                      Border.all(color: AppColors.adminButtonBorder),
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
                     Text('Manage',
                         style: TextStyle(
-                            color: Color(0xFFF3EFF7),
+                            color: AppColors.adminTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 12)),
                     SizedBox(width: 4),
-                    Icon(Icons.expand_more, size: 16, color: Color(0xFF948CA3)),
+                    Icon(Icons.expand_more, size: 16, color: AppColors.adminTextSecondary),
                   ],
                 ),
               ),

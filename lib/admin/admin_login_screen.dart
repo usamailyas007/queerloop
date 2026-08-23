@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/theme/app_colors.dart';
 
 import '../core/theme/app_images.dart';
 import '../core/widgets/app_gradient_button.dart';
@@ -35,7 +36,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: Stack(
         children: <Widget>[
           // Soft pink glow behind the card, top-center.
@@ -52,8 +53,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     gradient: RadialGradient(
                       radius: 0.6,
                       colors: <Color>[
-                        Color(0x21FF3B77),
-                        Color(0x00FF3B77),
+                        AppColors.adminPinkGlow,
+                        AppColors.adminPinkTransparent,
                       ],
                     ),
                   ),
@@ -70,10 +71,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 90),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF141119),
+                    color: AppColors.adminSurface,
                     borderRadius: BorderRadius.circular(28),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.18),
+                      color: AppColors.adminCardBorderStrong,
                     ),
                     boxShadow: <BoxShadow>[
                       BoxShadow(
@@ -98,7 +99,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                           const Text(
                             'Sign in',
                             style: TextStyle(
-                              color: Color(0xFFF3EFF7),
+                              color: AppColors.adminTextPrimary,
                               fontWeight: FontWeight.w800,
                               fontSize: 24,
                               letterSpacing: -0.48,
@@ -110,7 +111,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                           const Text(
                             'Enter your email and password to continue.',
                             style: TextStyle(
-                              color: Color(0xFFA79FB8),
+                              color: AppColors.adminTextFaint,
                               fontSize: 12.5,
                             ),
                           ),
@@ -121,7 +122,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                           const Text(
                             'Email',
                             style: TextStyle(
-                              color: Color(0xFFF3EFF7),
+                              color: AppColors.adminTextPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 11.5,
                             ),
@@ -131,10 +132,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                             controller: _emailController,
                             hintText: 'you@queerloop.app',
                             keyboardType: TextInputType.emailAddress,
-                            fillColor: Colors.white.withValues(alpha: 0.04),
+                            fillColor: AppColors.adminRowDivider,
                             prefixIcon: const Icon(
                               Icons.mail_outline_rounded,
-                              color: Color(0xFFA79FB8),
+                              color: AppColors.adminTextFaint,
                               size: 17,
                             ),
                           ),
@@ -145,7 +146,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                           const Text(
                             'Password',
                             style: TextStyle(
-                              color: Color(0xFFF3EFF7),
+                              color: AppColors.adminTextPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 11.5,
                             ),
@@ -155,10 +156,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                             controller: _passwordController,
                             hintText: 'Enter your password',
                             isPassword: true,
-                            fillColor: Colors.white.withValues(alpha: 0.04),
+                            fillColor: AppColors.adminRowDivider,
                             prefixIcon: const Icon(
                               Icons.lock_outline_rounded,
-                              color: Color(0xFFA79FB8),
+                              color: AppColors.adminTextFaint,
                               size: 17,
                             ),
                           ),
@@ -174,12 +175,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
                               colors: <Color>[
-                                Color(0xFFFF3B77),
-                                Color(0xFF8B5CFF),
+                                AppColors.adminPink,
+                                AppColors.adminPurple,
                               ],
                             ),
                             textStyle: const TextStyle(
-                              color: Colors.white,
+                              color: AppColors.textInverse,
                               fontWeight: FontWeight.w800,
                               fontSize: 14,
                               letterSpacing: -0.14,

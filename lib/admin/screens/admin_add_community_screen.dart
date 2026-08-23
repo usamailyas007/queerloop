@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -45,7 +46,7 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -61,13 +62,13 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                       children: <Widget>[
                         const Text(
                           'Communities /',
-                          style: TextStyle(color: Color(0xFF635C72), fontSize: 12),
+                          style: TextStyle(color: AppColors.adminTextMuted, fontSize: 12),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Add community',
                           style: AppTextStyles.titleMedium.copyWith(
-                            color: Color(0xFFF3EFF7),
+                            color: AppColors.adminTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 24,
                           ),
@@ -75,7 +76,7 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                         const SizedBox(height: 4),
                         const Text(
                           "Creates a new group tab in the app's Communities section",
-                          style: TextStyle(color: Color(0xFF948CA3), fontSize: 13),
+                          style: TextStyle(color: AppColors.adminTextSecondary, fontSize: 13),
                         ),
                       ],
                     ),
@@ -97,10 +98,10 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                 width: 440,
                 padding: const EdgeInsets.all(AppSpacing.xl),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF141119),
+                  color: AppColors.adminSurface,
                   borderRadius: BorderRadius.circular(20),
                   border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.09)),
+                      Border.all(color: AppColors.adminBorder),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,7 +109,7 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                     const Text(
                       'Community name',
                       style: TextStyle(
-                          color: Color(0xFF948CA3),
+                          color: AppColors.adminTextSecondary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600),
                     ),
@@ -116,7 +117,7 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                     AppTextField(
                       controller: _nameController,
                       hintText: 'e.g. Asexual',
-                      fillColor: const Color(0xFF1C1824),
+                      fillColor: AppColors.adminSurfaceAlt,
                     ),
 
                     const SizedBox(height: AppSpacing.lg),
@@ -124,7 +125,7 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                     const Text(
                       'Short description',
                       style: TextStyle(
-                          color: Color(0xFF948CA3),
+                          color: AppColors.adminTextSecondary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600),
                     ),
@@ -132,7 +133,7 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                     AppTextField(
                       controller: _descriptionController,
                       hintText: "Shown on the community's about page",
-                      fillColor: const Color(0xFF1C1824),
+                      fillColor: AppColors.adminSurfaceAlt,
                       maxLines: 3,
                     ),
 
@@ -141,7 +142,7 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                     const Text(
                       'Community image',
                       style: TextStyle(
-                          color: Color(0xFF948CA3),
+                          color: AppColors.adminTextSecondary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600),
                     ),
@@ -152,10 +153,10 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                         width: double.infinity,
                         height: 120,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1C1824),
+                          color: AppColors.adminSurfaceAlt,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.16),
+                            color: AppColors.adminDropzoneBorder,
                           ),
                         ),
                         clipBehavior: Clip.antiAlias,
@@ -164,18 +165,18 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: <Widget>[
                                   Icon(Icons.file_upload_outlined,
-                                      color: Color(0xFF948CA3), size: 22),
+                                      color: AppColors.adminTextSecondary, size: 22),
                                   SizedBox(height: 8),
                                   Text(
                                     'Upload image',
                                     style: TextStyle(
-                                        color: Color(0xFF948CA3), fontSize: 13),
+                                        color: AppColors.adminTextSecondary, fontSize: 13),
                                   ),
                                   SizedBox(height: 2),
                                   Text(
                                     'PNG, JPG or SVG · Max 2 MB',
                                     style: TextStyle(
-                                        color: Color(0xFF635C72), fontSize: 11),
+                                        color: AppColors.adminTextMuted, fontSize: 11),
                                   ),
                                 ],
                               )
@@ -189,7 +190,7 @@ class _AdminAddCommunityScreenState extends State<AdminAddCommunityScreen> {
                     const Text(
                       'Visibility',
                       style: TextStyle(
-                          color: Color(0xFF948CA3),
+                          color: AppColors.adminTextSecondary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600),
                     ),

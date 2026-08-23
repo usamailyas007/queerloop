@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_gradient_button.dart';
@@ -80,7 +81,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -90,7 +91,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
               const Text(
                 'Announcements',
                 style: TextStyle(
-                  color: Color(0xFFF3EFF7),
+                  color: AppColors.adminTextPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 24,
                 ),
@@ -98,7 +99,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
               const SizedBox(height: 4),
               const Text(
                 'Sent as a push notification and pinned in the notifications list',
-                style: TextStyle(color: Color(0xFF948CA3), fontSize: 13),
+                style: TextStyle(color: AppColors.adminTextSecondary, fontSize: 13),
               ),
 
               const SizedBox(height: AppSpacing.xl),
@@ -112,10 +113,10 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(AppSpacing.lg),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF141119),
+                          color: AppColors.adminSurface,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.09)),
+                              color: AppColors.adminBorder),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,7 +124,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                             const Text(
                               'Compose',
                               style: TextStyle(
-                                  color: Color(0xFFF3EFF7),
+                                  color: AppColors.adminTextPrimary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14),
                             ),
@@ -131,20 +132,20 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                             AppTextField(
                               controller: _titleController,
                               hintText: 'Title',
-                              fillColor: const Color(0xFF1C1824),
+                              fillColor: AppColors.adminSurfaceAlt,
                             ),
                             const SizedBox(height: AppSpacing.md),
                             AppTextField(
                               controller: _messageController,
                               hintText: 'Message',
-                              fillColor: const Color(0xFF1C1824),
+                              fillColor: AppColors.adminSurfaceAlt,
                               maxLines: 4,
                             ),
                             const SizedBox(height: AppSpacing.lg),
                             const Text(
                               'Audience',
                               style: TextStyle(
-                                  color: Color(0xFF948CA3),
+                                  color: AppColors.adminTextSecondary,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600),
                             ),
@@ -174,10 +175,10 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(AppSpacing.lg),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF141119),
+                          color: AppColors.adminSurface,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.09)),
+                              color: AppColors.adminBorder),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,7 +186,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                             const Text(
                               'Sent',
                               style: TextStyle(
-                                  color: Color(0xFFF3EFF7),
+                                  color: AppColors.adminTextPrimary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14),
                             ),
@@ -202,7 +203,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                                     padding: const EdgeInsets.all(
                                         AppSpacing.md),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF1C1824),
+                                      color: AppColors.adminSurfaceAlt,
                                       borderRadius:
                                           BorderRadius.circular(14),
                                     ),
@@ -217,7 +218,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                                               Text(
                                                 item.title,
                                                 style: const TextStyle(
-                                                  color: Color(0xFFF3EFF7),
+                                                  color: AppColors.adminTextPrimary,
                                                   fontWeight:
                                                       FontWeight.w700,
                                                   fontSize: 13,
@@ -227,7 +228,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                                               Text(
                                                 item.meta,
                                                 style: const TextStyle(
-                                                  color: Color(0xFF635C72),
+                                                  color: AppColors.adminTextMuted,
                                                   fontSize: 11,
                                                 ),
                                               ),
@@ -240,19 +241,19 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                                                   horizontal: 10,
                                                   vertical: 3),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFF3FE0AE)
+                                            color: AppColors.adminTeal
                                                 .withValues(alpha: 0.2),
                                             borderRadius:
                                                 BorderRadius.circular(12),
                                             border: Border.all(
-                                              color: const Color(0xFF3FE0AE)
+                                              color: AppColors.adminTeal
                                                   .withValues(alpha: 0.4),
                                             ),
                                           ),
                                           child: const Text(
                                             'Sent',
                                             style: TextStyle(
-                                              color: Color(0xFF3FE0AE),
+                                              color: AppColors.adminTeal,
                                               fontWeight: FontWeight.w700,
                                               fontSize: 11,
                                             ),

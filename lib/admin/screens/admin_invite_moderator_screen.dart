@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -53,7 +54,7 @@ class _AdminInviteModeratorScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -69,13 +70,13 @@ class _AdminInviteModeratorScreenState
                       children: <Widget>[
                         const Text(
                           'Moderators /',
-                          style: TextStyle(color: Color(0xFF635C72), fontSize: 12),
+                          style: TextStyle(color: AppColors.adminTextMuted, fontSize: 12),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Invite moderator',
                           style: AppTextStyles.titleMedium.copyWith(
-                            color: Color(0xFFF3EFF7),
+                            color: AppColors.adminTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 24,
                           ),
@@ -100,10 +101,10 @@ class _AdminInviteModeratorScreenState
                 width: 440,
                 padding: const EdgeInsets.all(AppSpacing.xl),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF141119),
+                  color: AppColors.adminSurface,
                   borderRadius: BorderRadius.circular(20),
                   border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.09)),
+                      Border.all(color: AppColors.adminBorder),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -111,7 +112,7 @@ class _AdminInviteModeratorScreenState
                     const Text(
                       'Work email',
                       style: TextStyle(
-                          color: Color(0xFF948CA3),
+                          color: AppColors.adminTextSecondary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600),
                     ),
@@ -120,9 +121,9 @@ class _AdminInviteModeratorScreenState
                       controller: _emailController,
                       hintText: 'name@queerloop.app',
                       keyboardType: TextInputType.emailAddress,
-                      fillColor: const Color(0xFF1C1824),
+                      fillColor: AppColors.adminSurfaceAlt,
                       prefixIcon: const Icon(Icons.mail_outline_rounded,
-                          color: Color(0xFF635C72), size: 20),
+                          color: AppColors.adminTextMuted, size: 20),
                     ),
 
                     const SizedBox(height: AppSpacing.lg),
@@ -130,7 +131,7 @@ class _AdminInviteModeratorScreenState
                     const Text(
                       'Password',
                       style: TextStyle(
-                          color: Color(0xFF948CA3),
+                          color: AppColors.adminTextSecondary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600),
                     ),
@@ -139,9 +140,9 @@ class _AdminInviteModeratorScreenState
                       controller: _passwordController,
                       hintText: 'Enter password',
                       isPassword: true,
-                      fillColor: const Color(0xFF1C1824),
+                      fillColor: AppColors.adminSurfaceAlt,
                       prefixIcon: const Icon(Icons.lock_outline_rounded,
-                          color: Color(0xFF635C72), size: 20),
+                          color: AppColors.adminTextMuted, size: 20),
                     ),
 
                     const SizedBox(height: AppSpacing.lg),
@@ -149,7 +150,7 @@ class _AdminInviteModeratorScreenState
                     const Text(
                       'Assign communities',
                       style: TextStyle(
-                          color: Color(0xFF948CA3),
+                          color: AppColors.adminTextSecondary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600),
                     ),

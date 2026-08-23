@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_gradient_button.dart';
@@ -57,7 +58,7 @@ class _AdminConversationOverviewScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -71,7 +72,7 @@ class _AdminConversationOverviewScreenState
                     child: Text(
                       'Conversation of the day',
                       style: TextStyle(
-                        color: Color(0xFFF3EFF7),
+                        color: AppColors.adminTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 24,
                       ),
@@ -82,7 +83,7 @@ class _AdminConversationOverviewScreenState
                     child: AppTextField(
                       hintText: 'Search past questions',
                       prefixIconPath: AdminIcons.search,
-                      fillColor: const Color(0xFF141119),
+                      fillColor: AppColors.adminSurface,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -91,7 +92,7 @@ class _AdminConversationOverviewScreenState
                     child: AppOutlineButton(
                       text: 'History',
                       height: 44,
-                      backgroundColor: const Color(0xFF1C1824),
+                      backgroundColor: AppColors.adminSurfaceAlt,
                       onPressed: widget.onOpenHistory,
                     ),
                   ),
@@ -102,7 +103,7 @@ class _AdminConversationOverviewScreenState
                     child: AppGradientButton(
                       text: 'Publish new question',
                       textStyle: const TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textInverse,
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
                       ),
@@ -122,10 +123,10 @@ class _AdminConversationOverviewScreenState
                     child: Container(
                       padding: const EdgeInsets.all(23),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF141119),
+                        color: AppColors.adminSurface,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.09),
+                          color: AppColors.adminBorder,
                         ),
                       ),
                       child: Column(
@@ -135,7 +136,7 @@ class _AdminConversationOverviewScreenState
                           const Text(
                             "Today's question",
                             style: TextStyle(
-                              color: Color(0xFFF3EFF7),
+                              color: AppColors.adminTextPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
                             ),
@@ -144,7 +145,7 @@ class _AdminConversationOverviewScreenState
                           const Text(
                             'Question',
                             style: TextStyle(
-                              color: Color(0xFFF3EFF7),
+                              color: AppColors.adminTextPrimary,
                               fontSize: 16,
                               fontWeight: FontWeight.w400,
                             ),
@@ -152,7 +153,7 @@ class _AdminConversationOverviewScreenState
                           const SizedBox(height: AppSpacing.xs),
                           AppTextField(
                             controller: _questionController,
-                            fillColor: const Color(0xFF1C1824),
+                            fillColor: AppColors.adminSurfaceAlt,
                           ),
                           const SizedBox(height: 53),
                           Align(
@@ -163,7 +164,7 @@ class _AdminConversationOverviewScreenState
                               child: AppGradientButton(
                                 text: 'Publish to everyone',
                                 textStyle: const TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.textInverse,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 13,
                                 ),
@@ -182,10 +183,10 @@ class _AdminConversationOverviewScreenState
                     child: Container(
                       padding: const EdgeInsets.all(AppSpacing.lg),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF141119),
+                        color: AppColors.adminSurface,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.09),
+                          color: AppColors.adminBorder,
                         ),
                       ),
                       child: Column(
@@ -201,7 +202,7 @@ class _AdminConversationOverviewScreenState
                                     const Text(
                                       'Live now',
                                       style: TextStyle(
-                                        color: Color(0xFFF3EFF7),
+                                        color: AppColors.adminTextPrimary,
                                         fontWeight: FontWeight.w700,
                                         fontSize: 14,
                                       ),
@@ -210,7 +211,7 @@ class _AdminConversationOverviewScreenState
                                     Text(
                                       '${NumberFormat.decimalPattern().format(_liveQuestion.answers)} answers so far',
                                       style: const TextStyle(
-                                        color: Color(0xFF635C72),
+                                        color: AppColors.adminTextMuted,
                                         fontSize: 11,
                                       ),
                                     ),
@@ -236,7 +237,7 @@ class _AdminConversationOverviewScreenState
                                 child: const Text(
                                   'Live',
                                   style: TextStyle(
-                                    color: Color(0xFF3FE0AE),
+                                    color: AppColors.adminTeal,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 11,
                                   ),
@@ -251,10 +252,10 @@ class _AdminConversationOverviewScreenState
                             width: double.infinity,
                             padding: const EdgeInsets.all(19),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1C1824),
+                              color: AppColors.adminSurfaceAlt,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: Color(0xFFFFFF17).withValues(alpha: 0.1),
+                                color: AppColors.adminHighlightBorder.withValues(alpha: 0.1),
                               ),
                             ),
                             child: Column(
@@ -263,7 +264,7 @@ class _AdminConversationOverviewScreenState
                                 const Text(
                                   "TODAY'S QUESTION",
                                   style: TextStyle(
-                                    color: Color(0xFF635C72),
+                                    color: AppColors.adminTextMuted,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w400,
                                     letterSpacing: 1.2,
@@ -273,7 +274,7 @@ class _AdminConversationOverviewScreenState
                                 Text(
                                   _liveQuestion.question,
                                   style: const TextStyle(
-                                    color: Color(0xFFF3EFF7),
+                                    color: AppColors.adminTextPrimary,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 14,
                                   ),
@@ -287,7 +288,7 @@ class _AdminConversationOverviewScreenState
                           const Text(
                             'Past questions',
                             style: TextStyle(
-                              color: Color(0xFFF3EFF7),
+                              color: AppColors.adminTextPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
                             ),
@@ -302,7 +303,7 @@ class _AdminConversationOverviewScreenState
                                     child: Text(
                                       q.question,
                                       style: const TextStyle(
-                                        color: Color(0xffF3EFF7),
+                                        color: AppColors.adminTextPrimary,
                                         fontSize: 11,
                                         fontWeight: FontWeight.w400,
                                       ),
@@ -311,7 +312,7 @@ class _AdminConversationOverviewScreenState
                                   Text(
                                     '${_formatCompactCount(q.answers)} answers',
                                     style: const TextStyle(
-                                      color: Color(0xFF635C72),
+                                      color: AppColors.adminTextMuted,
                                       fontSize: 11,
                                     ),
                                   ),

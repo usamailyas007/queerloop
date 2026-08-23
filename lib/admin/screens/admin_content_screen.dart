@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_images.dart';
 import '../../core/theme/app_spacing.dart';
@@ -148,7 +149,7 @@ class _AdminContentScreenState extends State<AdminContentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -158,7 +159,7 @@ class _AdminContentScreenState extends State<AdminContentScreen> {
               const Text(
                 'Content',
                 style: TextStyle(
-                  color: Color(0xFFF3EFF7),
+                  color: AppColors.adminTextPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 24,
                 ),
@@ -188,9 +189,9 @@ class _AdminContentScreenState extends State<AdminContentScreen> {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF141119),
+                  color: AppColors.adminSurface,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+                  border: Border.all(color: AppColors.adminBorder),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,12 +199,12 @@ class _AdminContentScreenState extends State<AdminContentScreen> {
                     const Row(
                       children: <Widget>[
                         Icon(Icons.local_fire_department_rounded,
-                            size: 16, color: Color(0xFFFFB45C)),
+                            size: 16, color: AppColors.adminOrange),
                         SizedBox(width: 6),
                         Text(
                           'Trending videos',
                           style: TextStyle(
-                              color: Color(0xFFF3EFF7),
+                              color: AppColors.adminTextPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 14),
                         ),
@@ -244,9 +245,9 @@ class _ContentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (String label, Color color) = switch (post.status) {
-      _PostStatus.live => ('Live', const Color(0xFF3FE0AE)),
-      _PostStatus.hidden => ('Hidden', const Color(0xFFFF3B77)),
-      _PostStatus.inReview => ('In review', const Color(0xFFFFB45C)),
+      _PostStatus.live => ('Live', AppColors.adminTeal),
+      _PostStatus.hidden => ('Hidden', AppColors.adminPink),
+      _PostStatus.inReview => ('In review', AppColors.adminOrange),
     };
 
     return Column(
@@ -274,7 +275,7 @@ class _ContentCard extends StatelessWidget {
                           ? 'Reported x${post.reportCount}'
                           : label,
                       style: const TextStyle(
-                        color: Color(0xFFF3EFF7),
+                        color: AppColors.adminTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 10,
                       ),
@@ -287,12 +288,12 @@ class _ContentCard extends StatelessWidget {
                   child: Row(
                     children: <Widget>[
                       const Icon(Icons.remove_red_eye_outlined,
-                          size: 12, color: Colors.white),
+                          size: 12, color: AppColors.textInverse),
                       const SizedBox(width: 4),
                       Text(
                         post.views,
                         style: const TextStyle(
-                            color: Color(0xFFF3EFF7),
+                            color: AppColors.adminTextPrimary,
                             fontSize: 11,
                             fontWeight: FontWeight.w600),
                       ),
@@ -307,7 +308,7 @@ class _ContentCard extends StatelessWidget {
         Text(
           '${post.handle} · ${post.pronoun}',
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: Color(0xFF948CA3), fontSize: 11),
+          style: const TextStyle(color: AppColors.adminTextSecondary, fontSize: 11),
         ),
         const SizedBox(height: 4),
         Row(
@@ -361,7 +362,7 @@ class _TrendingCard extends StatelessWidget {
                     child: Text(
                       '${post.rank}',
                       style: const TextStyle(
-                        color: Color(0xFFF3EFF7),
+                        color: AppColors.adminTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 11,
                       ),
@@ -374,12 +375,12 @@ class _TrendingCard extends StatelessWidget {
                   child: Row(
                     children: <Widget>[
                       const Icon(Icons.remove_red_eye_outlined,
-                          size: 12, color: Colors.white),
+                          size: 12, color: AppColors.textInverse),
                       const SizedBox(width: 4),
                       Text(
                         post.views,
                         style: const TextStyle(
-                            color: Color(0xFFF3EFF7),
+                            color: AppColors.adminTextPrimary,
                             fontSize: 11,
                             fontWeight: FontWeight.w600),
                       ),
@@ -394,7 +395,7 @@ class _TrendingCard extends StatelessWidget {
         Text(
           '${post.handle} · ${post.pronoun}',
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: Color(0xFF948CA3), fontSize: 11),
+          style: const TextStyle(color: AppColors.adminTextSecondary, fontSize: 11),
         ),
       ],
     );
@@ -421,19 +422,19 @@ class _MiniButton extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: danger
-              ? const Color(0xFFFF3B77).withValues(alpha: 0.14)
-              : const Color(0xFF1C1824),
+              ? AppColors.adminPink.withValues(alpha: 0.14)
+              : AppColors.adminSurfaceAlt,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: danger
-                ? const Color(0xFFFF3B77).withValues(alpha: 0.4)
-                : Colors.white.withValues(alpha: 0.12),
+                ? AppColors.adminPink.withValues(alpha: 0.4)
+                : AppColors.adminButtonBorder,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: danger ? const Color(0xFFFF3B77) : const Color(0xFFF3EFF7),
+            color: danger ? AppColors.adminPink : AppColors.adminTextPrimary,
             fontWeight: FontWeight.w700,
             fontSize: 11,
           ),

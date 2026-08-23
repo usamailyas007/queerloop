@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_gradient_button.dart';
@@ -20,117 +21,119 @@ class AdminSpotlightPastScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              const Text(
-                'Community spotlight /',
-                style: TextStyle(color: Color(0xFF635C72), fontSize: 12),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'Community spotlight /',
+                  style: TextStyle(color: AppColors.adminTextMuted, fontSize: 12),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            'Past spotlights',
+                            style: TextStyle(
+                              color: AppColors.adminTextPrimary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 24,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Every weekly pick, with reach and click-through',
+                            style: TextStyle(
+                              color: AppColors.adminTextSecondary,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      width: 220,
+                      child: AppTextField(
+                        hintText: 'Search past spotlights',
+                        prefixIconPath: AdminIcons.search,
+                        fillColor: AppColors.adminSurface,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    SizedBox(
+                      width: 120,
+                      child: AppOutlineButton(
+                        text: 'Past Spotlight',
+                        height: 44,
+                        backgroundColor: AppColors.adminSurfaceAlt,
+                        onPressed: () {},
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    SizedBox(
+                      width: 130,
+                      height: 44,
+                      child: AppGradientButton(
+                        text: 'New spotlight',
+                        textStyle: const TextStyle(
+                          color: AppColors.textInverse,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
+                        onPressed: onOpenOverview,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: AppSpacing.xl),
+
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: picks.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: AppSpacing.md,
+                    crossAxisSpacing: AppSpacing.md,
+                    childAspectRatio: 1.55,
+                  ),
+                  itemBuilder: (_, int index) =>
+                      _SpotlightCard(pick: picks[index]),
+                ),
+
+                const SizedBox(height: AppSpacing.md),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                    Text(
+                      'Showing ${picks.length} of 22 past spotlights',
+                      style: const TextStyle(
+                        color: AppColors.adminTextMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Row(
                       children: <Widget>[
-                        Text(
-                          'Past spotlights',
-                          style: TextStyle(
-                            color: Color(0xFFF3EFF7),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 24,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Every weekly pick, with reach and click-through',
-                          style: TextStyle(
-                            color: Color(0xFF948CA3),
-                            fontSize: 13,
-                          ),
-                        ),
+                        _pageButton('Previous'),
+                        const SizedBox(width: 8),
+                        _pageButton('Next'),
                       ],
                     ),
-                  ),
-                  SizedBox(
-                    width: 220,
-                    child: AppTextField(
-                      hintText: 'Search past spotlights',
-                      prefixIconPath: AdminIcons.search,
-                      fillColor: const Color(0xFF141119),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  SizedBox(
-                    width: 120,
-                    child: AppOutlineButton(
-                      text: 'Past Spotlight',
-                      height: 44,
-                      backgroundColor: const Color(0xFF1C1824),
-                      onPressed: () {},
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  SizedBox(
-                    width: 130,
-                    height: 44,
-                    child: AppGradientButton(
-                      text: 'New spotlight',
-                      textStyle: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                      ),
-                      onPressed: onOpenOverview,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: AppSpacing.xl),
-
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: picks.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  mainAxisSpacing: AppSpacing.md,
-                  crossAxisSpacing: AppSpacing.md,
-                  childAspectRatio: 1.55,
+                  ],
                 ),
-                itemBuilder: (_, int index) =>
-                    _SpotlightCard(pick: picks[index]),
-              ),
-
-              const SizedBox(height: AppSpacing.md),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Text(
-                    'Showing ${picks.length} of 22 past spotlights',
-                    style: const TextStyle(
-                      color: Color(0xFF635C72),
-                      fontSize: 12,
-                    ),
-                  ),
-                  Row(
-                    children: <Widget>[
-                      _pageButton('Previous'),
-                      const SizedBox(width: 8),
-                      _pageButton('Next'),
-                    ],
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -141,14 +144,14 @@ class AdminSpotlightPastScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1824),
+        color: AppColors.adminSurfaceAlt,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+        border: Border.all(color: AppColors.adminBorder),
       ),
       child: Text(
         label,
         style: const TextStyle(
-          color: Color(0xFF948CA3),
+          color: AppColors.adminTextSecondary,
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
@@ -166,9 +169,9 @@ class _SpotlightCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF141119),
+        color: AppColors.adminSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+        border: Border.all(color: AppColors.adminBorder),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -189,7 +192,7 @@ class _SpotlightCard extends StatelessWidget {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF3FE0AE).withValues(alpha: 0.9),
+                        color: AppColors.adminTeal.withValues(alpha: 0.9),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Text(
@@ -214,7 +217,7 @@ class _SpotlightCard extends StatelessWidget {
                   pick.headline,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFFF3EFF7),
+                    color: AppColors.adminTextPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                   ),
@@ -226,7 +229,7 @@ class _SpotlightCard extends StatelessWidget {
                       : '${pick.weekLabel} · ${pick.views} views · ${pick.taps} taps',
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFF635C72),
+                    color: AppColors.adminTextMuted,
                     fontSize: 11,
                   ),
                 ),
@@ -253,14 +256,14 @@ class _SpotlightCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1824),
+        color: AppColors.adminSurfaceAlt,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+        border: Border.all(color: AppColors.adminBorder),
       ),
       child: Text(
         label,
         style: const TextStyle(
-          color: Color(0xFFF3EFF7),
+          color: AppColors.adminTextPrimary,
           fontWeight: FontWeight.w700,
           fontSize: 11,
         ),

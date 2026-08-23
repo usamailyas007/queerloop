@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_icons.dart';
 import '../../core/theme/app_spacing.dart';
@@ -33,10 +34,10 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: const Color(0xFF16131D),
+          color: AppColors.moderatorSurface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: AppColors.moderatorBorder,
           ),
         ),
         child: Column(
@@ -48,7 +49,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                 Text(
                   label,
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: Colors.white38,
+                    color: AppColors.moderatorTextFaint,
                     fontSize: 11,
                     letterSpacing: 1.2,
                     fontWeight: FontWeight.w700,
@@ -61,7 +62,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
             Text(
               value,
               style: TextStyle(
-                color: valueColor ?? Colors.white,
+                color: valueColor ?? AppColors.moderatorTextPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 28,
               ),
@@ -70,7 +71,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
             Text(
               subtext,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white54,
+                color: AppColors.moderatorTextMuted,
                 fontSize: 12,
               ),
             ),
@@ -94,7 +95,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
             Text(
               label,
               style: const TextStyle(
-                color: Colors.white70,
+                color: AppColors.moderatorTextSecondary,
                 fontWeight: FontWeight.w500,
                 fontSize: 13,
               ),
@@ -102,7 +103,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
             Text(
               '$count',
               style: const TextStyle(
-                color: Colors.white54,
+                color: AppColors.moderatorTextMuted,
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
@@ -115,7 +116,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
           child: LinearProgressIndicator(
             value: fraction,
             minHeight: 6,
-            backgroundColor: Colors.white.withValues(alpha: 0.06),
+            backgroundColor: AppColors.moderatorDivider,
             valueColor: AlwaysStoppedAnimation<Color>(barColor),
           ),
         ),
@@ -137,7 +138,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121019),
+      backgroundColor: AppColors.moderatorBackground,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -152,7 +153,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                     Text(
                       'Good morning, Priya',
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: AppColors.moderatorTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 24,
                       ),
@@ -161,7 +162,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                     Text(
                       'Sunday, 2 August · 28 reports waiting · your average response is 4.2h',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: Colors.white54,
+                        color: AppColors.moderatorTextMuted,
                         fontSize: 13,
                       ),
                     ),
@@ -175,7 +176,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                   child: AppTextField(
                     hintText: 'Search case ID, account...',
                     prefixIconPath: AppIcons.searchSvg,
-                    fillColor: const Color(0xFF191622),
+                    fillColor: AppColors.moderatorSurfaceAlt,
                   ),
                 ),
 
@@ -185,10 +186,10 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                 Container(
                   padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF191622),
+                    color: AppColors.moderatorSurfaceAlt,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
+                      color: AppColors.moderatorBorder,
                     ),
                   ),
                   child: Row(
@@ -203,7 +204,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                             ),
                             decoration: BoxDecoration(
                               color: _dateFilterIndex == i
-                                  ? const Color(0xFF2C2738)
+                                  ? AppColors.moderatorChipSelected
                                   : Colors.transparent,
                               borderRadius: BorderRadius.circular(9),
                             ),
@@ -215,8 +216,8 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                                       : '30 days',
                               style: TextStyle(
                                 color: _dateFilterIndex == i
-                                    ? Colors.white
-                                    : Colors.white54,
+                                    ? AppColors.moderatorTextPrimary
+                                    : AppColors.moderatorTextMuted,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 12,
                               ),
@@ -240,8 +241,8 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: <Color>[
-                          Color(0xFFFF4B8B),
-                          Color(0xFF00E5FF),
+                          AppColors.moderatorPink,
+                          AppColors.gradientCyan,
                         ],
                       ),
                       borderRadius: BorderRadius.circular(12),
@@ -249,12 +250,12 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                     child: Row(
                       children: const <Widget>[
                         Icon(Icons.flag_outlined,
-                            color: Colors.white, size: 16),
+                            color: AppColors.moderatorTextPrimary, size: 16),
                         SizedBox(width: 6),
                         Text(
                           'Open queue',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: AppColors.moderatorTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
                           ),
@@ -284,11 +285,11 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                   iconWidget: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
-                      color: Color(0xFF059669),
+                      color: AppColors.moderatorGreen,
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.check_rounded,
-                        color: Colors.white, size: 14),
+                        color: AppColors.moderatorTextPrimary, size: 14),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
@@ -299,27 +300,27 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                   iconWidget: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
-                      color: Color(0xFFDC2626),
+                      color: AppColors.danger,
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.shield_outlined,
-                        color: Colors.white, size: 14),
+                        color: AppColors.moderatorTextPrimary, size: 14),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 _buildMetricCard(
                   label: 'AVG RESPONSE',
                   value: '4.2h',
-                  valueColor: const Color(0xFF00E5FF),
+                  valueColor: AppColors.gradientCyan,
                   subtext: 'Target under 24h',
                   iconWidget: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
-                      color: Color(0xFF9333EA),
+                      color: AppColors.moderatorPurple,
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.access_time_rounded,
-                        color: Colors.white, size: 14),
+                        color: AppColors.moderatorTextPrimary, size: 14),
                   ),
                 ),
               ],
@@ -336,10 +337,10 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(AppSpacing.xl),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF16131D),
+                      color: AppColors.moderatorSurface,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: AppColors.moderatorBorder,
                       ),
                     ),
                     child: Column(
@@ -354,7 +355,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                                 Text(
                                   'Reports by reason',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: AppColors.moderatorTextPrimary,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 16,
                                   ),
@@ -363,7 +364,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                                 Text(
                                   'This week · 312 total reports',
                                   style: TextStyle(
-                                    color: Colors.white38,
+                                    color: AppColors.moderatorTextFaint,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -372,7 +373,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                             Text(
                               'View breakdown',
                               style: TextStyle(
-                                color: Color(0xFFFF4B8B),
+                                color: AppColors.moderatorPink,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 12,
                               ),
@@ -385,31 +386,31 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                           label: 'Harassment or bullying',
                           count: 118,
                           fraction: 0.85,
-                          barColor: const Color(0xFFFF4B8B),
+                          barColor: AppColors.moderatorPink,
                         ),
                         _buildProgressBar(
                           label: 'Hate speech or slurs',
                           count: 87,
                           fraction: 0.65,
-                          barColor: const Color(0xFF9333EA),
+                          barColor: AppColors.moderatorPurple,
                         ),
                         _buildProgressBar(
                           label: 'Spam or fake account',
                           count: 54,
                           fraction: 0.42,
-                          barColor: const Color(0xFF00E5FF),
+                          barColor: AppColors.gradientCyan,
                         ),
                         _buildProgressBar(
                           label: 'Outing without consent',
                           count: 31,
                           fraction: 0.25,
-                          barColor: const Color(0xFFD97706),
+                          barColor: AppColors.warning,
                         ),
                         _buildProgressBar(
                           label: 'Sexual content',
                           count: 22,
                           fraction: 0.18,
-                          barColor: const Color(0xFF059669),
+                          barColor: AppColors.moderatorGreen,
                         ),
                       ],
                     ),
@@ -423,10 +424,10 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(AppSpacing.xl),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF16131D),
+                      color: AppColors.moderatorSurface,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: AppColors.moderatorBorder,
                       ),
                     ),
                     child: Column(
@@ -435,7 +436,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                         const Text(
                           'Needs you first',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: AppColors.moderatorTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 16,
                           ),
@@ -444,7 +445,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                         const Text(
                           'Ranked above queue order',
                           style: TextStyle(
-                            color: Colors.white38,
+                            color: AppColors.moderatorTextFaint,
                             fontSize: 12,
                           ),
                         ),
@@ -453,7 +454,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                         // Priority List Items
                         _buildNeedsItem(
                           badgeLabel: 'Urgent',
-                          badgeColor: const Color(0xFFDC2626),
+                          badgeColor: AppColors.danger,
                           title: 'Threats · QL-84402',
                           subtext: '4 reports · 22 min waiting',
                           onTap: () =>
@@ -461,7 +462,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                         ),
                         _buildNeedsItem(
                           badgeLabel: 'Urgent',
-                          badgeColor: const Color(0xFFDC2626),
+                          badgeColor: AppColors.danger,
                           title: 'Self-harm · QL-84397',
                           subtext: '2 reports · 51 min waiting',
                           onTap: () =>
@@ -469,7 +470,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                         ),
                         _buildNeedsItem(
                           badgeLabel: '14h',
-                          badgeColor: const Color(0xFFD97706),
+                          badgeColor: AppColors.warning,
                           title: 'Harassment · QL-84213',
                           subtext: 'In review, continue your work',
                           onTap: () =>
@@ -477,7 +478,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                         ),
                         _buildNeedsItem(
                           badgeLabel: '13h',
-                          badgeColor: const Color(0xFFD97706),
+                          badgeColor: AppColors.warning,
                           title: 'Hate speech · QL-84190',
                           subtext: '9 reports · unassigned',
                           onTap: () =>
@@ -485,7 +486,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                         ),
                         _buildNeedsItem(
                           badgeLabel: 'Appeal',
-                          badgeColor: const Color(0xFF9333EA),
+                          badgeColor: AppColors.moderatorPurple,
                           title: 'QL-83988',
                           subtext: 'Reassigned to a second moderator',
                           onTap: () =>
@@ -503,10 +504,10 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
             // ── Bottom Table Section: Reports queue · next up ───────────────
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF16131D),
+                color: AppColors.moderatorSurface,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
+                  color: AppColors.moderatorBorder,
                 ),
               ),
               child: Column(
@@ -522,7 +523,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                             Text(
                               'Reports queue · next up',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.moderatorTextPrimary,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 16,
                               ),
@@ -531,7 +532,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                             Text(
                               'Oldest and most severe first',
                               style: TextStyle(
-                                color: Colors.white38,
+                                color: AppColors.moderatorTextFaint,
                                 fontSize: 12,
                               ),
                             ),
@@ -542,7 +543,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                           child: const Text(
                             'Open full queue →',
                             style: TextStyle(
-                              color: Color(0xFFFF4B8B),
+                              color: AppColors.moderatorPink,
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
                             ),
@@ -551,18 +552,18 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                       ],
                     ),
                   ),
-                  const Divider(height: 1, color: Colors.white10),
+                  const Divider(height: 1, color: AppColors.moderatorDividerLine),
 
                   // Table Row 1
                   _buildQueueNextRow(
                     caseId: 'QL-84402',
                     reason: 'Threats',
-                    reasonColor: const Color(0xFFDC2626),
+                    reasonColor: AppColors.danger,
                     content: 'Comment · @nine_hex',
                     reportedBy: '4 reports',
                     waiting: '22 min',
                     status: 'Unassigned',
-                    statusColor: const Color(0xFFD97706),
+                    statusColor: AppColors.warning,
                     buttonText: 'Review',
                     onTap: () => setState(() => _reviewingCaseId = 'QL-84402'),
                   ),
@@ -570,12 +571,12 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                   _buildQueueNextRow(
                     caseId: 'QL-84397',
                     reason: 'Self-harm',
-                    reasonColor: const Color(0xFFDC2626),
+                    reasonColor: AppColors.danger,
                     content: 'Video · @lost.orbit',
                     reportedBy: '2 reports',
                     waiting: '51 min',
                     status: 'Unassigned',
-                    statusColor: const Color(0xFFD97706),
+                    statusColor: AppColors.warning,
                     buttonText: 'Review',
                     onTap: () => setState(() => _reviewingCaseId = 'QL-84397'),
                   ),
@@ -583,12 +584,12 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                   _buildQueueNextRow(
                     caseId: 'QL-84213',
                     reason: 'Harassment',
-                    reasonColor: const Color(0xFFD97706),
+                    reasonColor: AppColors.warning,
                     content: 'Comment · @dg_returns',
                     reportedBy: '@ashinorbit',
                     waiting: '14h',
                     status: 'You · in review',
-                    statusColor: const Color(0xFF059669),
+                    statusColor: AppColors.moderatorGreen,
                     buttonText: 'Continue',
                     isGradientButton: true,
                     onTap: () => setState(() => _reviewingCaseId = 'QL-84213'),
@@ -597,12 +598,12 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                   _buildQueueNextRow(
                     caseId: 'QL-84190',
                     reason: 'Hate speech',
-                    reasonColor: const Color(0xFFD97706),
+                    reasonColor: AppColors.warning,
                     content: 'Text post · @truth_ftw',
                     reportedBy: '9 reports',
                     waiting: '13h',
                     status: 'Unassigned',
-                    statusColor: const Color(0xFFD97706),
+                    statusColor: AppColors.warning,
                     buttonText: 'Review',
                     onTap: () => setState(() => _reviewingCaseId = 'QL-84190'),
                   ),
@@ -610,12 +611,12 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                   _buildQueueNextRow(
                     caseId: 'QL-84077',
                     reason: 'Spam',
-                    reasonColor: const Color(0xFF4B5563),
+                    reasonColor: AppColors.moderatorGray,
                     content: 'Profile · @free_giftcards',
                     reportedBy: '17 reports',
                     waiting: '6h',
                     status: 'Unassigned',
-                    statusColor: const Color(0xFFD97706),
+                    statusColor: AppColors.warning,
                     buttonText: 'Review',
                     onTap: () => setState(() => _reviewingCaseId = 'QL-84077'),
                   ),
@@ -641,10 +642,10 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
         margin: const EdgeInsets.only(bottom: AppSpacing.sm),
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: const Color(0xFF1D1927),
+          color: AppColors.moderatorSurfaceAlt2,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.06),
+            color: AppColors.moderatorDivider,
           ),
         ),
         child: Row(
@@ -673,7 +674,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                   Text(
                     title,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: AppColors.moderatorTextPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
                     ),
@@ -682,7 +683,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                   Text(
                     subtext,
                     style: const TextStyle(
-                      color: Colors.white38,
+                      color: AppColors.moderatorTextFaint,
                       fontSize: 11,
                     ),
                   ),
@@ -690,7 +691,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
               ),
             ),
             const Icon(Icons.chevron_right_rounded,
-                color: Colors.white24, size: 18),
+                color: AppColors.moderatorIconMuted, size: 18),
           ],
         ),
       ),
@@ -722,7 +723,7 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
             child: Text(
               caseId,
               style: const TextStyle(
-                color: Colors.white,
+                color: AppColors.moderatorTextPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 13,
               ),
@@ -753,21 +754,21 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
             flex: 3,
             child: Text(
               content,
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
+              style: const TextStyle(color: AppColors.moderatorTextSecondary, fontSize: 13),
             ),
           ),
           Expanded(
             flex: 2,
             child: Text(
               reportedBy,
-              style: const TextStyle(color: Colors.white54, fontSize: 13),
+              style: const TextStyle(color: AppColors.moderatorTextMuted, fontSize: 13),
             ),
           ),
           Expanded(
             flex: 1,
             child: Text(
               waiting,
-              style: const TextStyle(color: Colors.white54, fontSize: 13),
+              style: const TextStyle(color: AppColors.moderatorTextMuted, fontSize: 13),
             ),
           ),
           Expanded(
@@ -799,21 +800,21 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                 gradient: isGradientButton
                     ? const LinearGradient(
                         colors: <Color>[
-                          Color(0xFFFF4B8B),
-                          Color(0xFF00E5FF),
+                          AppColors.moderatorPink,
+                          AppColors.gradientCyan,
                         ],
                       )
                     : null,
-                color: isGradientButton ? null : const Color(0xFF1D1927),
+                color: isGradientButton ? null : AppColors.moderatorSurfaceAlt2,
                 borderRadius: BorderRadius.circular(14),
                 border: isGradientButton
                     ? null
-                    : Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                    : Border.all(color: AppColors.moderatorButtonBorder),
               ),
               child: Text(
                 buttonText,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.moderatorTextPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 12,
                 ),

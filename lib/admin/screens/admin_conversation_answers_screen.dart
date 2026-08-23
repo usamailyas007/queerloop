@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../core/widgets/app_user_avatar.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_images.dart';
 import '../../core/theme/app_spacing.dart';
@@ -75,7 +77,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -84,7 +86,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
             children: <Widget>[
               const Text(
                 'Conversation of the day /',
-                style: TextStyle(color: Color(0xFF635C72), fontSize: 12),
+                style: TextStyle(color: AppColors.adminTextMuted, fontSize: 12),
               ),
               const SizedBox(height: 4),
               Row(
@@ -94,7 +96,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                     child: Text(
                       'Answers',
                       style: TextStyle(
-                        color: Color(0xFFF3EFF7),
+                        color: AppColors.adminTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 24,
                       ),
@@ -105,7 +107,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                     child: AppTextField(
                       hintText: 'Search past questions',
                       prefixIconPath: AdminIcons.search,
-                      fillColor: const Color(0xFF141119),
+                      fillColor: AppColors.adminSurface,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -114,7 +116,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                     child: AppOutlineButton(
                       text: 'History',
                       height: 44,
-                      backgroundColor: const Color(0xFF1C1824),
+                      backgroundColor: AppColors.adminSurfaceAlt,
                       onPressed: onBack,
                     ),
                   ),
@@ -125,7 +127,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                     child: AppGradientButton(
                       text: 'Publish new question',
                       textStyle: const TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textInverse,
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
                       ),
@@ -140,10 +142,10 @@ class AdminConversationAnswersScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF141119),
+                  color: AppColors.adminSurface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.09),
+                    color: AppColors.adminBorder,
                   ),
                 ),
                 child: Column(
@@ -159,7 +161,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                               Text(
                                 "Answers: '${question.question}'",
                                 style: const TextStyle(
-                                  color: Color(0xFFF3EFF7),
+                                  color: AppColors.adminTextPrimary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14,
                                 ),
@@ -168,7 +170,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                               const Text(
                                 'Shown to users as comments under the question',
                                 style: TextStyle(
-                                  color: Color(0xFF635C72),
+                                  color: AppColors.adminTextMuted,
                                   fontSize: 11,
                                 ),
                               ),
@@ -178,7 +180,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                         Text(
                           'View all ${NumberFormat.decimalPattern().format(question.answers)}',
                           style: const TextStyle(
-                            color: Color(0xFF4CC9FF),
+                            color: AppColors.adminBlue,
                             fontWeight: FontWeight.w600,
                             fontSize: 12,
                           ),
@@ -195,7 +197,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         border: Border.symmetric(
                           horizontal: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.06),
+                            color: AppColors.adminDivider,
                           ),
                         ),
                       ),
@@ -220,13 +222,10 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                               flex: 2,
                               child: Row(
                                 children: <Widget>[
-                                  ClipOval(
-                                    child: Image.asset(
-                                      a.avatar,
-                                      width: 26,
-                                      height: 26,
-                                      fit: BoxFit.cover,
-                                    ),
+                                  AppUserAvatar(
+                                    imageAsset: a.avatar,
+                                    size: 26,
+                                    hasGradientBorder: false,
                                   ),
                                   const SizedBox(width: AppSpacing.sm),
                                   Expanded(
@@ -234,7 +233,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                                       a.handle,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        color: Color(0xFFF3EFF7),
+                                        color: AppColors.adminTextPrimary,
                                         fontWeight: FontWeight.w600,
                                         fontSize: 13,
                                       ),
@@ -248,7 +247,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                               child: Text(
                                 a.answer,
                                 style: const TextStyle(
-                                  color: Color(0xFF948CA3),
+                                  color: AppColors.adminTextSecondary,
                                   fontSize: 13,
                                 ),
                               ),
@@ -258,7 +257,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                               child: Text(
                                 '${a.likes}',
                                 style: const TextStyle(
-                                  color: Color(0xFF948CA3),
+                                  color: AppColors.adminTextSecondary,
                                   fontSize: 13,
                                 ),
                               ),
@@ -268,7 +267,7 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                               child: Text(
                                 a.postedAgo,
                                 style: const TextStyle(
-                                  color: Color(0xFF948CA3),
+                                  color: AppColors.adminTextSecondary,
                                   fontSize: 13,
                                 ),
                               ),
@@ -281,14 +280,14 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                                   vertical: 6,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1C1824),
+                                  color: AppColors.adminSurfaceAlt,
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: a.isFlagged
                                         ? const Color(
                                             0xFFFF8080,
                                           ).withValues(alpha: 0.4)
-                                        : Colors.white.withValues(alpha: 0.09),
+                                        : AppColors.adminBorder,
                                   ),
                                 ),
                                 child: Text(
@@ -296,8 +295,8 @@ class AdminConversationAnswersScreen extends StatelessWidget {
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: a.isFlagged
-                                        ? const Color(0xFFFF8080)
-                                        : const Color(0xFFF3EFF7),
+                                        ? AppColors.adminPinkLight
+                                        : AppColors.adminTextPrimary,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 11,
                                   ),
@@ -328,7 +327,7 @@ class _Header extends StatelessWidget {
     return Text(
       label,
       style: const TextStyle(
-        color: Color(0xFF635C72),
+        color: AppColors.adminTextMuted,
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/widgets/app_user_avatar.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_images.dart';
 import '../../core/theme/app_spacing.dart';
@@ -111,7 +113,7 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -127,7 +129,7 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                         Text(
                           'Communities',
                           style: TextStyle(
-                            color: Color(0xFFF3EFF7),
+                            color: AppColors.adminTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 24,
                           ),
@@ -135,7 +137,7 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                         SizedBox(height: 4),
                         Text(
                           '7 groups · assign moderators and rules per group',
-                          style: TextStyle(color: Color(0xFF948CA3), fontSize: 13),
+                          style: TextStyle(color: AppColors.adminTextSecondary, fontSize: 13),
                         ),
                       ],
                     ),
@@ -155,10 +157,10 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
 
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF141119),
+                  color: AppColors.adminSurface,
                   borderRadius: BorderRadius.circular(20),
                   border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.09)),
+                      Border.all(color: AppColors.adminBorder),
                 ),
                 child: Column(
                   children: <Widget>[
@@ -170,7 +172,7 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                       decoration: BoxDecoration(
                         border: Border(
                           bottom: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.06)),
+                              color: AppColors.adminDivider),
                         ),
                       ),
                       child: const Row(
@@ -190,7 +192,7 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                       itemCount: _communities.length,
                       separatorBuilder: (_, _) => Divider(
                         height: 1,
-                        color: Colors.white.withValues(alpha: 0.04),
+                        color: AppColors.adminRowDivider,
                       ),
                       itemBuilder: (_, int index) {
                         final _CommunityRow c = _communities[index];
@@ -205,17 +207,16 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                                 flex: 3,
                                 child: Row(
                                   children: <Widget>[
-                                    ClipOval(
-                                      child: Image.asset(c.avatar,
-                                          width: 34,
-                                          height: 34,
-                                          fit: BoxFit.cover),
+                                    AppUserAvatar(
+                                      imageAsset: c.avatar,
+                                      size: 34,
+                                      hasGradientBorder: false,
                                     ),
                                     const SizedBox(width: AppSpacing.sm),
                                     Text(
                                       c.name,
                                       style: const TextStyle(
-                                        color: Color(0xFFF3EFF7),
+                                        color: AppColors.adminTextPrimary,
                                         fontWeight: FontWeight.w700,
                                         fontSize: 13,
                                       ),
@@ -227,13 +228,13 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                                 flex: 2,
                                 child: Text(c.members,
                                     style: const TextStyle(
-                                        color: Color(0xFF948CA3), fontSize: 13)),
+                                        color: AppColors.adminTextSecondary, fontSize: 13)),
                               ),
                               Expanded(
                                 flex: 2,
                                 child: Text(c.posts,
                                     style: const TextStyle(
-                                        color: Color(0xFF948CA3), fontSize: 13)),
+                                        color: AppColors.adminTextSecondary, fontSize: 13)),
                               ),
                               Expanded(
                                 flex: 1,
@@ -241,8 +242,8 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                                   c.reports,
                                   style: TextStyle(
                                     color: int.parse(c.reports) > 50
-                                        ? const Color(0xFFFFB45C)
-                                        : Color(0xFF948CA3),
+                                        ? AppColors.adminOrange
+                                        : AppColors.adminTextSecondary,
                                     fontWeight: int.parse(c.reports) > 50
                                         ? FontWeight.w700
                                         : FontWeight.w400,
@@ -254,7 +255,7 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                                 flex: 2,
                                 child: Text(c.moderators,
                                     style: const TextStyle(
-                                        color: Color(0xFF948CA3), fontSize: 13)),
+                                        color: AppColors.adminTextSecondary, fontSize: 13)),
                               ),
                               Expanded(
                                 flex: 2,
@@ -265,14 +266,14 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                                         horizontal: 10, vertical: 3),
                                     decoration: BoxDecoration(
                                       color: (c.membersOnly
-                                              ? const Color(0xFF8B5CFF)
-                                              : const Color(0xFF3FE0AE))
+                                              ? AppColors.adminPurple
+                                              : AppColors.adminTeal)
                                           .withValues(alpha: 0.2),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color: (c.membersOnly
-                                                ? const Color(0xFF8B5CFF)
-                                                : const Color(0xFF3FE0AE))
+                                                ? AppColors.adminPurple
+                                                : AppColors.adminTeal)
                                             .withValues(alpha: 0.4),
                                       ),
                                     ),
@@ -280,8 +281,8 @@ class _AdminCommunitiesScreenState extends State<AdminCommunitiesScreen> {
                                       c.membersOnly ? 'Members only' : 'Public',
                                       style: TextStyle(
                                         color: c.membersOnly
-                                            ? const Color(0xFF8B5CFF)
-                                            : const Color(0xFF3FE0AE),
+                                            ? AppColors.adminPurple
+                                            : AppColors.adminTeal,
                                         fontWeight: FontWeight.w700,
                                         fontSize: 11,
                                       ),
@@ -315,7 +316,7 @@ class _Header extends StatelessWidget {
     return Text(
       label,
       style: const TextStyle(
-        color: Color(0xFF635C72),
+        color: AppColors.adminTextMuted,
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
+import '../core/widgets/app_user_avatar.dart';
+import '../core/theme/app_colors.dart';
 
 import '../core/theme/app_images.dart';
 import '../core/theme/app_spacing.dart';
@@ -47,7 +49,7 @@ class _AdminShellState extends State<AdminShell> {
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: Row(
         children: <Widget>[
           // ── Sidebar Navigation Drawer ─────────────────────────────────────
@@ -109,9 +111,9 @@ class _AdminSidebar extends StatelessWidget {
     return Container(
       width: 248,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.02),
+        color: AppColors.adminSidebarTint,
         border: Border(
-          right: BorderSide(color: Colors.white.withValues(alpha: 0.09)),
+          right: BorderSide(color: AppColors.adminBorder),
         ),
       ),
       padding: const EdgeInsets.symmetric(
@@ -142,19 +144,16 @@ class _AdminSidebar extends StatelessWidget {
           ),
 
           // Bottom Divider
-          Divider(color: Colors.white.withValues(alpha: 0.09)),
+          Divider(color: AppColors.adminBorder),
           const SizedBox(height: AppSpacing.sm),
 
           // Bottom User Profile Card (Admin)
           Row(
             children: <Widget>[
-              ClipOval(
-                child: Image.asset(
-                  AppImages.user2,
-                  width: 36,
-                  height: 36,
-                  fit: BoxFit.cover,
-                ),
+              AppUserAvatar(
+                imageAsset: AppImages.user2,
+                size: 36,
+                hasGradientBorder: false,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -166,7 +165,7 @@ class _AdminSidebar extends StatelessWidget {
                       name,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xFFF3EFF7),
+                        color: AppColors.adminTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 12.5,
                       ),
@@ -174,7 +173,7 @@ class _AdminSidebar extends StatelessWidget {
                     const SizedBox(height: 2),
                     const Text(
                       'Admin',
-                      style: TextStyle(color: Color(0xFF948CA3), fontSize: 11),
+                      style: TextStyle(color: AppColors.adminTextSecondary, fontSize: 11),
                     ),
                   ],
                 ),
@@ -183,11 +182,11 @@ class _AdminSidebar extends StatelessWidget {
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF3FE0AE),
+                  color: AppColors.adminTeal,
                   shape: BoxShape.circle,
                   boxShadow: <BoxShadow>[
                     BoxShadow(
-                      color: const Color(0xFF3FE0AE).withValues(alpha: 0.18),
+                      color: AppColors.adminTeal.withValues(alpha: 0.18),
                       blurRadius: 0,
                       spreadRadius: 3,
                     ),
@@ -211,7 +210,7 @@ class _AdminSidebar extends StatelessWidget {
           child: Text(
             section.title,
             style: const TextStyle(
-              color: Color(0xFF635C72),
+              color: AppColors.adminTextMuted,
               fontSize: 9.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.9,
@@ -232,7 +231,7 @@ class _AdminSidebar extends StatelessWidget {
   Widget _buildSidebarItem({required int index, required _NavItem item}) {
     final bool isSelected = selectedIndex == index;
     final Color iconColor =
-        isSelected ? const Color(0xFF00E5FF) : const Color(0xFF948CA3);
+        isSelected ? AppColors.gradientCyan : AppColors.adminTextSecondary;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.xs),
@@ -244,7 +243,7 @@ class _AdminSidebar extends StatelessWidget {
             vertical: 10,
           ),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF1C1824) : Colors.transparent,
+            color: isSelected ? AppColors.adminSurfaceAlt : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
@@ -270,8 +269,8 @@ class _AdminSidebar extends StatelessWidget {
                   item.label,
                   style: TextStyle(
                     color: isSelected
-                        ? const Color(0xFFF3EFF7)
-                        : const Color(0xFF948CA3),
+                        ? AppColors.adminTextPrimary
+                        : AppColors.adminTextSecondary,
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),

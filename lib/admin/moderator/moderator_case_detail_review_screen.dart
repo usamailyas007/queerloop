@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/widgets/app_user_avatar.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_images.dart';
 import '../../core/theme/app_spacing.dart';
@@ -60,16 +62,16 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFF191622),
+          color: AppColors.moderatorSurfaceAlt,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: AppColors.moderatorInputBorder,
           ),
         ),
         child: Text(
           label,
           style: AppTextStyles.bodyMedium.copyWith(
-            color: Colors.white,
+            color: AppColors.moderatorTextPrimary,
             fontWeight: FontWeight.w600,
             fontSize: 13,
           ),
@@ -81,7 +83,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121019),
+      backgroundColor: AppColors.moderatorBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -96,7 +98,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                       Text(
                         widget.caseId,
                         style: AppTextStyles.titleMedium.copyWith(
-                          color: Colors.white,
+                          color: AppColors.moderatorTextPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 24,
                         ),
@@ -105,7 +107,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                       Text(
                         '${widget.reason} · reported 14 hours ago by ${widget.reportedBy}',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: Colors.white54,
+                          color: AppColors.moderatorTextMuted,
                           fontSize: 13,
                         ),
                       ),
@@ -134,10 +136,10 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                       child: Container(
                         padding: const EdgeInsets.all(AppSpacing.xl),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF16131D),
+                          color: AppColors.moderatorSurface,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.08),
+                            color: AppColors.moderatorBorder,
                           ),
                         ),
                         child: SingleChildScrollView(
@@ -147,7 +149,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                               Text(
                                 'Reported content',
                                 style: AppTextStyles.titleMedium.copyWith(
-                                  color: Colors.white,
+                                  color: AppColors.moderatorTextPrimary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 16,
                                 ),
@@ -158,10 +160,10 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                               Container(
                                 padding: const EdgeInsets.all(AppSpacing.lg),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1D1927),
+                                  color: AppColors.moderatorSurfaceAlt2,
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.08),
+                                    color: AppColors.moderatorBorder,
                                   ),
                                 ),
                                 child: Column(
@@ -169,13 +171,10 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                   children: <Widget>[
                                     Row(
                                       children: <Widget>[
-                                        ClipOval(
-                                          child: Image.asset(
-                                            AppImages.user1,
-                                            width: 38,
-                                            height: 38,
-                                            fit: BoxFit.cover,
-                                          ),
+                                        AppUserAvatar(
+                                          imageAsset: AppImages.user1,
+                                          size: 38,
+                                          hasGradientBorder: false,
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(
@@ -187,7 +186,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                                 widget.reportedUser,
                                                 style: AppTextStyles.bodyMedium
                                                     .copyWith(
-                                                  color: Colors.white,
+                                                  color: AppColors.moderatorTextPrimary,
                                                   fontWeight: FontWeight.w700,
                                                   fontSize: 14,
                                                 ),
@@ -196,7 +195,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                               const Text(
                                                 "Comment on @rowankeeps' video · 2 Aug 21:14",
                                                 style: TextStyle(
-                                                  color: Colors.white38,
+                                                  color: AppColors.moderatorTextFaint,
                                                   fontSize: 11,
                                                 ),
                                               ),
@@ -209,7 +208,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                             vertical: 4,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: Colors.white
+                                            color: AppColors.moderatorTextPrimary
                                                 .withValues(alpha: 0.08),
                                             borderRadius:
                                                 BorderRadius.circular(12),
@@ -217,7 +216,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                           child: const Text(
                                             'Comment',
                                             style: TextStyle(
-                                              color: Colors.white70,
+                                              color: AppColors.moderatorTextSecondary,
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -229,7 +228,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                     Text(
                                       '"honestly nobody asked, go be miserable somewhere else"',
                                       style: AppTextStyles.bodyMedium.copyWith(
-                                        color: Colors.white,
+                                        color: AppColors.moderatorTextPrimary,
                                         fontSize: 14,
                                         height: 1.4,
                                       ),
@@ -243,7 +242,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                               Text(
                                 'Thread context',
                                 style: AppTextStyles.titleMedium.copyWith(
-                                  color: Colors.white,
+                                  color: AppColors.moderatorTextPrimary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 16,
                                 ),
@@ -257,16 +256,16 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                 margin:
                                     const EdgeInsets.only(bottom: AppSpacing.sm),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1D1927),
+                                  color: AppColors.moderatorSurfaceAlt2,
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.06),
+                                    color: AppColors.moderatorDivider,
                                   ),
                                 ),
                                 child: Text(
                                   '@rowankeeps · "Six months post-op. Read the caption before you comment 🤍"',
                                   style: AppTextStyles.bodySmall.copyWith(
-                                    color: Colors.white54,
+                                    color: AppColors.moderatorTextMuted,
                                     fontSize: 13,
                                   ),
                                 ),
@@ -277,16 +276,16 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(AppSpacing.md),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1D1927),
+                                  color: AppColors.moderatorSurfaceAlt2,
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.06),
+                                    color: AppColors.moderatorDivider,
                                   ),
                                 ),
                                 child: Text(
                                   '@jules.does · "Six months looks so good on you."',
                                   style: AppTextStyles.bodySmall.copyWith(
-                                    color: Colors.white54,
+                                    color: AppColors.moderatorTextMuted,
                                     fontSize: 13,
                                   ),
                                 ),
@@ -305,10 +304,10 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                       child: Container(
                         padding: const EdgeInsets.all(AppSpacing.xl),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF16131D),
+                          color: AppColors.moderatorSurface,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.08),
+                            color: AppColors.moderatorBorder,
                           ),
                         ),
                         child: SingleChildScrollView(
@@ -319,7 +318,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                               Text(
                                 'Account history · ${widget.reportedUser}',
                                 style: AppTextStyles.titleMedium.copyWith(
-                                  color: Colors.white,
+                                  color: AppColors.moderatorTextPrimary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15,
                                 ),
@@ -332,10 +331,10 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                 children: const <Widget>[
                                   Text('Joined',
                                       style: TextStyle(
-                                          color: Colors.white38, fontSize: 12)),
+                                          color: AppColors.moderatorTextFaint, fontSize: 12)),
                                   Text('11 Mar 2026',
                                       style: TextStyle(
-                                          color: Colors.white,
+                                          color: AppColors.moderatorTextPrimary,
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600)),
                                 ],
@@ -347,10 +346,10 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                 children: const <Widget>[
                                   Text('Reports against',
                                       style: TextStyle(
-                                          color: Colors.white38, fontSize: 12)),
+                                          color: AppColors.moderatorTextFaint, fontSize: 12)),
                                   Text('6 in 30 days',
                                       style: TextStyle(
-                                          color: Color(0xFFFF4B8B),
+                                          color: AppColors.moderatorPink,
                                           fontSize: 12,
                                           fontWeight: FontWeight.w700)),
                                 ],
@@ -362,10 +361,10 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                 children: const <Widget>[
                                   Text('Previous actions',
                                       style: TextStyle(
-                                          color: Colors.white38, fontSize: 12)),
+                                          color: AppColors.moderatorTextFaint, fontSize: 12)),
                                   Text('1 warning · 1 comment removed',
                                       style: TextStyle(
-                                          color: Colors.white,
+                                          color: AppColors.moderatorTextPrimary,
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600)),
                                 ],
@@ -377,10 +376,10 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                 children: const <Widget>[
                                   Text('Blocked by',
                                       style: TextStyle(
-                                          color: Colors.white38, fontSize: 12)),
+                                          color: AppColors.moderatorTextFaint, fontSize: 12)),
                                   Text('23 people',
                                       style: TextStyle(
-                                          color: Colors.white,
+                                          color: AppColors.moderatorTextPrimary,
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600)),
                                 ],
@@ -392,7 +391,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                               Text(
                                 'Decision',
                                 style: AppTextStyles.titleMedium.copyWith(
-                                  color: Colors.white,
+                                  color: AppColors.moderatorTextPrimary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 16,
                                 ),
@@ -412,12 +411,12 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                       vertical: AppSpacing.md - 2,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF1D1927),
+                                      color: AppColors.moderatorSurfaceAlt2,
                                       borderRadius: BorderRadius.circular(16),
                                       border: Border.all(
                                         color: _selectedDecisionIndex == i
-                                            ? const Color(0xFFFF4B8B)
-                                            : Colors.white
+                                            ? AppColors.moderatorPink
+                                            : AppColors.moderatorTextPrimary
                                                 .withValues(alpha: 0.08),
                                         width:
                                             _selectedDecisionIndex == i ? 1.5 : 1,
@@ -430,7 +429,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                         Text(
                                           _decisionOptions[i].title,
                                           style: TextStyle(
-                                            color: Colors.white,
+                                            color: AppColors.moderatorTextPrimary,
                                             fontWeight:
                                                 _selectedDecisionIndex == i
                                                     ? FontWeight.w700
@@ -442,8 +441,8 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                           _decisionOptions[i].subtitle,
                                           style: TextStyle(
                                             color: _selectedDecisionIndex == i
-                                                ? const Color(0xFFFF4B8B)
-                                                : Colors.white38,
+                                                ? AppColors.moderatorPink
+                                                : AppColors.moderatorTextFaint,
                                             fontSize: 12,
                                             fontWeight:
                                                 _selectedDecisionIndex == i
@@ -462,7 +461,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                               AppTextField(
                                 controller: _noteController,
                                 hintText: 'Note for the log (required)',
-                                fillColor: const Color(0xFF1D1927),
+                                fillColor: AppColors.moderatorSurfaceAlt2,
                               ),
 
                               const SizedBox(height: AppSpacing.xl),
@@ -476,11 +475,11 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                       child: Container(
                                         height: 46,
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF1D1927),
+                                          color: AppColors.moderatorSurfaceAlt2,
                                           borderRadius:
                                               BorderRadius.circular(23),
                                           border: Border.all(
-                                            color: Colors.white
+                                            color: AppColors.moderatorTextPrimary
                                                 .withValues(alpha: 0.1),
                                           ),
                                         ),
@@ -488,7 +487,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                           child: Text(
                                             'No action needed',
                                             style: TextStyle(
-                                              color: Colors.white,
+                                              color: AppColors.moderatorTextPrimary,
                                               fontWeight: FontWeight.w700,
                                               fontSize: 13,
                                             ),
@@ -506,16 +505,16 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                         decoration: BoxDecoration(
                                           gradient: const LinearGradient(
                                             colors: <Color>[
-                                              Color(0xFFFF4B8B),
-                                              Color(0xFF9D4EDD),
-                                              Color(0xFF00E5FF),
+                                              AppColors.moderatorPink,
+                                              AppColors.moderatorPurpleAccent,
+                                              AppColors.gradientCyan,
                                             ],
                                           ),
                                           borderRadius:
                                               BorderRadius.circular(23),
                                           boxShadow: <BoxShadow>[
                                             BoxShadow(
-                                              color: const Color(0xFFFF4B8B)
+                                              color: AppColors.moderatorPink
                                                   .withValues(alpha: 0.3),
                                               blurRadius: 12,
                                               offset: const Offset(0, 4),
@@ -526,7 +525,7 @@ class _ModeratorCaseDetailReviewScreenState extends State<ModeratorCaseDetailRev
                                           child: Text(
                                             'Apply decision',
                                             style: TextStyle(
-                                              color: Colors.white,
+                                              color: AppColors.moderatorTextPrimary,
                                               fontWeight: FontWeight.w700,
                                               fontSize: 13,
                                             ),

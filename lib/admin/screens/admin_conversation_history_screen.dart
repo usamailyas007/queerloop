@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_gradient_button.dart';
@@ -170,7 +171,7 @@ class _AdminConversationHistoryScreenState
         .toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -179,7 +180,7 @@ class _AdminConversationHistoryScreenState
             children: <Widget>[
               const Text(
                 'Conversation of the day /',
-                style: TextStyle(color: Color(0xFF635C72), fontSize: 12),
+                style: TextStyle(color: AppColors.adminTextMuted, fontSize: 12),
               ),
               const SizedBox(height: 4),
               Row(
@@ -192,7 +193,7 @@ class _AdminConversationHistoryScreenState
                         Text(
                           'History',
                           style: TextStyle(
-                            color: Color(0xFFF3EFF7),
+                            color: AppColors.adminTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 26,
                           ),
@@ -201,7 +202,7 @@ class _AdminConversationHistoryScreenState
                         Text(
                           "Every question that's ever gone live, with how it performed",
                           style: TextStyle(
-                            color: Color(0xFF948CA3),
+                            color: AppColors.adminTextSecondary,
                             fontSize: 13,
                           ),
                         ),
@@ -213,7 +214,7 @@ class _AdminConversationHistoryScreenState
                     child: AppTextField(
                       hintText: 'Search past questions',
                       prefixIconPath: AdminIcons.search,
-                      fillColor: const Color(0xFF141119),
+                      fillColor: AppColors.adminSurface,
                       onChanged: (String val) =>
                           setState(() => _searchQuery = val),
                     ),
@@ -225,7 +226,7 @@ class _AdminConversationHistoryScreenState
                     child: AppGradientButton(
                       text: 'Publish new question',
                       textStyle: const TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textInverse,
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
                       ),
@@ -239,10 +240,10 @@ class _AdminConversationHistoryScreenState
 
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF141119),
+                  color: AppColors.adminSurface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.09),
+                    color: AppColors.adminBorder,
                   ),
                 ),
                 child: Column(
@@ -255,7 +256,7 @@ class _AdminConversationHistoryScreenState
                       decoration: BoxDecoration(
                         border: Border(
                           bottom: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.06),
+                            color: AppColors.adminDivider,
                           ),
                         ),
                       ),
@@ -277,7 +278,7 @@ class _AdminConversationHistoryScreenState
                       itemCount: filtered.length,
                       separatorBuilder: (_, _) => Divider(
                         height: 1,
-                        color: Colors.white.withValues(alpha: 0.04),
+                        color: AppColors.adminRowDivider,
                       ),
                       itemBuilder: (_, int index) {
                         final ConversationQuestion q = filtered[index];
@@ -295,7 +296,7 @@ class _AdminConversationHistoryScreenState
                                   child: Text(
                                     q.question,
                                     style: const TextStyle(
-                                      color: Color(0xFFF3EFF7),
+                                      color: AppColors.adminTextPrimary,
                                       fontWeight: FontWeight.w700,
                                       fontSize: 12.5,
                                     ),
@@ -307,7 +308,7 @@ class _AdminConversationHistoryScreenState
                                 child: Text(
                                   q.sentLive,
                                   style: const TextStyle(
-                                    color: Color(0xFF948CA3),
+                                    color: AppColors.adminTextSecondary,
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w400,
                                   ),
@@ -320,7 +321,7 @@ class _AdminConversationHistoryScreenState
                                     q.answers,
                                   ),
                                   style: const TextStyle(
-                                    color: Color(0xFF948CA3),
+                                    color: AppColors.adminTextSecondary,
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w400,
                                   ),
@@ -333,7 +334,7 @@ class _AdminConversationHistoryScreenState
                                     q.topAnswerLikes,
                                   ),
                                   style: const TextStyle(
-                                    color: Color(0xFF948CA3),
+                                    color: AppColors.adminTextSecondary,
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w400,
                                   ),
@@ -345,8 +346,8 @@ class _AdminConversationHistoryScreenState
                                   '${q.reports}',
                                   style: TextStyle(
                                     color: q.reports > 0
-                                        ? const Color(0xFFFFB45C)
-                                        : const Color(0xFF948CA3),
+                                        ? AppColors.adminOrange
+                                        : AppColors.adminTextSecondary,
                                     fontWeight: q.reports > 0
                                         ? FontWeight.w700
                                         : FontWeight.w400,
@@ -366,15 +367,15 @@ class _AdminConversationHistoryScreenState
                                     decoration: BoxDecoration(
                                       color:
                                           (q.isLive
-                                                  ? const Color(0xFF3FE0AE)
-                                                  : const Color(0xFF948CA3))
+                                                  ? AppColors.adminTeal
+                                                  : AppColors.adminTextSecondary)
                                               .withValues(alpha: 0.2),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color:
                                             (q.isLive
-                                                    ? const Color(0xFF3FE0AE)
-                                                    : const Color(0xFF948CA3))
+                                                    ? AppColors.adminTeal
+                                                    : AppColors.adminTextSecondary)
                                                 .withValues(alpha: 0.4),
                                       ),
                                     ),
@@ -382,8 +383,8 @@ class _AdminConversationHistoryScreenState
                                       q.isLive ? 'Live' : 'Ended',
                                       style: TextStyle(
                                         color: q.isLive
-                                            ? const Color(0xFF3FE0AE)
-                                            : const Color(0xFF948CA3),
+                                            ? AppColors.adminTeal
+                                            : AppColors.adminTextSecondary,
                                         fontWeight: FontWeight.w700,
                                         fontSize: 11,
                                       ),
@@ -401,19 +402,17 @@ class _AdminConversationHistoryScreenState
                                       vertical: 6,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF1C1824),
+                                      color: AppColors.adminSurfaceAlt,
                                       borderRadius: BorderRadius.circular(14),
                                       border: Border.all(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.09,
-                                        ),
+                                        color: AppColors.adminBorder,
                                       ),
                                     ),
                                     child: const Text(
                                       'View answers',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
-                                        color: Color(0xFFF3EFF7),
+                                        color: AppColors.adminTextPrimary,
                                         fontWeight: FontWeight.w700,
                                         fontSize: 12,
                                       ),
@@ -437,7 +436,7 @@ class _AdminConversationHistoryScreenState
                           Text(
                             'Showing ${filtered.length} of 66 questions',
                             style: const TextStyle(
-                              color: Color(0xFF635C72),
+                              color: AppColors.adminTextMuted,
                               fontSize: 12,
                             ),
                           ),
@@ -465,14 +464,14 @@ class _AdminConversationHistoryScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1824),
+        color: AppColors.adminSurfaceAlt,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+        border: Border.all(color: AppColors.adminBorder),
       ),
       child: Text(
         label,
         style: const TextStyle(
-          color: Color(0xFF948CA3),
+          color: AppColors.adminTextSecondary,
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
@@ -491,7 +490,7 @@ class _Header extends StatelessWidget {
     return Text(
       label,
       style: const TextStyle(
-        color: Color(0xFF635C72),
+        color: AppColors.adminTextMuted,
         fontSize: 9.5,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,

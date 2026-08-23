@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_gradient_button.dart';
@@ -75,7 +76,7 @@ class _AdminSpotlightOverviewScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -92,7 +93,7 @@ class _AdminSpotlightOverviewScreenState
                         Text(
                           'Community spotlight',
                           style: TextStyle(
-                            color: Color(0xFFF3EFF7),
+                            color: AppColors.adminTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 24,
                           ),
@@ -101,7 +102,7 @@ class _AdminSpotlightOverviewScreenState
                         Text(
                           'Admin-curated feature shown once a week in Discover',
                           style: TextStyle(
-                            color: Color(0xFF948CA3),
+                            color: AppColors.adminTextSecondary,
                             fontSize: 13,
                           ),
                         ),
@@ -113,7 +114,7 @@ class _AdminSpotlightOverviewScreenState
                     child: AppTextField(
                       hintText: 'Search past spotlights',
                       prefixIconPath: AdminIcons.search,
-                      fillColor: const Color(0xFF141119),
+                      fillColor: AppColors.adminSurface,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -122,7 +123,7 @@ class _AdminSpotlightOverviewScreenState
                     child: AppOutlineButton(
                       text: 'Past Spotlight',
                       height: 44,
-                      backgroundColor: const Color(0xFF1C1824),
+                      backgroundColor: AppColors.adminSurfaceAlt,
                       onPressed: widget.onOpenPast,
                     ),
                   ),
@@ -133,7 +134,7 @@ class _AdminSpotlightOverviewScreenState
                     child: AppGradientButton(
                       text: 'New spotlight',
                       textStyle: const TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textInverse,
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
                       ),
@@ -149,10 +150,10 @@ class _AdminSpotlightOverviewScreenState
                 width: 480,
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF141119),
+                  color: AppColors.adminSurface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.09),
+                    color: AppColors.adminBorder,
                   ),
                 ),
                 child: Column(
@@ -162,7 +163,7 @@ class _AdminSpotlightOverviewScreenState
                     const Text(
                       "This week's pick",
                       style: TextStyle(
-                        color: Color(0xFFF3EFF7),
+                        color: AppColors.adminTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
                       ),
@@ -172,7 +173,7 @@ class _AdminSpotlightOverviewScreenState
                     const Text(
                       'Cover image',
                       style: TextStyle(
-                        color: Color(0xFF948CA3),
+                        color: AppColors.adminTextSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -186,7 +187,7 @@ class _AdminSpotlightOverviewScreenState
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.09),
+                            color: AppColors.adminBorder,
                           ),
                         ),
                         clipBehavior: Clip.antiAlias,
@@ -204,7 +205,7 @@ class _AdminSpotlightOverviewScreenState
                     const Text(
                       'Headline',
                       style: TextStyle(
-                        color: Color(0xFF948CA3),
+                        color: AppColors.adminTextSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -212,7 +213,7 @@ class _AdminSpotlightOverviewScreenState
                     const SizedBox(height: AppSpacing.xs),
                     AppTextField(
                       controller: _headlineController,
-                      fillColor: const Color(0xFF1C1824),
+                      fillColor: AppColors.adminSurfaceAlt,
                     ),
 
                     const SizedBox(height: AppSpacing.lg),
@@ -220,7 +221,7 @@ class _AdminSpotlightOverviewScreenState
                     const Text(
                       'Description',
                       style: TextStyle(
-                        color: Color(0xFF948CA3),
+                        color: AppColors.adminTextSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -228,7 +229,7 @@ class _AdminSpotlightOverviewScreenState
                     const SizedBox(height: AppSpacing.xs),
                     AppTextField(
                       controller: _descriptionController,
-                      fillColor: const Color(0xFF1C1824),
+                      fillColor: AppColors.adminSurfaceAlt,
                       maxLines: 3,
                     ),
 
@@ -242,7 +243,7 @@ class _AdminSpotlightOverviewScreenState
                         child: AppGradientButton(
                           text: 'Publish spotlight',
                           textStyle: const TextStyle(
-                            color: Colors.white,
+                            color: AppColors.textInverse,
                             fontWeight: FontWeight.w800,
                             fontSize: 13,
                           ),

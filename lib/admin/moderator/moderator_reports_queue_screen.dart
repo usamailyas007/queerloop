@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_icons.dart';
 import '../../core/theme/app_spacing.dart';
@@ -51,7 +52,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
       reporter: '@ashinorbit',
       age: '1h',
       priority: 'Urgent',
-      priorityColor: Color(0xFFDC2626),
+      priorityColor: AppColors.danger,
     ),
     QueueReportItem(
       caseId: 'QL-84397',
@@ -60,7 +61,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
       reporter: 'System flag',
       age: '2h',
       priority: 'Urgent',
-      priorityColor: Color(0xFFDC2626),
+      priorityColor: AppColors.danger,
     ),
     QueueReportItem(
       caseId: 'QL-84213',
@@ -69,7 +70,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
       reporter: '@ashinorbit',
       age: '14h',
       priority: 'High',
-      priorityColor: Color(0xFFD97706),
+      priorityColor: AppColors.warning,
     ),
     QueueReportItem(
       caseId: 'QL-84190',
@@ -78,7 +79,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
       reporter: '@jules.does',
       age: '13h',
       priority: 'High',
-      priorityColor: Color(0xFFD97706),
+      priorityColor: AppColors.warning,
     ),
     QueueReportItem(
       caseId: 'QL-84150',
@@ -87,7 +88,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
       reporter: 'System flag',
       age: '9h',
       priority: 'Normal',
-      priorityColor: Color(0xFF4B5563),
+      priorityColor: AppColors.moderatorGray,
     ),
     QueueReportItem(
       caseId: 'QL-84102',
@@ -96,7 +97,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
       reporter: '@rowankeeps',
       age: '7h',
       priority: 'Escalate',
-      priorityColor: Color(0xFF9333EA),
+      priorityColor: AppColors.moderatorPurple,
     ),
     QueueReportItem(
       caseId: 'QL-84002',
@@ -105,7 +106,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
       reporter: '@rowankeeps',
       age: '7h',
       priority: 'Escalate',
-      priorityColor: Color(0xFF9333EA),
+      priorityColor: AppColors.moderatorPurple,
     ),
     QueueReportItem(
       caseId: 'QL-83988',
@@ -114,7 +115,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
       reporter: '—',
       age: '1d',
       priority: 'Appeal',
-      priorityColor: Color(0xFF9333EA),
+      priorityColor: AppColors.moderatorPurple,
     ),
   ];
 
@@ -143,7 +144,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
     }).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121019),
+      backgroundColor: AppColors.moderatorBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -160,7 +161,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                       Text(
                         'Reports queue',
                         style: AppTextStyles.titleMedium.copyWith(
-                          color: Colors.white,
+                          color: AppColors.moderatorTextPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 24,
                         ),
@@ -169,7 +170,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                       Text(
                         '28 waiting · sorted urgent first',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: Colors.white54,
+                          color: AppColors.moderatorTextMuted,
                           fontSize: 13,
                         ),
                       ),
@@ -183,7 +184,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                     child: AppTextField(
                       hintText: 'Search by case ID, username...',
                       prefixIconPath: AppIcons.searchSvg,
-                      fillColor: const Color(0xFF191622),
+                      fillColor: AppColors.moderatorSurfaceAlt,
                       onChanged: (String val) =>
                           setState(() => _searchQuery = val),
                     ),
@@ -195,10 +196,10 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                   Container(
                     padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF191622),
+                      color: AppColors.moderatorSurfaceAlt,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: AppColors.moderatorBorder,
                       ),
                     ),
                     child: Row(
@@ -212,7 +213,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                             ),
                             decoration: BoxDecoration(
                               color: _reasonFilter == 0
-                                  ? const Color(0xFF2C2738)
+                                  ? AppColors.moderatorChipSelected
                                   : Colors.transparent,
                               borderRadius: BorderRadius.circular(9),
                             ),
@@ -220,8 +221,8 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                               'All reasons',
                               style: TextStyle(
                                 color: _reasonFilter == 0
-                                    ? Colors.white
-                                    : Colors.white54,
+                                    ? AppColors.moderatorTextPrimary
+                                    : AppColors.moderatorTextMuted,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13,
                               ),
@@ -237,7 +238,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                             ),
                             decoration: BoxDecoration(
                               color: _reasonFilter == 1
-                                  ? const Color(0xFF2C2738)
+                                  ? AppColors.moderatorChipSelected
                                   : Colors.transparent,
                               borderRadius: BorderRadius.circular(9),
                             ),
@@ -245,8 +246,8 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                               'Urgent only',
                               style: TextStyle(
                                 color: _reasonFilter == 1
-                                    ? Colors.white
-                                    : Colors.white54,
+                                    ? AppColors.moderatorTextPrimary
+                                    : AppColors.moderatorTextMuted,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13,
                               ),
@@ -266,16 +267,16 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                       vertical: 9,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF191622),
+                      color: AppColors.moderatorSurfaceAlt,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: AppColors.moderatorBorder,
                       ),
                     ),
                     child: const Text(
                       'Oldest first',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.moderatorTextPrimary,
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                       ),
@@ -290,10 +291,10 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF16131D),
+                    color: AppColors.moderatorSurface,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
+                      color: AppColors.moderatorBorder,
                     ),
                   ),
                   child: Column(
@@ -310,7 +311,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                             Text(
                               '28 reports',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.moderatorTextPrimary,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
                               ),
@@ -318,14 +319,14 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                             Text(
                               'All communities',
                               style: TextStyle(
-                                color: Colors.white38,
+                                color: AppColors.moderatorTextFaint,
                                 fontSize: 12,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const Divider(height: 1, color: Colors.white10),
+                      const Divider(height: 1, color: AppColors.moderatorDividerLine),
 
                       // Table Header Columns
                       Container(
@@ -336,7 +337,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                         decoration: BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.06),
+                              color: AppColors.moderatorDivider,
                             ),
                           ),
                         ),
@@ -346,7 +347,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                               flex: 2,
                               child: Text('CASE',
                                   style: TextStyle(
-                                      color: Colors.white38,
+                                      color: AppColors.moderatorTextFaint,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: 1.2)),
@@ -355,7 +356,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                               flex: 3,
                               child: Text('REASON',
                                   style: TextStyle(
-                                      color: Colors.white38,
+                                      color: AppColors.moderatorTextFaint,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: 1.2)),
@@ -364,7 +365,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                               flex: 3,
                               child: Text('REPORTED ACCOUNT',
                                   style: TextStyle(
-                                      color: Colors.white38,
+                                      color: AppColors.moderatorTextFaint,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: 1.2)),
@@ -373,7 +374,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                               flex: 3,
                               child: Text('REPORTER',
                                   style: TextStyle(
-                                      color: Colors.white38,
+                                      color: AppColors.moderatorTextFaint,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: 1.2)),
@@ -382,7 +383,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                               flex: 1,
                               child: Text('AGE',
                                   style: TextStyle(
-                                      color: Colors.white38,
+                                      color: AppColors.moderatorTextFaint,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: 1.2)),
@@ -391,7 +392,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                               flex: 2,
                               child: Text('PRIORITY',
                                   style: TextStyle(
-                                      color: Colors.white38,
+                                      color: AppColors.moderatorTextFaint,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: 1.2)),
@@ -407,7 +408,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                           itemCount: filtered.length,
                           separatorBuilder: (BuildContext context, int index) => Divider(
                             height: 1,
-                            color: Colors.white.withValues(alpha: 0.04),
+                            color: AppColors.moderatorRowDivider,
                           ),
                           itemBuilder: (_, int index) {
                             final QueueReportItem item = filtered[index];
@@ -424,7 +425,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                                     child: Text(
                                       item.caseId,
                                       style: const TextStyle(
-                                        color: Colors.white,
+                                        color: AppColors.moderatorTextPrimary,
                                         fontWeight: FontWeight.w700,
                                         fontSize: 13,
                                       ),
@@ -435,7 +436,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                                     child: Text(
                                       item.reason,
                                       style: const TextStyle(
-                                        color: Colors.white70,
+                                        color: AppColors.moderatorTextSecondary,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -445,7 +446,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                                     child: Text(
                                       item.reportedAccount,
                                       style: const TextStyle(
-                                        color: Colors.white70,
+                                        color: AppColors.moderatorTextSecondary,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -455,7 +456,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                                     child: Text(
                                       item.reporter,
                                       style: const TextStyle(
-                                        color: Colors.white54,
+                                        color: AppColors.moderatorTextMuted,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -465,7 +466,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                                     child: Text(
                                       item.age,
                                       style: const TextStyle(
-                                        color: Colors.white54,
+                                        color: AppColors.moderatorTextMuted,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -513,11 +514,11 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                                           vertical: 6,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF1D1927),
+                                          color: AppColors.moderatorSurfaceAlt2,
                                           borderRadius:
                                               BorderRadius.circular(14),
                                           border: Border.all(
-                                            color: Colors.white
+                                            color: AppColors.moderatorTextPrimary
                                                 .withValues(alpha: 0.12),
                                           ),
                                         ),
@@ -525,7 +526,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                                           'Review',
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
-                                            color: Colors.white,
+                                            color: AppColors.moderatorTextPrimary,
                                             fontWeight: FontWeight.w700,
                                             fontSize: 12,
                                           ),
@@ -549,7 +550,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                         decoration: BoxDecoration(
                           border: Border(
                             top: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.06),
+                              color: AppColors.moderatorDivider,
                             ),
                           ),
                         ),
@@ -559,7 +560,7 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
                             Text(
                               'Showing ${filtered.length} of 28 reports',
                               style: const TextStyle(
-                                color: Colors.white38,
+                                color: AppColors.moderatorTextFaint,
                                 fontSize: 12,
                               ),
                             ),
@@ -588,16 +589,16 @@ class _ModeratorReportsQueueScreenState extends State<ModeratorReportsQueueScree
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF191622),
+        color: AppColors.moderatorSurfaceAlt,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: AppColors.moderatorBorder,
         ),
       ),
       child: Text(
         label,
         style: const TextStyle(
-          color: Colors.white70,
+          color: AppColors.moderatorTextSecondary,
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),

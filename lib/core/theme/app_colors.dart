@@ -69,4 +69,70 @@ abstract final class AppColors {
     colors: <Color>[Color(0x386750A4), Color(0x006750A4)],
     stops: <double>[0.0, 1.0],
   );
+
+  // ── Admin console dark palette (Figma-verified) ─────────────────────
+  static const Color adminBackground = Color(0xFF18181B);
+  static const Color adminSurface = Color(0xFF141119);
+  static const Color adminSurfaceAlt = Color(0xFF1C1824);
+
+  static const Color adminBorder = Color(0x17FFFFFF); // white @ ~9%
+  static const Color adminDivider = Color(0x0FFFFFFF); // white @ ~6%
+  static const Color adminRowDivider = Color(0x0AFFFFFF); // white @ ~4%
+
+  static const Color adminTextPrimary = Color(0xFFF3EFF7);
+  static const Color adminTextSecondary = Color(0xFF948CA3);
+  static const Color adminTextMuted = Color(0xFF635C72);
+  static const Color adminTextFaint = Color(0xFFA79FB8);
+
+  static const Color adminTeal = Color(0xFF3FE0AE);
+  static const Color adminGreen = Color(0xFF34D399);
+  static const Color adminOrange = Color(0xFFFFB45C);
+  static const Color adminPink = Color(0xFFFF3B77);
+  static const Color adminPinkLight = Color(0xFFFF8080);
+  static const Color adminPurple = Color(0xFF8B5CFF);
+  static const Color adminPurpleSoft = Color(0xFF7C6BFF);
+  static const Color adminBlue = Color(0xFF4CC9FF);
+
+  // Const-context alpha variants (Color.withValues isn't a const function).
+  static const Color adminPinkGlow = Color(0x21FF3B77); // adminPink @ 13%
+  static const Color adminPinkTransparent = Color(0x00FF3B77); // adminPink @ 0%
+  static const Color adminPinkFaded = Color(0x40FF3B77); // adminPink @ 25%
+  static const Color adminPurpleFaded = Color(0x408B5CFF); // adminPurple @ 25%
+
+  /// Subtle border tint on the "Today's question" highlight card. Named
+  /// literally rather than semantically — its role is decorative, not a
+  /// deliberate brand hue.
+  static const Color adminHighlightBorder = Color(0xFFFFFF17);
+
+  static const Color adminButtonBorder = Color(0x1FFFFFFF); // white @ ~12%
+  static const Color adminDropzoneBorder = Color(0x29FFFFFF); // white @ ~16%
+  static const Color adminCardBorderStrong = Color(0x2EFFFFFF); // white @ ~18%
+  static const Color adminSidebarTint = Color(0x05FFFFFF); // white @ ~2%
+
+  // ── Moderator console dark palette ──────────────────────────────────
+  static const Color moderatorBackground = Color(0xFF121019);
+  static const Color moderatorSurface = Color(0xFF16131D);
+  static const Color moderatorSurfaceAlt = Color(0xFF191622);
+  static const Color moderatorSurfaceAlt2 = Color(0xFF1D1927);
+  static const Color moderatorChipSelected = Color(0xFF2C2738);
+  static const Color moderatorSidebarActive = Color(0xFF231E30);
+
+  static const Color moderatorPink = Color(0xFFFF4B8B);
+  static const Color moderatorPurple = Color(0xFF9333EA);
+  static const Color moderatorPurpleAccent = Color(0xFF9D4EDD);
+  static const Color moderatorGreen = Color(0xFF059669);
+  static const Color moderatorGray = Color(0xFF4B5563);
+
+  static const Color moderatorTextPrimary = Colors.white;
+  static const Color moderatorTextSecondary = Colors.white70;
+  static const Color moderatorTextMuted = Colors.white54;
+  static const Color moderatorTextFaint = Colors.white38;
+  static const Color moderatorDividerLine = Colors.white10;
+  static const Color moderatorIconMuted = Colors.white24;
+
+  static const Color moderatorBorder = Color(0x14FFFFFF); // white @ ~8%
+  static const Color moderatorDivider = Color(0x0FFFFFFF); // white @ ~6%
+  static const Color moderatorRowDivider = Color(0x0AFFFFFF); // white @ ~4%
+  static const Color moderatorButtonBorder = Color(0x1FFFFFFF); // white @ ~12%
+  static const Color moderatorInputBorder = Color(0x1AFFFFFF); // white @ ~10%
 }

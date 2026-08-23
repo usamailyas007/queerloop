@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_text_field.dart';
@@ -67,7 +68,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF18181B),
+      backgroundColor: AppColors.adminBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -85,7 +86,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         const Text(
                           'Platform overview',
                           style: TextStyle(
-                            color: Color(0xFFF3EFF7),
+                            color: AppColors.adminTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 26,
                             letterSpacing: -0.52,
@@ -95,7 +96,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         RichText(
                           text: const TextSpan(
                             style: TextStyle(
-                              color: Color(0xFF948CA3),
+                              color: AppColors.adminTextSecondary,
                               fontSize: 13,
                             ),
                             children: <TextSpan>[
@@ -105,7 +106,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               TextSpan(
                                 text: '2 minutes ago',
                                 style: TextStyle(
-                                  color: Color(0xFFF3EFF7),
+                                  color: AppColors.adminTextPrimary,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -121,7 +122,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     child: AppTextField(
                       hintText: 'Search users, cases, communities…',
                       prefixIconPath: AdminIcons.search,
-                      fillColor: const Color(0xFF141119),
+                      fillColor: AppColors.adminSurface,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -144,7 +145,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       value: '86,412',
                       delta: '+7.4% vs last week',
                       iconPath: AdminIcons.users,
-                      iconColor: Color(0xFF8B5CFF),
+                      iconColor: AppColors.adminPurple,
                     ),
                   ),
                   SizedBox(width: AppSpacing.md),
@@ -154,7 +155,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       value: '3,208',
                       delta: '+12.1%',
                       iconPath: AdminIcons.userSingle,
-                      iconColor: Color(0xFF3FE0AE),
+                      iconColor: AppColors.adminTeal,
                     ),
                   ),
                   SizedBox(width: AppSpacing.md),
@@ -163,9 +164,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       label: 'Posts today',
                       value: '21,749',
                       delta: '64% video',
-                      deltaColor: Color(0xFF948CA3),
+                      deltaColor: AppColors.adminTextSecondary,
                       iconPath: AdminIcons.image,
-                      iconColor: Color(0xFF4CC9FF),
+                      iconColor: AppColors.adminBlue,
                     ),
                   ),
                   SizedBox(width: AppSpacing.md),
@@ -173,11 +174,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     child: AdminStatCard(
                       label: 'Open reports',
                       value: '28',
-                      valueColor: Color(0xFFFFB45C),
+                      valueColor: AppColors.adminOrange,
                       delta: 'Avg response 4.2h',
-                      deltaColor: Color(0xFFFFB45C),
+                      deltaColor: AppColors.adminOrange,
                       iconPath: AdminIcons.shield,
-                      iconColor: Color(0xFFFFB45C),
+                      iconColor: AppColors.adminOrange,
                     ),
                   ),
                 ],
@@ -199,7 +200,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         trailing: const Text(
                           'Peak 91.2K on 28 Jul',
                           style: TextStyle(
-                            color: Color(0xFF3FE0AE),
+                            color: AppColors.adminTeal,
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
                           ),
@@ -212,21 +213,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               Text(
                                 '3 Jul',
                                 style: TextStyle(
-                                  color: Color(0xFF635C72),
+                                  color: AppColors.adminTextMuted,
                                   fontSize: 11,
                                 ),
                               ),
                               Text(
                                 '18 Jul',
                                 style: TextStyle(
-                                  color: Color(0xFF635C72),
+                                  color: AppColors.adminTextMuted,
                                   fontSize: 11,
                                 ),
                               ),
                               Text(
                                 '2 Aug',
                                 style: TextStyle(
-                                  color: Color(0xFF635C72),
+                                  color: AppColors.adminTextMuted,
                                   fontSize: 11,
                                 ),
                               ),
@@ -250,7 +251,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       child: Container(
                                         decoration: BoxDecoration(
                                           color: bar.style == _BarStyle.muted
-                                              ? const Color(0xFF1C1824)
+                                              ? AppColors.adminSurfaceAlt
                                               : null,
                                           gradient: bar.style == _BarStyle.muted
                                               ? null
@@ -261,12 +262,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                                       bar.style ==
                                                           _BarStyle.pink
                                                       ? const <Color>[
-                                                          Color(0xFFFF3B77),
-                                                          Color(0x40FF3B77),
+                                                          AppColors.adminPink,
+                                                          AppColors.adminPinkFaded,
                                                         ]
                                                       : const <Color>[
-                                                          Color(0xFF8B5CFF),
-                                                          Color(0x408B5CFF),
+                                                          AppColors.adminPurple,
+                                                          AppColors.adminPurpleFaded,
                                                         ],
                                                 ),
                                           borderRadius:
@@ -309,7 +310,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                           Text(
                                             item.label,
                                             style: const TextStyle(
-                                              color: Color(0xFFF3EFF7),
+                                              color: AppColors.adminTextPrimary,
                                               fontSize: 12.5,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -317,7 +318,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                           Text(
                                             item.members,
                                             style: const TextStyle(
-                                              color: Color(0xFF948CA3),
+                                              color: AppColors.adminTextSecondary,
                                               fontSize: 11,
                                               fontWeight: FontWeight.w700,
                                             ),
@@ -336,7 +337,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                           valueColor:
                                               const AlwaysStoppedAnimation<
                                                 Color
-                                              >(Color(0xFF8B5CFF)),
+                                              >(AppColors.adminPurple),
                                         ),
                                       ),
                                     ],
@@ -372,9 +373,9 @@ class _RangePills extends StatelessWidget {
       height: 38,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: const Color(0xFF141119),
+        color: AppColors.adminSurface,
         borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+        border: Border.all(color: AppColors.adminBorder),
       ),
       child: Row(
         children: <Widget>[
@@ -389,7 +390,7 @@ class _RangePills extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: selectedIndex == i
-                      ? const Color(0xFF1C1824)
+                      ? AppColors.adminSurfaceAlt
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -397,8 +398,8 @@ class _RangePills extends StatelessWidget {
                   _labels[i],
                   style: TextStyle(
                     color: selectedIndex == i
-                        ? const Color(0xFFF3EFF7)
-                        : const Color(0xFF948CA3),
+                        ? AppColors.adminTextPrimary
+                        : AppColors.adminTextSecondary,
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
@@ -432,9 +433,9 @@ class _ChartCard extends StatelessWidget {
       height: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: const Color(0xFF141119),
+        color: AppColors.adminSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+        border: Border.all(color: AppColors.adminBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -448,7 +449,7 @@ class _ChartCard extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      color: Color(0xFFF3EFF7),
+                      color: AppColors.adminTextPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
                     ),
@@ -459,7 +460,7 @@ class _ChartCard extends StatelessWidget {
                       child: Text(
                         subtitle!,
                         style: const TextStyle(
-                          color: Color(0xFF635C72),
+                          color: AppColors.adminTextMuted,
                           fontSize: 11,
                         ),
                       ),

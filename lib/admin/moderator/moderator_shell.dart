@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/widgets/app_user_avatar.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_images.dart';
 import '../../core/theme/app_spacing.dart';
@@ -31,7 +33,7 @@ class _ModeratorShellState extends State<ModeratorShell> {
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121019),
+      backgroundColor: AppColors.moderatorBackground,
       body: Row(
         children: <Widget>[
           // ── Sidebar Navigation Drawer ─────────────────────────────────────
@@ -67,10 +69,10 @@ class _ModeratorSidebar extends StatelessWidget {
     return Container(
       width: 240,
       decoration: BoxDecoration(
-        color: const Color(0xFF16131D),
+        color: AppColors.moderatorSurface,
         border: Border(
           right: BorderSide(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: AppColors.moderatorBorder,
           ),
         ),
       ),
@@ -94,7 +96,7 @@ class _ModeratorSidebar extends StatelessWidget {
                 const Text(
                   'QUEERLOOP+',
                   style: TextStyle(
-                    color: Color(0xFFFF4B8B),
+                    color: AppColors.moderatorPink,
                     fontWeight: FontWeight.w900,
                     fontSize: 16,
                     letterSpacing: 0.5,
@@ -127,19 +129,16 @@ class _ModeratorSidebar extends StatelessWidget {
           const Spacer(),
 
           // Bottom Divider
-          Divider(color: Colors.white.withValues(alpha: 0.08)),
+          Divider(color: AppColors.moderatorBorder),
           const SizedBox(height: AppSpacing.sm),
 
           // Bottom User Profile Card (MOD-04 Priya)
           Row(
             children: <Widget>[
-              ClipOval(
-                child: Image.asset(
-                  AppImages.user1,
-                  width: 38,
-                  height: 38,
-                  fit: BoxFit.cover,
-                ),
+              AppUserAvatar(
+                imageAsset: AppImages.user1,
+                size: 38,
+                hasGradientBorder: false,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -150,7 +149,7 @@ class _ModeratorSidebar extends StatelessWidget {
                     Text(
                       'MOD-04 · Priya',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.moderatorTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
                       ),
@@ -159,7 +158,7 @@ class _ModeratorSidebar extends StatelessWidget {
                     Text(
                       'Moderator',
                       style: TextStyle(
-                        color: Colors.white38,
+                        color: AppColors.moderatorTextFaint,
                         fontSize: 11,
                       ),
                     ),
@@ -170,7 +169,7 @@ class _ModeratorSidebar extends StatelessWidget {
                 width: 8,
                 height: 8,
                 decoration: const BoxDecoration(
-                  color: Color(0xFF00E5FF),
+                  color: AppColors.gradientCyan,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -199,7 +198,7 @@ class _ModeratorSidebar extends StatelessWidget {
             vertical: 10,
           ),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF231E30) : Colors.transparent,
+            color: isSelected ? AppColors.moderatorSidebarActive : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -207,14 +206,14 @@ class _ModeratorSidebar extends StatelessWidget {
               Icon(
                 icon,
                 size: 20,
-                color: isSelected ? Colors.white : Colors.white54,
+                color: isSelected ? AppColors.moderatorTextPrimary : AppColors.moderatorTextMuted,
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   label,
                   style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.white70,
+                    color: isSelected ? AppColors.moderatorTextPrimary : AppColors.moderatorTextSecondary,
                     fontWeight:
                         isSelected ? FontWeight.w700 : FontWeight.w500,
                     fontSize: 14,
@@ -228,7 +227,7 @@ class _ModeratorSidebar extends StatelessWidget {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00E5FF),
+                    color: AppColors.gradientCyan,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -254,8 +253,8 @@ class _InfinityLogoPainter extends CustomPainter {
     final Paint paint = Paint()
       ..shader = const LinearGradient(
         colors: <Color>[
-          Color(0xFF00E5FF),
-          Color(0xFFFF4B8B),
+          AppColors.gradientCyan,
+          AppColors.moderatorPink,
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
       ..style = PaintingStyle.stroke

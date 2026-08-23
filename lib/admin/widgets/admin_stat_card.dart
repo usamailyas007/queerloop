@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../../core/theme/app_colors.dart';
 
 import '../../core/theme/app_spacing.dart';
 
@@ -9,10 +10,10 @@ class AdminStatCard extends StatelessWidget {
     required this.value,
     super.key,
     this.iconPath,
-    this.iconColor = const Color(0xFF8B5CFF),
-    this.valueColor = const Color(0xFFF3EFF7),
+    this.iconColor = AppColors.adminPurple,
+    this.valueColor = AppColors.adminTextPrimary,
     this.delta,
-    this.deltaColor = const Color(0xFF3FE0AE),
+    this.deltaColor = AppColors.adminTeal,
   });
 
   final String label;
@@ -29,9 +30,9 @@ class AdminStatCard extends StatelessWidget {
       // height: 117,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF141119),
+        color: AppColors.adminSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+        border: Border.all(color: AppColors.adminBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -42,7 +43,7 @@ class AdminStatCard extends StatelessWidget {
               Text(
                 label.toUpperCase(),
                 style: const TextStyle(
-                  color: Color(0xFF635C72),
+                  color: AppColors.adminTextMuted,
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.6,
