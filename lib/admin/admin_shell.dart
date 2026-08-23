@@ -3,7 +3,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import '../core/widgets/app_user_avatar.dart';
 import '../core/theme/app_colors.dart';
-
 import '../core/theme/app_images.dart';
 import '../core/theme/app_spacing.dart';
 import 'admin_auth_provider.dart';
@@ -52,10 +51,7 @@ class _AdminShellState extends State<AdminShell> {
       backgroundColor: AppColors.adminBackground,
       body: Row(
         children: <Widget>[
-          // ── Sidebar Navigation Drawer ─────────────────────────────────────
           _AdminSidebar(selectedIndex: _selectedIndex, onSelected: _select),
-
-          // ── Main Screen View Area ─────────────────────────────────────────
           Expanded(
             child: IndexedStack(index: _selectedIndex, children: screens),
           ),
@@ -123,7 +119,6 @@ class _AdminSidebar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          // Top Brand Logo (icon + gradient QUEERLOOP+ wordmark)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
             child: Row(
@@ -134,20 +129,14 @@ class _AdminSidebar extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(height: AppSpacing.lg),
-
           Expanded(
             child: SingleChildScrollView(
               child: _buildSections(),
             ),
           ),
-
-          // Bottom Divider
           Divider(color: AppColors.adminBorder),
           const SizedBox(height: AppSpacing.sm),
-
-          // Bottom User Profile Card (Admin)
           Row(
             children: <Widget>[
               AppUserAvatar(

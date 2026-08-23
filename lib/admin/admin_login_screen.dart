@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
-
 import '../core/theme/app_images.dart';
 import '../core/widgets/app_gradient_button.dart';
 import '../core/widgets/app_text_field.dart';
@@ -15,8 +14,9 @@ class AdminLoginScreen extends StatefulWidget {
 }
 
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
-  final TextEditingController _emailController =
-      TextEditingController(text: 'you@queerloop.app');
+  final TextEditingController _emailController = TextEditingController(
+    text: 'you@queerloop.app',
+  );
   final TextEditingController _passwordController = TextEditingController();
 
   @override
@@ -28,9 +28,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
   void _submit() {
     context.read<AdminAuthProvider>().signIn(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-        );
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+    );
   }
 
   @override
@@ -39,7 +39,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       backgroundColor: AppColors.adminBackground,
       body: Stack(
         children: <Widget>[
-          // Soft pink glow behind the card, top-center.
           Positioned(
             top: -520,
             left: 0,
@@ -73,9 +72,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   decoration: BoxDecoration(
                     color: AppColors.adminSurface,
                     borderRadius: BorderRadius.circular(28),
-                    border: Border.all(
-                      color: AppColors.adminCardBorderStrong,
-                    ),
+                    border: Border.all(color: AppColors.adminCardBorderStrong),
                     boxShadow: <BoxShadow>[
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.7),
@@ -93,9 +90,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
                           Image.asset(AppImages.logo, width: 76, height: 29),
-
                           const SizedBox(height: 13),
-
                           const Text(
                             'Sign in',
                             style: TextStyle(
@@ -105,9 +100,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                               letterSpacing: -0.48,
                             ),
                           ),
-
                           const SizedBox(height: 6),
-
                           const Text(
                             'Enter your email and password to continue.',
                             style: TextStyle(
@@ -115,10 +108,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                               fontSize: 12.5,
                             ),
                           ),
-
                           const SizedBox(height: 22),
-
-                          // Email Input Field
                           const Text(
                             'Email',
                             style: TextStyle(
@@ -139,10 +129,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                               size: 17,
                             ),
                           ),
-
                           const SizedBox(height: 16),
-
-                          // Password Input Field
                           const Text(
                             'Password',
                             style: TextStyle(
@@ -163,10 +150,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                               size: 17,
                             ),
                           ),
-
                           const SizedBox(height: 22),
-
-                          // Sign in Button
                           AppGradientButton(
                             text: 'Sign in →',
                             height: 48,
