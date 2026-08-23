@@ -86,11 +86,11 @@ class _AdminSidebar extends StatelessWidget {
       title: 'ENGAGEMENT',
       items: <_NavItem>[
         _NavItem(
-          materialIcon: Icons.forum_outlined,
+          iconPath: AdminIcons.convo,
           label: 'Conversation of the day',
         ),
         _NavItem(
-          materialIcon: Icons.auto_awesome_outlined,
+          iconPath: AdminIcons.spotlight,
           label: 'Community spotlight',
         ),
       ],
@@ -249,15 +249,21 @@ class _AdminSidebar extends StatelessWidget {
           ),
           child: Row(
             children: <Widget>[
-              if (item.iconPath != null)
+              if (item.iconPath.endsWith('.svg'))
                 SvgPicture.asset(
-                  item.iconPath!,
+                  item.iconPath,
                   width: 16,
                   height: 16,
                   colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
                 )
               else
-                Icon(item.materialIcon, size: 16, color: iconColor),
+                Image.asset(
+                  item.iconPath,
+                  width: 16,
+                  height: 16,
+                  color: iconColor,
+                  colorBlendMode: BlendMode.srcIn,
+                ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -287,9 +293,8 @@ class _NavSection {
 }
 
 class _NavItem {
-  const _NavItem({this.iconPath, this.materialIcon, required this.label});
+  const _NavItem({required this.iconPath, required this.label});
 
-  final String? iconPath;
-  final IconData? materialIcon;
+  final String iconPath;
   final String label;
 }

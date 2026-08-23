@@ -120,7 +120,7 @@ class _AdminConversationOverviewScreenState
                   Expanded(
                     flex: 11,
                     child: Container(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      padding: const EdgeInsets.all(23),
                       decoration: BoxDecoration(
                         color: const Color(0xFF141119),
                         borderRadius: BorderRadius.circular(20),
@@ -140,13 +140,13 @@ class _AdminConversationOverviewScreenState
                               fontSize: 14,
                             ),
                           ),
-                          const SizedBox(height: AppSpacing.lg),
+                          const SizedBox(height: AppSpacing.md),
                           const Text(
                             'Question',
                             style: TextStyle(
-                              color: Color(0xFF948CA3),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFF3EFF7),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w400,
                             ),
                           ),
                           const SizedBox(height: AppSpacing.xs),
@@ -154,17 +154,17 @@ class _AdminConversationOverviewScreenState
                             controller: _questionController,
                             fillColor: const Color(0xFF1C1824),
                           ),
-                          const SizedBox(height: AppSpacing.xl),
+                          const SizedBox(height: 53),
                           Align(
                             alignment: Alignment.centerRight,
                             child: SizedBox(
-                              width: 190,
+                              width: 259,
                               height: 44,
                               child: AppGradientButton(
                                 text: 'Publish to everyone',
                                 textStyle: const TextStyle(
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w700,
                                   fontSize: 13,
                                 ),
                                 onPressed: () =>
@@ -180,149 +180,151 @@ class _AdminConversationOverviewScreenState
                   Expanded(
                     flex: 10,
                     child: Container(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF141119),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.09),
-                          ),
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141119),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.09),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      const Text(
-                                        'Live now',
-                                        style: TextStyle(
-                                          color: Color(0xFFF3EFF7),
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${NumberFormat.decimalPattern().format(_liveQuestion.answers)} answers so far',
-                                        style: const TextStyle(
-                                          color: Color(0xFF635C72),
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF3FE0AE,
-                                    ).withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: const Color(
-                                        0xFF3FE0AE,
-                                      ).withValues(alpha: 0.4),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'Live',
-                                    style: TextStyle(
-                                      color: Color(0xFF3FE0AE),
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: AppSpacing.md),
-
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(AppSpacing.md),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1C1824),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  const Text(
-                                    "TODAY'S QUESTION",
-                                    style: TextStyle(
-                                      color: Color(0xFF635C72),
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 1.2,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _liveQuestion.question,
-                                    style: const TextStyle(
-                                      color: Color(0xFFF3EFF7),
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            const SizedBox(height: AppSpacing.lg),
-
-                            const Text(
-                              'Past questions',
-                              style: TextStyle(
-                                color: Color(0xFFF3EFF7),
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                            for (final ConversationQuestion q in _pastQuestions)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 6,
-                                ),
-                                child: Row(
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    Expanded(
-                                      child: Text(
-                                        q.question,
-                                        style: const TextStyle(
-                                          color: Color(0xFF948CA3),
-                                          fontSize: 13,
-                                        ),
+                                    const Text(
+                                      'Live now',
+                                      style: TextStyle(
+                                        color: Color(0xFFF3EFF7),
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
                                       ),
                                     ),
+                                    const SizedBox(height: 2),
                                     Text(
-                                      '${_formatCompactCount(q.answers)} answers',
+                                      '${NumberFormat.decimalPattern().format(_liveQuestion.answers)} answers so far',
                                       style: const TextStyle(
                                         color: Color(0xFF635C72),
-                                        fontSize: 12,
+                                        fontSize: 11,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                          ],
-                        ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFF3FE0AE,
+                                  ).withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(
+                                      0xFF3FE0AE,
+                                    ).withValues(alpha: 0.1),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Live',
+                                  style: TextStyle(
+                                    color: Color(0xFF3FE0AE),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 18),
+
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(19),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1C1824),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Color(0xFFFFFF17).withValues(alpha: 0.1),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                const Text(
+                                  "TODAY'S QUESTION",
+                                  style: TextStyle(
+                                    color: Color(0xFF635C72),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w400,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  _liveQuestion.question,
+                                  style: const TextStyle(
+                                    color: Color(0xFFF3EFF7),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: AppSpacing.lg),
+
+                          const Text(
+                            'Past questions',
+                            style: TextStyle(
+                              color: Color(0xFFF3EFF7),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          for (final ConversationQuestion q in _pastQuestions)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: Text(
+                                      q.question,
+                                      style: const TextStyle(
+                                        color: Color(0xffF3EFF7),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    '${_formatCompactCount(q.answers)} answers',
+                                    style: const TextStyle(
+                                      color: Color(0xFF635C72),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          const SizedBox(height: 100),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

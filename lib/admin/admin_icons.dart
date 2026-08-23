@@ -9,4 +9,6 @@ abstract final class AdminIcons {
   static const String megaphone = '$dir/admin_megaphone.svg';
   static const String search = '$dir/admin_search.svg';
   static const String userSingle = '$dir/admin_user_single.svg';
+  static const String spotlight = '$dir/spotlight.png';
+  static const String convo = '$dir/convo.png';
 }
