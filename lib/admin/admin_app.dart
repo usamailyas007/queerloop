@@ -9,8 +9,8 @@ import '../core/theme/app_theme.dart';
 import '../l10n/app_localizations.dart';
 import 'auth/provider/admin_auth_provider.dart';
 import 'auth/screens/admin_login_screen.dart';
-import 'admin_shell.dart';
-import 'moderator/moderator_shell.dart';
+import 'admin_view/admin_shell.dart';
+import 'moderator_view/moderator_shell.dart';
 
 class AdminApp extends StatelessWidget {
   const AdminApp({super.key});
