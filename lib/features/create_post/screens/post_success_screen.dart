@@ -15,56 +15,67 @@ class PostSuccessScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              // Compact Success Animation (Tight container to eliminate empty Lottie canvas margin)
-              Center(child: SuccessAnimationCircle(size: 300)),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                // Success Animation Circle
+                const Center(child: SuccessAnimationCircle(size: 300)),
 
-              const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.md),
 
-              // Title
-              Text(
-                'Posted',
-                style: AppTextStyles.headingMedium.copyWith(fontSize: 22),
-              ),
-
-              const SizedBox(height: AppSpacing.sm),
-
-              // Subtitle
-              Text(
-                "Your post is live. It's visible to\nthe audience you picked on the\nlast screen.",
-                textAlign: TextAlign.center,
-                style: AppTextStyles.authHeaderSub.copyWith(
-                  color: Colors.white54,
-                  fontSize: 14,
-                  height: 1.45,
+                // Title
+                Text(
+                  'Posted',
+                  style: AppTextStyles.headingMedium.copyWith(fontSize: 22),
+                  textAlign: TextAlign.center,
                 ),
-              ),
 
-              const SizedBox(height: AppSpacing.xl),
-              // View post button
-              AppGradientButton(
-                text: 'View post',
-                onPressed: () {
-                  Navigator.popUntil(context, (route) => route.isFirst);
-                },
-              ),
+                const SizedBox(height: AppSpacing.sm),
 
-              const SizedBox(height: AppSpacing.md),
+                // Subtitle
+                Text(
+                  "Your post is live. It's visible to\nthe audience you picked on the\nlast screen.",
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.authHeaderSub.copyWith(
+                    color: Colors.white54,
+                    fontSize: 14,
+                    height: 1.45,
+                  ),
+                ),
 
-              // Back to feed button
-              AppOutlineButton(
-                text: 'Back to feed',
-                onPressed: () {
-                  Navigator.popUntil(context, (route) => route.isFirst);
-                },
-              ),
+                const SizedBox(height: AppSpacing.xl),
 
-              const SizedBox(height: AppSpacing.md),
-            ],
+                // View post button
+                AppGradientButton(
+                  text: 'View post',
+                  onPressed: () {
+                    Navigator.popUntil(
+                      context,
+                      (Route<dynamic> route) => route.isFirst,
+                    );
+                  },
+                ),
+
+                const SizedBox(height: AppSpacing.md),
+
+                // Back to feed button
+                AppOutlineButton(
+                  text: 'Back to feed',
+                  onPressed: () {
+                    Navigator.popUntil(
+                      context,
+                      (Route<dynamic> route) => route.isFirst,
+                    );
+                  },
+                ),
+
+                const SizedBox(height: AppSpacing.md),
+              ],
+            ),
           ),
         ),
       ),

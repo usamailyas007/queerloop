@@ -17,17 +17,12 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
   const CreatePostTypeBottomSheet({super.key});
 
   static Future<void> show(BuildContext context) async {
-    final CreatePostProvider provider =
-        context.read<CreatePostProvider?>() ?? CreatePostProvider();
-
+    context.read<CreatePostProvider>().resetPostForm();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => ChangeNotifierProvider<CreatePostProvider>.value(
-        value: provider,
-        child: const CreatePostTypeBottomSheet(),
-      ),
+      builder: (_) => const CreatePostTypeBottomSheet(),
     );
   }
 
@@ -114,10 +109,7 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
                 Navigator.push<void>(
                   context,
                   MaterialPageRoute<void>(
-                    builder: (_) => ChangeNotifierProvider<CreatePostProvider>.value(
-                      value: provider,
-                      child: const SelectVideoScreen(),
-                    ),
+                    builder: (_) => const SelectVideoScreen(),
                   ),
                 );
               },
@@ -137,10 +129,7 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
                 Navigator.push<void>(
                   context,
                   MaterialPageRoute<void>(
-                    builder: (_) => ChangeNotifierProvider<CreatePostProvider>.value(
-                      value: provider,
-                      child: const SelectPhotoScreen(),
-                    ),
+                    builder: (_) => const SelectPhotoScreen(),
                   ),
                 );
               },
@@ -160,10 +149,7 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
                 Navigator.push<void>(
                   context,
                   MaterialPageRoute<void>(
-                    builder: (_) => ChangeNotifierProvider<CreatePostProvider>.value(
-                      value: provider,
-                      child: const WritePostScreen(),
-                    ),
+                    builder: (_) => const WritePostScreen(),
                   ),
                 );
               },
@@ -207,17 +193,19 @@ class _MediaOptionTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.cardBackground,
           borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.1),
+          ),
         ),
         child: Row(
           children: <Widget>[
-            // Icon Badge
+            // Icon in rounded square
             Container(
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
+                color: iconColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               child: Center(
                 child: SvgPicture.asset(
@@ -231,7 +219,7 @@ class _MediaOptionTile extends StatelessWidget {
 
             const SizedBox(width: AppSpacing.md),
 
-            // Title & Subtitle
+            // Text column
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,13 +243,10 @@ class _MediaOptionTile extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(width: AppSpacing.sm),
-
-            // Arrow >
             const Icon(
               Icons.chevron_right_rounded,
               color: Colors.white38,
-              size: 22,
+              size: 20,
             ),
           ],
         ),

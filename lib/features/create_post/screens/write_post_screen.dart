@@ -89,6 +89,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
                   AppGradientButton(
                     text: 'Post',
                     onPressed: () {
+                      provider.resetPostForm();
                       Navigator.push<void>(
                         context,
                         MaterialPageRoute<void>(

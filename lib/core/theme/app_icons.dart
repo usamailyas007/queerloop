@@ -9,7 +9,6 @@ abstract final class AppIcons {
   static const String google = '$dir/google.svg';
   static const String key = '$dir/key.svg';
 
-  // SVG Icons
   static const String camera = '$dir/camera.svg';
   static const String upload = '$dir/upload.svg';
   static const String search = '$dir/search.svg';
@@ -20,7 +19,6 @@ abstract final class AppIcons {
   static const String appleSvg = '$dir/apple.svg';
   static const String googleSvg = '$dir/google.svg';
 
-  // Home Navigation & Feed Icons
   static const String home = '$dir/home.svg';
   static const String discover = '$dir/discover.svg';
   static const String msg = '$dir/msg.svg';
@@ -37,7 +35,6 @@ abstract final class AppIcons {
   static const String likedLogo = '$dir/liked-logo.png';
   static const String unlikeLogo = '$dir/unlike-logo.png';
 
-  // Discover / Search / Create Post Icons
   static const String clock = '$dir/clock.svg';
   static const String filter = '$dir/filter.svg';
   static const String cross = '$dir/cross.svg';

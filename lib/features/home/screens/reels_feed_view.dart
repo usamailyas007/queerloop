@@ -14,10 +14,16 @@ import '../widgets/share_this_post_bottom_sheet.dart';
 class ReelsFeedView extends StatefulWidget {
   const ReelsFeedView({
     this.onGuestActionTriggered,
+    this.initialPage = 0,
+    this.customReels,
+    this.hasBottomBar = true,
     super.key,
   });
 
   final VoidCallback? onGuestActionTriggered;
+  final int initialPage;
+  final List<ReelItemModel>? customReels;
+  final bool hasBottomBar;
 
   @override
   State<ReelsFeedView> createState() => _ReelsFeedViewState();
@@ -25,11 +31,13 @@ class ReelsFeedView extends StatefulWidget {
 
 class _ReelsFeedViewState extends State<ReelsFeedView> {
   late final PageController _pageController;
+  late int _activePage;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
+    _activePage = widget.initialPage;
+    _pageController = PageController(initialPage: widget.initialPage);
   }
 
   @override
@@ -112,7 +120,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
   Widget build(BuildContext context) {
     final HomeFeedProvider provider = context.watch<HomeFeedProvider>();
 
-    if (provider.isFollowingEmpty) {
+    if (widget.customReels == null && provider.isFollowingEmpty) {
       return HomeEmptyStateView(
         onOpenExplore: () {
           provider.setTopTab(TopTab.forYou);
@@ -120,17 +128,23 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
       );
     }
 
-    final List<ReelItemModel> reels = provider.reels;
+    final List<ReelItemModel> reels = widget.customReels ?? provider.reels;
 
     return PageView.builder(
       controller: _pageController,
       scrollDirection: Axis.vertical,
       itemCount: reels.length,
+      onPageChanged: (int index) {
+        setState(() => _activePage = index);
+      },
       itemBuilder: (context, index) {
         final ReelItemModel item = reels[index];
 
         return ReelFeedCard(
+          key: ValueKey<String>(item.id),
           reel: item,
+          isActive: index == _activePage,
+          hasBottomBar: widget.hasBottomBar,
           showCommunityFilterTag: provider.activeTopTab == TopTab.communities,
           selectedCommunity: provider.selectedCommunityFilter,
           onLikeToggle: () {

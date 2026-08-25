@@ -6,7 +6,9 @@ import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
 import '../core/theme/app_theme.dart';
 import '../features/auth/auth_provider.dart';
+import '../features/create_post/provider/create_post_provider.dart';
 import '../features/home/provider/home_feed_provider.dart';
+import '../features/messages/provider/messages_provider.dart';
 import '../features/profile_setup/provider/profile_setup_provider.dart';
 import '../features/splash_welcome/provider/splash_provider.dart';
 import '../l10n/app_localizations.dart';
@@ -31,6 +33,10 @@ class App extends StatelessWidget {
             create: (_) => ProfileSetupProvider()),
         ChangeNotifierProvider<HomeFeedProvider>(
             create: (_) => HomeFeedProvider()),
+        ChangeNotifierProvider<CreatePostProvider>(
+            create: (_) => CreatePostProvider()),
+        ChangeNotifierProvider<MessagesProvider>(
+            create: (_) => MessagesProvider()),
       ],
       child: MaterialApp(
         title: 'QueerLoop+',

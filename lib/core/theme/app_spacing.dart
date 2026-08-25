@@ -1,4 +1,3 @@
-// Spacing, radius, and size tokens for both apps.
 
 abstract final class AppSpacing {
   static const double none = 0;

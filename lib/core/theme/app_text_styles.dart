@@ -7,7 +7,6 @@ import 'app_colors.dart';
 abstract final class AppTextStyles {
   static const String fontFamily = 'HankenGrotesk';
 
-  // ── Core Typography Scale ──────────────────────────────────────────
   static const TextStyle displayLarge = TextStyle(
     fontFamily: fontFamily,
     fontSize: 32,
@@ -104,7 +103,6 @@ abstract final class AppTextStyles {
     color: AppColors.textInverse,
   );
 
-  // ── Auth & Screen Component Styles ─────────────────────────────────
   static const TextStyle authHeaderTitle = TextStyle(
     fontFamily: fontFamily,
     fontSize: 24,

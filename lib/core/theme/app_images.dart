@@ -1,4 +1,3 @@
-// Asset paths for bundled images and animations.
 
 abstract final class AppImages {
   static const String dir = 'assets/images';
@@ -10,27 +9,23 @@ abstract final class AppImages {
   static const String logoName = '$dir/logo_name.png';
   static const String logoNameSvg = '$dir/logo_name.svg';
 
-  // Onboarding / Welcome PNG Images
   static const String onboardingWelcomeDir = '$dir/welcome';
   static const String onboardingFeed = '$onboardingWelcomeDir/feed.png';
   static const String onboardingCommunity = '$onboardingWelcomeDir/community.png';
   static const String onboardingSafety = '$onboardingWelcomeDir/safety.png';
 
-  // Home Feed Images
   static const String homeDir = '$dir/home';
   static const String followingImg = '$homeDir/following-img.png';
   static const String forYouImg = '$homeDir/for-you-img.png';
   static const String communityImg = '$homeDir/community-img.png';
   static const String emptyHomeImg = '$homeDir/empty-home.png';
 
-  // Sample User Avatars
   static const String userDir = '$dir/sample-users';
   static const String user1 = '$userDir/user-1.png';
   static const String user2 = '$userDir/user-2.png';
   static const String user3 = '$userDir/user-3.png';
   static const String user4 = '$userDir/user-4.png';
 
-  // Communities PNG Images
   static const String lesbian = '$communitiesDir/Lesbian.png';
   static const String gay = '$communitiesDir/Gay.png';
   static const String bisexual = '$communitiesDir/Bisexual.png';
@@ -46,7 +41,6 @@ abstract final class AppImages {
   static const String transfemme = '$communitiesDir/Transfemme.png';
   static const String allies = '$communitiesDir/LGBTQ+Alies.png';
 
-  // Discover Screen Images
   static const String discoverDir = '$dir/discover';
   static const String searchResult1 = '$discoverDir/search-result-1.png';
   static const String searchResult2 = '$discoverDir/search-result-2.png';
@@ -56,7 +50,6 @@ abstract final class AppImages {
   static const String searchResult6 = '$discoverDir/search-result-6.png';
   static const String trendingBottom = '$discoverDir/trending-bottom.png';
 
-  // Animations
   static const String successAnimation = '$animationsDir/success_animation.gif';
   static const String successLottie = '$animationsDir/Success.json';
 }

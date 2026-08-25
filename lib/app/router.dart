@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../features/auth/auth_provider.dart';
-import '../features/auth/screens/register_screen.dart';
+import '../features/auth/screens/login_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/splash_welcome/provider/splash_provider.dart';
 import '../features/splash_welcome/screens/splash_screen.dart';
@@ -33,10 +33,10 @@ class AppRouter extends StatelessWidget {
       );
     }
 
-    // 3. Auth gate
+    // 3. Auth gate — show Login first; user can switch to Register from there
     return switch (authStatus) {
       AuthStatus.signedIn => const HomeScreen(),
-      _ => const RegisterScreen(),
+      _ => const LoginScreen(),
     };
   }
 }

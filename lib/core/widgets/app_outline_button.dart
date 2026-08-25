@@ -14,6 +14,7 @@ class AppOutlineButton extends StatelessWidget {
     this.textColor = Colors.white,
     this.height = AppSizes.buttonHeight,
     this.width = double.infinity,
+    this.fontSize = 13,
   });
 
   final String text;
@@ -23,6 +24,7 @@ class AppOutlineButton extends StatelessWidget {
   final Color textColor;
   final double height;
   final double width;
+  final double fontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -42,9 +44,20 @@ class AppOutlineButton extends StatelessWidget {
           onTap: onPressed,
           borderRadius: BorderRadius.circular(AppRadius.button),
           child: Center(
-            child: Text(
-              text,
-              style: AppTextStyles.buttonText.copyWith(color: textColor),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  text,
+                  maxLines: 1,
+                  style: AppTextStyles.buttonText.copyWith(
+                    color: textColor,
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ),
           ),
         ),

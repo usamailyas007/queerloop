@@ -4,11 +4,14 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
+import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../home/models/reel_item_model.dart';
+import '../../home/provider/home_feed_provider.dart';
 import '../models/create_post_models.dart';
 import '../provider/create_post_provider.dart';
 import '../widgets/add_tag_bottom_sheet.dart';
@@ -81,6 +84,41 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
     super.dispose();
   }
 
+
+  void _publishPost(BuildContext context, CreatePostProvider provider) {
+    final HomeFeedProvider homeProvider = context.read<HomeFeedProvider>();
+    final GalleryMediaItem? item = provider.selectedMedia;
+
+    if (item != null && item.isVideo) {
+      final ReelItemModel newReel = ReelItemModel(
+        id: 'reel_${DateTime.now().millisecondsSinceEpoch}',
+        username: '@you',
+        pronounsTime: 'they/them · just now',
+        avatarAsset: AppImages.user1,
+        videoAsset:
+            item.videoAsset ?? (item.filePath ?? 'assets/videos/video1.mp4'),
+        videoFilePath: item.filePath,
+        caption: provider.caption,
+        likesCount: 0,
+        commentsCount: 0,
+        tags: provider.tags.isNotEmpty
+            ? provider.tags
+            : <String>[provider.selectedCommunity],
+        durationText:
+            '0:${provider.selectedDurationSeconds.toString().padLeft(2, '0')}',
+      );
+      homeProvider.addNewReel(newReel);
+    }
+
+    provider.resetPostForm();
+
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => const PostSuccessScreen(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -189,9 +227,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                                       borderRadius: BorderRadius.circular(3),
                                     ),
                                     child: Text(
-                                      selectedItem?.duration.isNotEmpty ?? false
-                                          ? selectedItem!.duration
-                                          : '0:38',
+                                      '${provider.selectedDurationSeconds}s',
                                       style: AppTextStyles.caption.copyWith(
                                         color: Colors.white,
                                         fontSize: 10,
@@ -623,14 +659,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                   Expanded(
                     child: AppGradientButton(
                       text: 'Publish',
-                      onPressed: () {
-                        Navigator.push<void>(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const PostSuccessScreen(),
-                          ),
-                        );
-                      },
+                      onPressed: () => _publishPost(context, provider),
                     ),
                   ),
                 ],

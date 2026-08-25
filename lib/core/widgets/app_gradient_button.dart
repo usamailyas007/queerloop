@@ -14,6 +14,7 @@ class AppGradientButton extends StatelessWidget {
     this.width = double.infinity,
     this.borderRadius = const BorderRadius.all(Radius.circular(AppRadius.button)),
     this.textStyle,
+    this.fontSize,
     this.isLoading = false,
     this.isEnabled = true,
   });
@@ -25,6 +26,7 @@ class AppGradientButton extends StatelessWidget {
   final double width;
   final BorderRadiusGeometry borderRadius;
   final TextStyle? textStyle;
+  final double? fontSize;
   final bool isLoading;
   final bool isEnabled;
 
@@ -63,7 +65,24 @@ class AppGradientButton extends StatelessWidget {
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
-                  : Text(text, style: textStyle ?? AppTextStyles.buttonText),
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          text,
+                          maxLines: 1,
+                          style: textStyle ??
+                              (fontSize != null
+                                  ? AppTextStyles.buttonText.copyWith(
+                                      fontSize: fontSize,
+                                    )
+                                  : AppTextStyles.buttonText),
+                        ),
+                      ),
+                    ),
             ),
           ),
         ),

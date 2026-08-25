@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -172,7 +174,8 @@ class ChatBubble extends StatelessWidget {
             ),
 
           // ── Image Bubble with Reaction Badge ─────────────────────────────
-          if (message.type == MessageType.image && message.imageAsset != null)
+          if (message.type == MessageType.image &&
+              (message.imageFilePath != null || message.imageAsset != null))
             Align(
               alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
               child: Column(
@@ -181,12 +184,19 @@ class ChatBubble extends StatelessWidget {
                 children: <Widget>[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(20),
-                    child: Image.asset(
-                      message.imageAsset!,
-                      width: 190,
-                      height: 190,
-                      fit: BoxFit.cover,
-                    ),
+                    child: message.imageFilePath != null
+                        ? Image.file(
+                            File(message.imageFilePath!),
+                            width: 190,
+                            height: 190,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.asset(
+                            message.imageAsset!,
+                            width: 190,
+                            height: 190,
+                            fit: BoxFit.cover,
+                          ),
                   ),
                   if (message.reactionEmoji != null)
                     _buildReactionPill(

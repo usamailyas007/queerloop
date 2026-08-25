@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
@@ -180,7 +181,16 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                         Expanded(
                           child: AppOutlineButton(
                             text: 'Share profile',
-                            onPressed: () {},
+                            onPressed: () {
+                              SharePlus.instance.share(
+                                ShareParams(
+                                  text:
+                                      'Check out @ashinorbit on QueerLoop+! https://queerloop.app/profile/ashinorbit',
+                                  subject:
+                                      'QueerLoop+ Profile - Ash Mercado (@ashinorbit)',
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ],

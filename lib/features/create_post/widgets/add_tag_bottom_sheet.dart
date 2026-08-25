@@ -47,19 +47,41 @@ class _AddTagBottomSheetState extends State<AddTagBottomSheet> {
     '#transjoy',
     '#support',
     '#queerbooktok',
+    '#prideprep2026',
+    '#binderfitcheck',
+    '#lgbtq',
+    '#transgender',
   ];
 
   @override
   void initState() {
     super.initState();
     _tags = List<String>.from(widget.selectedTags);
-    _searchController = TextEditingController(text: 'chosen');
+    _searchController = TextEditingController();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _addCustomTag(String raw) {
+    final String clean = raw.trim();
+    if (clean.isEmpty) return;
+    final String tag = clean.startsWith('#') ? clean : '#$clean';
+
+    if (!_tags.contains(tag)) {
+      if (_tags.length < 5) {
+        setState(() {
+          _tags.add(tag);
+          _searchController.clear();
+        });
+        widget.onTagsChanged(_tags);
+      }
+    } else {
+      _searchController.clear();
+    }
   }
 
   void _toggleTag(String tag) {
@@ -75,12 +97,25 @@ class _AddTagBottomSheetState extends State<AddTagBottomSheet> {
     widget.onTagsChanged(_tags);
   }
 
+  void _handleDone() {
+    final String query = _searchController.text.trim();
+    if (query.isNotEmpty) {
+      _addCustomTag(query);
+    }
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final String query = _searchController.text.trim().toLowerCase();
+    final String cleanTagQuery = query.startsWith('#') ? query : '#$query';
+
     final List<String> matching = _allMatchingTags
         .where((String t) => query.isEmpty || t.toLowerCase().contains(query))
         .toList();
+
+    final bool isExactMatch = matching.any((String t) => t.toLowerCase() == cleanTagQuery.toLowerCase());
+    final bool showCustomCreate = query.isNotEmpty && !isExactMatch;
 
     return Container(
       decoration: const BoxDecoration(
@@ -100,181 +135,252 @@ class _AddTagBottomSheetState extends State<AddTagBottomSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-            // Drag handle
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
 
-            const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.lg),
 
-            // Header (Title + Close X)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: <Widget>[
-                Text(
-                  'Add a tag',
-                  style: AppTextStyles.headingMedium.copyWith(fontSize: 20),
-                ),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.close_rounded,
-                      color: Colors.white70,
-                      size: 18,
-                    ),
+              // Header (Title + Close X)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  Text(
+                    'Add a tag',
+                    style: AppTextStyles.headingMedium.copyWith(fontSize: 20),
                   ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: AppSpacing.lg),
-
-            // Search Bar Row using AppTextField component
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: AppTextField(
-                    controller: _searchController,
-                    hintText: 'Search tags...',
-                    prefixIconPath: AppIcons.search,
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Text(
-                    'Done',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.gradientPink,
-                      fontWeight: FontWeight.w700,
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white70,
+                        size: 18,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: AppSpacing.xl),
-
-            // SELECTED header
-            Text(
-              'SELECTED  ·  ${_tags.length}',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: Colors.white54,
-                letterSpacing: 1.2,
-                fontSize: 11,
+                ],
               ),
-            ),
 
-            const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.lg),
 
-            // Selected tags chips (Gradient pill chips with x)
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: _tags
-                  .map(
-                    (String tag) => GestureDetector(
-                      onTap: () => _toggleTag(tag),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md,
-                          vertical: AppSpacing.xs,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: AppColors.primaryGradientButton,
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            Text(
-                              tag,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(
-                              Icons.close_rounded,
-                              color: Colors.white,
-                              size: 14,
-                            ),
-                          ],
+              // Search Bar Row using AppTextField component
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: AppTextField(
+                      controller: _searchController,
+                      hintText: 'Search or type new tag...',
+                      prefixIconPath: AppIcons.search,
+                      textInputAction: TextInputAction.done,
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (String val) {
+                        _addCustomTag(val);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  GestureDetector(
+                    onTap: _handleDone,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        'Done',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.gradientPink,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
-                  )
-                  .toList(),
-            ),
-
-            const SizedBox(height: AppSpacing.xl),
-
-            // MATCHING TAGS header
-            Text(
-              'MATCHING TAGS',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: Colors.white54,
-                letterSpacing: 1.2,
-                fontSize: 11,
+                  ),
+                ],
               ),
-            ),
 
-            const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.xl),
 
-            // Matching tags list
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: matching
-                  .map(
-                    (String tag) => GestureDetector(
-                      onTap: () => _toggleTag(tag),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.sm,
+              // SELECTED header
+              Text(
+                'SELECTED  ·  ${_tags.length}',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: Colors.white54,
+                  letterSpacing: 1.2,
+                  fontSize: 11,
+                ),
+              ),
+
+              const SizedBox(height: AppSpacing.md),
+
+              // Selected tags chips (Gradient pill chips with x)
+              if (_tags.isNotEmpty)
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: _tags
+                      .map(
+                        (String tag) => GestureDetector(
+                          onTap: () => _toggleTag(tag),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.xs,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: AppColors.primaryGradientButton,
+                              borderRadius: BorderRadius.circular(AppRadius.pill),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Text(
+                                  tag,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.close_rounded,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        child: Text(
-                          tag,
+                      )
+                      .toList(),
+                )
+              else
+                Text(
+                  'No tags selected yet.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: Colors.white38,
+                  ),
+                ),
+
+              const SizedBox(height: AppSpacing.xl),
+
+              // Create Custom Tag Chip if typed something new
+              if (showCustomCreate) ...<Widget>[
+                GestureDetector(
+                  onTap: () => _addCustomTag(query),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.gradientCyan.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(AppRadius.card),
+                      border: Border.all(
+                        color: AppColors.gradientCyan.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        const Icon(
+                          Icons.add_rounded,
+                          color: AppColors.gradientCyan,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Add "$cleanTagQuery"',
                           style: AppTextStyles.bodyMedium.copyWith(
-                            color: Colors.white,
+                            color: AppColors.gradientCyan,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                  )
-                  .toList(),
-            ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
 
-            const SizedBox(height: AppSpacing.xl),
-
-            // Up to 5 tags note
-            Text(
-              'Up to 5 tags per post.',
-              style: AppTextStyles.caption.copyWith(
-                color: Colors.white38,
-                fontSize: 12,
+              // MATCHING TAGS header
+              Text(
+                'MATCHING TAGS',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: Colors.white54,
+                  letterSpacing: 1.2,
+                  fontSize: 11,
+                ),
               ),
-            ),
-          ],
+
+              const SizedBox(height: AppSpacing.md),
+
+              // Matching tags list
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: matching
+                    .map(
+                      (String tag) => GestureDetector(
+                        onTap: () => _toggleTag(tag),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.sm,
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              Text(
+                                tag,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: _tags.contains(tag)
+                                      ? AppColors.gradientPink
+                                      : Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (_tags.contains(tag)) ...<Widget>[
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.check_rounded,
+                                  color: AppColors.gradientPink,
+                                  size: 16,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+
+              const SizedBox(height: AppSpacing.xl),
+
+              // Up to 5 tags note
+              Text(
+                'Up to 5 tags per post.',
+                style: AppTextStyles.caption.copyWith(
+                  color: Colors.white38,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }

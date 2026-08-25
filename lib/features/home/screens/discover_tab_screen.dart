@@ -7,6 +7,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
+import '../screens/hashtag_posts_screen.dart';
 import '../widgets/guest_action_modal_dialog.dart';
 
 class DiscoverTabScreen extends StatelessWidget {
@@ -79,34 +80,85 @@ class DiscoverTabScreen extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
 
             // 01. #chosenfamily Card
-            const _TrendingItemCard(
+            _TrendingItemCard(
               rank: '01',
               rankColor: AppColors.gradientPink,
               hashtag: '#chosenfamily',
               postsCount: '28.4K posts today',
               thumbnailAsset: AppImages.forYouImg,
+              onTap: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const HashtagPostsScreen(
+                    hashtag: '#chosenfamily',
+                    postsCount: '28.4K posts today',
+                    rankColor: AppColors.gradientPink,
+                  ),
+                ),
+              ),
             ),
 
             const SizedBox(height: AppSpacing.md),
 
             // 02. #prideprep2026 Card
-            const _TrendingItemCard(
+            _TrendingItemCard(
               rank: '02',
               rankColor: AppColors.gradientPurple,
               hashtag: '#prideprep2026',
               postsCount: '19.7K posts today',
               thumbnailAsset: AppImages.followingImg,
+              onTap: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const HashtagPostsScreen(
+                    hashtag: '#prideprep2026',
+                    postsCount: '19.7K posts today',
+                    rankColor: AppColors.gradientPurple,
+                  ),
+                ),
+              ),
             ),
 
             const SizedBox(height: AppSpacing.md),
 
             // 03. #binderfitcheck Card
-            const _TrendingItemCard(
+            _TrendingItemCard(
               rank: '03',
               rankColor: AppColors.gradientCyan,
               hashtag: '#binderfitcheck',
               postsCount: '11.2K posts today',
               thumbnailAsset: AppImages.communityImg,
+              onTap: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const HashtagPostsScreen(
+                    hashtag: '#binderfitcheck',
+                    postsCount: '11.2K posts today',
+                    rankColor: AppColors.gradientCyan,
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: AppSpacing.md),
+
+            // 04. #queerbooktok Card
+            _TrendingItemCard(
+              rank: '04',
+              rankColor: AppColors.gradientPurple,
+              hashtag: '#queerbooktok',
+              postsCount: '8.9K posts today',
+              thumbnailAsset: AppImages.forYouImg,
+              onTap: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const HashtagPostsScreen(
+                    hashtag: '#queerbooktok',
+                    postsCount: '8.9K posts today',
+                    rankColor: AppColors.gradientPurple,
+                  ),
+                ),
+              ),
             ),
 
             const SizedBox(height: AppSpacing.xl),
@@ -160,6 +212,7 @@ class _TrendingItemCard extends StatelessWidget {
     required this.hashtag,
     required this.postsCount,
     required this.thumbnailAsset,
+    required this.onTap,
   });
 
   final String rank;
@@ -167,57 +220,61 @@ class _TrendingItemCard extends StatelessWidget {
   final String hashtag;
   final String postsCount;
   final String thumbnailAsset;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      child: Row(
-        children: <Widget>[
-          Text(
-            rank,
-            style: AppTextStyles.titleMedium.copyWith(
-              color: rankColor,
-              fontWeight: FontWeight.w700,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        child: Row(
+          children: <Widget>[
+            Text(
+              rank,
+              style: AppTextStyles.titleMedium.copyWith(
+                color: rankColor,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  hashtag,
-                  style: AppTextStyles.titleSmall.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    hashtag,
+                    style: AppTextStyles.titleSmall.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  postsCount,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: Colors.white54,
+                  const SizedBox(height: 2),
+                  Text(
+                    postsCount,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: Colors.white54,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            child: Image.asset(
-              thumbnailAsset,
-              width: 44,
-              height: 44,
-              fit: BoxFit.cover,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: Image.asset(
+                thumbnailAsset,
+                width: 44,
+                height: 44,
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

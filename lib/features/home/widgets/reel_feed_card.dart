@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
@@ -21,6 +24,8 @@ class ReelFeedCard extends StatefulWidget {
     required this.onOpenFilterCommunities,
     this.showCommunityFilterTag = false,
     this.selectedCommunity = 'All Communities',
+    this.isActive = true,
+    this.hasBottomBar = true,
     super.key,
   });
 
@@ -34,6 +39,9 @@ class ReelFeedCard extends StatefulWidget {
   final VoidCallback onOpenFilterCommunities;
   final bool showCommunityFilterTag;
   final String selectedCommunity;
+  /// Whether this card is the currently visible page (controls auto-play).
+  final bool isActive;
+  final bool hasBottomBar;
 
   @override
   State<ReelFeedCard> createState() => _ReelFeedCardState();
@@ -41,6 +49,12 @@ class ReelFeedCard extends StatefulWidget {
 
 class _ReelFeedCardState extends State<ReelFeedCard>
     with SingleTickerProviderStateMixin {
+  // ── Video player ────────────────────────────────────────────────────────
+  late VideoPlayerController _videoController;
+  bool _videoInitialized = false;
+  bool _isPaused = false;
+
+  // ── Double-tap heart animation ───────────────────────────────────────────
   late AnimationController _animController;
   late Animation<double> _scaleAnim;
   bool _showDoubleTapHeart = false;
@@ -48,6 +62,8 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   @override
   void initState() {
     super.initState();
+
+    // Heart animation
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -55,28 +71,62 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     _scaleAnim = Tween<double>(begin: 0.5, end: 1.3).animate(
       CurvedAnimation(parent: _animController, curve: Curves.elasticOut),
     );
+
+    // Video
+    _initVideo();
+  }
+
+  Future<void> _initVideo() async {
+    final String? filePath = widget.reel.videoFilePath;
+    if (filePath != null && filePath.isNotEmpty) {
+      _videoController = VideoPlayerController.file(File(filePath));
+    } else {
+      _videoController = VideoPlayerController.asset(widget.reel.videoAsset);
+    }
+    await _videoController.initialize();
+    _videoController.setLooping(true);
+    _videoController.setVolume(1.0);
+    if (mounted) {
+      setState(() => _videoInitialized = true);
+      if (widget.isActive) {
+        _videoController.play();
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(ReelFeedCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_videoInitialized) return;
+    if (widget.isActive && !oldWidget.isActive) {
+      _videoController.play();
+      setState(() => _isPaused = false);
+    } else if (!widget.isActive && oldWidget.isActive) {
+      _videoController.pause();
+    }
   }
 
   @override
   void dispose() {
+    _videoController.dispose();
     _animController.dispose();
     super.dispose();
   }
 
-  void _handleDoubleTap() {
-    if (!widget.reel.isLiked) {
-      widget.onLikeToggle();
-    }
+  void _handleTap() {
+    if (!_videoInitialized) return;
     setState(() {
-      _showDoubleTapHeart = true;
+      _isPaused = !_isPaused;
+      _isPaused ? _videoController.pause() : _videoController.play();
     });
+  }
+
+  void _handleDoubleTap() {
+    if (!widget.reel.isLiked) widget.onLikeToggle();
+    setState(() => _showDoubleTapHeart = true);
     _animController.forward(from: 0.0).then((_) {
       Future.delayed(const Duration(milliseconds: 200), () {
-        if (mounted) {
-          setState(() {
-            _showDoubleTapHeart = false;
-          });
-        }
+        if (mounted) setState(() => _showDoubleTapHeart = false);
       });
     });
   }
@@ -86,45 +136,77 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     final ReelItemModel item = widget.reel;
     final double viewPaddingBottom = MediaQuery.of(context).viewPadding.bottom;
     final double paddingBottom = MediaQuery.of(context).padding.bottom;
-    final double systemBottomInset = viewPaddingBottom > paddingBottom
-        ? viewPaddingBottom
-        : paddingBottom;
-    final double rightActionsBottom = 110 + systemBottomInset;
-    final double leftDetailsBottom = 100 + systemBottomInset;
+    final double systemBottomInset =
+        viewPaddingBottom > paddingBottom ? viewPaddingBottom : paddingBottom;
+    final double rightActionsBottom =
+        (widget.hasBottomBar ? 110 : 28) + systemBottomInset;
+    final double leftDetailsBottom =
+        (widget.hasBottomBar ? 100 : 20) + systemBottomInset;
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return GestureDetector(
+      onTap: _handleTap,
       onDoubleTap: _handleDoubleTap,
       child: Stack(
         fit: StackFit.expand,
         children: <Widget>[
-          // ── 1. Full Bleed Media Image ──────────────────────────────────────
-          Image.asset(
-            item.mediaAsset,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(color: AppColors.background);
-            },
-          ),
+          // ── 1. Video Player (full-bleed, cover-fit) ───────────────────────
+          _videoInitialized
+              ? SizedBox.expand(
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: _videoController.value.size.width,
+                      height: _videoController.value.size.height,
+                      child: VideoPlayer(_videoController),
+                    ),
+                  ),
+                )
+              : Container(
+                  color: Colors.black,
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      color: Colors.white30,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                ),
 
-          // ── 2. Top & Bottom Dark Gradient Overlay for Readability ─────────
+          // ── 2. Top & Bottom Dark Gradient Overlay ─────────────────────────
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: <Color>[
+                  Colors.black.withValues(alpha: 0.6),
+                  Colors.transparent,
+                  Colors.transparent,
                   Colors.black.withValues(alpha: 0.85),
-                  Colors.transparent,
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.9),
                 ],
-                stops: const <double>[0.0, 0.25, 0.65, 1.0],
+                stops: const <double>[0.0, 0.20, 0.60, 1.0],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
             ),
           ),
 
-          // ── 3. Double-Tap Animated Heart Popup ────────────────────────────
+          // ── 3. Pause Icon (shows briefly when tapped) ─────────────────────
+          if (_isPaused)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.pause_rounded,
+                  color: Colors.white,
+                  size: 48,
+                ),
+              ),
+            ),
+
+          // ── 4. Double-Tap Heart Animation ─────────────────────────────────
           if (_showDoubleTapHeart)
             Center(
               child: ScaleTransition(
@@ -133,14 +215,32 @@ class _ReelFeedCardState extends State<ReelFeedCard>
               ),
             ),
 
-          // ── 4. Right Side Action Bar Column ───────────────────────────────
+          // ── 5. Video Progress Bar (bottom edge, above overlay) ────────────
+          if (_videoInitialized)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: VideoProgressIndicator(
+                _videoController,
+                allowScrubbing: true,
+                colors: VideoProgressColors(
+                  playedColor: AppColors.gradientPink,
+                  bufferedColor: Colors.white24,
+                  backgroundColor: Colors.white12,
+                ),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+
+          // ── 6. Right Side Action Bar ───────────────────────────────────────
           Positioned(
             right: 14,
             bottom: rightActionsBottom,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                // Like Action (liked-logo.png / unlike-logo.png)
+                // Like
                 _RightActionButton(
                   onTap: widget.onLikeToggle,
                   label: '${item.likesCount}',
@@ -153,7 +253,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
 
                 const SizedBox(height: 18),
 
-                // Comment Action (Opens Comments Bottom Sheet)
+                // Comment
                 _RightActionButton(
                   onTap: widget.onOpenComments,
                   label: '${item.commentsCount}',
@@ -170,7 +270,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
 
                 const SizedBox(height: 18),
 
-                // Share Action (Opens Share Bottom Sheet)
+                // Share
                 _RightActionButton(
                   onTap: widget.onOpenShare,
                   label: l10n.homeShare,
@@ -187,7 +287,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
 
                 const SizedBox(height: 18),
 
-                // Save Action
+                // Save
                 _RightActionButton(
                   onTap: widget.onSaveToggle,
                   label: l10n.homeSave,
@@ -204,7 +304,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
 
                 const SizedBox(height: 18),
 
-                // Safety Action Badge (Opens Safety Bottom Sheet)
+                // Safety
                 GestureDetector(
                   onTap: widget.onOpenSafety,
                   child: Container(
@@ -247,6 +347,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
             ),
           ),
 
+          // ── 7. Bottom-Left Details (tags, user info, caption) ─────────────
           Positioned(
             left: 16,
             right: 80,
@@ -255,14 +356,13 @@ class _ReelFeedCardState extends State<ReelFeedCard>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                // Communities Tag vs Standard Tags + Video Duration Badge
+                // Tags row
                 if (widget.showCommunityFilterTag) ...<Widget>[
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        // Pink-Cyan Reversed Gradient Community Tag
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 10,
@@ -281,10 +381,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                             ),
                           ),
                         ),
-
                         const SizedBox(width: 4),
-
-                        // All Communities Filter Selector Tag
                         GestureDetector(
                           onTap: widget.onOpenFilterCommunities,
                           child: Container(
@@ -325,13 +422,11 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                   ),
                   const SizedBox(height: AppSpacing.sm),
                 ] else ...<Widget>[
-                  // Community Tags + Video Duration Badge Row (For Following / For You)
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        // Community Tag (e.g. Queer / Non-binary)
                         if (item.tags.isNotEmpty)
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -354,26 +449,23 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                               ),
                             ),
                           ),
-
-                        const SizedBox(width: 8),
-
-                        // Video Duration Tag (e.g. 0:18 / 0:47 or 60s)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.4),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.2),
+                        if (item.durationText.isNotEmpty) ...<Widget>[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
                             ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              if (item.durationText.contains('/')) ...<Widget>[
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
                                 SvgPicture.asset(
                                   AppIcons.play,
                                   width: 10,
@@ -384,25 +476,25 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                              ],
-                              Text(
-                                item.durationText,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
+                                Text(
+                                  item.durationText,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                 ],
 
-                // Compact User Info Row (Avatar + Handle + Pronouns + Follow button right next to it)
+                // User info row
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
@@ -452,32 +544,6 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
-
-                const SizedBox(height: 6),
-
-                // Sound Title Row
-                Row(
-                  children: <Widget>[
-                    const Icon(
-                      Icons.auto_awesome_rounded,
-                      color: Colors.white70,
-                      size: 13,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        item.soundTitle,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
@@ -486,6 +552,8 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     );
   }
 }
+
+// ── Right Action Button ────────────────────────────────────────────────────
 
 class _RightActionButton extends StatelessWidget {
   const _RightActionButton({

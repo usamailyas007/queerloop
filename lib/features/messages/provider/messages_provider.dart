@@ -326,4 +326,43 @@ class MessagesProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  // ── Send Image Message in Conversation ────────────────────────────────
+  void sendImageMessage(
+    String conversationId, {
+    String? imageFilePath,
+    String? imageAsset,
+  }) {
+    final int idx =
+        _conversations.indexWhere((ConversationModel c) => c.id == conversationId);
+    if (idx != -1) {
+      final ConversationModel target = _conversations[idx];
+      final List<ChatMessageModel> updatedMsgs =
+          List<ChatMessageModel>.from(target.messages)
+            ..add(
+              ChatMessageModel(
+                id: 'm_${DateTime.now().millisecondsSinceEpoch}',
+                senderUsername: 'me',
+                isMe: true,
+                timestamp: 'Just now',
+                imageFilePath: imageFilePath,
+                imageAsset: imageAsset,
+                type: MessageType.image,
+              ),
+            );
+
+      _conversations[idx] = ConversationModel(
+        id: target.id,
+        username: target.username,
+        avatarAsset: target.avatarAsset,
+        lastMessage: 'You: Sent an image',
+        timeAgo: 'Just now',
+        unreadCount: 0,
+        isTyping: false,
+        hasStoryRing: target.hasStoryRing,
+        messages: updatedMsgs,
+      );
+      notifyListeners();
+    }
+  }
 }

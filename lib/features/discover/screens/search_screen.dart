@@ -274,61 +274,8 @@ class _SearchResultsBody extends StatelessWidget {
                   onSeeAll: () => provider.setSelectedSearchTab(1),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                SizedBox(
-                  height: 160,
-                  child: Row(
-                    children: <Widget>[
-                      // Card 1 with 12.4K badge
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: <Widget>[
-                              Image.asset(
-                                AppImages.searchResult1,
-                                fit: BoxFit.cover,
-                              ),
-                              Positioned(
-                                bottom: 8,
-                                left: 8,
-                                child: Text(
-                                  '12.4K',
-                                  style: AppTextStyles.caption.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      // Card 2
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.asset(
-                            AppImages.searchResult2,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      // Card 3
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.asset(
-                            AppImages.searchResult3,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                SearchPostsGrid(
+                  results: provider.searchResults.take(3).toList(),
                 ),
 
                 const SizedBox(height: AppSpacing.xl),
@@ -531,6 +478,7 @@ class _NoResultsBody extends StatelessWidget {
                   Expanded(
                     child: AppGradientButton(
                       text: 'Explore Trending',
+                      fontSize: 13,
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),
@@ -538,6 +486,7 @@ class _NoResultsBody extends StatelessWidget {
                   Expanded(
                     child: AppOutlineButton(
                       text: 'Discover Communities',
+                      fontSize: 13,
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),

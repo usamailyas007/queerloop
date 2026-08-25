@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -565,20 +566,62 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                 child: Row(
                   children: <Widget>[
                     // Gallery Icon
-                    const Icon(
-                      Icons.image_outlined,
-                      color: Colors.white54,
-                      size: 22,
+                    GestureDetector(
+                      onTap: () async {
+                        try {
+                          final ImagePicker picker = ImagePicker();
+                          final XFile? file = await picker.pickImage(
+                            source: ImageSource.gallery,
+                          );
+                          if (file != null) {
+                            provider.sendImageMessage(
+                              activeConv.id,
+                              imageFilePath: file.path,
+                            );
+                          }
+                        } catch (e) {
+                          debugPrint('Error picking chat image from gallery: $e');
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        child: const Icon(
+                          Icons.image_outlined,
+                          color: Colors.white70,
+                          size: 24,
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: AppSpacing.md),
+                    const SizedBox(width: AppSpacing.sm),
 
                     // Camera Icon
-                    const Icon(
-                      Icons.camera_alt_outlined,
-                      color: Colors.white54,
-                      size: 22,
+                    GestureDetector(
+                      onTap: () async {
+                        try {
+                          final ImagePicker picker = ImagePicker();
+                          final XFile? file = await picker.pickImage(
+                            source: ImageSource.camera,
+                          );
+                          if (file != null) {
+                            provider.sendImageMessage(
+                              activeConv.id,
+                              imageFilePath: file.path,
+                            );
+                          }
+                        } catch (e) {
+                          debugPrint('Error capturing chat image: $e');
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        child: const Icon(
+                          Icons.camera_alt_outlined,
+                          color: Colors.white70,
+                          size: 24,
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: AppSpacing.md),
+                    const SizedBox(width: AppSpacing.sm),
 
                     // Message Input Field
                     Expanded(

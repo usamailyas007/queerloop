@@ -1,8 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
@@ -11,8 +13,83 @@ import '../provider/create_post_provider.dart';
 import '../widgets/media_thumbnail_widget.dart';
 import 'new_post_form_screen.dart';
 
-class TrimVideoScreen extends StatelessWidget {
+class TrimVideoScreen extends StatefulWidget {
   const TrimVideoScreen({super.key});
+
+  @override
+  State<TrimVideoScreen> createState() => _TrimVideoScreenState();
+}
+
+class _TrimVideoScreenState extends State<TrimVideoScreen> {
+  VideoPlayerController? _controller;
+  bool _isInitialized = false;
+  bool _isPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final CreatePostProvider provider = context.read<CreatePostProvider>();
+      _setupVideoController(provider.selectedMedia);
+    });
+  }
+
+  Future<void> _setupVideoController(GalleryMediaItem? item) async {
+    if (item == null) return;
+    await _controller?.dispose();
+
+    final String? filePath = item.filePath;
+    final String? videoAsset = item.videoAsset;
+
+    VideoPlayerController ctrl;
+    if (filePath != null && filePath.isNotEmpty) {
+      ctrl = VideoPlayerController.file(File(filePath));
+    } else if (videoAsset != null && videoAsset.isNotEmpty) {
+      ctrl = VideoPlayerController.asset(videoAsset);
+    } else {
+      ctrl = VideoPlayerController.asset('assets/videos/video1.mp4');
+    }
+
+    try {
+      await ctrl.initialize();
+      ctrl.setLooping(true);
+      if (mounted) {
+        setState(() {
+          _controller = ctrl;
+          _isInitialized = true;
+          _isPlaying = true;
+        });
+        ctrl.play();
+      }
+    } catch (e) {
+      debugPrint('Error initializing video in TrimVideoScreen: $e');
+    }
+  }
+
+  void _togglePlayPause() {
+    if (_controller == null || !_isInitialized) return;
+    setState(() {
+      if (_controller!.value.isPlaying) {
+        _controller!.pause();
+        _isPlaying = false;
+      } else {
+        _controller!.play();
+        _isPlaying = true;
+      }
+    });
+  }
+
+  void _seekToTrimStart(double trimRatio, int totalDurationSeconds) {
+    if (_controller == null || !_isInitialized) return;
+    final int targetSec = (trimRatio * totalDurationSeconds).round();
+    _controller!.seekTo(Duration(seconds: targetSec));
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,16 +142,17 @@ class TrimVideoScreen extends StatelessWidget {
                   AppGradientButton(
                     text: 'Done',
                     onPressed: () {
+                      _controller?.pause();
                       Navigator.push<void>(
                         context,
                         MaterialPageRoute<void>(
-                          builder: (_) =>
-                              ChangeNotifierProvider<CreatePostProvider>.value(
-                            value: provider,
-                            child: const NewPostFormScreen(),
-                          ),
+                          builder: (_) => const NewPostFormScreen(),
                         ),
-                      );
+                      ).then((_) {
+                        if (mounted && _isPlaying) {
+                          _controller?.play();
+                        }
+                      });
                     },
                     height: 32,
                     width: 70,
@@ -86,7 +164,7 @@ class TrimVideoScreen extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.sm),
 
-            // ── Video Preview Section (Fixed ~330px height like screenshot) ──
+            // ── Video Preview Section ─────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: Container(
@@ -97,36 +175,84 @@ class TrimVideoScreen extends StatelessWidget {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: <Widget>[
-                      MediaThumbnailWidget(item: selectedItem),
+                  child: GestureDetector(
+                    onTap: _togglePlayPause,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: <Widget>[
+                        // Video Player or Thumbnail fallback
+                        if (_isInitialized && _controller != null)
+                          SizedBox.expand(
+                            child: FittedBox(
+                              fit: BoxFit.cover,
+                              child: SizedBox(
+                                width: _controller!.value.size.width,
+                                height: _controller!.value.size.height,
+                                child: VideoPlayer(_controller!),
+                              ),
+                            ),
+                          )
+                        else
+                          MediaThumbnailWidget(item: selectedItem),
 
-                      // Selected duration pill badge bottom-left
-                      Positioned(
-                        bottom: AppSpacing.md,
-                        left: AppSpacing.md,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md,
-                            vertical: AppSpacing.xs,
+                        // Play/Pause center overlay
+                        if (!_isPlaying)
+                          Center(
+                            child: Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.play_arrow_rounded,
+                                color: Colors.white,
+                                size: 36,
+                              ),
+                            ),
                           ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.65),
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.pill),
-                          ),
-                          child: Text(
-                            '${provider.trimStartFormatted} / ${provider.totalDurationFormatted} selected',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
+
+                        // Selected duration pill badge bottom-left
+                        Positioned(
+                          bottom: AppSpacing.md,
+                          left: AppSpacing.md,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.xs,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.75),
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.pill),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.15),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                const Icon(
+                                  Icons.cut_rounded,
+                                  color: AppColors.gradientCyan,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '${provider.trimStartFormatted} / ${provider.totalDurationFormatted} (${provider.selectedDurationSeconds}s)',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -158,8 +284,9 @@ class TrimVideoScreen extends StatelessWidget {
                 trimEnd: provider.trimEnd,
                 onChanged: (double start, double end) {
                   provider.setTrimRange(start, end);
+                  _seekToTrimStart(start, provider.totalDurationSeconds);
                 },
-                thumbnailAsset: selectedItem?.assetPath ?? AppImages.forYouImg,
+                item: selectedItem,
               ),
             ),
 
@@ -172,24 +299,36 @@ class TrimVideoScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
                   Text(
-                    '0:00',
+                    provider.trimStartFormatted,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
                       fontSize: 12,
                     ),
                   ),
-                  Text(
-                    provider.selectedDurationFormatted,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.gradientPink,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.gradientPink.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '${provider.selectedDurationSeconds}s selected',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.gradientPink,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                   Text(
                     provider.totalDurationFormatted,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
                       fontSize: 12,
                     ),
                   ),
@@ -210,13 +349,13 @@ class _VideoTrimTimelineStrip extends StatefulWidget {
     required this.trimStart,
     required this.trimEnd,
     required this.onChanged,
-    required this.thumbnailAsset,
+    required this.item,
   });
 
   final double trimStart;
   final double trimEnd;
   final void Function(double start, double end) onChanged;
-  final String thumbnailAsset;
+  final GalleryMediaItem? item;
 
   @override
   State<_VideoTrimTimelineStrip> createState() =>
@@ -230,7 +369,7 @@ class _VideoTrimTimelineStripState extends State<_VideoTrimTimelineStrip> {
       builder: (BuildContext context, BoxConstraints constraints) {
         final double width = constraints.maxWidth;
         const double stripHeight = 52;
-        const double handleWidth = 10;
+        const double handleWidth = 14;
 
         final double leftPos = widget.trimStart * (width - handleWidth * 2);
         final double rightPos =
@@ -248,10 +387,9 @@ class _VideoTrimTimelineStripState extends State<_VideoTrimTimelineStrip> {
                     children: List<Widget>.generate(
                       5,
                       (int i) => Expanded(
-                        child: Image.asset(
-                          widget.thumbnailAsset,
+                        child: MediaThumbnailWidget(
+                          item: widget.item,
                           fit: BoxFit.cover,
-                          height: stripHeight,
                         ),
                       ),
                     ),
@@ -266,7 +404,7 @@ class _VideoTrimTimelineStripState extends State<_VideoTrimTimelineStrip> {
                 bottom: 0,
                 width: leftPos.clamp(0, width),
                 child: Container(
-                  color: Colors.black.withValues(alpha: 0.6),
+                  color: Colors.black.withValues(alpha: 0.65),
                 ),
               ),
 
@@ -277,7 +415,7 @@ class _VideoTrimTimelineStripState extends State<_VideoTrimTimelineStrip> {
                 top: 0,
                 bottom: 0,
                 child: Container(
-                  color: Colors.black.withValues(alpha: 0.6),
+                  color: Colors.black.withValues(alpha: 0.65),
                 ),
               ),
 
@@ -310,7 +448,7 @@ class _VideoTrimTimelineStripState extends State<_VideoTrimTimelineStrip> {
                     final double deltaRatio =
                         details.delta.dx / (width - handleWidth * 2);
                     final double newStart = (widget.trimStart + deltaRatio)
-                        .clamp(0.0, widget.trimEnd - 0.1);
+                        .clamp(0.0, widget.trimEnd - 0.05);
                     widget.onChanged(newStart, widget.trimEnd);
                   },
                   child: Container(
@@ -318,6 +456,13 @@ class _VideoTrimTimelineStripState extends State<_VideoTrimTimelineStrip> {
                       color: AppColors.gradientPink,
                       borderRadius: BorderRadius.horizontal(
                         left: Radius.circular(6),
+                      ),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.drag_handle_rounded,
+                        color: Colors.white,
+                        size: 10,
                       ),
                     ),
                   ),
@@ -335,7 +480,7 @@ class _VideoTrimTimelineStripState extends State<_VideoTrimTimelineStrip> {
                     final double deltaRatio =
                         details.delta.dx / (width - handleWidth * 2);
                     final double newEnd = (widget.trimEnd + deltaRatio)
-                        .clamp(widget.trimStart + 0.1, 1.0);
+                        .clamp(widget.trimStart + 0.05, 1.0);
                     widget.onChanged(widget.trimStart, newEnd);
                   },
                   child: Container(
@@ -343,6 +488,13 @@ class _VideoTrimTimelineStripState extends State<_VideoTrimTimelineStrip> {
                       color: AppColors.gradientPink,
                       borderRadius: BorderRadius.horizontal(
                         right: Radius.circular(6),
+                      ),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.drag_handle_rounded,
+                        color: Colors.white,
+                        size: 10,
                       ),
                     ),
                   ),

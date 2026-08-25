@@ -14,6 +14,7 @@ class ChatMessageModel {
     required this.timestamp,
     this.text,
     this.imageAsset,
+    this.imageFilePath,
     this.postThumbnailAsset,
     this.postAuthor,
     this.postViews,
@@ -28,6 +29,7 @@ class ChatMessageModel {
   final String timestamp;
   final String? text;
   final String? imageAsset;
+  final String? imageFilePath;
   final String? postThumbnailAsset;
   final String? postAuthor;
   final String? postViews;

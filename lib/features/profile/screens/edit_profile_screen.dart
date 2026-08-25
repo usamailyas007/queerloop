@@ -1,5 +1,9 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
 
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -38,6 +42,86 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     'Cooking',
   ];
   final String _dateOfBirth = '14 June 1998';
+  String? _profilePhotoPath;
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+      if (image != null && mounted) {
+        setState(() => _profilePhotoPath = image.path);
+      }
+    } catch (_) {}
+  }
+
+  void _showPhotoOptions() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1A1625),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (BuildContext ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.lg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                // Handle
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Text(
+                  'Change Photo',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                // Camera option
+                _PhotoOptionTile(
+                  icon: Icons.camera_alt_rounded,
+                  label: 'Take Photo',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickImage(ImageSource.camera);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                // Gallery option
+                _PhotoOptionTile(
+                  icon: Icons.photo_library_rounded,
+                  label: 'Choose from Gallery',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickImage(ImageSource.gallery);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void dispose() {
@@ -219,17 +303,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             gradient: AppColors.primaryGradientButton,
                           ),
                           child: ClipOval(
-                            child: Image.asset(
-                              AppImages.user1,
-                              width: 82,
-                              height: 82,
-                              fit: BoxFit.cover,
-                            ),
+                            child: _profilePhotoPath != null
+                                ? Image.file(
+                                    File(_profilePhotoPath!),
+                                    width: 82,
+                                    height: 82,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Image.asset(
+                                    AppImages.user1,
+                                    width: 82,
+                                    height: 82,
+                                    fit: BoxFit.cover,
+                                  ),
                           ),
                         ),
                         const SizedBox(height: AppSpacing.xs + 2),
                         GestureDetector(
-                          onTap: () {},
+                          onTap: _showPhotoOptions,
                           child: Text(
                             'Change photo',
                             style: AppTextStyles.bodyMedium.copyWith(
@@ -358,7 +449,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   _buildSelectableBox(
                     label: 'COMMUNITIES',
                     valueText: '3 joined',
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.pushNamed(context, AppRoutes.allCommunities);
+                    },
                   ),
 
                   // 8. DATE OF BIRTH (Locked)
@@ -387,6 +480,67 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   const SizedBox(height: AppSpacing.xl),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Photo Option Tile ──────────────────────────────────────────────────────
+
+class _PhotoOptionTile extends StatelessWidget {
+  const _PhotoOptionTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFF231F2E),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: Colors.white70, size: 20),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Text(
+              label,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+            const Spacer(),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.white38,
+              size: 20,
             ),
           ],
         ),

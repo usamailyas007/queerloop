@@ -10,8 +10,22 @@ import '../provider/create_post_provider.dart';
 import '../widgets/media_thumbnail_widget.dart';
 import 'new_post_form_screen.dart';
 
-class SelectPhotoScreen extends StatelessWidget {
+class SelectPhotoScreen extends StatefulWidget {
   const SelectPhotoScreen({super.key});
+
+  @override
+  State<SelectPhotoScreen> createState() => _SelectPhotoScreenState();
+}
+
+class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final CreatePostProvider provider = context.read<CreatePostProvider>();
+      provider.loadDevicePhotos();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +66,7 @@ class SelectPhotoScreen extends StatelessWidget {
 
                   // Title
                   Text(
-                    'Chosee Photo',
+                    'Choose Photo',
                     style: AppTextStyles.titleMedium.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -62,15 +76,12 @@ class SelectPhotoScreen extends StatelessWidget {
                   // Next Button
                   AppGradientButton(
                     text: 'Next',
+                    isEnabled: selectedItem != null,
                     onPressed: () {
                       Navigator.push<void>(
                         context,
                         MaterialPageRoute<void>(
-                          builder: (_) =>
-                              ChangeNotifierProvider<CreatePostProvider>.value(
-                            value: provider,
-                            child: const NewPostFormScreen(),
-                          ),
+                          builder: (_) => const NewPostFormScreen(),
                         ),
                       );
                     },
@@ -91,7 +102,17 @@ class SelectPhotoScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(AppRadius.card),
-                  child: MediaThumbnailWidget(item: selectedItem),
+                  child: Container(
+                    color: const Color(0xFF1E1B26),
+                    child: selectedItem != null
+                        ? MediaThumbnailWidget(item: selectedItem)
+                        : const Center(
+                            child: Text(
+                              'Select a photo from your gallery below',
+                              style: TextStyle(color: Colors.white54),
+                            ),
+                          ),
+                  ),
                 ),
               ),
             ),
@@ -104,22 +125,33 @@ class SelectPhotoScreen extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
-                  Text(
-                    'Choose from gallery',
-                    style: AppTextStyles.titleSmall.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
                   Row(
                     children: <Widget>[
                       Text(
-                        '1 selected',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: Colors.white54,
-                          fontSize: 12,
+                        'Recents',
+                        style: AppTextStyles.titleSmall.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: Colors.white70,
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: <Widget>[
+                      if (provider.photoGallery.isNotEmpty)
+                        Text(
+                          '${provider.photoGallery.length} photos',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: Colors.white54,
+                            fontSize: 12,
+                          ),
+                        ),
                       const SizedBox(width: AppSpacing.sm),
                       GestureDetector(
                         onTap: () => provider.pickMediaFromDevice(false),
@@ -147,44 +179,89 @@ class SelectPhotoScreen extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.md),
 
-            // ── Photo Gallery Grid ───────────────────────────────────────
+            // ── Real Photo Gallery Grid ──────────────────────────────────
             Expanded(
               flex: 4,
-              child: GridView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  crossAxisSpacing: AppSpacing.sm,
-                  mainAxisSpacing: AppSpacing.sm,
-                  childAspectRatio: 0.85,
-                ),
-                itemCount: provider.photoGallery.length,
-                itemBuilder: (BuildContext context, int index) {
-                  final GalleryMediaItem item = provider.photoGallery[index];
-                  final bool isSelected = selectedItem?.id == item.id;
-
-                  return GestureDetector(
-                    onTap: () => provider.selectMedia(item),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(AppRadius.card),
-                        border: Border.all(
-                          color: isSelected
-                              ? AppColors.gradientPink
-                              : Colors.transparent,
-                          width: 2,
+              child: provider.isLoadingDevicePhotos
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppColors.gradientCyan,
                         ),
                       ),
-                      child: ClipRRect(
-                        borderRadius:
-                            BorderRadius.circular(AppRadius.card - 2),
-                        child: MediaThumbnailWidget(item: item),
-                      ),
-                    ),
-                  );
-                },
-              ),
+                    )
+                  : provider.photoGallery.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: <Widget>[
+                              const Icon(
+                                Icons.photo_library_outlined,
+                                color: Colors.white38,
+                                size: 40,
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'No photos found in gallery',
+                                style: TextStyle(color: Colors.white54),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: () =>
+                                    provider.pickMediaFromDevice(false),
+                                child: const Text(
+                                  'Pick Photo from Device',
+                                  style: TextStyle(
+                                    color: AppColors.gradientCyan,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : GridView.builder(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg,
+                          ),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            crossAxisSpacing: AppSpacing.sm,
+                            mainAxisSpacing: AppSpacing.sm,
+                            childAspectRatio: 0.85,
+                          ),
+                          itemCount: provider.photoGallery.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            final GalleryMediaItem item =
+                                provider.photoGallery[index];
+                            final bool isSelected =
+                                selectedItem?.id == item.id;
+
+                            return GestureDetector(
+                              onTap: () => provider.selectMedia(item),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                decoration: BoxDecoration(
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadius.card),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? AppColors.gradientPink
+                                        : Colors.transparent,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.card - 2,
+                                  ),
+                                  child:
+                                      MediaThumbnailWidget(item: item),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
             ),
           ],
         ),

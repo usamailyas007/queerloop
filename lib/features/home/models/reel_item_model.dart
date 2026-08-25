@@ -4,25 +4,25 @@ class ReelItemModel {
     required this.username,
     required this.pronounsTime,
     required this.avatarAsset,
-    required this.mediaAsset,
+    required this.videoAsset,
+    this.videoFilePath,
     required this.caption,
-    required this.soundTitle,
     required this.likesCount,
     required this.commentsCount,
     this.isLiked = false,
     this.isSaved = false,
     this.isFollowing = false,
     this.tags = const <String>[],
-    this.durationText = '0:18 / 0:47',
+    this.durationText = '',
   });
 
   final String id;
   final String username;
   final String pronounsTime;
   final String avatarAsset;
-  final String mediaAsset;
+  final String videoAsset;
+  final String? videoFilePath;
   final String caption;
-  final String soundTitle;
   final int likesCount;
   final int commentsCount;
   final bool isLiked;
@@ -42,9 +42,9 @@ class ReelItemModel {
       username: username,
       pronounsTime: pronounsTime,
       avatarAsset: avatarAsset,
-      mediaAsset: mediaAsset,
+      videoAsset: videoAsset,
+      videoFilePath: videoFilePath,
       caption: caption,
-      soundTitle: soundTitle,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount,
       isLiked: isLiked ?? this.isLiked,

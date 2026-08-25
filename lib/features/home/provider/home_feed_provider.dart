@@ -13,54 +13,51 @@ class HomeFeedProvider extends ChangeNotifier {
   SubMode _activeSubMode = SubMode.reels;
   String _selectedCommunityFilter = 'All Communities';
 
-  // Mock Feed Lists with authentic home assets matching reference screenshots
+  // Mock Feed Lists — each reel uses a real video asset
   final List<ReelItemModel> _reels = <ReelItemModel>[
     const ReelItemModel(
       id: 'reel_1',
       username: '@jules.does',
       pronounsTime: 'she/they · 40m',
       avatarAsset: AppImages.user1,
-      mediaAsset: AppImages.followingImg,
+      videoAsset: 'assets/videos/video1.mp4',
       caption: 'Drag brunch prep at 6am is a lifestyle nobody warns you about 💃',
-      soundTitle: 'Original sound — jules.does',
       likesCount: 908,
       commentsCount: 77,
       isLiked: false,
       isFollowing: true,
       tags: <String>['Queer'],
-      durationText: '0:18 / 0:47',
+      durationText: '0:47',
     ),
     const ReelItemModel(
       id: 'reel_2',
       username: '@rowankeeps',
       pronounsTime: 'they/them · 2h',
       avatarAsset: AppImages.user2,
-      mediaAsset: AppImages.forYouImg,
+      videoAsset: 'assets/videos/video2.mp4',
       caption:
           'Six months of top surgery recovery in 40 seconds. Read the caption before you comment, please 🤍\n#transjoy #recovery #sixmonths',
-      soundTitle: 'Original sound — rowankeeps',
       likesCount: 1240,
       commentsCount: 182,
       isLiked: false,
       isFollowing: false,
-      tags: <String>['Non-binary', '60s'],
-      durationText: '0:40 / 0:40',
+      tags: <String>['Non-binary'],
+      durationText: '0:40',
     ),
     const ReelItemModel(
       id: 'reel_3',
       username: '@moss.and.oat',
       pronounsTime: 'she/her · 5h',
       avatarAsset: AppImages.user3,
-      mediaAsset: AppImages.communityImg,
+      videoAsset: 'assets/videos/video3.mp4',
       caption:
           "First date turned into building a bookshelf together. That's the whole plot.",
-      soundTitle: 'Original sound — moss.and.oat',
       likesCount: 3410,
       commentsCount: 420,
       isLiked: false,
       isFollowing: false,
-      tags: <String>['Lesbian · community only', 'All Communities'],
-      durationText: '0:30 / 0:59',
+      tags: <String>['Lesbian · community only'],
+      durationText: '0:59',
     ),
   ];
 
@@ -164,6 +161,11 @@ class HomeFeedProvider extends ChangeNotifier {
       _reels[index] = item.copyWith(isFollowing: !item.isFollowing);
       notifyListeners();
     }
+  }
+
+  void addNewReel(ReelItemModel reel) {
+    _reels.insert(0, reel);
+    notifyListeners();
   }
 
   void toggleLikePost(String id) {

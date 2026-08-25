@@ -6,6 +6,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../models/post_item_model.dart';
+import 'safety_bottom_sheet.dart';
 
 class PostFeedCard extends StatelessWidget {
   const PostFeedCard({
@@ -71,11 +72,6 @@ class PostFeedCard extends StatelessWidget {
                     ),
                   ],
                 ),
-              ),
-              const Icon(
-                Icons.more_vert_rounded,
-                color: Colors.white38,
-                size: 20,
               ),
             ],
           ),
@@ -182,40 +178,52 @@ class PostFeedCard extends StatelessWidget {
               const Spacer(),
 
               // Safety Badge Pill
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.15),
+              GestureDetector(
+                onTap: () {
+                  showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (BuildContext context) {
+                      return SafetyBottomSheet(username: post.username);
+                    },
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
                   ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    SvgPicture.asset(
-                      AppIcons.safety,
-                      width: 14,
-                      height: 14,
-                      colorFilter: const ColorFilter.mode(
-                        Colors.white70,
-                        BlendMode.srcIn,
-                      ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.15),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      l10n.homeSafety,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      SvgPicture.asset(
+                        AppIcons.safety,
+                        width: 14,
+                        height: 14,
+                        colorFilter: const ColorFilter.mode(
+                          Colors.white70,
+                          BlendMode.srcIn,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 6),
+                      Text(
+                        l10n.homeSafety,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

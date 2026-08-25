@@ -18,51 +18,61 @@ class AccountCreatedSuccessScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.screenPaddingHorizontal,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              const Spacer(),
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height -
+                  MediaQuery.of(context).padding.top -
+                  MediaQuery.of(context).padding.bottom,
+            ),
+            child: IntrinsicHeight(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.screenPaddingHorizontal,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    const Spacer(),
 
-              // ── Animated Tick Circle (GIF Animation) ────────────────
-              const SuccessAnimationCircle(size: 300),
+                    // ── Animated Tick Circle (GIF Animation) ────────────────
+                    const SuccessAnimationCircle(size: 300),
 
-              const SizedBox(height: AppSpacing.xxl),
+                    const SizedBox(height: AppSpacing.xxl),
 
-              Text(
-                l10n.authAccountCreatedTitle,
-                style: AppTextStyles.successTitle,
-                textAlign: TextAlign.center,
+                    Text(
+                      l10n.authAccountCreatedTitle,
+                      style: AppTextStyles.successTitle,
+                      textAlign: TextAlign.center,
+                    ),
+
+                    const SizedBox(height: AppSpacing.sm),
+
+                    Text(
+                      l10n.authAccountCreatedSub,
+                      style: AppTextStyles.successSub,
+                      textAlign: TextAlign.center,
+                    ),
+
+                    const SizedBox(height: AppSpacing.xxxl),
+
+                    AppGradientButton(
+                      text: l10n.authContinueToProfileBtn,
+                      onPressed: () {
+                        Navigator.pushNamedAndRemoveUntil(
+                          context,
+                          AppRoutes.profileSetup,
+                          (Route<dynamic> route) => false,
+                        );
+                      },
+                    ),
+
+                    const Spacer(),
+                  ],
+                ),
               ),
-
-              const SizedBox(height: AppSpacing.sm),
-
-              Text(
-                l10n.authAccountCreatedSub,
-                style: AppTextStyles.successSub,
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: AppSpacing.xxxl),
-
-              AppGradientButton(
-                text: l10n.authContinueToProfileBtn,
-                onPressed: () {
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    AppRoutes.profileSetup,
-                    (Route<dynamic> route) => false,
-                  );
-                },
-              ),
-
-              const Spacer(),
-            ],
+            ),
           ),
         ),
       ),

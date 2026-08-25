@@ -473,12 +473,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: AppSpacing.sm),
-                      AppOutlineButton(
-                        text: 'Follow back',
-                        height: 32,
-                        width: 90,
-                        onPressed: () {},
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minWidth: 88,
+                          maxWidth: 110,
+                        ),
+                        child: AppOutlineButton(
+                          text: 'Follow back',
+                          height: 32,
+                          fontSize: 12,
+                          onPressed: () {},
+                        ),
                       ),
                     ],
                   ),
