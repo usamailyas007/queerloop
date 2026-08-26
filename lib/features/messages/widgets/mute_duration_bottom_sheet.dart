@@ -82,10 +82,10 @@ class _MuteDurationBottomSheetState extends State<MuteDurationBottomSheet> {
         vertical: AppSpacing.xs + 2,
       ),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: context.themeCardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: context.themeBorder,
         ),
       ),
       child: Row(
@@ -94,7 +94,7 @@ class _MuteDurationBottomSheetState extends State<MuteDurationBottomSheet> {
           Text(
             title,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: Colors.white,
+              color: context.themeTextPrimary,
               fontWeight: FontWeight.w600,
               fontSize: 14,
             ),
@@ -114,9 +114,9 @@ class _MuteDurationBottomSheetState extends State<MuteDurationBottomSheet> {
         widget.username.startsWith('@') ? widget.username : '@${widget.username}';
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
@@ -135,7 +135,7 @@ class _MuteDurationBottomSheetState extends State<MuteDurationBottomSheet> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: context.themeBorderStrong,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -150,8 +150,8 @@ class _MuteDurationBottomSheetState extends State<MuteDurationBottomSheet> {
                     AppIcons.mute,
                     width: 20,
                     height: 20,
-                    colorFilter: const ColorFilter.mode(
-                      Colors.white70,
+                    colorFilter: ColorFilter.mode(
+                      context.themeTextSecondary,
                       BlendMode.srcIn,
                     ),
                   ),
@@ -159,7 +159,7 @@ class _MuteDurationBottomSheetState extends State<MuteDurationBottomSheet> {
                   Text(
                     'Mute $cleanUsername',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 17,
                     ),
@@ -173,7 +173,7 @@ class _MuteDurationBottomSheetState extends State<MuteDurationBottomSheet> {
               Text(
                 "You'll stay following each other and they can still see your posts. They won't know.",
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: Colors.white54,
+                  color: context.themeTextMuted,
                   fontSize: 12,
                   height: 1.35,
                 ),
@@ -185,7 +185,7 @@ class _MuteDurationBottomSheetState extends State<MuteDurationBottomSheet> {
               Text(
                 'MUTE FOR',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: Colors.white54,
+                  color: context.themeTextMuted,
                   letterSpacing: 1.2,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -214,12 +214,12 @@ class _MuteDurationBottomSheetState extends State<MuteDurationBottomSheet> {
                         decoration: BoxDecoration(
                           color: isSelected
                               ? AppColors.gradientCyan
-                              : AppColors.cardBackground,
+                              : context.themeCardBackground,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: isSelected
                                 ? AppColors.gradientCyan
-                                : Colors.white.withValues(alpha: 0.1),
+                                : context.themeBorder,
                           ),
                         ),
                         child: Text(
@@ -227,7 +227,7 @@ class _MuteDurationBottomSheetState extends State<MuteDurationBottomSheet> {
                           style: TextStyle(
                             color: isSelected
                                 ? const Color(0xFF0F172A)
-                                : Colors.white70,
+                                : context.themeTextSecondary,
                             fontWeight: isSelected
                                 ? FontWeight.w700
                                 : FontWeight.w500,
@@ -246,7 +246,7 @@ class _MuteDurationBottomSheetState extends State<MuteDurationBottomSheet> {
               Text(
                 'WHAT TO HIDE',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: Colors.white54,
+                  color: context.themeTextMuted,
                   letterSpacing: 1.2,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,

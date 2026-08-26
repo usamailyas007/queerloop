@@ -20,6 +20,8 @@ class AppSnackBar {
 
     if (targetMessenger == null) return;
 
+    final bool isDark = context.isDarkMode;
+
     targetMessenger.hideCurrentSnackBar();
 
     targetMessenger.showSnackBar(
@@ -33,14 +35,16 @@ class AppSnackBar {
         content: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF191622),
+            color: isDark ? const Color(0xFF191622) : context.themeCardBackground,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.12),
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : context.themeBorder,
             ),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
+                color: Colors.black.withValues(alpha: isDark ? 0.5 : 0.08),
                 blurRadius: 16,
                 offset: const Offset(0, 6),
               ),
@@ -53,10 +57,12 @@ class AppSnackBar {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F2F34),
+                  color: isDark
+                      ? const Color(0xFF0F2F34)
+                      : context.themeCyanBadgeBackground,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: AppColors.gradientCyan.withValues(alpha: 0.2),
+                    color: AppColors.gradientCyan.withValues(alpha: isDark ? 0.2 : 0.35),
                   ),
                 ),
                 child: Center(
@@ -78,8 +84,8 @@ class AppSnackBar {
                   children: <Widget>[
                     Text(
                       title,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : context.themeTextPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
@@ -88,8 +94,8 @@ class AppSnackBar {
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
-                        style: const TextStyle(
-                          color: Colors.white54,
+                        style: TextStyle(
+                          color: isDark ? Colors.white54 : context.themeTextSecondary,
                           fontSize: 12,
                           height: 1.25,
                         ),

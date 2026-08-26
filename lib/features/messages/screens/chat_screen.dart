@@ -80,7 +80,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
         : '@${activeConv.username}';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -95,9 +95,9 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                   // Back button
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(
+                    child: Icon(
                       Icons.chevron_left_rounded,
-                      color: Colors.white,
+                      color: context.themeIcon,
                       size: 24,
                     ),
                   ),
@@ -125,12 +125,12 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                               width: 36,
                               height: 36,
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.08),
+                                color: context.themeChipBackground,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.person_outline_rounded,
-                                color: Colors.white54,
+                                color: context.themeIconMuted,
                                 size: 20,
                               ),
                             )
@@ -153,7 +153,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                     Text(
                                       activeConv.username,
                                       style: AppTextStyles.titleMedium.copyWith(
-                                        color: Colors.white,
+                                        color: context.themeTextPrimary,
                                         fontWeight: FontWeight.w700,
                                         fontSize: 15,
                                       ),
@@ -164,8 +164,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                         AppIcons.hide,
                                         width: 14,
                                         height: 14,
-                                        colorFilter: const ColorFilter.mode(
-                                          Colors.white54,
+                                        colorFilter: ColorFilter.mode(
+                                          context.themeIconMuted,
                                           BlendMode.srcIn,
                                         ),
                                       ),
@@ -175,8 +175,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                         AppIcons.mute,
                                         width: 14,
                                         height: 14,
-                                        colorFilter: const ColorFilter.mode(
-                                          Colors.white38,
+                                        colorFilter: ColorFilter.mode(
+                                          context.themeIconMuted,
                                           BlendMode.srcIn,
                                         ),
                                       ),
@@ -195,7 +195,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                     color: (isBlocked || isRestricted)
                                         ? AppColors.gradientCyan
                                         : (isMuted
-                                            ? Colors.white54
+                                            ? context.themeTextMuted
                                             : AppColors.gradientCyan),
                                     fontWeight: FontWeight.w600,
                                     fontSize: 11,
@@ -232,9 +232,9 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                         username: activeConv.username,
                       );
                     },
-                    child: const Icon(
+                    child: Icon(
                       Icons.more_vert_rounded,
-                      color: Colors.white54,
+                      color: context.themeIconMuted,
                       size: 22,
                     ),
                   ),
@@ -242,7 +242,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
               ),
             ),
 
-            const Divider(color: Color(0xFF2A2733), height: 1),
+            Divider(color: context.themeDivider, height: 1),
 
             // ── Restricted Banner Card ─────────────────────────────────────────
             if (isRestricted && !isBlocked)
@@ -254,7 +254,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                 child: Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0F242A),
+                    color: context.themeCyanBadgeBackground,
                     borderRadius: BorderRadius.circular(AppRadius.card),
                     border: Border.all(
                       color: AppColors.gradientCyan,
@@ -280,7 +280,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                             Text(
                               'You restricted this account',
                               style: AppTextStyles.bodyMedium.copyWith(
-                                color: Colors.white,
+                                color: context.themeTextPrimary,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
                               ),
@@ -289,7 +289,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                             Text(
                               "New messages arrive in your requests tray. They can't see your activity status.",
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: Colors.white54,
+                                color: context.themeTextSecondary,
                                 fontSize: 11,
                                 height: 1.3,
                               ),
@@ -324,7 +324,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                 child: Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0F242A),
+                    color: context.themeCyanBadgeBackground,
                     borderRadius: BorderRadius.circular(AppRadius.card),
                     border: Border.all(
                       color: AppColors.gradientCyan,
@@ -350,7 +350,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                             Text(
                               'Notifications are off for this chat',
                               style: AppTextStyles.bodyMedium.copyWith(
-                                color: Colors.white,
+                                color: context.themeTextPrimary,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
                               ),
@@ -359,7 +359,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                             Text(
                               "Messages still arrive — you just won't be alerted. Jules isn't told.",
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: Colors.white54,
+                                color: context.themeTextSecondary,
                                 fontSize: 11,
                                 height: 1.3,
                               ),
@@ -384,69 +384,65 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                 ),
               ),
 
-            // ── Messages Feed ListView ────────────────────────────────────────
+            // ── Messages List (Scrollable) ───────────────────────────────────
             Expanded(
-              child: Opacity(
-                opacity: isBlocked ? 0.35 : 1.0,
+              child: GestureDetector(
+                onTap: () => FocusScope.of(context).unfocus(),
                 child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.md,
+                  ),
                   children: <Widget>[
-                    const SizedBox(height: AppSpacing.md),
-
-                    // Date Separator Pill Header
+                    // Date Separator Pill (TODAY)
                     Center(
-                      child: Text(
-                        'Today 9:12',
-                        style: AppTextStyles.caption.copyWith(
-                          color: Colors.white38,
-                          fontSize: 11,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: context.themeChipBackground,
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                        ),
+                        child: Text(
+                          'TODAY',
+                          style: AppTextStyles.caption.copyWith(
+                            color: context.themeTextMuted,
+                            fontSize: 10,
+                            letterSpacing: 1.1,
+                          ),
                         ),
                       ),
                     ),
 
                     const SizedBox(height: AppSpacing.lg),
 
-                    // List of Chat Messages (with long press -> ChatMessageActionSheet)
-                    ...activeConv.messages.map(
-                      (ChatMessageModel msg) => GestureDetector(
-                        onLongPress: isBlocked
-                            ? null
-                            : () {
-                                ChatMessageActionSheet.show(
-                                  context,
-                                  messageText: msg.text ?? '',
-                                  isMe: msg.isMe,
-                                  onEmojiReaction: (String emoji) {
-                                    provider.addReaction(
-                                        activeConv.id, msg.id, emoji);
-                                  },
-                                  onDeleteForMe: () {
-                                    provider.deleteMessage(
-                                        activeConv.id, msg.id);
-                                  },
-                                  onUnsend: () {
-                                    provider.deleteMessage(
-                                        activeConv.id, msg.id);
-                                  },
-                                );
-                              },
-                        child: ChatBubble(message: msg),
+                    // Render Chat Bubbles
+                    for (int i = 0; i < activeConv.messages.length; i++) ...<Widget>[
+                      Builder(
+                        builder: (BuildContext itemCtx) {
+                          final ChatMessageModel msg = activeConv.messages[i];
+                          return GestureDetector(
+                            onLongPress: () {
+                              ChatMessageActionSheet.show(
+                                context,
+                                messageText: msg.text ?? '',
+                                isMe: msg.isMe,
+                                onDeleteForMe: () {
+                                  provider.deleteMessage(activeConv.id, msg.id);
+                                },
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                              child: ChatBubble(
+                                message: msg,
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    ),
-
-                    // Restricted Info Subtitle Text
-                    if (isRestricted && !isBlocked) ...<Widget>[
-                      const SizedBox(height: AppSpacing.lg),
-                      Text(
-                        'Anything Jules sends from now on will appear in Message requests until you unrestrict them.',
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.caption.copyWith(
-                          color: Colors.white38,
-                          fontSize: 12,
-                          height: 1.35,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
                     ],
 
                     // Typing indicator (if active & not blocked/restricted)
@@ -458,7 +454,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                       Text(
                         '${activeConv.username} is typing...',
                         style: AppTextStyles.caption.copyWith(
-                          color: Colors.white38,
+                          color: context.themeTextMuted,
                           fontSize: 11,
                         ),
                       ),
@@ -471,17 +467,17 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                             vertical: AppSpacing.sm,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.cardBackground,
+                            color: context.themeCardBackground,
                             borderRadius: BorderRadius.circular(AppRadius.pill),
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.08),
+                              color: context.themeBorder,
                             ),
                           ),
                           child: SvgPicture.asset(
                             AppIcons.typing,
                             height: 14,
-                            colorFilter: const ColorFilter.mode(
-                              Colors.white70,
+                            colorFilter: ColorFilter.mode(
+                              context.themeIconMuted,
                               BlendMode.srcIn,
                             ),
                           ),
@@ -498,29 +494,34 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
             if (isBlocked)
               Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   border: Border(
-                    top: BorderSide(color: Color(0xFF2A2733), width: 1),
+                    top: BorderSide(color: context.themeDivider, width: 1),
                   ),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    // Blocked Icon Circle
+                    // Blocked Icon Circle matching Image 1
                     Container(
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.05),
+                        color: context.isDarkMode
+                            ? context.themeChipBackground
+                            : Colors.transparent,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: AppColors.gradientCyan.withValues(alpha: 0.3),
+                          color: AppColors.gradientCyan.withValues(
+                            alpha: context.isDarkMode ? 0.3 : 0.35,
+                          ),
+                          width: 1.2,
                         ),
                       ),
                       child: const Icon(
                         Icons.block_rounded,
                         color: AppColors.gradientCyan,
-                        size: 22,
+                        size: 20,
                       ),
                     ),
 
@@ -530,7 +531,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                     Text(
                       'You blocked $cleanUsername',
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
                       ),
@@ -543,7 +544,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                       "You can't message each other. Nothing new arrives here. They were not told, and your old messages stay visible to you only.",
                       textAlign: TextAlign.center,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: Colors.white54,
+                        color: context.themeTextSecondary,
                         fontSize: 12,
                         height: 1.35,
                       ),
@@ -585,9 +586,9 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                       },
                       child: Container(
                         padding: const EdgeInsets.all(4),
-                        child: const Icon(
+                        child: Icon(
                           Icons.image_outlined,
-                          color: Colors.white70,
+                          color: context.themeIconMuted,
                           size: 24,
                         ),
                       ),
@@ -614,9 +615,9 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                       },
                       child: Container(
                         padding: const EdgeInsets.all(4),
-                        child: const Icon(
+                        child: Icon(
                           Icons.camera_alt_outlined,
-                          color: Colors.white70,
+                          color: context.themeIconMuted,
                           size: 24,
                         ),
                       ),

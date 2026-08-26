@@ -27,7 +27,12 @@ class AuthFooterLink extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(normalText, style: AppTextStyles.authFooterText),
+            Text(
+              normalText,
+              style: AppTextStyles.authFooterText.copyWith(
+                color: context.themeTextSecondary,
+              ),
+            ),
             if (highlightGradient != null)
               ShaderMask(
                 shaderCallback: (Rect bounds) =>

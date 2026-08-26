@@ -33,7 +33,7 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
     final GalleryMediaItem? selectedItem = provider.selectedMedia;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -53,12 +53,20 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -68,7 +76,7 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
                   Text(
                     'Choose Photo',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -103,13 +111,15 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(AppRadius.card),
                   child: Container(
-                    color: const Color(0xFF1E1B26),
+                    color: context.themeCardBackground,
                     child: selectedItem != null
                         ? MediaThumbnailWidget(item: selectedItem)
-                        : const Center(
+                        : Center(
                             child: Text(
                               'Select a photo from your gallery below',
-                              style: TextStyle(color: Colors.white54),
+                              style: TextStyle(
+                                color: context.themeTextMuted,
+                              ),
                             ),
                           ),
                   ),
@@ -130,14 +140,14 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
                       Text(
                         'Recents',
                         style: AppTextStyles.titleSmall.copyWith(
-                          color: Colors.white,
+                          color: context.themeTextPrimary,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(
+                      Icon(
                         Icons.keyboard_arrow_down_rounded,
-                        color: Colors.white70,
+                        color: context.themeIconMuted,
                         size: 20,
                       ),
                     ],
@@ -148,7 +158,7 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
                         Text(
                           '${provider.photoGallery.length} photos',
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: Colors.white54,
+                            color: context.themeTextMuted,
                             fontSize: 12,
                           ),
                         ),
@@ -161,8 +171,9 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
+                            color: context.themeChipBackground,
                             borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: context.themeBorder),
                           ),
                           child: const Icon(
                             Icons.add_photo_alternate_rounded,
@@ -195,15 +206,17 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: <Widget>[
-                              const Icon(
+                              Icon(
                                 Icons.photo_library_outlined,
-                                color: Colors.white38,
+                                color: context.themeIconMuted,
                                 size: 40,
                               ),
                               const SizedBox(height: 8),
-                              const Text(
+                              Text(
                                 'No photos found in gallery',
-                                style: TextStyle(color: Colors.white54),
+                                style: TextStyle(
+                                  color: context.themeTextMuted,
+                                ),
                               ),
                               const SizedBox(height: 8),
                               TextButton(

@@ -30,12 +30,14 @@ class PrivacyOptionCard extends StatelessWidget {
           vertical: AppSpacing.lg,
         ),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0D2A30) : const Color(0xFF1E1B26),
+          color: isSelected
+              ? context.themeCyanBadgeBackground
+              : context.themeCardBackground,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
                 ? AppColors.gradientCyan
-                : Colors.white.withValues(alpha: 0.12),
+                : context.themeBorder,
             width: isSelected ? 1.5 : 1,
           ),
         ),
@@ -47,8 +49,8 @@ class PrivacyOptionCard extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     optionTitle,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.themeTextPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -57,8 +59,8 @@ class PrivacyOptionCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       l10n.profileRecommendedDefault,
-                      style: const TextStyle(
-                        color: Colors.white38,
+                      style: TextStyle(
+                        color: context.themeTextMuted,
                         fontSize: 12,
                       ),
                     ),
@@ -70,7 +72,7 @@ class PrivacyOptionCard extends StatelessWidget {
               isSelected
                   ? Icons.check_circle_rounded
                   : Icons.radio_button_unchecked_rounded,
-              color: isSelected ? AppColors.gradientCyan : Colors.white24,
+              color: isSelected ? AppColors.gradientCyan : context.themeIconMuted,
               size: 22,
             ),
           ],

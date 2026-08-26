@@ -523,6 +523,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                     const SizedBox(width: 12),
                     AppFollowButton(
                       isFollowing: item.isFollowing,
+                      isOverMedia: true,
                       onTap: widget.onFollowToggle,
                     ),
                   ],

@@ -118,9 +118,9 @@ class _AddTagBottomSheetState extends State<AddTagBottomSheet> {
     final bool showCustomCreate = query.isNotEmpty && !isExactMatch;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
         top: 12,
@@ -141,7 +141,7 @@ class _AddTagBottomSheetState extends State<AddTagBottomSheet> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: context.themeBorderStrong,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -155,7 +155,10 @@ class _AddTagBottomSheetState extends State<AddTagBottomSheet> {
                 children: <Widget>[
                   Text(
                     'Add a tag',
-                    style: AppTextStyles.headingMedium.copyWith(fontSize: 20),
+                    style: AppTextStyles.headingMedium.copyWith(
+                      color: context.themeTextPrimary,
+                      fontSize: 20,
+                    ),
                   ),
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
@@ -163,12 +166,14 @@ class _AddTagBottomSheetState extends State<AddTagBottomSheet> {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.04),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.close_rounded,
-                        color: Colors.white70,
+                        color: context.themeIconMuted,
                         size: 18,
                       ),
                     ),
@@ -219,7 +224,7 @@ class _AddTagBottomSheetState extends State<AddTagBottomSheet> {
               Text(
                 'SELECTED  ·  ${_tags.length}',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: Colors.white54,
+                  color: context.themeTextMuted,
                   letterSpacing: 1.2,
                   fontSize: 11,
                 ),
@@ -272,7 +277,7 @@ class _AddTagBottomSheetState extends State<AddTagBottomSheet> {
                 Text(
                   'No tags selected yet.',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: Colors.white38,
+                    color: context.themeTextMuted,
                   ),
                 ),
 
@@ -321,7 +326,7 @@ class _AddTagBottomSheetState extends State<AddTagBottomSheet> {
               Text(
                 'MATCHING TAGS',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: Colors.white54,
+                  color: context.themeTextMuted,
                   letterSpacing: 1.2,
                   fontSize: 11,
                 ),
@@ -347,7 +352,7 @@ class _AddTagBottomSheetState extends State<AddTagBottomSheet> {
                                 style: AppTextStyles.bodyMedium.copyWith(
                                   color: _tags.contains(tag)
                                       ? AppColors.gradientPink
-                                      : Colors.white,
+                                      : context.themeTextPrimary,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -373,7 +378,7 @@ class _AddTagBottomSheetState extends State<AddTagBottomSheet> {
               Text(
                 'Up to 5 tags per post.',
                 style: AppTextStyles.caption.copyWith(
-                  color: Colors.white38,
+                  color: context.themeTextMuted,
                   fontSize: 12,
                 ),
               ),

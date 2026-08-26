@@ -173,9 +173,9 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
       backgroundColor: Colors.transparent,
       builder: (BuildContext ctx) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.bottomSheetBackground,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: ctx.themeBottomSheetBackground,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg,
@@ -191,7 +191,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                     width: 36,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: ctx.themeBorderStrong,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -203,15 +203,17 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
+                    color: ctx.isDarkMode
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.black.withValues(alpha: 0.04),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '"${comment.content}"',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white70,
+                    style: TextStyle(
+                      color: ctx.themeTextSecondary,
                       fontSize: 13,
                       fontStyle: FontStyle.italic,
                     ),
@@ -221,22 +223,22 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
                 // Option 1: Hide Comment / Answer
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.visibility_off_outlined,
-                    color: Colors.white,
+                    color: ctx.themeIcon,
                     size: 22,
                   ),
                   title: Text(
                     'Hide $typeNameLower',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: ctx.themeTextPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   subtitle: Text(
                     'This $typeNameLower will be moved to hidden $typeNamePluralLower',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: ctx.themeTextMuted, fontSize: 12),
                   ),
                   onTap: () {
                     Navigator.pop(ctx);
@@ -246,15 +248,15 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
                 // Option 2: Report Comment / Answer
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.flag_outlined,
-                    color: Colors.white,
+                    color: ctx.themeIcon,
                     size: 22,
                   ),
                   title: Text(
                     'Report $typeNameLower',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: ctx.themeTextPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -272,15 +274,15 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
                 // Option 3: Copy Text
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.copy_rounded,
-                    color: Colors.white,
+                    color: ctx.themeIcon,
                     size: 22,
                   ),
-                  title: const Text(
-                    'Copy text',
+                  title: Text(
+                    'Copy $typeNameLower',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: ctx.themeTextPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -309,6 +311,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
   void _openHiddenCommentsSheet() {
     final String typeNamePluralLower =
         widget.isAnswers ? 'answers' : 'comments';
+    final String typeNameLower =
+        widget.isAnswers ? 'answer' : 'comment';
 
     showModalBottomSheet<void>(
       context: context,
@@ -319,9 +323,9 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
           builder: (BuildContext context, StateSetter setModalState) {
             return Container(
               height: MediaQuery.of(context).size.height * 0.72,
-              decoration: const BoxDecoration(
-                color: AppColors.bottomSheetBackground,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              decoration: BoxDecoration(
+                color: context.themeBottomSheetBackground,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
               ),
               padding: const EdgeInsets.only(top: 12, bottom: 16),
               child: SafeArea(
@@ -334,7 +338,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                         width: 36,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.white24,
+                          color: context.themeBorderStrong,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -351,16 +355,16 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                         children: <Widget>[
                           Row(
                             children: <Widget>[
-                              const Icon(
+                              Icon(
                                 Icons.visibility_off_outlined,
-                                color: Colors.white,
+                                color: context.themeIcon,
                                 size: 20,
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 '${_hiddenComments.length} Hidden $typeNamePluralLower',
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: context.themeTextPrimary,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -369,9 +373,9 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                           ),
                           GestureDetector(
                             onTap: () => Navigator.pop(context),
-                            child: const Icon(
+                            child: Icon(
                               Icons.close_rounded,
-                              color: Colors.white54,
+                              color: context.themeIconMuted,
                               size: 22,
                             ),
                           ),
@@ -390,16 +394,18 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.05),
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.05)
+                              : Colors.black.withValues(alpha: 0.04),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.08),
+                            color: context.themeBorder,
                           ),
                         ),
                         child: Text(
                           'These $typeNamePluralLower were hidden by you or flagged by automatic community moderation.',
-                          style: const TextStyle(
-                            color: Colors.white70,
+                          style: TextStyle(
+                            color: context.themeTextSecondary,
                             fontSize: 12,
                             height: 1.3,
                           ),
@@ -415,8 +421,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                           ? Center(
                               child: Text(
                                 'No hidden $typeNamePluralLower',
-                                style: const TextStyle(
-                                  color: Colors.white54,
+                                style: TextStyle(
+                                  color: context.themeTextMuted,
                                   fontSize: 14,
                                 ),
                               ),
@@ -453,8 +459,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                             children: <Widget>[
                                               Text(
                                                 item.username,
-                                                style: const TextStyle(
-                                                  color: Colors.white,
+                                                style: TextStyle(
+                                                  color: context.themeTextPrimary,
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.w700,
                                                 ),
@@ -462,8 +468,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                               const SizedBox(width: 6),
                                               Text(
                                                 item.timeAgo,
-                                                style: const TextStyle(
-                                                  color: Colors.white54,
+                                                style: TextStyle(
+                                                  color: context.themeTextMuted,
                                                   fontSize: 11,
                                                 ),
                                               ),
@@ -472,8 +478,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                           const SizedBox(height: 4),
                                           Text(
                                             item.content,
-                                            style: const TextStyle(
-                                              color: Colors.white,
+                                            style: TextStyle(
+                                              color: context.themeTextPrimary,
                                               fontSize: 13,
                                               height: 1.35,
                                             ),
@@ -504,27 +510,26 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                                 vertical: 4,
                                               ),
                                               decoration: BoxDecoration(
-                                                color: Colors.white
-                                                    .withValues(alpha: 0.1),
+                                                color: context.themeChipBackground,
                                                 borderRadius:
                                                     BorderRadius.circular(8),
                                                 border: Border.all(
-                                                  color: Colors.white24,
+                                                  color: context.themeBorder,
                                                 ),
                                               ),
-                                              child: const Row(
+                                              child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: <Widget>[
                                                   Icon(
                                                     Icons.visibility_outlined,
-                                                    color: Colors.white,
+                                                    color: context.themeIcon,
                                                     size: 14,
                                                   ),
-                                                  SizedBox(width: 4),
+                                                  const SizedBox(width: 4),
                                                   Text(
-                                                    'Unhide',
+                                                    'Unhide $typeNameLower',
                                                     style: TextStyle(
-                                                      color: Colors.white,
+                                                      color: context.themeTextPrimary,
                                                       fontSize: 11,
                                                       fontWeight:
                                                           FontWeight.w600,
@@ -586,9 +591,9 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.72,
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
         top: 12,
@@ -604,7 +609,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: context.themeBorderStrong,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -620,17 +625,17 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                 children: <Widget>[
                   Text(
                     titleText,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.themeTextPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(
+                    child: Icon(
                       Icons.close_rounded,
-                      color: Colors.white54,
+                      color: context.themeIconMuted,
                       size: 22,
                     ),
                   ),
@@ -664,17 +669,24 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                       child: Container(
                         padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
-                          color: AppColors.cardBackground,
+                          color: context.isDarkMode
+                              ? const Color(0xFF1E1B26)
+                              : const Color(0xFFE8FAF9),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.12),
+                            color: context.isDarkMode
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : AppColors.gradientCyan.withValues(alpha: 0.45),
+                            width: context.isDarkMode ? 1.0 : 1.2,
                           ),
                         ),
                         child: Row(
                           children: <Widget>[
-                            const Icon(
+                            Icon(
                               Icons.visibility_off_outlined,
-                              color: Colors.white54,
+                              color: context.isDarkMode
+                                  ? Colors.white54
+                                  : AppColors.gradientCyan,
                               size: 20,
                             ),
                             const SizedBox(width: 12),
@@ -684,14 +696,12 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                 children: <Widget>[
                                   Text(
                                     widget.isAnswers
-                                        ? (_hiddenComments.length > 1
-                                            ? '${_hiddenComments.length} Answers hidden'
-                                            : 'Answer hidden')
-                                        : (_hiddenComments.length > 1
-                                            ? '${_hiddenComments.length} Comments hidden'
-                                            : l10n.commentHiddenTitle),
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                        ? '${_hiddenComments.length} ${_hiddenComments.length > 1 ? 'Answers' : 'Answer'} hidden'
+                                        : '${_hiddenComments.length} ${_hiddenComments.length > 1 ? 'comments' : 'comment'} hidden',
+                                    style: TextStyle(
+                                      color: context.isDarkMode
+                                          ? Colors.white
+                                          : const Color(0xFFE5A8BA),
                                       fontSize: 13,
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -701,19 +711,22 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                     widget.isAnswers
                                         ? 'This answer was flagged for moderation.'
                                         : l10n.commentHiddenSub,
-                                    style: const TextStyle(
-                                      color: Colors.white54,
+                                    style: TextStyle(
+                                      color: context.isDarkMode
+                                          ? Colors.white54
+                                          : const Color(0xFF7E7989),
                                       fontSize: 12,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            const Icon(
-                              Icons.chevron_right_rounded,
-                              color: Colors.white54,
-                              size: 20,
-                            ),
+                            if (context.isDarkMode)
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                color: Colors.white54,
+                                size: 20,
+                              ),
                           ],
                         ),
                       ),
@@ -828,8 +841,8 @@ class _CommentItemTile extends StatelessWidget {
                       children: <Widget>[
                         Text(
                           comment.username,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.themeTextPrimary,
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                           ),
@@ -837,8 +850,8 @@ class _CommentItemTile extends StatelessWidget {
                         const SizedBox(width: 6),
                         Text(
                           comment.timeAgo,
-                          style: const TextStyle(
-                            color: Colors.white54,
+                          style: TextStyle(
+                            color: context.themeTextMuted,
                             fontSize: 11,
                           ),
                         ),
@@ -847,8 +860,8 @@ class _CommentItemTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       comment.content,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.themeTextPrimary,
                         fontSize: 13,
                         height: 1.35,
                       ),
@@ -860,8 +873,8 @@ class _CommentItemTile extends StatelessWidget {
                           onTap: () {},
                           child: Text(
                             replyLabel,
-                            style: const TextStyle(
-                              color: Colors.white54,
+                            style: TextStyle(
+                              color: context.themeTextMuted,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
@@ -879,8 +892,8 @@ class _CommentItemTile extends StatelessWidget {
                           },
                           child: Text(
                             reportLabel,
-                            style: const TextStyle(
-                              color: Colors.white54,
+                            style: TextStyle(
+                              color: context.themeTextMuted,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
@@ -910,7 +923,7 @@ class _CommentItemTile extends StatelessWidget {
                       style: TextStyle(
                         color: comment.isLiked
                             ? AppColors.gradientPink
-                            : Colors.white54,
+                            : context.themeTextMuted,
                         fontSize: 11,
                         fontWeight: comment.isLiked
                             ? FontWeight.w700
@@ -948,8 +961,8 @@ class _CommentItemTile extends StatelessWidget {
                           children: <Widget>[
                             Text(
                               comment.authorReplyUser ?? 'rowankeeps',
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: context.themeTextPrimary,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -978,8 +991,8 @@ class _CommentItemTile extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           comment.authorReplyText!,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.themeTextPrimary,
                             fontSize: 13,
                             height: 1.35,
                           ),

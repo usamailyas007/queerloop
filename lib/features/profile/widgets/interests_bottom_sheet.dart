@@ -111,7 +111,7 @@ class _InterestsBottomSheetState extends State<InterestsBottomSheet> {
         Text(
           title,
           style: AppTextStyles.labelSmall.copyWith(
-            color: Colors.white54,
+            color: context.themeTextMuted,
             letterSpacing: 1.2,
             fontSize: 11,
             fontWeight: FontWeight.w700,
@@ -135,18 +135,20 @@ class _InterestsBottomSheetState extends State<InterestsBottomSheet> {
                 decoration: BoxDecoration(
                   gradient:
                       isSelected ? AppColors.primaryGradientButton : null,
-                  color: isSelected ? null : AppColors.cardBackground,
+                  color: isSelected ? null : context.themeCardBackground,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: isSelected
                         ? Colors.transparent
-                        : Colors.white.withValues(alpha: 0.1),
+                        : context.themeBorder,
                   ),
                 ),
                 child: Text(
                   item,
                   style: TextStyle(
-                    color: Colors.white,
+                    color: isSelected
+                        ? Colors.white
+                        : context.themeTextSecondary,
                     fontWeight:
                         isSelected ? FontWeight.w700 : FontWeight.w500,
                     fontSize: 13,
@@ -164,9 +166,9 @@ class _InterestsBottomSheetState extends State<InterestsBottomSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
         top: AppSpacing.md,
@@ -187,7 +189,7 @@ class _InterestsBottomSheetState extends State<InterestsBottomSheet> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: context.themeBorderStrong,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -204,7 +206,7 @@ class _InterestsBottomSheetState extends State<InterestsBottomSheet> {
                     child: Text(
                       'Cancel',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white54,
+                        color: context.themeTextMuted,
                         fontSize: 14,
                       ),
                     ),
@@ -212,7 +214,7 @@ class _InterestsBottomSheetState extends State<InterestsBottomSheet> {
                   Text(
                     'Interests',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 17,
                     ),
@@ -250,7 +252,7 @@ class _InterestsBottomSheetState extends State<InterestsBottomSheet> {
               Text(
                 'Pick up to 10. These show on your profile and shape what Explore recommends. You can leave this empty.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: Colors.white54,
+                  color: context.themeTextSecondary,
                   fontSize: 13,
                   height: 1.35,
                 ),
@@ -275,7 +277,7 @@ class _InterestsBottomSheetState extends State<InterestsBottomSheet> {
                   Text(
                     'SELECTED',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       letterSpacing: 1.2,
                       fontSize: 11,
                       fontWeight: FontWeight.w700,

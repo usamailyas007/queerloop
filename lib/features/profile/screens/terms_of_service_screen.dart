@@ -8,6 +8,7 @@ class TermsOfServiceScreen extends StatelessWidget {
   const TermsOfServiceScreen({super.key});
 
   Widget _buildSection({
+    required BuildContext context,
     required String numberAndTitle,
     required String bodyText,
   }) {
@@ -19,7 +20,7 @@ class TermsOfServiceScreen extends StatelessWidget {
           Text(
             numberAndTitle,
             style: AppTextStyles.titleMedium.copyWith(
-              color: Colors.white,
+              color: context.themeTextPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 16,
             ),
@@ -28,7 +29,7 @@ class TermsOfServiceScreen extends StatelessWidget {
           Text(
             bodyText,
             style: AppTextStyles.bodySmall.copyWith(
-              color: Colors.white70,
+              color: context.themeTextSecondary,
               fontSize: 13,
               height: 1.45,
             ),
@@ -41,7 +42,7 @@ class TermsOfServiceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -59,12 +60,20 @@ class TermsOfServiceScreen extends StatelessWidget {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -74,7 +83,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                       'Terms of service',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 17,
                       ),
@@ -96,7 +105,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   Text(
                     'Last updated 1 January 2026 · Placeholder copy for handover',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white38,
+                      color: context.themeTextMuted,
                       fontSize: 12,
                     ),
                   ),
@@ -105,6 +114,7 @@ class TermsOfServiceScreen extends StatelessWidget {
 
                   // 1. Acceptance of terms
                   _buildSection(
+                    context: context,
                     numberAndTitle: '1. Acceptance of terms',
                     bodyText:
                         'By creating an account or browsing as a guest, you agree to these Terms and to our Community Rules. If you do not agree, please do not use QueerLoop+.',
@@ -112,6 +122,7 @@ class TermsOfServiceScreen extends StatelessWidget {
 
                   // 2. Your content
                   _buildSection(
+                    context: context,
                     numberAndTitle: '2. Your content',
                     bodyText:
                         'You keep ownership of what you post. By publishing, you grant QueerLoop+ a limited licence to host, display and distribute it within the app so other members can see it, based on the visibility you choose.',
@@ -119,6 +130,7 @@ class TermsOfServiceScreen extends StatelessWidget {
 
                   // 3. Community conduct
                   _buildSection(
+                    context: context,
                     numberAndTitle: '3. Community conduct',
                     bodyText:
                         "Harassment, hate speech, doxxing and content that endangers a member's safety are never allowed. Violations may lead to content removal, a warning or account suspension — see Moderation & appeals.",
@@ -126,6 +138,7 @@ class TermsOfServiceScreen extends StatelessWidget {
 
                   // 4. Account termination
                   _buildSection(
+                    context: context,
                     numberAndTitle: '4. Account termination',
                     bodyText:
                         'You can delete your account at any time from Settings. We may suspend or remove accounts that violate these Terms or put other members at risk.',
@@ -133,6 +146,7 @@ class TermsOfServiceScreen extends StatelessWidget {
 
                   // 5. Disclaimers & liability
                   _buildSection(
+                    context: context,
                     numberAndTitle: '5. Disclaimers & liability',
                     bodyText:
                         'QueerLoop+ is provided "as is." We work to keep the community safe but cannot guarantee it is free of errors, downtime or content that violates our rules before it\'s reviewed.',
@@ -140,6 +154,7 @@ class TermsOfServiceScreen extends StatelessWidget {
 
                   // 6. Changes to these terms
                   _buildSection(
+                    context: context,
                     numberAndTitle: '6. Changes to these terms',
                     bodyText:
                         "We'll notify members in-app before material changes take effect. Continuing to use QueerLoop+ after that point means you accept the updated Terms.",
@@ -147,6 +162,7 @@ class TermsOfServiceScreen extends StatelessWidget {
 
                   // 7. Eligibility
                   _buildSection(
+                    context: context,
                     numberAndTitle: '7. Eligibility',
                     bodyText:
                         'QueerLoop+ is an 18+ space. You confirm you are at least 18 years old, and that any information you provide, including your date of birth in Profile settings, is accurate.',

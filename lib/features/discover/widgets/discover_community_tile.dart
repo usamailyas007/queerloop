@@ -25,9 +25,9 @@ class DiscoverCommunityTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: context.themeCardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.themeBorder),
       ),
       child: Row(
         children: <Widget>[
@@ -47,14 +47,16 @@ class DiscoverCommunityTile extends StatelessWidget {
               children: <Widget>[
                 Text(
                   community.name,
-                  style:
-                      AppTextStyles.titleSmall.copyWith(color: Colors.white),
+                  style: AppTextStyles.titleSmall.copyWith(
+                    color: context.themeTextPrimary,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   community.description,
-                  style:
-                      AppTextStyles.bodySmall.copyWith(color: Colors.white54),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.themeTextMuted,
+                  ),
                 ),
               ],
             ),

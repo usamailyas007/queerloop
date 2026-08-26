@@ -50,10 +50,10 @@ class GuestActionModalDialog extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: AppColors.bottomSheetBackground,
+        color: context.themeCardBackground,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.12),
+          color: context.themeBorder,
         ),
       ),
       child: Column(
@@ -67,13 +67,21 @@ class GuestActionModalDialog extends StatelessWidget {
               child: Container(
                 width: AppSizes.buttonHeightSmall,
                 height: AppSizes.buttonHeightSmall,
-                decoration: const BoxDecoration(
-                  color: AppColors.cardBackground,
+                decoration: BoxDecoration(
+                  color: context.isDarkMode
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.transparent,
                   shape: BoxShape.circle,
+                  border: Border.all(
+                    color: context.isDarkMode
+                        ? Colors.white.withValues(alpha: 0.12)
+                        : context.themeBorder,
+                    width: 1.1,
+                  ),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.close_rounded,
-                  color: Colors.white54,
+                  color: context.themeIconMuted,
                   size: AppSizes.iconSm,
                 ),
               ),
@@ -84,8 +92,8 @@ class GuestActionModalDialog extends StatelessWidget {
           Container(
             width: 56,
             height: 56,
-            decoration: const BoxDecoration(
-              color: AppColors.cyanBadgeBackground,
+            decoration: BoxDecoration(
+              color: context.themeCyanBadgeBackground,
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -102,7 +110,7 @@ class GuestActionModalDialog extends StatelessWidget {
             title,
             textAlign: TextAlign.center,
             style: AppTextStyles.titleMedium.copyWith(
-              color: Colors.white,
+              color: context.themeTextPrimary,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -114,7 +122,7 @@ class GuestActionModalDialog extends StatelessWidget {
             subtitle,
             textAlign: TextAlign.center,
             style: AppTextStyles.bodySmall.copyWith(
-              color: Colors.white60,
+              color: context.themeTextSecondary,
               height: 1.4,
             ),
           ),
@@ -150,7 +158,7 @@ class GuestActionModalDialog extends StatelessWidget {
               l10n.guestNotReadyKeepBrowsing,
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white.withValues(alpha: 0.8),
+                color: context.themeTextSecondary,
                 fontSize: 12,
                 decoration: TextDecoration.underline,
                 fontWeight: FontWeight.w500,

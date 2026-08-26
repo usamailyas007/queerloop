@@ -31,7 +31,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -50,12 +50,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -64,7 +72,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   Text(
                     'Notifications',
                     style: AppTextStyles.titleLarge.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 20,
                     ),
@@ -112,18 +120,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         gradient: isSelected
                             ? AppColors.primaryGradientButton
                             : null,
-                        color: isSelected ? null : AppColors.cardBackground,
+                        color: isSelected ? null : context.themeCardBackground,
                         borderRadius: BorderRadius.circular(AppRadius.pill),
                         border: isSelected
                             ? null
                             : Border.all(
-                                color: Colors.white.withValues(alpha: 0.12),
+                                color: context.themeBorder,
                               ),
                       ),
                       child: Text(
                         _filters[index],
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: isSelected ? Colors.white : Colors.white70,
+                          color: isSelected
+                              ? Colors.white
+                              : context.themeTextSecondary,
                           fontWeight:
                               isSelected ? FontWeight.w700 : FontWeight.w500,
                           fontSize: 13,
@@ -146,7 +156,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F242A),
+                      color: context.themeCyanBadgeBackground,
                       borderRadius: BorderRadius.circular(AppRadius.card),
                       border: Border.all(
                         color: AppColors.gradientCyan,
@@ -175,7 +185,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               Text(
                                 'Your report was actioned',
                                 style: AppTextStyles.bodyMedium.copyWith(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 13,
                                 ),
@@ -184,7 +194,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               Text(
                                 'QL-84213 — the comment was removed and the account warned.',
                                 style: AppTextStyles.bodySmall.copyWith(
-                                  color: Colors.white54,
+                                  color: context.themeTextMuted,
                                   fontSize: 11,
                                   height: 1.3,
                                 ),
@@ -202,7 +212,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   Text(
                     'TODAY',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       letterSpacing: 1.2,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -227,23 +237,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         child: RichText(
                           text: TextSpan(
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: Colors.white70,
+                              color: context.themeTextSecondary,
                               fontSize: 13,
                               height: 1.3,
                             ),
-                            children: const <TextSpan>[
+                            children: <TextSpan>[
                               TextSpan(
                                 text: 'jules.does ',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              TextSpan(text: 'and 240 others liked your post\n'),
+                              const TextSpan(
+                                  text: 'and 240 others liked your post\n'),
                               TextSpan(
                                 text: '2h',
                                 style: TextStyle(
-                                  color: Colors.white38,
+                                  color: context.themeTextMuted,
                                   fontSize: 11,
                                 ),
                               ),
@@ -285,22 +296,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             child: RichText(
                               text: TextSpan(
                                 style: AppTextStyles.bodySmall.copyWith(
-                                  color: Colors.white70,
+                                  color: context.themeTextSecondary,
                                   fontSize: 13,
                                 ),
-                                children: const <TextSpan>[
+                                children: <TextSpan>[
                                   TextSpan(
                                     text: 'sam.arroyo ',
                                     style: TextStyle(
-                                      color: Colors.white,
+                                      color: context.themeTextPrimary,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                  TextSpan(text: 'requested to follow you\n'),
+                                  const TextSpan(
+                                      text: 'requested to follow you\n'),
                                   TextSpan(
                                     text: '4h',
                                     style: TextStyle(
-                                      color: Colors.white38,
+                                      color: context.themeTextMuted,
                                       fontSize: 11,
                                     ),
                                   ),
@@ -380,24 +392,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         child: RichText(
                           text: TextSpan(
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: Colors.white70,
+                              color: context.themeTextSecondary,
                               fontSize: 13,
                               height: 1.3,
                             ),
-                            children: const <TextSpan>[
+                            children: <TextSpan>[
                               TextSpan(
                                 text: 'moss.and.oat ',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              TextSpan(
+                              const TextSpan(
                                   text: 'replied: "sending this to my sister*"\n'),
                               TextSpan(
                                 text: '5h',
                                 style: TextStyle(
-                                  color: Colors.white38,
+                                  color: context.themeTextMuted,
                                   fontSize: 11,
                                 ),
                               ),
@@ -424,7 +436,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   Text(
                     'THIS WEEK',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       letterSpacing: 1.2,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -449,23 +461,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         child: RichText(
                           text: TextSpan(
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: Colors.white70,
+                              color: context.themeTextSecondary,
                               fontSize: 13,
                               height: 1.3,
                             ),
-                            children: const <TextSpan>[
+                            children: <TextSpan>[
                               TextSpan(
                                 text: 'nadia.builds ',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              TextSpan(text: 'started following you\n'),
+                              const TextSpan(text: 'started following you\n'),
                               TextSpan(
                                 text: 'Tue',
                                 style: TextStyle(
-                                  color: Colors.white38,
+                                  color: context.themeTextMuted,
                                   fontSize: 11,
                                 ),
                               ),
@@ -497,7 +509,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F242A),
+                          color: context.themeCyanBadgeBackground,
                           shape: BoxShape.circle,
                           border: Border.all(
                             color:
@@ -515,25 +527,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         child: RichText(
                           text: TextSpan(
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: Colors.white70,
+                              color: context.themeTextSecondary,
                               fontSize: 13,
                               height: 1.3,
                             ),
-                            children: const <TextSpan>[
+                            children: <TextSpan>[
                               TextSpan(
                                 text: 'QueerLoop+ ',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              TextSpan(
+                              const TextSpan(
                                   text:
                                       'Community rules updated — comment filters are on by default\n'),
                               TextSpan(
                                 text: 'Mon',
                                 style: TextStyle(
-                                  color: Colors.white38,
+                                  color: context.themeTextMuted,
                                   fontSize: 11,
                                 ),
                               ),

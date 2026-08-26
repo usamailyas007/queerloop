@@ -21,7 +21,7 @@
     "description": "Tagline displayed on the splash screen"
   },
 
-  "splashCommunityText": "18+ COMMUNITY",
+  "splashCommunityText": "SAFE & INCLUSIVE COMMUNITY",
   "@splashCommunityText": {
     "description": "Footer text displayed on the splash screen"
   },

@@ -43,7 +43,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final bool isPrivateAccount = widget.isPrivate || widget.username.contains('kit.lumen');
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -61,12 +61,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -80,7 +88,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           Text(
                             widget.username,
                             style: AppTextStyles.titleMedium.copyWith(
-                              color: Colors.white,
+                              color: context.themeTextPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 17,
                             ),
@@ -91,8 +99,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               AppIcons.password,
                               width: 14,
                               height: 14,
-                              colorFilter: const ColorFilter.mode(
-                                Colors.white70,
+                              colorFilter: ColorFilter.mode(
+                                context.themeIconMuted,
                                 BlendMode.srcIn,
                               ),
                             ),
@@ -114,12 +122,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.more_vert_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 20,
                       ),
                     ),
@@ -169,7 +185,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       child: Container(
                                         height: 42,
                                         decoration: BoxDecoration(
-                                          color: AppColors.cardBackground,
+                                          color: context.themeCardBackground,
                                           borderRadius: BorderRadius.circular(
                                               AppRadius.card),
                                           border: Border.all(
@@ -263,10 +279,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             width: 68,
                             height: 68,
                             decoration: BoxDecoration(
-                              color: AppColors.cardBackground,
+                              color: context.themeCardBackground,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.08),
+                                color: context.themeBorder,
                               ),
                             ),
                             child: Center(
@@ -274,8 +290,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 AppIcons.password,
                                 width: 26,
                                 height: 26,
-                                colorFilter: const ColorFilter.mode(
-                                  Colors.white,
+                                colorFilter: ColorFilter.mode(
+                                  context.themeIcon,
                                   BlendMode.srcIn,
                                 ),
                               ),
@@ -285,7 +301,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           Text(
                             'This account is private',
                             style: AppTextStyles.titleMedium.copyWith(
-                              color: Colors.white,
+                              color: context.themeTextPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 16,
                             ),
@@ -297,7 +313,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               "Kit approves followers one by one. You'll get a notification if your request is accepted.",
                               textAlign: TextAlign.center,
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: Colors.white54,
+                                color: context.themeTextSecondary,
                                 fontSize: 13,
                                 height: 1.35,
                               ),
@@ -324,10 +340,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       Container(
                         padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
-                          color: AppColors.cardBackground,
+                          color: context.themeCardBackground,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.08),
+                            color: context.themeBorder,
                           ),
                         ),
                         child: Column(
@@ -350,7 +366,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     Text(
                                       '@${widget.username}',
                                       style: AppTextStyles.titleSmall.copyWith(
-                                        color: Colors.white,
+                                        color: context.themeTextPrimary,
                                         fontWeight: FontWeight.w700,
                                         fontSize: 13,
                                       ),
@@ -358,7 +374,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     Text(
                                       'they/them • 18m',
                                       style: AppTextStyles.caption.copyWith(
-                                        color: Colors.white54,
+                                        color: context.themeTextMuted,
                                         fontSize: 11,
                                       ),
                                     ),
@@ -370,7 +386,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             Text(
                               'Told my grandma about Dev over the phone and she said "finally, you sounded lonely in December." Eleven months of rehearsing a speech for nothing.',
                               style: AppTextStyles.bodyMedium.copyWith(
-                                color: Colors.white,
+                                color: context.themeTextPrimary,
                                 fontSize: 13,
                                 height: 1.35,
                               ),

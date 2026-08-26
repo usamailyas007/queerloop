@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_user_avatar.dart';
@@ -32,7 +33,9 @@ class DiscoverCreatorCircle extends StatelessWidget {
         const SizedBox(height: AppSpacing.xs),
         Text(
           creator.username,
-          style: AppTextStyles.caption.copyWith(color: Colors.white70),
+          style: AppTextStyles.caption.copyWith(
+            color: context.themeTextSecondary,
+          ),
         ),
       ],
     );

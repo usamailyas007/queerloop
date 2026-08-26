@@ -27,7 +27,7 @@ class Step5YourPrivacyScreen extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -51,12 +51,16 @@ class Step5YourPrivacyScreen extends StatelessWidget {
                     children: <Widget>[
                       Text(
                         l10n.profileStep5Title,
-                        style: AppTextStyles.authHeaderTitle,
+                        style: AppTextStyles.authHeaderTitle.copyWith(
+                          color: context.themeTextPrimary,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
                         l10n.profileStep5Sub,
-                        style: AppTextStyles.authHeaderSub,
+                        style: AppTextStyles.authHeaderSub.copyWith(
+                          color: context.themeTextSecondary,
+                        ),
                       ),
 
                       const SizedBox(height: AppSpacing.xxl),
@@ -163,9 +167,9 @@ class _PrivacyToggleCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1B26),
+        color: context.themeCardBackground,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        border: Border.all(color: context.themeBorder),
       ),
       child: Row(
         children: <Widget>[
@@ -175,8 +179,8 @@ class _PrivacyToggleCard extends StatelessWidget {
               children: <Widget>[
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.themeTextPrimary,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -184,8 +188,8 @@ class _PrivacyToggleCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    color: Colors.white38,
+                  style: TextStyle(
+                    color: context.themeTextMuted,
                     fontSize: 12,
                     height: 1.3,
                   ),
@@ -220,9 +224,9 @@ class _PrivacyNavCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1B26),
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          border: Border.all(color: context.themeBorder),
         ),
         child: Row(
           children: <Widget>[
@@ -232,8 +236,8 @@ class _PrivacyNavCard extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.themeTextPrimary,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
@@ -241,14 +245,17 @@ class _PrivacyNavCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     valueText,
-                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                    style: TextStyle(
+                      color: context.themeTextMuted,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
-              color: Colors.white54,
+              color: context.themeIconMuted,
               size: 20,
             ),
           ],

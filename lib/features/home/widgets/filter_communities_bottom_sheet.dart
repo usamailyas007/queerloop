@@ -45,9 +45,9 @@ class _FilterCommunitiesBottomSheetState
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF12101A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
         top: 12,
@@ -67,7 +67,7 @@ class _FilterCommunitiesBottomSheetState
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: context.themeBorderStrong,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -81,17 +81,17 @@ class _FilterCommunitiesBottomSheetState
               children: <Widget>[
                 Text(
                   l10n.filterCommunitiesTitle,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.themeTextPrimary,
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
-                  child: const Icon(
+                  child: Icon(
                     Icons.close_rounded,
-                    color: Colors.white54,
+                    color: context.themeIconMuted,
                     size: 22,
                   ),
                 ),
@@ -103,8 +103,8 @@ class _FilterCommunitiesBottomSheetState
             // ── Subtitle ─────────────────────────────────────────────────────
             Text(
               l10n.filterCommunitiesSub,
-              style: const TextStyle(
-                color: Colors.white54,
+              style: TextStyle(
+                color: context.themeTextSecondary,
                 fontSize: 13,
                 height: 1.35,
               ),
@@ -139,12 +139,14 @@ class _FilterCommunitiesBottomSheetState
                         vertical: 14,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E1B26),
+                        color: isSelected
+                            ? context.themeCyanBadgeBackground
+                            : context.themeCardBackground,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: isSelected
                               ? AppColors.gradientCyan
-                              : Colors.white.withValues(alpha: 0.12),
+                              : context.themeBorder,
                           width: isSelected ? 1.5 : 1.0,
                         ),
                       ),
@@ -154,7 +156,7 @@ class _FilterCommunitiesBottomSheetState
                           Text(
                             communityName,
                             style: TextStyle(
-                              color: Colors.white,
+                              color: context.themeTextPrimary,
                               fontSize: 14,
                               fontWeight: isSelected
                                   ? FontWeight.w700

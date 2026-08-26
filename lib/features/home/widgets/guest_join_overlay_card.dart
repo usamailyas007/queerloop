@@ -18,19 +18,20 @@ class GuestJoinOverlayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool isDark = context.isDarkMode;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground.withValues(alpha: 0.96),
+        color: context.themeCardBackground.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.15),
+          color: context.themeBorder,
         ),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.6),
+            color: Colors.black.withValues(alpha: isDark ? 0.6 : 0.12),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -53,7 +54,8 @@ class GuestJoinOverlayCard extends StatelessWidget {
                 child: Text(
                   l10n.guestJoinToLikeTitle,
                   style: AppTextStyles.titleSmall.copyWith(
-                    color: Colors.white,
+                    color: context.themeTextPrimary,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -74,7 +76,7 @@ class GuestJoinOverlayCard extends StatelessWidget {
           Text(
             l10n.guestJoinToLikeSub,
             style: AppTextStyles.bodySmall.copyWith(
-              color: Colors.white60,
+              color: context.themeTextSecondary,
               height: 1.35,
             ),
           ),

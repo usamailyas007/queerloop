@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 
 import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
@@ -7,6 +8,9 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/theme_provider.dart';
+import '../../auth/auth_provider.dart';
+import '../../home/provider/home_feed_provider.dart';
 
 import '../widgets/logout_confirmation_modal_dialog.dart';
 import 'blocked_accounts_screen.dart';
@@ -31,6 +35,7 @@ class SettingsScreen extends StatelessWidget {
   final String avatarAsset;
 
   Widget _buildOptionTile({
+    required BuildContext context,
     required Widget iconWidget,
     required String title,
     String? trailingText,
@@ -45,7 +50,7 @@ class SettingsScreen extends StatelessWidget {
           vertical: AppSpacing.md - 2,
         ),
         decoration: BoxDecoration(
-          color: AppColors.background,
+          color: context.themeBackground,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -56,7 +61,7 @@ class SettingsScreen extends StatelessWidget {
               child: Text(
                 title,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: Colors.white,
+                  color: context.themeTextPrimary,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
@@ -66,16 +71,16 @@ class SettingsScreen extends StatelessWidget {
               Text(
                 trailingText,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: Colors.white38,
+                  color: context.themeTextMuted,
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
             ],
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
-              color: Colors.white38,
+              color: context.themeIconMuted,
               size: 20,
             ),
           ],
@@ -86,12 +91,14 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
-            // ── Top Header Bar ──────────────────────────────────────────────
+            // ── Top Header Bar (Back button + Settings Title + Theme Toggle) ──
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.lg,
@@ -99,34 +106,77 @@ class SettingsScreen extends StatelessWidget {
               ),
               child: Row(
                 children: <Widget>[
+                  // Back button
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     child: Container(
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         size: 24,
                       ),
                     ),
                   ),
+
+                  // Center title
                   Expanded(
                     child: Text(
                       'Settings',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 17,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 38), // Balance spacing
+
+                  // Top-Right Global Theme Toggle Button
+                  Consumer<ThemeProvider>(
+                    builder: (BuildContext ctx, ThemeProvider themeProvider, _) {
+                      final bool dark = themeProvider.isDarkMode;
+                      return GestureDetector(
+                        onTap: () => themeProvider.toggleTheme(),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: dark
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.transparent,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: dark
+                                  ? Colors.white.withValues(alpha: 0.12)
+                                  : context.themeBorder,
+                              width: 1.1,
+                            ),
+                          ),
+                          child: Icon(
+                            dark
+                                ? Icons.wb_sunny_outlined
+                                : Icons.nightlight_round,
+                            color: context.themeTextPrimary,
+                            size: 20,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -151,10 +201,10 @@ class SettingsScreen extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(AppSpacing.md),
                       decoration: BoxDecoration(
-                        color: AppColors.cardBackground,
+                        color: context.themeCardBackground,
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.08),
+                          color: context.themeBorder,
                         ),
                       ),
                       child: Row(
@@ -175,7 +225,7 @@ class SettingsScreen extends StatelessWidget {
                                 Text(
                                   name,
                                   style: AppTextStyles.bodyMedium.copyWith(
-                                    color: Colors.white,
+                                    color: context.themeTextPrimary,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 15,
                                   ),
@@ -184,16 +234,16 @@ class SettingsScreen extends StatelessWidget {
                                 Text(
                                   handleWithPronouns,
                                   style: AppTextStyles.bodySmall.copyWith(
-                                    color: Colors.white38,
+                                    color: context.themeTextMuted,
                                     fontSize: 12,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          const Icon(
+                          Icon(
                             Icons.chevron_right_rounded,
-                            color: Colors.white38,
+                            color: context.themeIconMuted,
                             size: 20,
                           ),
                         ],
@@ -207,7 +257,7 @@ class SettingsScreen extends StatelessWidget {
                   Text(
                     'SAFETY & PRIVACY',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       letterSpacing: 1.2,
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -217,6 +267,7 @@ class SettingsScreen extends StatelessWidget {
                   const SizedBox(height: AppSpacing.sm),
 
                   _buildOptionTile(
+                    context: context,
                     iconWidget: SvgPicture.asset(
                       AppIcons.safety,
                       width: 18,
@@ -237,9 +288,10 @@ class SettingsScreen extends StatelessWidget {
                     },
                   ),
                   _buildOptionTile(
-                    iconWidget: const Icon(
+                    context: context,
+                    iconWidget: Icon(
                       Icons.block_rounded,
-                      color: Colors.white70,
+                      color: context.themeIconMuted,
                       size: 18,
                     ),
                     title: 'Blocked accounts',
@@ -254,12 +306,13 @@ class SettingsScreen extends StatelessWidget {
                     },
                   ),
                   _buildOptionTile(
+                    context: context,
                     iconWidget: SvgPicture.asset(
                       AppIcons.mute,
                       width: 18,
                       height: 18,
-                      colorFilter: const ColorFilter.mode(
-                        Colors.white70,
+                      colorFilter: ColorFilter.mode(
+                        context.themeIconMuted,
                         BlendMode.srcIn,
                       ),
                     ),
@@ -280,7 +333,7 @@ class SettingsScreen extends StatelessWidget {
                   Text(
                     'APP',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       letterSpacing: 1.2,
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -290,9 +343,10 @@ class SettingsScreen extends StatelessWidget {
                   const SizedBox(height: AppSpacing.sm),
 
                   _buildOptionTile(
-                    iconWidget: const Icon(
+                    context: context,
+                    iconWidget: Icon(
                       Icons.notifications_none_rounded,
-                      color: Colors.white70,
+                      color: context.themeIconMuted,
                       size: 18,
                     ),
                     title: 'Notifications',
@@ -306,9 +360,10 @@ class SettingsScreen extends StatelessWidget {
                     },
                   ),
                   _buildOptionTile(
-                    iconWidget: const Icon(
+                    context: context,
+                    iconWidget: Icon(
                       Icons.description_outlined,
-                      color: Colors.white70,
+                      color: context.themeIconMuted,
                       size: 18,
                     ),
                     title: 'Terms & Conditions',
@@ -322,9 +377,10 @@ class SettingsScreen extends StatelessWidget {
                     },
                   ),
                   _buildOptionTile(
-                    iconWidget: const Icon(
+                    context: context,
+                    iconWidget: Icon(
                       Icons.description_outlined,
-                      color: Colors.white70,
+                      color: context.themeIconMuted,
                       size: 18,
                     ),
                     title: 'Privacy Policy',
@@ -340,13 +396,15 @@ class SettingsScreen extends StatelessWidget {
 
                   const SizedBox(height: AppSpacing.xxl),
 
-                  // Log Out Button (Dark Outlined Button with Exit Icon)
+                  // Log Out Button (Themed Outlined Button with Exit Icon)
                   GestureDetector(
                     onTap: () {
                       LogoutConfirmationModalDialog.show(
                         context,
                         username: '@ashinorbit',
                         onConfirmLogout: () {
+                          context.read<HomeFeedProvider>().resetToHome();
+                          context.read<AuthProvider>().signOut();
                           Navigator.pushNamedAndRemoveUntil(
                             context,
                             AppRoutes.login,
@@ -359,25 +417,25 @@ class SettingsScreen extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
-                        color: AppColors.cardBackground,
+                        color: context.themeCardBackground,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.1),
+                          color: context.themeBorder,
                         ),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: <Widget>[
                           Icon(
                             Icons.logout_rounded,
-                            color: Colors.white,
+                            color: context.themeTextPrimary,
                             size: 18,
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Text(
                             'Log out',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: context.themeTextPrimary,
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                             ),
@@ -405,7 +463,7 @@ class SettingsScreen extends StatelessWidget {
                         child: Text(
                           'Delete account',
                           style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.gradientCyan,
+                            color: context.themeTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
                           ),

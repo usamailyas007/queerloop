@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../home/provider/home_feed_provider.dart';
 import '../provider/profile_setup_provider.dart';
 import 'step1_name_username_screen.dart';
 import 'step2_add_photo_screen.dart';
@@ -62,6 +63,7 @@ class _ProfileSetupFlowScreenState extends State<ProfileSetupFlowScreen> {
   }
 
   void _finish() {
+    context.read<HomeFeedProvider>().resetToHome();
     Navigator.pushNamedAndRemoveUntil(
       context,
       AppRoutes.home,

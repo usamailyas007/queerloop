@@ -12,6 +12,7 @@ abstract final class AppColors {
   static const Color warning = Color(0xFFD97706);
   static const Color danger = Color(0xFFDC2626);
 
+  // Dark Theme Tokens
   static const Color background = Color(0xFF121019);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color surfaceAlt = Color(0xFFF1F3F6);
@@ -34,6 +35,26 @@ abstract final class AppColors {
   static const Color border = Color(0xFFE2E8F0);
   static const Color divider = Color(0xFFEDF0F4);
   static const Color overlay = Color(0x14000000);
+
+  // Light Theme Tokens (Matches User Design Specs)
+  static const Color lightBackground = Color(0xFFFFFFFF);
+  static const Color lightSurface = Color(0xFFFAFAFC);
+  static const Color lightCardBackground = Color(0xFFFFFFFF);
+  static const Color lightBottomSheetBackground = Color(0xFFFFFFFF);
+  static const Color lightBottomBarBackground = Color(0xFFFFFFFF);
+  static const Color lightChipBackground = Color(0xFFF1EFF7);
+  static const Color lightCyanBadgeBackground = Color(0xFFE0F7FA);
+
+  static const Color lightTextPrimary = Color(0xFF12101A);
+  static const Color lightTextSecondary = Color(0xFF6E6A7C);
+  static const Color lightTextMuted = Color(0xFF9E9AA8);
+
+  static const Color lightBorder = Color(0xFFE5E3EB);
+  static const Color lightBorderStrong = Color(0xFFD4D0DE);
+  static const Color lightDivider = Color(0xFFEFEFF4);
+  static const Color lightInputBackground = Color(0xFFFFFFFF);
+  static const Color lightIcon = Color(0xFF12101A);
+  static const Color lightIconMuted = Color(0xFF8A8696);
 
   static const Color gradientPink = Color(0xFFFF4B8B);
   static const Color gradientPurple = Color(0xFF6750A4);
@@ -129,4 +150,58 @@ abstract final class AppColors {
   static const Color moderatorRowDivider = Color(0x0AFFFFFF);
   static const Color moderatorButtonBorder = Color(0x1FFFFFFF);
   static const Color moderatorInputBorder = Color(0x1AFFFFFF);
+}
+
+/// Global Theme Context Helpers to access dynamic colors based on current ThemeMode.
+extension AppThemeContextExtension on BuildContext {
+  bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+
+  Color get themeBackground =>
+      isDarkMode ? AppColors.background : AppColors.lightBackground;
+
+  Color get themeCardBackground =>
+      isDarkMode ? AppColors.cardBackground : AppColors.lightCardBackground;
+
+  Color get themeBottomSheetBackground => isDarkMode
+      ? AppColors.bottomSheetBackground
+      : AppColors.lightBottomSheetBackground;
+
+  Color get themeBottomBarBackground => isDarkMode
+      ? AppColors.bottomBarBackground
+      : AppColors.lightBottomBarBackground;
+
+  Color get themeChipBackground =>
+      isDarkMode ? AppColors.chipBackground : AppColors.lightChipBackground;
+
+  Color get themeTextPrimary =>
+      isDarkMode ? Colors.white : AppColors.lightTextPrimary;
+
+  Color get themeTextSecondary =>
+      isDarkMode ? Colors.white70 : AppColors.lightTextSecondary;
+
+  Color get themeTextMuted =>
+      isDarkMode ? Colors.white54 : AppColors.lightTextMuted;
+
+  Color get themeBorder =>
+      isDarkMode ? Colors.white12 : AppColors.lightBorder;
+
+  Color get themeBorderStrong =>
+      isDarkMode ? Colors.white24 : AppColors.lightBorderStrong;
+
+  Color get themeDivider =>
+      isDarkMode ? Colors.white10 : AppColors.lightDivider;
+
+  Color get themeIcon =>
+      isDarkMode ? Colors.white : AppColors.lightIcon;
+
+  Color get themeIconMuted =>
+      isDarkMode ? Colors.white54 : AppColors.lightIconMuted;
+
+  Color get themeInputBackground => isDarkMode
+      ? const Color(0xFF1E1B26)
+      : AppColors.lightInputBackground;
+
+  Color get themeCyanBadgeBackground => isDarkMode
+      ? AppColors.cyanBadgeBackground
+      : AppColors.lightCyanBadgeBackground;
 }

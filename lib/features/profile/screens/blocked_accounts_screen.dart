@@ -79,7 +79,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -97,12 +97,20 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -112,7 +120,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                       'Blocked accounts',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 17,
                       ),
@@ -142,7 +150,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                   Text(
                     "Blocked people can't find your profile, message you, or see anything you post. They are not told.",
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextSecondary,
                       fontSize: 13,
                       height: 1.35,
                     ),
@@ -152,12 +160,15 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
 
                   // Blocked Accounts List
                   if (filtered.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
                       child: Center(
                         child: Text(
                           'No blocked accounts found.',
-                          style: TextStyle(color: Colors.white38, fontSize: 14),
+                          style: TextStyle(
+                            color: context.themeTextMuted,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     )
@@ -186,7 +197,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                                   Text(
                                     user.username,
                                     style: AppTextStyles.bodyMedium.copyWith(
-                                      color: Colors.white,
+                                      color: context.themeTextPrimary,
                                       fontWeight: FontWeight.w700,
                                       fontSize: 14,
                                     ),
@@ -195,7 +206,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                                   Text(
                                     user.blockedDate,
                                     style: AppTextStyles.bodySmall.copyWith(
-                                      color: Colors.white38,
+                                      color: context.themeTextMuted,
                                       fontSize: 12,
                                     ),
                                   ),
@@ -212,16 +223,16 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                                   vertical: 8,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.cardBackground,
+                                  color: context.themeCardBackground,
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.12),
+                                    color: context.themeBorder,
                                   ),
                                 ),
                                 child: Text(
                                   'Unblock',
                                   style: AppTextStyles.bodyMedium.copyWith(
-                                    color: Colors.white,
+                                    color: context.themeTextPrimary,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 13,
                                   ),

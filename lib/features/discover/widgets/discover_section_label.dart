@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
 /// Small ALL-CAPS section label used throughout Discover screens.
@@ -13,7 +14,7 @@ class DiscoverSectionLabel extends StatelessWidget {
     return Text(
       label,
       style: AppTextStyles.labelSmall.copyWith(
-        color: Colors.white54,
+        color: context.themeTextMuted,
         letterSpacing: 1.2,
       ),
     );

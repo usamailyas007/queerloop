@@ -115,7 +115,18 @@ class HomeFeedProvider extends ChangeNotifier {
   }
 
   void setBottomNavIndex(int index) {
+    if (index == 0 && _bottomNavIndex != 0) {
+      _activeTopTab = TopTab.forYou;
+    }
     _bottomNavIndex = index;
+    notifyListeners();
+  }
+
+  void resetToHome() {
+    _bottomNavIndex = 0;
+    _activeTopTab = TopTab.forYou;
+    _activeSubMode = SubMode.reels;
+    _selectedCommunityFilter = 'All Communities';
     notifyListeners();
   }
 

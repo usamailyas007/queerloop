@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_snackbar.dart';
@@ -13,38 +15,41 @@ class DeleteAccountScreen extends StatelessWidget {
 
   final String username;
 
-  Widget _buildConsequenceCard({
+  Widget _buildConsequenceCard(
+    BuildContext context, {
+    required Widget iconWidget,
     required String text,
-    required bool isPositive,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
-        vertical: AppSpacing.md,
+        vertical: 14,
       ),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(16),
+        color: context.themeCardBackground,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: context.themeBorder,
+          width: 1.1,
         ),
       ),
       child: Row(
         children: <Widget>[
-          Icon(
-            isPositive ? Icons.check_rounded : Icons.close_rounded,
-            color: AppColors.gradientCyan,
-            size: 18,
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: Center(child: iconWidget),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
               text,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white70,
+                color: context.themeTextPrimary,
                 fontSize: 13,
                 height: 1.3,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -57,13 +62,14 @@ class DeleteAccountScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final String cleanUsername =
         username.startsWith('@') ? username : '@$username';
+    final bool isDark = context.isDarkMode;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
-            // ── Top Header Bar ──────────────────────────────────────────────
+            // ── Top Header Bar (Back button + Delete account centered title) ──
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.lg,
@@ -77,12 +83,20 @@ class DeleteAccountScreen extends StatelessWidget {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -92,132 +106,159 @@ class DeleteAccountScreen extends StatelessWidget {
                       'Delete account',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 17,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 38), // Balance spacing
+                  const SizedBox(width: 38),
                 ],
               ),
             ),
 
             // ── Main Content Body ───────────────────────────────────────────
             Expanded(
-              child: ListView(
+              child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                children: <Widget>[
-                  const SizedBox(height: AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const SizedBox(height: AppSpacing.lg),
 
-                  // Cyan Trash Badge Icon
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Container(
-                      width: 54,
-                      height: 54,
+                    // Top Cyan Trash Icon Badge Box matching reference design
+                    Container(
+                      width: 56,
+                      height: 56,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0D2A30),
-                        borderRadius: BorderRadius.circular(16),
+                        color: isDark
+                            ? const Color(0xFF003840).withValues(alpha: 0.45)
+                            : const Color(0xFFE0F7FA),
+                        borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: AppColors.gradientCyan.withValues(alpha: 0.3),
+                          color: AppColors.gradientCyan.withValues(
+                            alpha: isDark ? 0.3 : 0.35,
+                          ),
+                          width: 1.1,
                         ),
                       ),
-                      child: const Icon(
-                        Icons.delete_outline_rounded,
-                        color: AppColors.gradientCyan,
-                        size: 26,
+                      child: Center(
+                        child: SvgPicture.asset(
+                          AppIcons.delete,
+                          width: 22,
+                          height: 22,
+                          colorFilter: const ColorFilter.mode(
+                            AppColors.gradientCyan,
+                            BlendMode.srcIn,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: AppSpacing.lg),
+                    const SizedBox(height: AppSpacing.xl),
 
-                  // Main Title
-                  Text(
-                    "This can't be undone",
-                    style: AppTextStyles.headingMedium.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 22,
-                    ),
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  // Subtitle
-                  Text(
-                    "Here's exactly what happens when you confirm.",
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
-                      fontSize: 13,
-                      height: 1.35,
-                    ),
-                  ),
-
-                  const SizedBox(height: AppSpacing.xl),
-
-                  // 3 Consequence List Cards
-                  _buildConsequenceCard(
-                    text: 'All posts, comments and messages are erased within 30 days',
-                    isPositive: false,
-                  ),
-                  _buildConsequenceCard(
-                    text: '$cleanUsername is released and can be claimed by someone else',
-                    isPositive: false,
-                  ),
-                  _buildConsequenceCard(
-                    text: 'Reports you filed stay with moderation, without your name',
-                    isPositive: true,
-                  ),
-
-                  const SizedBox(height: AppSpacing.xxl),
-                ],
-              ),
-            ),
-
-            // ── Bottom Action Button ────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: GestureDetector(
-                onTap: () {
-                  final ScaffoldMessengerState messenger =
-                      ScaffoldMessenger.of(context);
-                  Navigator.pop(context);
-                  AppSnackBar.show(
-                    context,
-                    messenger: messenger,
-                    title: 'Account deletion requested',
-                    subtitle: 'Your account will be erased within 30 days',
-                    icon: const Icon(
-                      Icons.delete_outline_rounded,
-                      color: AppColors.gradientCyan,
-                      size: 18,
-                    ),
-                    actionLabel: null,
-                  );
-                },
-                child: Container(
-                  width: double.infinity,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0D2A30),
-                    borderRadius: BorderRadius.circular(26),
-                    border: Border.all(
-                      color: AppColors.gradientCyan,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Delete my account',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.gradientCyan,
+                    // Title
+                    Text(
+                      "This can't be undone",
+                      style: AppTextStyles.titleLarge.copyWith(
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
-                        fontSize: 15,
+                        fontSize: 24,
                       ),
                     ),
-                  ),
+
+                    const SizedBox(height: AppSpacing.xs),
+
+                    // Subtitle
+                    Text(
+                      "Here's exactly what happens when you confirm.",
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: context.themeTextSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+
+                    const SizedBox(height: AppSpacing.xxl),
+
+                    // 1. All posts, comments erased within 30 days
+                    _buildConsequenceCard(
+                      context,
+                      iconWidget: Icon(
+                        Icons.close_rounded,
+                        color: isDark
+                            ? Colors.white70
+                            : const Color(0xFF334155),
+                        size: 18,
+                      ),
+                      text:
+                          'All posts, comments and messages are erased within 30 days',
+                    ),
+
+                    // 2. @username released and can be claimed by someone else
+                    _buildConsequenceCard(
+                      context,
+                      iconWidget: Icon(
+                        Icons.close_rounded,
+                        color: isDark
+                            ? Colors.white70
+                            : const Color(0xFF334155),
+                        size: 18,
+                      ),
+                      text:
+                          '$cleanUsername is released and can be claimed by someone else',
+                    ),
+
+                    // 3. Reports stay with moderation without your name
+                    _buildConsequenceCard(
+                      context,
+                      iconWidget: const Icon(
+                        Icons.check_rounded,
+                        color: Color(0xFF10B981),
+                        size: 18,
+                      ),
+                      text:
+                          'Reports you filed stay with moderation, without your name',
+                    ),
+
+                    const Spacer(),
+
+                    // Bottom "Delete my account" outlined button
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pop(context);
+                        AppSnackBar.show(
+                          context,
+                          title: 'Account deletion initiated',
+                          subtitle:
+                              'You have 30 days to log back in and cancel.',
+                        );
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: context.themeCardBackground,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: context.themeBorder,
+                            width: 1.1,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Delete my account',
+                            style: TextStyle(
+                              color: context.themeTextPrimary,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
                 ),
               ),
             ),

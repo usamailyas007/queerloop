@@ -17,9 +17,9 @@ class DiscoverStaticSearchBar extends StatelessWidget {
     return Container(
       height: AppSizes.fieldHeight,
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: context.themeCardBackground,
         borderRadius: BorderRadius.circular(AppRadius.input),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        border: Border.all(color: context.themeBorder),
       ),
       child: Row(
         children: <Widget>[
@@ -28,13 +28,18 @@ class DiscoverStaticSearchBar extends StatelessWidget {
             AppIcons.search,
             width: AppSizes.iconMd,
             height: AppSizes.iconMd,
-            colorFilter: const ColorFilter.mode(
-              Colors.white38,
+            colorFilter: ColorFilter.mode(
+              context.themeIconMuted,
               BlendMode.srcIn,
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Text(hint, style: AppTextStyles.inputHintText),
+          Text(
+            hint,
+            style: AppTextStyles.inputHintText.copyWith(
+              color: context.themeTextMuted,
+            ),
+          ),
         ],
       ),
     );

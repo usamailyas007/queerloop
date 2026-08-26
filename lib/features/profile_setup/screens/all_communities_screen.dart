@@ -38,7 +38,7 @@ class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -53,7 +53,10 @@ class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
                   const SizedBox(width: AppSpacing.lg),
                   Text(
                     l10n.profileAllCommunitiesTitle,
-                    style: AppTextStyles.authHeaderTitle.copyWith(fontSize: 22),
+                    style: AppTextStyles.authHeaderTitle.copyWith(
+                      fontSize: 22,
+                      color: context.themeTextPrimary,
+                    ),
                   ),
                 ],
               ),

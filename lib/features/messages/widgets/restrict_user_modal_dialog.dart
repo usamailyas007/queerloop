@@ -35,6 +35,7 @@ class RestrictUserModalDialog extends StatelessWidget {
   }
 
   Widget _buildBenefitCard({
+    required BuildContext context,
     required String text,
     required bool isPositive,
   }) {
@@ -45,17 +46,19 @@ class RestrictUserModalDialog extends StatelessWidget {
         vertical: AppSpacing.md - 2,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: context.isDarkMode
+            ? Colors.white.withValues(alpha: 0.04)
+            : Colors.black.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: context.themeBorder,
         ),
       ),
       child: Row(
         children: <Widget>[
           Icon(
             isPositive ? Icons.check_rounded : Icons.close_rounded,
-            color: isPositive ? AppColors.gradientCyan : Colors.white38,
+            color: isPositive ? AppColors.gradientCyan : context.themeTextMuted,
             size: 18,
           ),
           const SizedBox(width: AppSpacing.md),
@@ -63,7 +66,7 @@ class RestrictUserModalDialog extends StatelessWidget {
             child: Text(
               text,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white70,
+                color: context.themeTextSecondary,
                 fontSize: 12,
                 height: 1.25,
               ),
@@ -85,14 +88,14 @@ class RestrictUserModalDialog extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.xl),
         decoration: BoxDecoration(
-          color: const Color(0xFF191622),
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: context.themeBorder,
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.5),
+              color: Colors.black.withValues(alpha: context.isDarkMode ? 0.5 : 0.08),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -106,10 +109,10 @@ class RestrictUserModalDialog extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
+                color: context.themeCyanBadgeBackground,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.12),
+                  color: AppColors.gradientCyan.withValues(alpha: 0.25),
                 ),
               ),
               child: Center(
@@ -118,7 +121,7 @@ class RestrictUserModalDialog extends StatelessWidget {
                   width: 22,
                   height: 22,
                   colorFilter: const ColorFilter.mode(
-                    Colors.white70,
+                    AppColors.gradientCyan,
                     BlendMode.srcIn,
                   ),
                 ),
@@ -132,7 +135,7 @@ class RestrictUserModalDialog extends StatelessWidget {
               'Restrict $cleanUsername?',
               textAlign: TextAlign.center,
               style: AppTextStyles.titleMedium.copyWith(
-                color: Colors.white,
+                color: context.themeTextPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
               ),
@@ -145,7 +148,7 @@ class RestrictUserModalDialog extends StatelessWidget {
               "A quieter option than blocking. Here's exactly what changes:",
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white54,
+                color: context.themeTextSecondary,
                 fontSize: 12,
                 height: 1.35,
               ),
@@ -155,18 +158,22 @@ class RestrictUserModalDialog extends StatelessWidget {
 
             // 4 Benefit Cards
             _buildBenefitCard(
+              context: context,
               text: 'Their messages move to your requests tray silently',
               isPositive: true,
             ),
             _buildBenefitCard(
+              context: context,
               text: 'Their comments on your posts show only to them',
               isPositive: true,
             ),
             _buildBenefitCard(
+              context: context,
               text: "They can't see when you're active or if you've read anything",
               isPositive: true,
             ),
             _buildBenefitCard(
+              context: context,
               text: 'They keep following you and are never told',
               isPositive: false,
             ),
@@ -185,9 +192,9 @@ class RestrictUserModalDialog extends StatelessWidget {
                 AppSnackBar.show(
                   context,
                   messenger: messenger,
-                  title: '$cleanUsername restrict',
+                  title: '$cleanUsername restricted',
                   subtitle:
-                      'Their comments only shows to them, DMs sent to the requests',
+                      'Their comments only show to them, DMs sent to requests',
                   icon: SvgPicture.asset(
                     AppIcons.hide,
                     width: 18,

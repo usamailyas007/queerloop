@@ -71,9 +71,9 @@ class _PronounsBottomSheetState extends State<PronounsBottomSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
@@ -91,7 +91,7 @@ class _PronounsBottomSheetState extends State<PronounsBottomSheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: context.themeBorderStrong,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -108,7 +108,7 @@ class _PronounsBottomSheetState extends State<PronounsBottomSheet> {
                   child: Text(
                     'Cancel',
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       fontSize: 14,
                     ),
                   ),
@@ -116,7 +116,7 @@ class _PronounsBottomSheetState extends State<PronounsBottomSheet> {
                 Text(
                   'Pronouns',
                   style: AppTextStyles.titleMedium.copyWith(
-                    color: Colors.white,
+                    color: context.themeTextPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 17,
                   ),
@@ -154,7 +154,7 @@ class _PronounsBottomSheetState extends State<PronounsBottomSheet> {
             Text(
               'Pick as many as fit. They sit next to your name everywhere in the app.',
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white54,
+                color: context.themeTextSecondary,
                 fontSize: 13,
                 height: 1.35,
               ),
@@ -181,18 +181,20 @@ class _PronounsBottomSheetState extends State<PronounsBottomSheet> {
                       gradient: isSelected
                           ? AppColors.primaryGradientButton
                           : null,
-                      color: isSelected ? null : AppColors.cardBackground,
+                      color: isSelected ? null : context.themeCardBackground,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isSelected
                             ? Colors.transparent
-                            : Colors.white.withValues(alpha: 0.1),
+                            : context.themeBorder,
                       ),
                     ),
                     child: Text(
                       item,
                       style: TextStyle(
-                        color: Colors.white,
+                        color: isSelected
+                            ? Colors.white
+                            : context.themeTextPrimary,
                         fontWeight:
                             isSelected ? FontWeight.w700 : FontWeight.w500,
                         fontSize: 13,

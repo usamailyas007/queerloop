@@ -119,7 +119,7 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -139,12 +139,20 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -154,7 +162,7 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
                   Text(
                     'New Video',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -194,7 +202,7 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(AppRadius.card),
                   child: Container(
-                    color: const Color(0xFF1E1B26),
+                    color: context.themeCardBackground,
                     child: GestureDetector(
                       onTap: _togglePlayPause,
                       child: Stack(
@@ -215,10 +223,12 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
                           else if (selectedItem != null)
                             MediaThumbnailWidget(item: selectedItem)
                           else
-                            const Center(
+                            Center(
                               child: Text(
                                 'Select a video from your gallery below',
-                                style: TextStyle(color: Colors.white54),
+                                style: TextStyle(
+                                  color: context.themeTextMuted,
+                                ),
                               ),
                             ),
 
@@ -276,14 +286,14 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
                       Text(
                         'Recents',
                         style: AppTextStyles.titleSmall.copyWith(
-                          color: Colors.white,
+                          color: context.themeTextPrimary,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(
+                      Icon(
                         Icons.keyboard_arrow_down_rounded,
-                        color: Colors.white70,
+                        color: context.themeIconMuted,
                         size: 20,
                       ),
                     ],
@@ -294,7 +304,7 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
                         Text(
                           '${provider.videoGallery.length} selected',
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: Colors.white54,
+                            color: context.themeTextMuted,
                             fontSize: 12,
                           ),
                         ),
@@ -312,8 +322,9 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
+                            color: context.themeChipBackground,
                             borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: context.themeBorder),
                           ),
                           child: const Icon(
                             Icons.add_photo_alternate_rounded,

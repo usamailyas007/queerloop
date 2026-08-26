@@ -29,24 +29,30 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildOptionTile({
+  Widget _buildOptionTile(
+    BuildContext context, {
     required Widget iconWidget,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
-    Color titleColor = Colors.white,
+    Color? titleColor,
   }) {
+    final bool isDark = context.isDarkMode;
+    final Color finalTitleColor = titleColor ?? context.themeTextPrimary;
+    final bool isCyan = titleColor == AppColors.gradientCyan;
+
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Material(
-        color: AppColors.cardBackground,
+        color: context.themeCardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
         clipBehavior: Clip.antiAlias,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
+              color: isCyan ? AppColors.gradientCyan : context.themeBorder,
+              width: isCyan ? 1.4 : 1.0,
             ),
           ),
           child: ListTile(
@@ -56,20 +62,32 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
               vertical: 4,
             ),
             leading: Container(
-              width: 36,
-              height: 36,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: titleColor == AppColors.gradientCyan
-                    ? AppColors.gradientCyan.withValues(alpha: 0.12)
-                    : Colors.white.withValues(alpha: 0.06),
+                color: isDark
+                    ? (isCyan
+                        ? AppColors.gradientCyan.withValues(alpha: 0.15)
+                        : Colors.white.withValues(alpha: 0.08))
+                    : Colors.transparent,
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark
+                      ? (isCyan
+                          ? AppColors.gradientCyan.withValues(alpha: 0.3)
+                          : Colors.white.withValues(alpha: 0.12))
+                      : (isCyan
+                          ? AppColors.gradientCyan.withValues(alpha: 0.4)
+                          : context.themeBorder),
+                  width: 1.1,
+                ),
               ),
               child: Center(child: iconWidget),
             ),
             title: Text(
               title,
               style: AppTextStyles.bodyMedium.copyWith(
-                color: titleColor,
+                color: finalTitleColor,
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
               ),
@@ -77,13 +95,13 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
             subtitle: Text(
               subtitle,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white54,
+                color: context.themeTextMuted,
                 fontSize: 12,
               ),
             ),
-            trailing: const Icon(
+            trailing: Icon(
               Icons.chevron_right_rounded,
-              color: Colors.white38,
+              color: context.themeIconMuted,
               size: 20,
             ),
           ),
@@ -98,9 +116,9 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
         username.startsWith('@') ? username : '@$username';
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.vertical(
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(
           top: Radius.circular(24),
         ),
       ),
@@ -119,7 +137,7 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                 width: 38,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: context.themeBorderStrong,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -131,7 +149,7 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
             Text(
               cleanHandle,
               style: AppTextStyles.titleLarge.copyWith(
-                color: Colors.white,
+                color: context.themeTextPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
               ),
@@ -140,7 +158,7 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
             Text(
               "Everything here is between you and this account — they're never notified which option you chose.",
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white54,
+                color: context.themeTextSecondary,
                 fontSize: 12,
                 height: 1.3,
               ),
@@ -150,12 +168,13 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
 
             // 1. Restrict Option
             _buildOptionTile(
+              context,
               iconWidget: SvgPicture.asset(
                 AppIcons.hide,
                 width: 18,
                 height: 18,
-                colorFilter: const ColorFilter.mode(
-                  Colors.white70,
+                colorFilter: ColorFilter.mode(
+                  context.themeTextSecondary,
                   BlendMode.srcIn,
                 ),
               ),
@@ -193,12 +212,13 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
 
             // 2. Hide Content Option
             _buildOptionTile(
+              context,
               iconWidget: SvgPicture.asset(
                 AppIcons.hide,
                 width: 18,
                 height: 18,
-                colorFilter: const ColorFilter.mode(
-                  Colors.white70,
+                colorFilter: ColorFilter.mode(
+                  context.themeTextSecondary,
                   BlendMode.srcIn,
                 ),
               ),
@@ -220,12 +240,13 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
 
             // 3. Mute Option
             _buildOptionTile(
+              context,
               iconWidget: SvgPicture.asset(
                 AppIcons.mute,
                 width: 18,
                 height: 18,
-                colorFilter: const ColorFilter.mode(
-                  Colors.white70,
+                colorFilter: ColorFilter.mode(
+                  context.themeTextSecondary,
                   BlendMode.srcIn,
                 ),
               ),
@@ -243,6 +264,7 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
 
             // 4. Block Option
             _buildOptionTile(
+              context,
               iconWidget: const Icon(
                 Icons.block_rounded,
                 color: AppColors.gradientCyan,
@@ -263,6 +285,7 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
 
             // 5. Report Option
             _buildOptionTile(
+              context,
               iconWidget: SvgPicture.asset(
                 AppIcons.report,
                 width: 18,

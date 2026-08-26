@@ -52,7 +52,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
     final bool hasContent = _contentController.text.trim().isNotEmpty;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -71,7 +71,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
                     child: Text(
                       'Cancel',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white54,
+                        color: context.themeTextMuted,
                       ),
                     ),
                   ),
@@ -80,7 +80,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
                   Text(
                     'Write a post',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -128,14 +128,14 @@ class _WritePostScreenState extends State<WritePostScreen> {
                           Text(
                             'ashinorbit',
                             style: AppTextStyles.titleSmall.copyWith(
-                              color: Colors.white,
+                              color: context.themeTextPrimary,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           Text(
                             'she/they',
                             style: AppTextStyles.caption.copyWith(
-                              color: Colors.white54,
+                              color: context.themeTextMuted,
                             ),
                           ),
                         ],
@@ -179,17 +179,17 @@ class _WritePostScreenState extends State<WritePostScreen> {
                               vertical: AppSpacing.xs,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.cardBackground,
+                              color: context.themeCardBackground,
                               borderRadius:
                                   BorderRadius.circular(AppRadius.pill),
                               border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.12),
+                                color: context.themeBorder,
                               ),
                             ),
                             child: Text(
                               tag,
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: Colors.white70,
+                                color: context.themeTextSecondary,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -212,17 +212,17 @@ class _WritePostScreenState extends State<WritePostScreen> {
                               vertical: AppSpacing.xs,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.05),
+                              color: context.themeChipBackground,
                               borderRadius:
                                   BorderRadius.circular(AppRadius.pill),
                               border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.15),
+                                color: context.themeBorder,
                               ),
                             ),
                             child: Text(
                               '+ Add tag',
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: Colors.white70,
+                                color: context.themeTextSecondary,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -251,17 +251,17 @@ class _WritePostScreenState extends State<WritePostScreen> {
                           vertical: AppSpacing.md,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.cardBackground,
+                          color: context.themeCardBackground,
                           borderRadius: BorderRadius.circular(AppRadius.card),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.08),
+                            color: context.themeBorder,
                           ),
                         ),
                         child: Row(
                           children: <Widget>[
-                            const Icon(
+                            Icon(
                               Icons.language_rounded,
-                              color: Colors.white70,
+                              color: context.themeIconMuted,
                               size: 20,
                             ),
                             const SizedBox(width: AppSpacing.md),
@@ -269,14 +269,14 @@ class _WritePostScreenState extends State<WritePostScreen> {
                               child: Text(
                                 _visibilityLabel(provider.visibility),
                                 style: AppTextStyles.bodyMedium.copyWith(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
-                            const Icon(
+                            Icon(
                               Icons.chevron_right_rounded,
-                              color: Colors.white38,
+                              color: context.themeIconMuted,
                               size: 20,
                             ),
                           ],

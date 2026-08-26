@@ -24,17 +24,28 @@ class DiscoverConversationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: <Color>[Color(0xFF2A1040), Color(0xFF1A1030)],
+        color: isDark ? null : Colors.white,
+        gradient: LinearGradient(
+          colors: isDark
+              ? const <Color>[Color(0xFF2A1040), Color(0xFF1A1030)]
+              : const <Color>[
+                  Color(0x24FF3B77), // #FF3B77 with 14% opacity
+                  Color(0x248B5CFF), // #8B5CFF with 14% opacity
+                ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(AppRadius.card),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: AppColors.gradientPurple.withValues(alpha: 0.4),
+          color: isDark
+              ? AppColors.gradientPurple.withValues(alpha: 0.4)
+              : const Color(0xFF8B5CFF).withValues(alpha: 0.25),
+          width: 1.2,
         ),
       ),
       child: Column(
@@ -43,47 +54,59 @@ class DiscoverConversationCard extends StatelessWidget {
           Text(
             "TODAY'S QUESTION",
             style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.gradientCyan,
+              color: isDark
+                  ? AppColors.gradientCyan
+                  : const Color(0xFF9D7BFF),
+              fontWeight: FontWeight.w700,
               letterSpacing: 1.2,
+              fontSize: 11,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             'What does chosen family mean to you?',
-            style: AppTextStyles.titleSmall.copyWith(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.themeTextPrimary,
+              fontSize: 16,
               fontWeight: FontWeight.w700,
-              height: 1.4,
+              height: 1.35,
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: 6),
           Text(
-            '5.1K people from over mid — add your voice, or see what others said',
-            style: AppTextStyles.bodySmall.copyWith(
-              color: Colors.white54,
+            '2,140 people have answered — add your voice, or just read what others said.',
+            style: TextStyle(
+              color: context.themeTextSecondary,
+              fontSize: 12,
               height: 1.35,
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: <Widget>[
-              // Stacked avatars
+              // Stacked overlapping avatars
               SizedBox(
-                width: 72,
-                height: 26,
+                width: 48,
+                height: 28,
                 child: Stack(
                   children: <Widget>[
                     Positioned(
                       left: 0,
-                      child: _StackedAvatar(imageAsset: AppImages.user1),
+                      child: _StackedAvatar(
+                        imageAsset: AppImages.user1,
+                        borderColor: isDark
+                            ? const Color(0xFF2A1040)
+                            : const Color(0xFF1E1B26),
+                      ),
                     ),
                     Positioned(
-                      left: 18,
-                      child: _StackedAvatar(imageAsset: AppImages.user2),
-                    ),
-                    Positioned(
-                      left: 36,
-                      child: _StackedAvatar(imageAsset: AppImages.user3),
+                      left: 20,
+                      child: _StackedAvatar(
+                        imageAsset: AppImages.user2,
+                        borderColor: isDark
+                            ? const Color(0xFF2A1040)
+                            : const Color(0xFF1E1B26),
+                      ),
                     ),
                   ],
                 ),
@@ -91,15 +114,18 @@ class DiscoverConversationCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Text(
                 '2.1K answered',
-                style:
-                    AppTextStyles.bodySmall.copyWith(color: Colors.white54),
+                style: TextStyle(
+                  color: context.themeTextSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               const Spacer(),
               AppGradientButton(
                 text: 'Answer',
                 onPressed: () => _showAnswersBottomSheet(context),
-                height: 34,
-                width: 80,
+                height: 36,
+                width: 88,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
               ),
             ],
@@ -111,16 +137,20 @@ class DiscoverConversationCard extends StatelessWidget {
 }
 
 class _StackedAvatar extends StatelessWidget {
-  const _StackedAvatar({required this.imageAsset});
+  const _StackedAvatar({
+    required this.imageAsset,
+    required this.borderColor,
+  });
 
   final String imageAsset;
+  final Color borderColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF2A1040), width: 2),
+        border: Border.all(color: borderColor, width: 2),
       ),
       child: ClipOval(
         child: Image.asset(

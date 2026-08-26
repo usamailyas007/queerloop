@@ -51,9 +51,9 @@ class _WhoCanSeeThisBottomSheetState
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: SafeArea(
@@ -68,7 +68,7 @@ class _WhoCanSeeThisBottomSheetState
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: context.themeBorderStrong,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -82,7 +82,10 @@ class _WhoCanSeeThisBottomSheetState
               children: <Widget>[
                 Text(
                   'Who can see this?',
-                  style: AppTextStyles.headingMedium.copyWith(fontSize: 20),
+                  style: AppTextStyles.headingMedium.copyWith(
+                    color: context.themeTextPrimary,
+                    fontSize: 20,
+                  ),
                 ),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
@@ -90,12 +93,20 @@ class _WhoCanSeeThisBottomSheetState
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
+                      color: context.isDarkMode
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.transparent,
                       shape: BoxShape.circle,
+                      border: Border.all(
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : context.themeBorder,
+                        width: 1.1,
+                      ),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.close_rounded,
-                      color: Colors.white70,
+                      color: context.themeIconMuted,
                       size: 18,
                     ),
                   ),
@@ -109,7 +120,7 @@ class _WhoCanSeeThisBottomSheetState
             Text(
               "Set this before you post — visibility can't be changed afterwards.",
               style: AppTextStyles.authHeaderSub.copyWith(
-                color: Colors.white54,
+                color: context.themeTextSecondary,
                 fontSize: 13,
                 height: 1.4,
               ),
@@ -194,12 +205,12 @@ class _VisibilityOptionTile extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
             color: isSelected
                 ? AppColors.gradientCyan
-                : Colors.white.withValues(alpha: 0.08),
+                : context.themeBorder,
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
@@ -207,7 +218,9 @@ class _VisibilityOptionTile extends StatelessWidget {
           children: <Widget>[
             Icon(
               icon,
-              color: isSelected ? AppColors.gradientCyan : Colors.white70,
+              color: isSelected
+                  ? AppColors.gradientCyan
+                  : context.themeTextSecondary,
               size: 22,
             ),
             const SizedBox(width: AppSpacing.md),
@@ -218,7 +231,7 @@ class _VisibilityOptionTile extends StatelessWidget {
                   Text(
                     title,
                     style: AppTextStyles.titleSmall.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -226,7 +239,7 @@ class _VisibilityOptionTile extends StatelessWidget {
                   Text(
                     subtitle,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       fontSize: 12,
                     ),
                   ),

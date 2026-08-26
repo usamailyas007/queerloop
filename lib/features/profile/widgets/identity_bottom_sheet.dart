@@ -99,9 +99,9 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
         .toList();
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
         top: AppSpacing.md,
@@ -122,7 +122,7 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: context.themeBorderStrong,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -139,7 +139,7 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
                     child: Text(
                       'Cancel',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white54,
+                        color: context.themeTextMuted,
                         fontSize: 14,
                       ),
                     ),
@@ -147,7 +147,7 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
                   Text(
                     'Identity',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 17,
                     ),
@@ -185,7 +185,7 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
               Text(
                 'Add as many or as few as you want. Nothing here is required, and you can remove them at any time.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: Colors.white54,
+                  color: context.themeTextSecondary,
                   fontSize: 13,
                   height: 1.35,
                 ),
@@ -248,7 +248,7 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
                 Text(
                   'ADD MORE',
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: Colors.white54,
+                    color: context.themeTextMuted,
                     letterSpacing: 1.2,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -270,16 +270,16 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
                           vertical: 9,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.cardBackground,
+                          color: context.themeCardBackground,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
+                            color: context.themeBorder,
                           ),
                         ),
                         child: Text(
                           item,
-                          style: const TextStyle(
-                            color: Colors.white70,
+                          style: TextStyle(
+                            color: context.themeTextSecondary,
                             fontWeight: FontWeight.w500,
                             fontSize: 13,
                           ),
@@ -295,7 +295,7 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
               Text(
                 'NOT LISTED? WRITE YOUR OWN',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: Colors.white54,
+                  color: context.themeTextMuted,
                   letterSpacing: 1.2,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -26,8 +27,8 @@ class SearchRecentTile extends StatelessWidget {
             AppIcons.clock,
             width: AppSizes.iconMd,
             height: AppSizes.iconMd,
-            colorFilter: const ColorFilter.mode(
-              Colors.white38,
+            colorFilter: ColorFilter.mode(
+              context.themeIconMuted,
               BlendMode.srcIn,
             ),
           ),
@@ -35,7 +36,9 @@ class SearchRecentTile extends StatelessWidget {
           Expanded(
             child: Text(
               query,
-              style: AppTextStyles.bodyMedium.copyWith(color: Colors.white70),
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: context.themeTextPrimary,
+              ),
             ),
           ),
           GestureDetector(
@@ -44,8 +47,8 @@ class SearchRecentTile extends StatelessWidget {
               AppIcons.cross,
               width: AppSizes.iconMd,
               height: AppSizes.iconMd,
-              colorFilter: const ColorFilter.mode(
-                Colors.white38,
+              colorFilter: ColorFilter.mode(
+                context.themeIconMuted,
                 BlendMode.srcIn,
               ),
             ),

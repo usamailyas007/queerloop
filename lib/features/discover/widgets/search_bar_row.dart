@@ -49,8 +49,10 @@ class SearchBarRow extends StatelessWidget {
             child: Text(
               'Cancel',
               style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.gradientCyan,
-                fontWeight: FontWeight.w500,
+                color: context.isDarkMode
+                    ? AppColors.gradientCyan
+                    : context.themeTextPrimary,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),

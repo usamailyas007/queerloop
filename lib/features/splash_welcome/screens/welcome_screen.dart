@@ -100,9 +100,10 @@ class _WelcomeScreenContent extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final List<OnboardingPageModel> pages = _buildPages(l10n);
     final OnboardingProvider provider = context.watch<OnboardingProvider>();
+    final bool isDark = context.isDarkMode;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -116,7 +117,9 @@ class _WelcomeScreenContent extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     '0${provider.currentPage + 1} / 0${pages.length}',
-                    style: AppTextStyles.timerText,
+                    style: AppTextStyles.timerText.copyWith(
+                      color: context.themeTextMuted,
+                    ),
                   ),
                   const Spacer(),
                   if (!provider.isLastPage)
@@ -128,13 +131,22 @@ class _WelcomeScreenContent extends StatelessWidget {
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.white24),
-                          color: const Color(0xFF2B2534).withValues(alpha: 0.8),
+                          color: isDark
+                              ? const Color(0xFF2B2534).withValues(alpha: 0.8)
+                              : const Color(0xFFEDEDF2),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white24
+                                : context.themeBorder,
+                            width: 1.1,
+                          ),
                           borderRadius: BorderRadius.circular(AppRadius.pill),
                         ),
                         child: Text(
                           l10n.onboardingSkip,
-                          style: AppTextStyles.onboardingSkipText,
+                          style: AppTextStyles.onboardingSkipText.copyWith(
+                            color: context.themeTextPrimary,
+                          ),
                         ),
                       ),
                     ),
@@ -210,10 +222,10 @@ class _OnboardingPage extends StatelessWidget {
                 fit: BoxFit.cover,
                 width: double.infinity,
                 errorBuilder: (context, error, stackTrace) => Container(
-                  color: const Color(0xFF1E1B26),
-                  child: const Icon(
+                  color: context.themeCardBackground,
+                  child: Icon(
                     Icons.image_outlined,
-                    color: Colors.white38,
+                    color: context.themeIconMuted,
                     size: 48,
                   ),
                 ),
@@ -224,12 +236,22 @@ class _OnboardingPage extends StatelessWidget {
           const SizedBox(height: AppSpacing.xl),
 
           // Title
-          Text(model.title, style: AppTextStyles.onboardingTitle),
+          Text(
+            model.title,
+            style: AppTextStyles.onboardingTitle.copyWith(
+              color: context.themeTextPrimary,
+            ),
+          ),
 
           const SizedBox(height: AppSpacing.md),
 
           // Description
-          Text(model.description, style: AppTextStyles.onboardingDesc),
+          Text(
+            model.description,
+            style: AppTextStyles.onboardingDesc.copyWith(
+              color: context.themeTextSecondary,
+            ),
+          ),
         ],
       ),
     );
@@ -244,6 +266,8 @@ class _DotsIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List<Widget>.generate(count, (int index) {
@@ -256,7 +280,11 @@ class _DotsIndicator extends StatelessWidget {
           height: AppSpacing.sm,
           decoration: BoxDecoration(
             gradient: isActive ? AppColors.primaryGradientButton : null,
-            color: isActive ? null : Colors.white.withValues(alpha: 0.25),
+            color: isActive
+                ? null
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.25)
+                    : Colors.black.withValues(alpha: 0.15)),
             borderRadius: BorderRadius.circular(AppRadius.pill),
           ),
         );

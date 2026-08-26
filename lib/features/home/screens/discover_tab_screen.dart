@@ -15,6 +15,35 @@ class DiscoverTabScreen extends StatelessWidget {
 
   final bool isGuest;
 
+  void _handleTrendingTap(
+    BuildContext context, {
+    required String hashtag,
+    required String postsCount,
+    required Color rankColor,
+  }) {
+    if (isGuest) {
+      GuestActionModalDialog.show(
+        context,
+        title: 'Sign up to explore trending posts',
+        subtitle:
+            'Create a free account to view full trending discussions, interact, and save posts. Browsing stays free forever.',
+        iconData: Icons.tag_rounded,
+      );
+      return;
+    }
+
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => HashtagPostsScreen(
+          hashtag: hashtag,
+          postsCount: postsCount,
+          rankColor: rankColor,
+        ),
+      ),
+    );
+  }
+
   void _handleCommunityTap(BuildContext context, String communityName) {
     if (isGuest) {
       final AppLocalizations l10n = AppLocalizations.of(context);
@@ -32,7 +61,7 @@ class DiscoverTabScreen extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.symmetric(
@@ -44,15 +73,33 @@ class DiscoverTabScreen extends StatelessWidget {
             // Title: "Discover"
             Text(
               l10n.guestDiscoverTitle,
-              style: AppTextStyles.headingMedium.copyWith(color: Colors.white),
+              style: AppTextStyles.headingMedium.copyWith(
+                color: context.themeTextPrimary,
+              ),
             ),
 
             const SizedBox(height: AppSpacing.md),
 
             // Reusable TextField Widget: AppTextField
-            AppTextField(
-              hintText: l10n.guestDiscoverSearchHint,
-              prefixIconPath: AppIcons.search,
+            GestureDetector(
+              onTap: isGuest
+                  ? () {
+                      GuestActionModalDialog.show(
+                        context,
+                        title: 'Sign up to search QueerLoop+',
+                        subtitle:
+                            'Create a free account to search creators, tags, and communities.',
+                        iconData: Icons.search_rounded,
+                      );
+                    }
+                  : null,
+              child: AbsorbPointer(
+                absorbing: isGuest,
+                child: AppTextField(
+                  hintText: l10n.guestDiscoverSearchHint,
+                  prefixIconPath: AppIcons.search,
+                ),
+              ),
             ),
 
             const SizedBox(height: AppSpacing.xl),
@@ -64,14 +111,14 @@ class DiscoverTabScreen extends StatelessWidget {
                 Text(
                   l10n.guestTrendingNow,
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: Colors.white54,
+                    color: context.themeTextMuted,
                     letterSpacing: 1.2,
                   ),
                 ),
                 Text(
                   l10n.guestWorldwide,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: Colors.white54,
+                    color: context.themeTextSecondary,
                   ),
                 ),
               ],
@@ -86,15 +133,11 @@ class DiscoverTabScreen extends StatelessWidget {
               hashtag: '#chosenfamily',
               postsCount: '28.4K posts today',
               thumbnailAsset: AppImages.forYouImg,
-              onTap: () => Navigator.push<void>(
+              onTap: () => _handleTrendingTap(
                 context,
-                MaterialPageRoute<void>(
-                  builder: (_) => const HashtagPostsScreen(
-                    hashtag: '#chosenfamily',
-                    postsCount: '28.4K posts today',
-                    rankColor: AppColors.gradientPink,
-                  ),
-                ),
+                hashtag: '#chosenfamily',
+                postsCount: '28.4K posts today',
+                rankColor: AppColors.gradientPink,
               ),
             ),
 
@@ -107,15 +150,11 @@ class DiscoverTabScreen extends StatelessWidget {
               hashtag: '#prideprep2026',
               postsCount: '19.7K posts today',
               thumbnailAsset: AppImages.followingImg,
-              onTap: () => Navigator.push<void>(
+              onTap: () => _handleTrendingTap(
                 context,
-                MaterialPageRoute<void>(
-                  builder: (_) => const HashtagPostsScreen(
-                    hashtag: '#prideprep2026',
-                    postsCount: '19.7K posts today',
-                    rankColor: AppColors.gradientPurple,
-                  ),
-                ),
+                hashtag: '#prideprep2026',
+                postsCount: '19.7K posts today',
+                rankColor: AppColors.gradientPurple,
               ),
             ),
 
@@ -128,15 +167,11 @@ class DiscoverTabScreen extends StatelessWidget {
               hashtag: '#binderfitcheck',
               postsCount: '11.2K posts today',
               thumbnailAsset: AppImages.communityImg,
-              onTap: () => Navigator.push<void>(
+              onTap: () => _handleTrendingTap(
                 context,
-                MaterialPageRoute<void>(
-                  builder: (_) => const HashtagPostsScreen(
-                    hashtag: '#binderfitcheck',
-                    postsCount: '11.2K posts today',
-                    rankColor: AppColors.gradientCyan,
-                  ),
-                ),
+                hashtag: '#binderfitcheck',
+                postsCount: '11.2K posts today',
+                rankColor: AppColors.gradientCyan,
               ),
             ),
 
@@ -149,15 +184,11 @@ class DiscoverTabScreen extends StatelessWidget {
               hashtag: '#queerbooktok',
               postsCount: '8.9K posts today',
               thumbnailAsset: AppImages.forYouImg,
-              onTap: () => Navigator.push<void>(
+              onTap: () => _handleTrendingTap(
                 context,
-                MaterialPageRoute<void>(
-                  builder: (_) => const HashtagPostsScreen(
-                    hashtag: '#queerbooktok',
-                    postsCount: '8.9K posts today',
-                    rankColor: AppColors.gradientPurple,
-                  ),
-                ),
+                hashtag: '#queerbooktok',
+                postsCount: '8.9K posts today',
+                rankColor: AppColors.gradientPurple,
               ),
             ),
 
@@ -167,7 +198,7 @@ class DiscoverTabScreen extends StatelessWidget {
             Text(
               l10n.guestBrowseCommunities,
               style: AppTextStyles.labelSmall.copyWith(
-                color: Colors.white54,
+                color: context.themeTextMuted,
                 letterSpacing: 1.2,
               ),
             ),
@@ -229,9 +260,9 @@ class _TrendingItemCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          border: Border.all(color: context.themeBorder),
         ),
         child: Row(
           children: <Widget>[
@@ -250,7 +281,7 @@ class _TrendingItemCard extends StatelessWidget {
                   Text(
                     hashtag,
                     style: AppTextStyles.titleSmall.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -258,7 +289,7 @@ class _TrendingItemCard extends StatelessWidget {
                   Text(
                     postsCount,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextSecondary,
                     ),
                   ),
                 ],
@@ -300,9 +331,9 @@ class _CommunityCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          border: Border.all(color: context.themeBorder),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,9 +350,9 @@ class _CommunityCard extends StatelessWidget {
                   ),
                 ),
                 if (isGuest)
-                  const Icon(
+                  Icon(
                     Icons.lock_outline_rounded,
-                    color: Colors.white38,
+                    color: context.themeIconMuted,
                     size: AppSizes.iconSm,
                   ),
               ],
@@ -330,7 +361,7 @@ class _CommunityCard extends StatelessWidget {
             Text(
               title,
               style: AppTextStyles.titleSmall.copyWith(
-                color: Colors.white,
+                color: context.themeTextPrimary,
                 fontWeight: FontWeight.w700,
               ),
             ),

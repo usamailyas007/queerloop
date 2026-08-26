@@ -68,9 +68,9 @@ class _ReportConversationBottomSheetState
         widget.targetTitle ?? "Reporting $cleanUsername's post";
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
@@ -89,7 +89,7 @@ class _ReportConversationBottomSheetState
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: context.themeBorderStrong,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -102,9 +102,9 @@ class _ReportConversationBottomSheetState
                 children: <Widget>[
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(
+                    child: Icon(
                       Icons.chevron_left_rounded,
-                      color: Colors.white,
+                      color: context.themeIcon,
                       size: 24,
                     ),
                   ),
@@ -113,7 +113,7 @@ class _ReportConversationBottomSheetState
                     child: Text(
                       'Why are you reporting this?',
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 17,
                       ),
@@ -128,10 +128,10 @@ class _ReportConversationBottomSheetState
               Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: AppColors.cardBackground,
+                  color: context.themeCardBackground,
                   borderRadius: BorderRadius.circular(AppRadius.card),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: context.themeBorder,
                   ),
                 ),
                 child: Row(
@@ -163,7 +163,7 @@ class _ReportConversationBottomSheetState
                           Text(
                             displayTargetTitle,
                             style: AppTextStyles.bodyMedium.copyWith(
-                              color: Colors.white,
+                              color: context.themeTextPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
                             ),
@@ -172,7 +172,7 @@ class _ReportConversationBottomSheetState
                           Text(
                             'A moderator reads every report',
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: Colors.white54,
+                              color: context.themeTextMuted,
                               fontSize: 12,
                             ),
                           ),
@@ -199,12 +199,12 @@ class _ReportConversationBottomSheetState
                       vertical: AppSpacing.md - 2,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
+                      color: context.themeCardBackground,
                       borderRadius: BorderRadius.circular(AppRadius.card),
                       border: Border.all(
                         color: isSelected
                             ? AppColors.gradientCyan
-                            : Colors.white.withValues(alpha: 0.08),
+                            : context.themeBorder,
                         width: isSelected ? 1.5 : 1.0,
                       ),
                     ),
@@ -214,7 +214,7 @@ class _ReportConversationBottomSheetState
                         Text(
                           reason,
                           style: AppTextStyles.bodyMedium.copyWith(
-                            color: Colors.white,
+                            color: context.themeTextPrimary,
                             fontWeight:
                                 isSelected ? FontWeight.w700 : FontWeight.w500,
                             fontSize: 14,
@@ -226,7 +226,7 @@ class _ReportConversationBottomSheetState
                               : Icons.radio_button_unchecked_rounded,
                           color: isSelected
                               ? AppColors.gradientCyan
-                              : Colors.white24,
+                              : context.themeBorderStrong,
                           size: 20,
                         ),
                       ],
@@ -244,10 +244,10 @@ class _ReportConversationBottomSheetState
                   vertical: AppSpacing.xs + 2,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.cardBackground,
+                  color: context.themeCardBackground,
                   borderRadius: BorderRadius.circular(AppRadius.card),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: context.themeBorder,
                   ),
                 ),
                 child: Row(
@@ -256,7 +256,7 @@ class _ReportConversationBottomSheetState
                     Text(
                       'Also block $cleanUsername',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: Colors.white70,
+                        color: context.themeTextSecondary,
                         fontWeight: FontWeight.w500,
                         fontSize: 13,
                       ),

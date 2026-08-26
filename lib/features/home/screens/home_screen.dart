@@ -26,18 +26,8 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Check if HomeFeedProvider is already available in the parent tree
-    final HomeFeedProvider? existingProvider =
-        context.read<HomeFeedProvider?>();
-
-    if (existingProvider != null) {
-      return _HomeScreenContent(isGuest: isGuest);
-    }
-
-    return ChangeNotifierProvider<HomeFeedProvider>(
-      create: (_) => HomeFeedProvider(),
-      child: _HomeScreenContent(isGuest: isGuest),
-    );
+    // HomeFeedProvider is always registered at the app root (app.dart)
+    return _HomeScreenContent(isGuest: isGuest);
   }
 }
 
@@ -238,24 +228,18 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
-        children: <Widget>[
-          bodyContent,
-
-          // Bottom Navigation Bar Overlay
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: HomeBottomNavBar(
-              currentIndex: navIndex,
-              isGuest: provider.isGuest,
-              onTap: (index) => _handleBottomNavTap(context, provider, index),
-            ),
-          ),
-        ],
+      backgroundColor: context.themeBackground,
+      // extendBody: true lets the body (reels/posts) fill the full screen
+      // edge-to-edge behind the floating bottomNavigationBar.
+      extendBody: true,
+      // Scaffold's own layout always positions bottomNavigationBar correctly
+      // at the very bottom from the first frame — no Stack/Positioned needed.
+      bottomNavigationBar: HomeBottomNavBar(
+        currentIndex: navIndex,
+        isGuest: provider.isGuest,
+        onTap: (index) => _handleBottomNavTap(context, provider, index),
       ),
+      body: bodyContent,
     );
   }
 }

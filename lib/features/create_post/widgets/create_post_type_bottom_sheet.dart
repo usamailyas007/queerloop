@@ -31,9 +31,9 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
     final CreatePostProvider provider = context.watch<CreatePostProvider>();
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: SafeArea(
@@ -48,7 +48,7 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: context.themeBorderStrong,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -62,7 +62,10 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
               children: <Widget>[
                 Text(
                   'New Post',
-                  style: AppTextStyles.headingMedium.copyWith(fontSize: 20),
+                  style: AppTextStyles.headingMedium.copyWith(
+                    color: context.themeTextPrimary,
+                    fontSize: 20,
+                  ),
                 ),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
@@ -70,12 +73,20 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
+                      color: context.isDarkMode
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.transparent,
                       shape: BoxShape.circle,
+                      border: Border.all(
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : context.themeBorder,
+                        width: 1.1,
+                      ),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.close_rounded,
-                      color: Colors.white70,
+                      color: context.themeIconMuted,
                       size: 18,
                     ),
                   ),
@@ -89,7 +100,7 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
             Text(
               'Pick what you want to share. You can add a caption and set who sees it on the next screen.',
               style: AppTextStyles.authHeaderSub.copyWith(
-                color: Colors.white54,
+                color: context.themeTextSecondary,
                 fontSize: 13,
                 height: 1.4,
               ),
@@ -186,32 +197,42 @@ class _MediaOptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: context.themeBorder,
           ),
         ),
         child: Row(
           children: <Widget>[
-            // Icon in rounded square
+            // Icon in circular container matching Image 2
             Container(
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(AppRadius.md),
+                color: isDark
+                    ? iconColor.withValues(alpha: 0.15)
+                    : Colors.transparent,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark
+                      ? Colors.transparent
+                      : iconColor.withValues(alpha: 0.35),
+                  width: 1.2,
+                ),
               ),
               child: Center(
                 child: SvgPicture.asset(
                   iconPath,
-                  width: 22,
-                  height: 22,
+                  width: 20,
+                  height: 20,
                   colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
                 ),
               ),
@@ -227,7 +248,7 @@ class _MediaOptionTile extends StatelessWidget {
                   Text(
                     title,
                     style: AppTextStyles.titleSmall.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -235,7 +256,7 @@ class _MediaOptionTile extends StatelessWidget {
                   Text(
                     subtitle,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       fontSize: 12,
                     ),
                   ),
@@ -243,9 +264,9 @@ class _MediaOptionTile extends StatelessWidget {
               ),
             ),
 
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
-              color: Colors.white38,
+              color: context.themeIconMuted,
               size: 20,
             ),
           ],

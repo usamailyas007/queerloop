@@ -56,7 +56,7 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
     final MessagesProvider provider = context.watch<MessagesProvider>();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -75,12 +75,20 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -90,7 +98,7 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
                     child: Text(
                       'Discover people',
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 18,
                       ),
@@ -108,9 +116,9 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
               child: AppTextField(
                 controller: _searchController,
                 hintText: 'Search by name or @username',
-                prefixIcon: const Icon(
+                prefixIcon: Icon(
                   Icons.search_rounded,
-                  color: Colors.white54,
+                  color: context.themeIconMuted,
                   size: 20,
                 ),
               ),
@@ -124,7 +132,7 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
               child: Text(
                 'PEOPLE YOU FOLLOW',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: Colors.white54,
+                  color: context.themeTextMuted,
                   letterSpacing: 1.2,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -180,7 +188,7 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
                                       Text(
                                         person.username,
                                         style: AppTextStyles.titleSmall.copyWith(
-                                          color: Colors.white,
+                                          color: context.themeTextPrimary,
                                           fontWeight: FontWeight.w700,
                                           fontSize: 14,
                                         ),
@@ -189,7 +197,7 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
                                       Text(
                                         person.lastMessage,
                                         style: AppTextStyles.bodySmall.copyWith(
-                                          color: Colors.white54,
+                                          color: context.themeTextSecondary,
                                           fontSize: 12,
                                         ),
                                       ),

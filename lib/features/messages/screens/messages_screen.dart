@@ -50,7 +50,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           final ConversationModel? deletedConv = provider.lastDeletedConv;
 
           return Scaffold(
-            backgroundColor: AppColors.background,
+            backgroundColor: context.themeBackground,
             body: SafeArea(
               child: Column(
                 children: <Widget>[
@@ -66,7 +66,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         Text(
                           'Messages',
                           style: AppTextStyles.titleLarge.copyWith(
-                            color: Colors.white,
+                            color: context.themeTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 22,
                           ),
@@ -110,9 +110,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     child: AppTextField(
                       controller: _searchController,
                       hintText: 'Search messages',
-                      prefixIcon: const Icon(
+                      prefixIcon: Icon(
                         Icons.search_rounded,
-                        color: Colors.white54,
+                        color: context.themeIconMuted,
                         size: 20,
                       ),
                       onChanged: provider.setSearchQuery,
@@ -134,7 +134,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                           vertical: AppSpacing.md,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F242A),
+                          color: context.themeCyanBadgeBackground,
                           borderRadius: BorderRadius.circular(AppRadius.card),
                           border: Border.all(
                             color: AppColors.gradientCyan,
@@ -153,7 +153,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               child: Text(
                                 'Chat with ${deletedConv.username.startsWith('@') ? deletedConv.username : '@${deletedConv.username}'} deleted',
                                 style: AppTextStyles.bodyMedium.copyWith(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 13,
                                 ),
@@ -189,7 +189,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             width: 72,
                             height: 72,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0F242A),
+                              color: context.themeCyanBadgeBackground,
                               borderRadius: BorderRadius.circular(24),
                             ),
                             child: Center(
@@ -214,7 +214,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               Text(
                                 'Start a conversation',
                                 style: AppTextStyles.headingMedium.copyWith(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 20,
                                 ),
@@ -234,7 +234,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             'Connect with people from the community\nand start meaningful conversations.',
                             textAlign: TextAlign.center,
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: Colors.white54,
+                              color: context.themeTextSecondary,
                               fontSize: 13,
                               height: 1.4,
                             ),
@@ -290,22 +290,21 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                   vertical: AppSpacing.md,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.cardBackground,
+                                  color: context.themeCardBackground,
                                   borderRadius:
                                       BorderRadius.circular(AppRadius.card),
                                   border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.08),
+                                    color: context.themeBorder,
                                   ),
                                 ),
                                 child: Row(
                                   children: <Widget>[
-                                    // Dark circle with cyan envelope icon
+                                    // Circle with cyan envelope icon
                                     Container(
                                       width: 40,
                                       height: 40,
                                       decoration: BoxDecoration(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.05),
+                                        color: context.themeChipBackground,
                                         shape: BoxShape.circle,
                                       ),
                                       child: const Icon(
@@ -336,7 +335,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                             "$requestCount people you don't follow",
                                             style: AppTextStyles.bodySmall
                                                 .copyWith(
-                                              color: Colors.white54,
+                                              color: context.themeTextMuted,
                                               fontSize: 12,
                                             ),
                                           ),
@@ -398,7 +397,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                   width: 44,
                                   height: 44,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0F242A),
+                                    color: context.themeCyanBadgeBackground,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: AppColors.gradientCyan

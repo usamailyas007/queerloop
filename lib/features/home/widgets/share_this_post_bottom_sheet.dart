@@ -22,9 +22,9 @@ class ShareThisPostBottomSheet extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF12101A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
         top: 12,
@@ -44,7 +44,7 @@ class ShareThisPostBottomSheet extends StatelessWidget {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: context.themeBorderStrong,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -55,8 +55,8 @@ class ShareThisPostBottomSheet extends StatelessWidget {
             // ── Title ────────────────────────────────────────────────────────
             Text(
               l10n.sharePostTitle,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: context.themeTextPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
@@ -67,8 +67,8 @@ class ShareThisPostBottomSheet extends StatelessWidget {
             // ── SEND TO Header ───────────────────────────────────────────────
             Text(
               l10n.shareSendToHeader,
-              style: const TextStyle(
-                color: Colors.white54,
+              style: TextStyle(
+                color: context.themeTextMuted,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 1.2,
@@ -109,21 +109,22 @@ class ShareThisPostBottomSheet extends StatelessWidget {
                       Container(
                         width: 48,
                         height: 48,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF1E1B26),
+                        decoration: BoxDecoration(
+                          color: context.themeCardBackground,
                           shape: BoxShape.circle,
+                          border: Border.all(color: context.themeBorder),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.add_rounded,
-                          color: Colors.white70,
+                          color: context.themeIconMuted,
                           size: 24,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         l10n.shareMore,
-                        style: const TextStyle(
-                          color: Colors.white70,
+                        style: TextStyle(
+                          color: context.themeTextSecondary,
                           fontSize: 12,
                         ),
                       ),
@@ -135,7 +136,7 @@ class ShareThisPostBottomSheet extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.lg),
 
-            const Divider(color: Colors.white12, height: 1),
+            Divider(color: context.themeBorder, height: 1),
 
             const SizedBox(height: AppSpacing.lg),
 
@@ -146,8 +147,8 @@ class ShareThisPostBottomSheet extends StatelessWidget {
                 _ActionButtonTile(
                   iconPath: AppIcons.copyLink,
                   label: l10n.shareCopyLink,
-                  iconColor: Colors.white,
-                  labelColor: Colors.white70,
+                  iconColor: context.themeIcon,
+                  labelColor: context.themeTextSecondary,
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -164,8 +165,8 @@ class ShareThisPostBottomSheet extends StatelessWidget {
                 _ActionButtonTile(
                   iconPath: AppIcons.save,
                   label: l10n.homeSave,
-                  iconColor: Colors.white,
-                  labelColor: Colors.white70,
+                  iconColor: context.themeIcon,
+                  labelColor: context.themeTextSecondary,
                   onTap: () {},
                 ),
 
@@ -188,10 +189,10 @@ class ShareThisPostBottomSheet extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E1B26),
+                color: context.themeCardBackground,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.12),
+                  color: context.themeBorder,
                 ),
               ),
               child: Row(
@@ -205,8 +206,8 @@ class ShareThisPostBottomSheet extends StatelessWidget {
                   Expanded(
                     child: Text(
                       l10n.shareNoticeText,
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: context.themeTextSecondary,
                         fontSize: 12,
                         height: 1.3,
                       ),
@@ -225,17 +226,17 @@ class ShareThisPostBottomSheet extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E1B26),
+                  color: context.themeCardBackground,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.12),
+                    color: context.themeBorder,
                   ),
                 ),
                 child: Center(
                   child: Text(
                     l10n.shareCancelBtn,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.themeTextPrimary,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -278,8 +279,8 @@ class _UserAvatarItem extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             name,
-            style: const TextStyle(
-              color: Colors.white70,
+            style: TextStyle(
+              color: context.themeTextSecondary,
               fontSize: 12,
             ),
           ),
@@ -313,9 +314,10 @@ class _ActionButtonTile extends StatelessWidget {
           Container(
             width: 48,
             height: 48,
-            decoration: const BoxDecoration(
-              color: Color(0xFF1E1B26),
+            decoration: BoxDecoration(
+              color: context.themeCardBackground,
               shape: BoxShape.circle,
+              border: Border.all(color: context.themeBorder),
             ),
             child: Center(
               child: SvgPicture.asset(

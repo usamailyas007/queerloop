@@ -44,7 +44,7 @@ class _NotificationsSettingsScreenState
                 Text(
                   title,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: Colors.white,
+                    color: context.themeTextPrimary,
                     fontWeight: FontWeight.w500,
                     fontSize: 14,
                   ),
@@ -54,7 +54,7 @@ class _NotificationsSettingsScreenState
                   Text(
                     subtitle,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white38,
+                      color: context.themeTextMuted,
                       fontSize: 12,
                     ),
                   ),
@@ -74,7 +74,7 @@ class _NotificationsSettingsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -92,12 +92,20 @@ class _NotificationsSettingsScreenState
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -107,58 +115,60 @@ class _NotificationsSettingsScreenState
                       'Notifications',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 17,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 38), // Balance layout
+                  const SizedBox(width: 38), // Balance
                 ],
               ),
             ),
 
-            // ── Main Content Body ───────────────────────────────────────────
+            // ── Main Settings Body ───────────────────────────────────────────
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                 children: <Widget>[
-                  // Master Card: Push Notifications
+                  const SizedBox(height: AppSpacing.sm),
+
+                  // ── MASTER PUSH TOGGLE CARD ────────────────────────────────
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: AppSpacing.md,
-                    ),
+                    padding: const EdgeInsets.all(AppSpacing.lg),
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(16),
+                      color: context.themeCardBackground,
+                      borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.themeBorder,
                       ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: <Widget>[
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              'Push notifications',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                'Pause all notifications',
+                                style: AppTextStyles.titleSmall.copyWith(
+                                  color: context.themeTextPrimary,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Master switch for this device',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: Colors.white38,
-                                fontSize: 12,
+                              const SizedBox(height: 4),
+                              Text(
+                                'Temporarily mute push notifications on this device',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: context.themeTextSecondary,
+                                  fontSize: 12,
+                                  height: 1.35,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                         CustomGradientSwitch(
                           value: _masterPush,
@@ -171,84 +181,161 @@ class _NotificationsSettingsScreenState
 
                   const SizedBox(height: AppSpacing.xl),
 
-                  // Section 1: ACTIVITY
+                  // ── ACTIVITY ON YOUR CONTENT SECTION ───────────────────────
                   Text(
-                    'ACTIVITY',
+                    'ACTIVITY ON YOUR CONTENT',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       letterSpacing: 1.2,
                       fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.md),
 
-                  const SizedBox(height: AppSpacing.xs),
-
-                  _buildToggleRow(
-                    title: 'Likes',
-                    value: _likes,
-                    onChanged: (bool val) => setState(() => _likes = val),
-                  ),
-                  _buildToggleRow(
-                    title: 'Comments and replies',
-                    value: _comments,
-                    onChanged: (bool val) => setState(() => _comments = val),
-                  ),
-                  _buildToggleRow(
-                    title: 'New followers',
-                    value: _newFollowers,
-                    onChanged: (bool val) =>
-                        setState(() => _newFollowers = val),
-                  ),
-                  _buildToggleRow(
-                    title: 'Follow requests',
-                    value: _followRequests,
-                    onChanged: (bool val) =>
-                        setState(() => _followRequests = val),
-                  ),
-                  _buildToggleRow(
-                    title: 'Messages',
-                    value: _messages,
-                    onChanged: (bool val) => setState(() => _messages = val),
-                  ),
-                  _buildToggleRow(
-                    title: 'Community posts',
-                    value: _communityPosts,
-                    onChanged: (bool val) =>
-                        setState(() => _communityPosts = val),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: AppSpacing.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.themeCardBackground,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: context.themeBorder,
+                      ),
+                    ),
+                    child: Column(
+                      children: <Widget>[
+                        _buildToggleRow(
+                          title: 'Likes',
+                          subtitle: 'When someone likes your post or reel',
+                          value: _likes,
+                          onChanged: (bool val) => setState(() => _likes = val),
+                        ),
+                        Divider(color: context.themeDivider, height: 1),
+                        _buildToggleRow(
+                          title: 'Comments',
+                          subtitle: 'When someone comments on your post',
+                          value: _comments,
+                          onChanged: (bool val) =>
+                              setState(() => _comments = val),
+                        ),
+                        Divider(color: context.themeDivider, height: 1),
+                        _buildToggleRow(
+                          title: 'New followers',
+                          subtitle: 'When someone follows your profile',
+                          value: _newFollowers,
+                          onChanged: (bool val) =>
+                              setState(() => _newFollowers = val),
+                        ),
+                        Divider(color: context.themeDivider, height: 1),
+                        _buildToggleRow(
+                          title: 'Follow requests',
+                          subtitle: 'When someone requests to follow you',
+                          value: _followRequests,
+                          onChanged: (bool val) =>
+                              setState(() => _followRequests = val),
+                        ),
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: AppSpacing.xl),
 
-                  // Section 2: FROM QUEERLOOP+
+                  // ── MESSAGES & COMMUNITIES SECTION ─────────────────────────
                   Text(
-                    'FROM QUEERLOOP+',
+                    'MESSAGES & COMMUNITIES',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       letterSpacing: 1.2,
                       fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: AppSpacing.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.themeCardBackground,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: context.themeBorder,
+                      ),
+                    ),
+                    child: Column(
+                      children: <Widget>[
+                        _buildToggleRow(
+                          title: 'Direct messages',
+                          subtitle: 'When someone sends you a message',
+                          value: _messages,
+                          onChanged: (bool val) =>
+                              setState(() => _messages = val),
+                        ),
+                        Divider(color: context.themeDivider, height: 1),
+                        _buildToggleRow(
+                          title: 'Community posts',
+                          subtitle: 'Trending posts in communities you joined',
+                          value: _communityPosts,
+                          onChanged: (bool val) =>
+                              setState(() => _communityPosts = val),
+                        ),
+                      ],
                     ),
                   ),
 
-                  const SizedBox(height: AppSpacing.xs),
-
-                  _buildToggleRow(
-                    title: 'Moderation updates',
-                    subtitle: 'Results of reports you filed',
-                    value: _moderationUpdates,
-                    onChanged: (bool val) =>
-                        setState(() => _moderationUpdates = val),
-                  ),
-                  _buildToggleRow(
-                    title: 'Announcements',
-                    subtitle: 'Rare, and never marketing',
-                    value: _announcements,
-                    onChanged: (bool val) =>
-                        setState(() => _announcements = val),
-                  ),
-
                   const SizedBox(height: AppSpacing.xl),
+
+                  // ── FROM QUEERLOOP SECTION ─────────────────────────────────
+                  Text(
+                    'FROM QUEERLOOP',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: context.themeTextMuted,
+                      letterSpacing: 1.2,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: AppSpacing.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.themeCardBackground,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: context.themeBorder,
+                      ),
+                    ),
+                    child: Column(
+                      children: <Widget>[
+                        _buildToggleRow(
+                          title: 'Safety & moderation updates',
+                          subtitle: 'Reports you filed and policy updates',
+                          value: _moderationUpdates,
+                          onChanged: (bool val) =>
+                              setState(() => _moderationUpdates = val),
+                        ),
+                        Divider(color: context.themeDivider, height: 1),
+                        _buildToggleRow(
+                          title: 'Announcements & features',
+                          subtitle: 'New features and community events',
+                          value: _announcements,
+                          onChanged: (bool val) =>
+                              setState(() => _announcements = val),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: AppSpacing.xxxxxl),
                 ],
               ),
             ),

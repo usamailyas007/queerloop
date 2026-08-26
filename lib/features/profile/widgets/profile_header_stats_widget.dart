@@ -38,6 +38,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
   final Widget? actionButtons;
 
   Widget _buildStatColumn({
+    required BuildContext context,
     required String count,
     required String label,
     required VoidCallback onTap,
@@ -49,7 +50,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
           Text(
             count,
             style: AppTextStyles.titleMedium.copyWith(
-              color: Colors.white,
+              color: context.themeTextPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 18,
             ),
@@ -58,7 +59,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
           Text(
             label,
             style: AppTextStyles.caption.copyWith(
-              color: Colors.white54,
+              color: context.themeTextMuted,
               fontSize: 12,
             ),
           ),
@@ -67,7 +68,12 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildPillBadge(String text, Color borderColor, Color textColor) {
+  Widget _buildPillBadge(
+    BuildContext context,
+    String text,
+    Color borderColor,
+    Color textColor,
+  ) {
     return Container(
       margin: const EdgeInsets.only(right: AppSpacing.xs),
       padding: const EdgeInsets.symmetric(
@@ -75,7 +81,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
         vertical: 4,
       ),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: context.themeCardBackground,
         borderRadius: BorderRadius.circular(AppRadius.pill),
         border: Border.all(color: borderColor),
       ),
@@ -92,6 +98,8 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -109,9 +117,9 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
               ),
               child: Container(
                 padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.background,
+                  color: context.themeBackground,
                 ),
                 child: ClipOval(
                   child: Image.asset(
@@ -131,16 +139,19 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: <Widget>[
                   _buildStatColumn(
+                    context: context,
                     count: postsCount,
                     label: 'Posts',
                     onTap: () {},
                   ),
                   _buildStatColumn(
+                    context: context,
                     count: followersCount,
                     label: 'Followers',
                     onTap: onFollowersTap,
                   ),
                   _buildStatColumn(
+                    context: context,
                     count: followingCount,
                     label: 'Following',
                     onTap: onFollowingTap,
@@ -159,7 +170,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
             Text(
               name,
               style: AppTextStyles.titleMedium.copyWith(
-                color: Colors.white,
+                color: context.themeTextPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 16,
               ),
@@ -172,13 +183,15 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
                   vertical: 3,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.08),
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(AppRadius.pill),
                 ),
                 child: Text(
                   pronounsPill,
                   style: AppTextStyles.caption.copyWith(
-                    color: Colors.white70,
+                    color: context.themeTextSecondary,
                     fontSize: 11,
                   ),
                 ),
@@ -192,7 +205,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
         Text(
           bio,
           style: AppTextStyles.bodySmall.copyWith(
-            color: Colors.white70,
+            color: context.themeTextSecondary,
             fontSize: 13,
             height: 1.35,
           ),
@@ -206,7 +219,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
               Text(
                 'PRONOUNS',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: Colors.white38,
+                  color: context.themeTextMuted,
                   fontSize: 10,
                   letterSpacing: 1.0,
                 ),
@@ -214,6 +227,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
               const SizedBox(width: AppSpacing.md),
               ...pronounsList.map(
                 (String item) => _buildPillBadge(
+                  context,
                   item,
                   AppColors.gradientPink,
                   AppColors.gradientPink,
@@ -231,7 +245,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
               Text(
                 'IDENTITY',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: Colors.white38,
+                  color: context.themeTextMuted,
                   fontSize: 10,
                   letterSpacing: 1.0,
                 ),
@@ -239,6 +253,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
               const SizedBox(width: AppSpacing.md),
               ...identityList.map(
                 (String item) => _buildPillBadge(
+                  context,
                   item,
                   AppColors.gradientCyan,
                   AppColors.gradientCyan,
@@ -256,7 +271,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
               Text(
                 'INTERESTS',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: Colors.white38,
+                  color: context.themeTextMuted,
                   fontSize: 10,
                   letterSpacing: 1.0,
                 ),
@@ -266,7 +281,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
                 child: Text(
                   interestsText,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: Colors.white70,
+                    color: context.themeTextSecondary,
                     fontSize: 12,
                   ),
                 ),

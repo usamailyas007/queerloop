@@ -95,9 +95,10 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
   Widget build(BuildContext context) {
     final CreatePostProvider provider = context.watch<CreatePostProvider>();
     final GalleryMediaItem? selectedItem = provider.selectedMedia;
+    final bool isDark = context.isDarkMode;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,12 +119,20 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -133,7 +142,7 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
                   Text(
                     'Trim',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -266,7 +275,7 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
               child: Text(
                 'DRAG THE HANDLES TO TRIM',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: Colors.white54,
+                  color: context.themeTextMuted,
                   letterSpacing: 1.2,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -301,7 +310,7 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
                   Text(
                     provider.trimStartFormatted,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white70,
+                      color: context.themeTextSecondary,
                       fontWeight: FontWeight.w600,
                       fontSize: 12,
                     ),
@@ -327,7 +336,7 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
                   Text(
                     provider.totalDurationFormatted,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white70,
+                      color: context.themeTextSecondary,
                       fontWeight: FontWeight.w600,
                       fontSize: 12,
                     ),

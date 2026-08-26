@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text_styles.dart';
 
@@ -31,6 +32,10 @@ class AppSocialButton extends StatelessWidget {
           iconPath!,
           width: AppSizes.iconMd,
           height: AppSizes.iconMd,
+          colorFilter: ColorFilter.mode(
+            context.themeIcon,
+            BlendMode.srcIn,
+          ),
         );
       } else {
         leadingIcon = Image.asset(
@@ -49,10 +54,10 @@ class AppSocialButton extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1B26),
+        color: context.themeCardBackground,
         borderRadius: BorderRadius.circular(AppRadius.input),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.12),
+          color: context.themeBorder,
           width: AppSizes.borderWidth,
         ),
       ),
@@ -72,7 +77,9 @@ class AppSocialButton extends StatelessWidget {
                 ],
                 Text(
                   text,
-                  style: AppTextStyles.socialButtonText,
+                  style: AppTextStyles.socialButtonText.copyWith(
+                    color: context.themeTextPrimary,
+                  ),
                 ),
               ],
             ),

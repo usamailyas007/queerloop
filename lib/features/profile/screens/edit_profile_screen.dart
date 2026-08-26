@@ -62,7 +62,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void _showPhotoOptions() {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1A1625),
+      backgroundColor: context.themeBottomSheetBackground,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -82,14 +82,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: AppSpacing.lg),
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: ctx.themeBorderStrong,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 Text(
                   'Change Photo',
                   style: AppTextStyles.titleMedium.copyWith(
-                    color: Colors.white,
+                    color: ctx.themeTextPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 17,
                   ),
@@ -98,7 +98,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 // Camera option
                 _PhotoOptionTile(
                   icon: Icons.camera_alt_rounded,
-                  label: 'Take Photo',
+                  label: 'Take a photo',
                   onTap: () {
                     Navigator.pop(ctx);
                     _pickImage(ImageSource.camera);
@@ -108,13 +108,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 // Gallery option
                 _PhotoOptionTile(
                   icon: Icons.photo_library_rounded,
-                  label: 'Choose from Gallery',
+                  label: 'Choose from gallery',
                   onTap: () {
                     Navigator.pop(ctx);
                     _pickImage(ImageSource.gallery);
                   },
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
+                // Cancel
+                GestureDetector(
+                  onTap: () => Navigator.pop(ctx),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: ctx.themeCardBackground,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: ctx.themeBorder,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: ctx.themeTextMuted,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -123,25 +148,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _usernameController.dispose();
-    _bioController.dispose();
-    super.dispose();
-  }
-
-  Widget _buildFieldBox({
-    required String label,
-    required Widget child,
-  }) {
+  Widget _buildFieldBox({required String label, required Widget child}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           label,
           style: AppTextStyles.labelSmall.copyWith(
-            color: Colors.white54,
+            color: context.themeTextMuted,
             letterSpacing: 1.2,
             fontSize: 11,
             fontWeight: FontWeight.w700,
@@ -155,10 +169,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             vertical: AppSpacing.md - 2,
           ),
           decoration: BoxDecoration(
-            color: AppColors.cardBackground,
+            color: context.themeInputBackground,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
+              color: context.themeBorder,
             ),
           ),
           child: child,
@@ -187,15 +201,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: Colors.white,
+                  color: context.themeTextPrimary,
                   fontWeight: FontWeight.w500,
                   fontSize: 14,
                 ),
               ),
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
-              color: Colors.white38,
+              color: context.themeIconMuted,
               size: 20,
             ),
           ],
@@ -211,7 +225,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final String interestsDisplay = '${_interests.length} selected';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -229,7 +243,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     child: Text(
                       'Cancel',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white54,
+                        color: context.themeTextMuted,
                         fontSize: 14,
                       ),
                     ),
@@ -237,7 +251,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   Text(
                     'Edit profile',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 17,
                     ),
@@ -343,7 +357,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       Text(
                         'DISPLAY NAME',
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: Colors.white54,
+                          color: context.themeTextMuted,
                           letterSpacing: 1.2,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -364,7 +378,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       Text(
                         'USERNAME',
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: Colors.white54,
+                          color: context.themeTextMuted,
                           letterSpacing: 1.2,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -385,7 +399,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       Text(
                         'BIO',
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: Colors.white54,
+                          color: context.themeTextMuted,
                           letterSpacing: 1.2,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -468,7 +482,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         Text(
                           _dateOfBirth,
                           style: AppTextStyles.bodyMedium.copyWith(
-                            color: Colors.white,
+                            color: context.themeTextPrimary,
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -512,9 +526,9 @@ class _PhotoOptionTile extends StatelessWidget {
           vertical: AppSpacing.md,
         ),
         decoration: BoxDecoration(
-          color: const Color(0xFF231F2E),
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          border: Border.all(color: context.themeBorder),
         ),
         child: Row(
           children: <Widget>[
@@ -522,24 +536,24 @@ class _PhotoOptionTile extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
+                color: context.themeChipBackground,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: Colors.white70, size: 20),
+              child: Icon(icon, color: context.themeIcon, size: 20),
             ),
             const SizedBox(width: AppSpacing.md),
             Text(
               label,
               style: AppTextStyles.bodyMedium.copyWith(
-                color: Colors.white,
+                color: context.themeTextPrimary,
                 fontWeight: FontWeight.w600,
                 fontSize: 15,
               ),
             ),
             const Spacer(),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
-              color: Colors.white38,
+              color: context.themeIconMuted,
               size: 20,
             ),
           ],

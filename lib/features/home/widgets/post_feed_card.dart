@@ -25,21 +25,22 @@ class PostFeedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool isDark = context.isDarkMode;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1B26),
+        color: context.themeCardBackground,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.12),
+          color: context.themeBorder,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          // ── Header Row (Avatar + Handle + Pronouns/Time + Options) ────────
+          // ── Header Row (Avatar + Handle + Pronouns/Time) ──
           Row(
             children: <Widget>[
               ClipOval(
@@ -57,16 +58,16 @@ class PostFeedCard extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       post.username,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.themeTextPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
                       post.pronounsTime,
-                      style: const TextStyle(
-                        color: Colors.white54,
+                      style: TextStyle(
+                        color: context.themeTextMuted,
                         fontSize: 12,
                       ),
                     ),
@@ -81,8 +82,8 @@ class PostFeedCard extends StatelessWidget {
           // ── Content Body Text ─────────────────────────────────────────────
           Text(
             post.content,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.themeTextPrimary,
               fontSize: 14,
               height: 1.4,
             ),
@@ -120,8 +121,8 @@ class PostFeedCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(
                       '${post.likesCount > 1000 ? '${(post.likesCount / 1000).toStringAsFixed(1)}K' : post.likesCount}',
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: context.themeTextSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -141,16 +142,16 @@ class PostFeedCard extends StatelessWidget {
                       AppIcons.comment,
                       width: 18,
                       height: 18,
-                      colorFilter: const ColorFilter.mode(
-                        Colors.white70,
+                      colorFilter: ColorFilter.mode(
+                        context.themeTextSecondary,
                         BlendMode.srcIn,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Text(
                       '${post.commentsCount}',
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: context.themeTextSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -169,7 +170,9 @@ class PostFeedCard extends StatelessWidget {
                   width: 18,
                   height: 18,
                   colorFilter: ColorFilter.mode(
-                    post.isSaved ? AppColors.gradientCyan : Colors.white70,
+                    post.isSaved
+                        ? AppColors.gradientCyan
+                        : context.themeTextSecondary,
                     BlendMode.srcIn,
                   ),
                 ),
@@ -195,10 +198,12 @@ class PostFeedCard extends StatelessWidget {
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.black.withValues(alpha: 0.04),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.15),
+                      color: context.themeBorder,
                     ),
                   ),
                   child: Row(
@@ -209,15 +214,15 @@ class PostFeedCard extends StatelessWidget {
                         width: 14,
                         height: 14,
                         colorFilter: const ColorFilter.mode(
-                          Colors.white70,
+                          AppColors.gradientCyan,
                           BlendMode.srcIn,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         l10n.homeSafety,
-                        style: const TextStyle(
-                          color: Colors.white70,
+                        style: TextStyle(
+                          color: context.themeTextSecondary,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),

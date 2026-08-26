@@ -26,7 +26,7 @@ class ProfileVisibilityScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -41,12 +41,16 @@ class ProfileVisibilityScreen extends StatelessWidget {
 
               Text(
                 l10n.profileVisibilityTitle,
-                style: AppTextStyles.authHeaderTitle,
+                style: AppTextStyles.authHeaderTitle.copyWith(
+                  color: context.themeTextPrimary,
+                ),
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
                 l10n.profileVisibilitySub,
-                style: AppTextStyles.authHeaderSub,
+                style: AppTextStyles.authHeaderSub.copyWith(
+                  color: context.themeTextSecondary,
+                ),
               ),
 
               const SizedBox(height: AppSpacing.xxl),

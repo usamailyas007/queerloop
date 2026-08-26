@@ -16,6 +16,7 @@ class CodeExpiredScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool isDark = context.isDarkMode;
     final String codeStr = (expiredCode != null && expiredCode!.isNotEmpty)
         ? expiredCode!
         : '49999';
@@ -28,9 +29,8 @@ class CodeExpiredScreen extends StatelessWidget {
     });
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
-        top: false,
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.screenPaddingHorizontal,
@@ -38,7 +38,7 @@ class CodeExpiredScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.lg),
               const AuthBackButton(),
               const SizedBox(height: AppSpacing.xxxxl),
 
@@ -47,10 +47,14 @@ class CodeExpiredScreen extends StatelessWidget {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2C1929),
+                  color: isDark
+                      ? const Color(0xFF2C1929)
+                      : const Color(0xFFFFEBEE),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: const Color(0xFFFF5252).withValues(alpha: 0.3),
+                    color: const Color(0xFFFF5252).withValues(
+                      alpha: isDark ? 0.3 : 0.2,
+                    ),
                     width: 1,
                   ),
                 ),
@@ -67,12 +71,16 @@ class CodeExpiredScreen extends StatelessWidget {
 
               Text(
                 l10n.authCodeExpiredTitle,
-                style: AppTextStyles.authHeaderTitle,
+                style: AppTextStyles.authHeaderTitle.copyWith(
+                  color: context.themeTextPrimary,
+                ),
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
                 l10n.authCodeExpiredSub,
-                style: AppTextStyles.authHeaderSub,
+                style: AppTextStyles.authHeaderSub.copyWith(
+                  color: context.themeTextSecondary,
+                ),
               ),
 
               const SizedBox(height: AppSpacing.xxl),
@@ -85,7 +93,9 @@ class CodeExpiredScreen extends StatelessWidget {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E1B26),
+                      color: isDark
+                          ? const Color(0xFF1E1B26)
+                          : context.themeCardBackground,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: const Color(0xFFFF5252).withValues(alpha: 0.6),

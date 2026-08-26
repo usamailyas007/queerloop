@@ -53,14 +53,14 @@ class _BlockUserModalDialogState extends State<BlockUserModalDialog> {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.xl),
         decoration: BoxDecoration(
-          color: const Color(0xFF191622),
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: context.themeBorder,
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.5),
+              color: Colors.black.withValues(alpha: context.isDarkMode ? 0.5 : 0.08),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -74,7 +74,7 @@ class _BlockUserModalDialogState extends State<BlockUserModalDialog> {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: const Color(0xFF0F2F34),
+                color: context.themeCyanBadgeBackground,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: AppColors.gradientCyan.withValues(alpha: 0.3),
@@ -94,7 +94,7 @@ class _BlockUserModalDialogState extends State<BlockUserModalDialog> {
               'Block $cleanUsername?',
               textAlign: TextAlign.center,
               style: AppTextStyles.titleMedium.copyWith(
-                color: Colors.white,
+                color: context.themeTextPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
               ),
@@ -107,7 +107,7 @@ class _BlockUserModalDialogState extends State<BlockUserModalDialog> {
               "They won't be able to message you, find your profile or see your posts, and they're removed from your followers. They are not told.",
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white54,
+                color: context.themeTextSecondary,
                 fontSize: 12,
                 height: 1.35,
               ),
@@ -122,10 +122,12 @@ class _BlockUserModalDialogState extends State<BlockUserModalDialog> {
                 vertical: AppSpacing.xs + 2,
               ),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.04),
+                color: context.isDarkMode
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : Colors.black.withValues(alpha: 0.03),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
+                  color: context.themeBorder,
                 ),
               ),
               child: Row(
@@ -134,7 +136,7 @@ class _BlockUserModalDialogState extends State<BlockUserModalDialog> {
                   Text(
                     'Also report this account',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white70,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w500,
                       fontSize: 13,
                     ),

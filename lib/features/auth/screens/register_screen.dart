@@ -59,7 +59,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final String? authError = context.watch<AuthProvider>().error;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -146,7 +146,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 border: Border.all(
                                   color: _agreedToTerms
                                       ? AppColors.gradientCyan
-                                      : Colors.white38,
+                                      : context.themeBorderStrong,
                                   width: AppSizes.borderWidthFocused,
                                 ),
                               ),
@@ -164,19 +164,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             child: RichText(
                               textAlign: TextAlign.left,
                               text: TextSpan(
-                                style: AppTextStyles.termsNormalText,
+                                style: AppTextStyles.termsNormalText.copyWith(
+                                  color: context.themeTextSecondary,
+                                ),
                                 children: <TextSpan>[
                                   TextSpan(text: l10n.authAgreeTermsPrefix),
                                   TextSpan(
                                     text: l10n.authTermsConditions,
                                     style: AppTextStyles.termsLinkText,
                                   ),
-                                  TextSpan(text: ' ${l10n.authAnd} \n'),
+                                  TextSpan(
+                                    text: ' ${l10n.authAnd} \n',
+                                    style: TextStyle(
+                                      color: context.themeTextSecondary,
+                                    ),
+                                  ),
                                   TextSpan(
                                     text: l10n.authPrivacyPolicy,
                                     style: AppTextStyles.termsLinkText,
                                   ),
-                                  TextSpan(text: l10n.authPeriod),
+                                  TextSpan(
+                                    text: l10n.authPeriod,
+                                    style: TextStyle(
+                                      color: context.themeTextSecondary,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),

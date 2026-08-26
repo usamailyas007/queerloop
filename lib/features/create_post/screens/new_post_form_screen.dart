@@ -84,7 +84,6 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
     super.dispose();
   }
 
-
   void _publishPost(BuildContext context, CreatePostProvider provider) {
     final HomeFeedProvider homeProvider = context.read<HomeFeedProvider>();
     final GalleryMediaItem? item = provider.selectedMedia;
@@ -126,7 +125,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
     final GalleryMediaItem? selectedItem = provider.selectedMedia;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -145,12 +144,20 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -161,7 +168,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                       'New post',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -188,7 +195,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(AppRadius.card),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
+                            color: context.themeBorder,
                           ),
                         ),
                         child: ClipRRect(
@@ -303,13 +310,13 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                       Text(
                         'Caption',
                         style: AppTextStyles.caption.copyWith(
-                          color: Colors.white54,
+                          color: context.themeTextMuted,
                         ),
                       ),
                       Text(
                         '${provider.captionCharCount} / ${CreatePostProvider.maxCaptionLength}',
                         style: AppTextStyles.caption.copyWith(
-                          color: Colors.white54,
+                          color: context.themeTextMuted,
                         ),
                       ),
                     ],
@@ -335,17 +342,17 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                         vertical: AppSpacing.md,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.cardBackground,
+                        color: context.themeCardBackground,
                         borderRadius: BorderRadius.circular(AppRadius.card),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.08),
+                          color: context.themeBorder,
                         ),
                       ),
                       child: Row(
                         children: <Widget>[
-                          const Icon(
+                          Icon(
                             Icons.people_outline_rounded,
-                            color: Colors.white70,
+                            color: context.themeIconMuted,
                             size: 22,
                           ),
                           const SizedBox(width: AppSpacing.md),
@@ -353,7 +360,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                             child: Text(
                               'Community',
                               style: AppTextStyles.titleSmall.copyWith(
-                                color: Colors.white,
+                                color: context.themeTextPrimary,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -378,9 +385,9 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                             ),
                           ),
                           const SizedBox(width: AppSpacing.xs),
-                          const Icon(
+                          Icon(
                             Icons.chevron_right_rounded,
-                            color: Colors.white38,
+                            color: context.themeIconMuted,
                             size: 20,
                           ),
                         ],
@@ -394,10 +401,10 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
+                      color: context.themeCardBackground,
                       borderRadius: BorderRadius.circular(AppRadius.card),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.themeBorder,
                       ),
                     ),
                     child: Column(
@@ -405,16 +412,16 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                       children: <Widget>[
                         Row(
                           children: <Widget>[
-                            const Icon(
+                            Icon(
                               Icons.visibility_outlined,
-                              color: Colors.white70,
+                              color: context.themeIconMuted,
                               size: 22,
                             ),
                             const SizedBox(width: AppSpacing.md),
                             Text(
                               'Who can see this',
                               style: AppTextStyles.titleSmall.copyWith(
-                                color: Colors.white,
+                                color: context.themeTextPrimary,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -461,10 +468,10 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                       vertical: AppSpacing.md,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
+                      color: context.themeCardBackground,
                       borderRadius: BorderRadius.circular(AppRadius.card),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.themeBorder,
                       ),
                     ),
                     child: Row(
@@ -476,7 +483,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                               Text(
                                 'Allow comments',
                                 style: AppTextStyles.titleSmall.copyWith(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -484,7 +491,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                               Text(
                                 'Filtered for slurs automatically',
                                 style: AppTextStyles.bodySmall.copyWith(
-                                  color: Colors.white54,
+                                  color: context.themeTextMuted,
                                   fontSize: 12,
                                 ),
                               ),
@@ -508,10 +515,10 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                       vertical: AppSpacing.md,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
+                      color: context.themeCardBackground,
                       borderRadius: BorderRadius.circular(AppRadius.card),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.themeBorder,
                       ),
                     ),
                     child: Row(
@@ -523,7 +530,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                               Text(
                                 'Allow downloads',
                                 style: AppTextStyles.titleSmall.copyWith(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -531,7 +538,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                               Text(
                                 'Off keeps the video inside the app',
                                 style: AppTextStyles.bodySmall.copyWith(
-                                  color: Colors.white54,
+                                  color: context.themeTextMuted,
                                   fontSize: 12,
                                 ),
                               ),
@@ -560,11 +567,11 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                             vertical: AppSpacing.xs,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.cardBackground,
+                            color: context.themeCardBackground,
                             borderRadius:
                                 BorderRadius.circular(AppRadius.pill),
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.12),
+                              color: context.themeBorder,
                             ),
                           ),
                           child: Row(
@@ -573,16 +580,16 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                               Text(
                                 tag,
                                 style: AppTextStyles.bodySmall.copyWith(
-                                  color: Colors.white70,
+                                  color: context.themeTextSecondary,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(width: 4),
                               GestureDetector(
                                 onTap: () => provider.removeTag(tag),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.close_rounded,
-                                  color: Colors.white38,
+                                  color: context.themeIconMuted,
                                   size: 14,
                                 ),
                               ),
@@ -607,17 +614,17 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                             vertical: AppSpacing.xs,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.05),
+                            color: context.themeChipBackground,
                             borderRadius:
                                 BorderRadius.circular(AppRadius.pill),
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.15),
+                              color: context.themeBorder,
                             ),
                           ),
                           child: Text(
                             '+ Add tag',
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: Colors.white70,
+                              color: context.themeTextSecondary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -695,16 +702,16 @@ class _VisibilityOptionChip extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           gradient: isSelected ? AppColors.primaryGradientButton : null,
-          color: isSelected ? null : Colors.white.withValues(alpha: 0.08),
+          color: isSelected ? null : context.themeChipBackground,
           borderRadius: BorderRadius.circular(AppRadius.pill),
           border: isSelected
               ? null
-              : Border.all(color: Colors.white.withValues(alpha: 0.12)),
+              : Border.all(color: context.themeBorder),
         ),
         child: Text(
           label,
           style: AppTextStyles.bodySmall.copyWith(
-            color: isSelected ? Colors.white : Colors.white70,
+            color: isSelected ? Colors.white : context.themeTextSecondary,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             fontSize: 12,
           ),

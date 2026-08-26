@@ -29,24 +29,36 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool isDark = context.isDarkMode;
 
     return Scaffold(
+      backgroundColor: context.themeBackground,
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.0, -0.2),
-            radius: 1.25,
-            colors: <Color>[
-              Color(
-                0xFF3B162E,
-              ), // Deep plum center aura matching reference screenshot
-              Color(0xFF220E1E),
-              Color(0xFF0C0A10), // Pure dark background edge
-            ],
-            stops: <double>[0.0, 0.45, 1.0],
-          ),
+        decoration: BoxDecoration(
+          color: context.themeBackground,
+          gradient: isDark
+              ? const RadialGradient(
+                  center: Alignment(0.0, -0.2),
+                  radius: 1.25,
+                  colors: <Color>[
+                    Color(0xFF3B162E), // Deep plum center aura
+                    Color(0xFF220E1E),
+                    Color(0xFF0C0A10), // Pure dark background edge
+                  ],
+                  stops: <double>[0.0, 0.45, 1.0],
+                )
+              : const RadialGradient(
+                  center: Alignment(0.0, -0.2),
+                  radius: 1.25,
+                  colors: <Color>[
+                    Color(0xFFFFF0F5), // Soft pastel pink aura
+                    Color(0xFFFAFAFC),
+                    Color(0xFFFFFFFF),
+                  ],
+                  stops: <double>[0.0, 0.45, 1.0],
+                ),
         ),
         child: SafeArea(
           child: Column(
@@ -96,8 +108,8 @@ class _SplashScreenState extends State<SplashScreen> {
               // ── Tagline: "Your people, your feed, your rules." ──────────
               Text(
                 l10n.splashTagline,
-                style: const TextStyle(
-                  color: Colors.white60,
+                style: TextStyle(
+                  color: isDark ? Colors.white60 : AppColors.lightTextSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
                   letterSpacing: 0.2,
@@ -129,8 +141,8 @@ class _SplashScreenState extends State<SplashScreen> {
                   // Footer Label
                   Text(
                     l10n.splashCommunityText,
-                    style: const TextStyle(
-                      color: Colors.white38,
+                    style: TextStyle(
+                      color: isDark ? Colors.white38 : AppColors.lightTextMuted,
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 1.8,

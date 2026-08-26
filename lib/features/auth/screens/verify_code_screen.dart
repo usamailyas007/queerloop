@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
@@ -94,11 +94,11 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String otpText = _otpController.text;
     final bool isFocused = _otpFocusNode.hasFocus;
+    final bool isDark = context.isDarkMode;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
-        top: false,
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.screenPaddingHorizontal,
@@ -106,7 +106,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.lg),
               const AuthBackButton(),
               const SizedBox(height: AppSpacing.xxxxl),
 
@@ -115,10 +115,14 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2C1929),
+                  color: isDark
+                      ? const Color(0xFF2C1929)
+                      : const Color(0xFFFFEBF2),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: AppColors.gradientPink.withValues(alpha: 0.3),
+                    color: AppColors.gradientPink.withValues(
+                      alpha: isDark ? 0.3 : 0.2,
+                    ),
                     width: 1,
                   ),
                 ),
@@ -139,93 +143,85 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 
               Text(
                 l10n.authEnterYourCodeTitle,
-                style: AppTextStyles.authHeaderTitle,
+                style: AppTextStyles.authHeaderTitle.copyWith(
+                  color: context.themeTextPrimary,
+                ),
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
                 l10n.authEnterYourCodeSub,
-                style: AppTextStyles.authHeaderSub,
+                style: AppTextStyles.authHeaderSub.copyWith(
+                  color: context.themeTextSecondary,
+                ),
               ),
 
               const SizedBox(height: AppSpacing.xxl),
 
-              // ── Dynamic PinPut OTP Widget ─────────────────────────────
+              // ── 5 Hidden Input Boxes Overlay ─────────────────────────
               GestureDetector(
-                onTap: () => _otpFocusNode.requestFocus(),
-                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  _otpFocusNode.requestFocus();
+                },
                 child: Stack(
+                  alignment: Alignment.center,
                   children: <Widget>[
+                    // Invisible real input
+                    Opacity(
+                      opacity: 0.0,
+                      child: TextField(
+                        controller: _otpController,
+                        focusNode: _otpFocusNode,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: <TextInputFormatter>[
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(5),
+                        ],
+                        onChanged: (String val) {
+                          setState(() {});
+                          if (val.length == 5) {
+                            _submit();
+                          }
+                        },
+                      ),
+                    ),
+
+                    // Visual 5 custom digit boxes
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: List<Widget>.generate(5, (int index) {
-                        final bool hasValue = index < otpText.length;
-                        final int activeIndex = otpText.isEmpty
-                            ? 0
-                            : (otpText.length < 5 ? otpText.length - 1 : 4);
-                        final bool isActiveBox =
-                            isFocused && index == activeIndex;
-                        final bool isHiddenDot =
-                            hasValue && index < activeIndex;
+                        final bool hasChar = index < otpText.length;
+                        final bool isCurrentFocus =
+                            isFocused && index == otpText.length;
 
                         return Container(
                           width: 56,
                           height: 56,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1E1B26),
+                            color: isDark
+                                ? const Color(0xFF1E1B26)
+                                : context.themeCardBackground,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: isActiveBox
-                                  ? AppColors.gradientPink
-                                  : Colors.white.withValues(alpha: 0.12),
-                              width: isActiveBox ? 1.5 : 1,
+                              color: isCurrentFocus
+                                  ? AppColors.gradientCyan
+                                  : (hasChar
+                                      ? AppColors.gradientPink
+                                      : (isDark
+                                          ? const Color(0xFF2D2938)
+                                          : context.themeBorder)),
+                              width: isCurrentFocus ? 1.5 : 1,
                             ),
                           ),
                           child: Center(
-                            child: isHiddenDot
-                                ? Container(
-                                    width: 12,
-                                    height: 12,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.gradientPink,
-                                      shape: BoxShape.circle,
-                                      boxShadow: <BoxShadow>[
-                                        BoxShadow(
-                                          color: AppColors.gradientPink
-                                              .withValues(alpha: 0.6),
-                                          blurRadius: 8,
-                                          spreadRadius: 1,
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : (hasValue
-                                    ? Text(
-                                        otpText[index],
-                                        style: AppTextStyles.otpDigitText,
-                                      )
-                                    : const SizedBox.shrink()),
+                            child: Text(
+                              hasChar ? otpText[index] : '',
+                              style: AppTextStyles.otpDigitText.copyWith(
+                                color: context.themeTextPrimary,
+                              ),
+                            ),
                           ),
                         );
                       }),
-                    ),
-                    Positioned.fill(
-                      child: Opacity(
-                        opacity: 0.0,
-                        child: TextField(
-                          controller: _otpController,
-                          focusNode: _otpFocusNode,
-                          keyboardType: TextInputType.number,
-                          maxLength: 5,
-                          autofocus: true,
-                          inputFormatters: <TextInputFormatter>[
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(5),
-                          ],
-                          onChanged: (String value) {
-                            setState(() {});
-                          },
-                        ),
-                      ),
                     ),
                   ],
                 ),
@@ -233,11 +229,41 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 
               const SizedBox(height: AppSpacing.xl),
 
-              // ── Resend Code Timer Text ─────────────────────────────────
+              // ── Timer / Resend Row ───────────────────────────────────
               Center(
-                child: Text(
-                  '${l10n.authResendCodePrefix}$_formattedTimer',
-                  style: AppTextStyles.timerText,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      l10n.authResendCodePrefix,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.themeTextMuted,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    if (_startSeconds > 0)
+                      Text(
+                        _formattedTimer,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.gradientCyan,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    else
+                      GestureDetector(
+                        onTap: () {
+                          _startTimer();
+                          _otpController.clear();
+                        },
+                        child: Text(
+                          'Resend now',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.gradientPink,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
 

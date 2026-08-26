@@ -35,7 +35,7 @@ class _DiscoverScreenBody extends StatelessWidget {
     AppColors.gradientPink,
     AppColors.gradientPurple,
     AppColors.gradientCyan,
-    Colors.white38,
+    Colors.grey,
   ];
 
   @override
@@ -44,7 +44,7 @@ class _DiscoverScreenBody extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: CustomScrollView(
           slivers: <Widget>[
@@ -59,7 +59,9 @@ class _DiscoverScreenBody extends StatelessWidget {
                 ),
                 child: Text(
                   l10n.guestDiscoverTitle,
-                  style: AppTextStyles.headingMedium,
+                  style: AppTextStyles.headingMedium.copyWith(
+                    color: context.themeTextPrimary,
+                  ),
                 ),
               ),
             ),
@@ -103,14 +105,14 @@ class _DiscoverScreenBody extends StatelessWidget {
                     Text(
                       l10n.guestTrendingNow,
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: Colors.white54,
+                        color: context.themeTextMuted,
                         letterSpacing: 1.2,
                       ),
                     ),
                     Text(
                       l10n.guestWorldwide,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: Colors.white54,
+                        color: context.themeTextMuted,
                       ),
                     ),
                   ],
@@ -139,13 +141,20 @@ class _DiscoverScreenBody extends StatelessWidget {
               ),
             ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
 
             // ── Conversation of the Day ────────────────────────────────────
-            SliverToBoxAdapter(
+            const SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: const DiscoverConversationCard(),
+                padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                child: DiscoverSectionLabel(label: 'CONVERSATION OF THE DAY'),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                child: DiscoverConversationCard(),
               ),
             ),
 

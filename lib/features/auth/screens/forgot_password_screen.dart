@@ -39,11 +39,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool isDark = context.isDarkMode;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
-        top: false,
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.screenPaddingHorizontal,
@@ -53,7 +53,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.lg),
                 const AuthBackButton(),
                 const SizedBox(height: AppSpacing.xxxxl),
 
@@ -62,10 +62,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2C1929),
+                    color: isDark
+                        ? const Color(0xFF2C1929)
+                        : const Color(0xFFFFEBF2),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: AppColors.gradientPink.withValues(alpha: 0.3),
+                      color: AppColors.gradientPink.withValues(
+                        alpha: isDark ? 0.3 : 0.2,
+                      ),
                       width: 1,
                     ),
                   ),
@@ -86,12 +90,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
                 Text(
                   l10n.authResetPasswordTitle,
-                  style: AppTextStyles.authHeaderTitle,
+                  style: AppTextStyles.authHeaderTitle.copyWith(
+                    color: context.themeTextPrimary,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   l10n.authResetPasswordSub,
-                  style: AppTextStyles.authHeaderSub,
+                  style: AppTextStyles.authHeaderSub.copyWith(
+                    color: context.themeTextSecondary,
+                  ),
                 ),
 
                 const SizedBox(height: AppSpacing.xxl),

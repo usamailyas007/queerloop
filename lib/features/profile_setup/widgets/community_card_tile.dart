@@ -26,12 +26,14 @@ class CommunityCardTile extends StatelessWidget {
           vertical: AppSpacing.md,
         ),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1B26),
+          color: isSelected
+              ? context.themeCyanBadgeBackground
+              : context.themeCardBackground,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
                 ? AppColors.gradientCyan
-                : Colors.white.withValues(alpha: 0.12),
+                : context.themeBorder,
             width: isSelected ? 1.5 : 1,
           ),
         ),
@@ -56,8 +58,8 @@ class CommunityCardTile extends StatelessWidget {
             Expanded(
               child: Text(
                 community.name,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.themeTextPrimary,
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
@@ -65,7 +67,7 @@ class CommunityCardTile extends StatelessWidget {
             ),
             Icon(
               isSelected ? Icons.check_rounded : Icons.add_rounded,
-              color: isSelected ? AppColors.gradientCyan : Colors.white54,
+              color: isSelected ? AppColors.gradientCyan : context.themeIconMuted,
               size: 20,
             ),
           ],

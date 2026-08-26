@@ -41,14 +41,14 @@ class ReportSentModalDialog extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.xl),
         decoration: BoxDecoration(
-          color: const Color(0xFF191622),
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: context.themeBorder,
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.5),
+              color: Colors.black.withValues(alpha: context.isDarkMode ? 0.5 : 0.08),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -62,7 +62,7 @@ class ReportSentModalDialog extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: const Color(0xFF0F2F34),
+                color: context.themeCyanBadgeBackground,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: AppColors.gradientCyan.withValues(alpha: 0.3),
@@ -82,7 +82,7 @@ class ReportSentModalDialog extends StatelessWidget {
               'Report sent',
               textAlign: TextAlign.center,
               style: AppTextStyles.titleMedium.copyWith(
-                color: Colors.white,
+                color: context.themeTextPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
               ),
@@ -95,7 +95,7 @@ class ReportSentModalDialog extends StatelessWidget {
               "A moderator reviews it within 24 hours. You'll get a notification with the decision — $cleanUsername is never told who reported.",
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white54,
+                color: context.themeTextSecondary,
                 fontSize: 12,
                 height: 1.35,
               ),
@@ -110,10 +110,12 @@ class ReportSentModalDialog extends StatelessWidget {
                 vertical: AppSpacing.sm + 4,
               ),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.04),
+                color: context.isDarkMode
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : Colors.black.withValues(alpha: 0.03),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
+                  color: context.themeBorder,
                 ),
               ),
               child: Column(
@@ -125,14 +127,14 @@ class ReportSentModalDialog extends StatelessWidget {
                       Text(
                         'Report ID',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: Colors.white38,
+                          color: context.themeTextMuted,
                           fontSize: 12,
                         ),
                       ),
                       Text(
                         reportId,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: Colors.white,
+                          color: context.themeTextPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 12,
                         ),
@@ -148,7 +150,7 @@ class ReportSentModalDialog extends StatelessWidget {
                       Text(
                         'Status',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: Colors.white38,
+                          color: context.themeTextMuted,
                           fontSize: 12,
                         ),
                       ),
@@ -158,7 +160,7 @@ class ReportSentModalDialog extends StatelessWidget {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F2F34),
+                          color: context.themeCyanBadgeBackground,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: AppColors.gradientCyan.withValues(alpha: 0.25),

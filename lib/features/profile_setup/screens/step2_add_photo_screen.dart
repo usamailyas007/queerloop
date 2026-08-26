@@ -52,7 +52,7 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -76,12 +76,16 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
                     children: <Widget>[
                       Text(
                         l10n.profileStep2Title,
-                        style: AppTextStyles.authHeaderTitle,
+                        style: AppTextStyles.authHeaderTitle.copyWith(
+                          color: context.themeTextPrimary,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
                         l10n.profileStep2Sub,
-                        style: AppTextStyles.authHeaderSub,
+                        style: AppTextStyles.authHeaderSub.copyWith(
+                          color: context.themeTextSecondary,
+                        ),
                       ),
 
                       const SizedBox(height: AppSpacing.xxl),
@@ -104,8 +108,8 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
                             ),
                           ),
                           child: Container(
-                            decoration: const BoxDecoration(
-                              color: AppColors.background,
+                            decoration: BoxDecoration(
+                              color: context.themeBackground,
                               shape: BoxShape.circle,
                             ),
                             padding: const EdgeInsets.all(3),
@@ -118,10 +122,14 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
                                       fit: BoxFit.cover,
                                     )
                                   : Container(
-                                      color: const Color(0xFF2C1929),
-                                      child: const Icon(
+                                      color: context.isDarkMode
+                                          ? const Color(0xFF2C1929)
+                                          : const Color(0xFFFFEBF2),
+                                      child: Icon(
                                         Icons.person_rounded,
-                                        color: Colors.white70,
+                                        color: context.isDarkMode
+                                            ? Colors.white70
+                                            : AppColors.gradientPink,
                                         size: 56,
                                       ),
                                     ),
@@ -148,12 +156,10 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
                                     vertical: AppSpacing.md,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF1E1B26),
+                                    color: context.themeCardBackground,
                                     borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.12,
-                                      ),
+                                      color: context.themeBorder,
                                     ),
                                   ),
                                   child: Row(
@@ -163,16 +169,16 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
                                         AppIcons.cameraSvg,
                                         width: 18,
                                         height: 18,
-                                        colorFilter: const ColorFilter.mode(
-                                          Colors.white,
+                                        colorFilter: ColorFilter.mode(
+                                          context.themeIcon,
                                           BlendMode.srcIn,
                                         ),
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
                                         l10n.profileTakePhoto,
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        style: TextStyle(
+                                          color: context.themeTextPrimary,
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -194,12 +200,10 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
                                     vertical: AppSpacing.md,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF1E1B26),
+                                    color: context.themeCardBackground,
                                     borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.12,
-                                      ),
+                                      color: context.themeBorder,
                                     ),
                                   ),
                                   child: Row(
@@ -209,16 +213,16 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
                                         AppIcons.uploadSvg,
                                         width: 18,
                                         height: 18,
-                                        colorFilter: const ColorFilter.mode(
-                                          Colors.white,
+                                        colorFilter: ColorFilter.mode(
+                                          context.themeIcon,
                                           BlendMode.srcIn,
                                         ),
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
                                         l10n.profileUpload,
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        style: TextStyle(
+                                          color: context.themeTextPrimary,
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -232,18 +236,15 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: AppSpacing.lg),
+                      const SizedBox(height: AppSpacing.xxl),
                     ],
                   ),
                 ),
               ),
 
-              // ── Fixed Bottom Button ────────────────────────────────────
+              // ── Bottom Fixed Button ────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.only(
-                  top: AppSpacing.md,
-                  bottom: AppSpacing.lg,
-                ),
+                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
                 child: AppGradientButton(
                   text: l10n.profileContinueBtn,
                   onPressed: widget.onNext,

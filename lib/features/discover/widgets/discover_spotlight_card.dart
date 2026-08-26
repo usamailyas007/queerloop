@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -11,11 +11,18 @@ class DiscoverSpotlightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        color: isDark
+            ? context.themeCardBackground
+            : const Color(0xFFEDEDF2),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0x4DB45C4D),
+          width: 1.5,
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -27,17 +34,17 @@ class DiscoverSpotlightCard extends StatelessWidget {
               Image.asset(
                 AppImages.trendingBottom,
                 width: double.infinity,
-                height: 140,
+                height: 145,
                 fit: BoxFit.cover,
               ),
-              // Dark gradient overlay for text readability
+              // Gradient overlay for text readability
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: <Color>[
-                        Colors.black.withValues(alpha: 0.4),
-                        Colors.black.withValues(alpha: 0.7),
+                        Colors.black.withValues(alpha: 0.35),
+                        Colors.black.withValues(alpha: 0.65),
                       ],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
@@ -48,7 +55,7 @@ class DiscoverSpotlightCard extends StatelessWidget {
               // Overlay text content over the image
               Positioned.fill(
                 child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
+                  padding: const EdgeInsets.all(AppSpacing.lg),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -57,7 +64,7 @@ class DiscoverSpotlightCard extends StatelessWidget {
                       Text(
                         "THIS WEEK'S PICK",
                         style: AppTextStyles.caption.copyWith(
-                          color: AppColors.gradientCyan,
+                          color: Colors.white,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.4,
                           fontSize: 11,
@@ -69,7 +76,7 @@ class DiscoverSpotlightCard extends StatelessWidget {
                         style: AppTextStyles.titleMedium.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w800,
-                          fontSize: 18,
+                          fontSize: 19,
                         ),
                       ),
                     ],
@@ -81,13 +88,16 @@ class DiscoverSpotlightCard extends StatelessWidget {
 
           // ── Info section below image ───────────────────────────────────
           Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Text(
               'Admin-curated every week. Chosen this week for its Pride showcase thread and genuinely welcoming new-performer nights.',
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white70,
-                fontSize: 13,
+                color: context.themeTextPrimary.withValues(
+                  alpha: isDark ? 0.9 : 0.85,
+                ),
+                fontSize: 13.5,
                 height: 1.45,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),

@@ -17,27 +17,41 @@ class DiscoverJoinPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.xs,
+          horizontal: AppSpacing.md + 2,
+          vertical: AppSpacing.xs + 2,
         ),
         decoration: BoxDecoration(
           gradient: isJoined ? null : AppColors.secondaryGradientButton,
-          color: isJoined ? Colors.white.withValues(alpha: 0.1) : null,
+          color: isJoined
+              ? (isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.transparent)
+              : null,
           borderRadius: BorderRadius.circular(AppRadius.pill),
           border: isJoined
-              ? Border.all(color: Colors.white.withValues(alpha: 0.2))
+              ? Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.2)
+                      : context.themeBorder,
+                  width: 1.2,
+                )
               : null,
         ),
         child: Text(
           isJoined ? 'Joined' : 'Join',
           style: AppTextStyles.bodySmall.copyWith(
-            color: isJoined ? Colors.white54 : Colors.white,
+            color: isJoined
+                ? (isDark ? Colors.white54 : context.themeTextPrimary)
+                : Colors.white,
             fontWeight: FontWeight.w700,
+            fontSize: 12,
           ),
         ),
       ),

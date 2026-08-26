@@ -66,6 +66,8 @@ class _AppTextFieldState extends State<AppTextField> {
 
   @override
   Widget build(BuildContext context) {
+    final Color iconColor = context.themeIconMuted;
+
     Widget? finalPrefix;
     if (widget.prefixIconPath != null) {
       final bool isSvg = widget.prefixIconPath!.endsWith('.svg');
@@ -76,8 +78,8 @@ class _AppTextFieldState extends State<AppTextField> {
                 widget.prefixIconPath!,
                 width: AppSizes.iconMd,
                 height: AppSizes.iconMd,
-                colorFilter: const ColorFilter.mode(
-                  Colors.white70,
+                colorFilter: ColorFilter.mode(
+                  iconColor,
                   BlendMode.srcIn,
                 ),
               )
@@ -85,7 +87,7 @@ class _AppTextFieldState extends State<AppTextField> {
                 widget.prefixIconPath!,
                 width: AppSizes.iconMd,
                 height: AppSizes.iconMd,
-                color: Colors.white70,
+                color: iconColor,
                 errorBuilder: (context, error, stackTrace) =>
                     widget.prefixIcon ?? const SizedBox.shrink(),
               ),
@@ -111,12 +113,12 @@ class _AppTextFieldState extends State<AppTextField> {
             _obscureText ? AppIcons.hide : AppIcons.visible,
             width: AppSizes.iconMd,
             height: AppSizes.iconMd,
-            color: Colors.white54,
+            color: iconColor,
             errorBuilder: (context, error, stackTrace) => Icon(
               _obscureText
                   ? Icons.visibility_off_outlined
                   : Icons.visibility_outlined,
-              color: Colors.white54,
+              color: iconColor,
               size: AppSizes.iconMd,
             ),
           ),
@@ -139,19 +141,23 @@ class _AppTextFieldState extends State<AppTextField> {
       autofillHints: widget.autofillHints,
       maxLines: widget.maxLines,
       maxLength: widget.maxLength,
-      style: AppTextStyles.inputFieldText,
+      style: AppTextStyles.inputFieldText.copyWith(
+        color: context.themeTextPrimary,
+      ),
       cursorColor: AppColors.gradientCyan,
       decoration: InputDecoration(
         hintText: widget.hintText,
-        hintStyle: AppTextStyles.inputHintText,
+        hintStyle: AppTextStyles.inputHintText.copyWith(
+          color: context.themeTextMuted,
+        ),
         prefixText: widget.prefixText,
-        prefixStyle: const TextStyle(
-          color: Colors.white54,
+        prefixStyle: TextStyle(
+          color: context.themeTextMuted,
           fontSize: 15,
           fontWeight: FontWeight.w500,
         ),
         filled: true,
-        fillColor: widget.fillColor ?? const Color(0xFF1E1B26),
+        fillColor: widget.fillColor ?? context.themeInputBackground,
         counterText: '',
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
@@ -170,14 +176,14 @@ class _AppTextFieldState extends State<AppTextField> {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.input),
           borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.12),
+            color: context.themeBorder,
             width: AppSizes.borderWidth,
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.input),
           borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.12),
+            color: context.themeBorder,
             width: AppSizes.borderWidth,
           ),
         ),

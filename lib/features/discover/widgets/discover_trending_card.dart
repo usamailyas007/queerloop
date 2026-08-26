@@ -35,9 +35,9 @@ class DiscoverTrendingCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          border: Border.all(color: context.themeBorder),
         ),
         child: Row(
           children: <Widget>[
@@ -56,7 +56,7 @@ class DiscoverTrendingCard extends StatelessWidget {
                   Text(
                     item.hashtag,
                     style: AppTextStyles.titleSmall.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -64,7 +64,7 @@ class DiscoverTrendingCard extends StatelessWidget {
                   Text(
                     item.postsCount,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                     ),
                   ),
                 ],

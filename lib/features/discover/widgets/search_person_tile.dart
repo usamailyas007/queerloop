@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_follow_button.dart';
@@ -51,13 +52,17 @@ class SearchPersonTile extends StatelessWidget {
                     children: <Widget>[
                       Text(
                         person.username,
-                        style: AppTextStyles.titleSmall
-                            .copyWith(color: Colors.white),
+                        style: AppTextStyles.titleSmall.copyWith(
+                          color: context.themeTextPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         '${person.pronouns} · ${person.followers}',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: Colors.white54),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: context.themeTextSecondary,
+                        ),
                       ),
                     ],
                   ),

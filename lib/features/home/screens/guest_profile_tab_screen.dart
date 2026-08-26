@@ -7,6 +7,8 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../profile/screens/privacy_policy_screen.dart';
+import '../../profile/screens/terms_of_service_screen.dart';
 
 class GuestProfileTabScreen extends StatelessWidget {
   const GuestProfileTabScreen({super.key});
@@ -16,7 +18,7 @@ class GuestProfileTabScreen extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -31,7 +33,7 @@ class GuestProfileTabScreen extends StatelessWidget {
               Text(
                 l10n.guestProfileHeader,
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: Colors.white38,
+                  color: context.themeTextMuted,
                   letterSpacing: 2.0,
                 ),
               ),
@@ -43,9 +45,12 @@ class GuestProfileTabScreen extends StatelessWidget {
                 child: Container(
                   width: 76,
                   height: 76,
-                  decoration: const BoxDecoration(
-                    color: AppColors.cyanBadgeBackground,
+                  decoration: BoxDecoration(
+                    color: context.themeCyanBadgeBackground,
                     shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.gradientCyan.withValues(alpha: 0.25),
+                    ),
                   ),
                   child: const Icon(
                     Icons.person_outline_rounded,
@@ -63,7 +68,7 @@ class GuestProfileTabScreen extends StatelessWidget {
                   l10n.guestProfileTitle,
                   textAlign: TextAlign.center,
                   style: AppTextStyles.titleMedium.copyWith(
-                    color: Colors.white,
+                    color: context.themeTextPrimary,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -81,7 +86,7 @@ class GuestProfileTabScreen extends StatelessWidget {
                     l10n.guestProfileSub,
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white60,
+                      color: context.themeTextSecondary,
                       height: 1.45,
                     ),
                   ),
@@ -110,17 +115,37 @@ class GuestProfileTabScreen extends StatelessWidget {
 
               const SizedBox(height: AppSpacing.xxl),
 
-              const Divider(color: Colors.white12, height: 1),
+              Divider(color: context.themeDivider, height: 1),
 
               const SizedBox(height: AppSpacing.lg),
 
               // Terms & Conditions Tile
-              _LegalTile(title: l10n.authTermsConditions, onTap: () {}),
+              _LegalTile(
+                title: l10n.authTermsConditions,
+                onTap: () {
+                  Navigator.push<void>(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const TermsOfServiceScreen(),
+                    ),
+                  );
+                },
+              ),
 
               const SizedBox(height: AppSpacing.md),
 
               // Privacy Policy Tile
-              _LegalTile(title: l10n.authPrivacyPolicy, onTap: () {}),
+              _LegalTile(
+                title: l10n.authPrivacyPolicy,
+                onTap: () {
+                  Navigator.push<void>(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const PrivacyPolicyScreen(),
+                    ),
+                  );
+                },
+              ),
 
               const Spacer(flex: 2),
             ],
@@ -144,9 +169,9 @@ class _LegalTile extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Row(
         children: <Widget>[
-          const Icon(
+          Icon(
             Icons.description_outlined,
-            color: Colors.white70,
+            color: context.themeIconMuted,
             size: AppSizes.iconMd,
           ),
           const SizedBox(width: AppSpacing.md),
@@ -154,14 +179,14 @@ class _LegalTile extends StatelessWidget {
             child: Text(
               title,
               style: AppTextStyles.bodyMedium.copyWith(
-                color: Colors.white,
+                color: context.themeTextPrimary,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          const Icon(
+          Icon(
             Icons.chevron_right_rounded,
-            color: Colors.white38,
+            color: context.themeIconMuted,
             size: AppSizes.iconMd,
           ),
         ],

@@ -16,7 +16,7 @@ class ChatBubble extends StatelessWidget {
 
   final ChatMessageModel message;
 
-  Widget _buildReactionPill(String emoji, int count) {
+  Widget _buildReactionPill(BuildContext context, String emoji, int count) {
     return Container(
       margin: const EdgeInsets.only(top: 4),
       padding: const EdgeInsets.symmetric(
@@ -24,10 +24,10 @@ class ChatBubble extends StatelessWidget {
         vertical: 3,
       ),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: context.themeCardBackground,
         borderRadius: BorderRadius.circular(AppRadius.pill),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.15),
+          color: context.themeBorder,
         ),
       ),
       child: Row(
@@ -41,7 +41,7 @@ class ChatBubble extends StatelessWidget {
           Text(
             '$count',
             style: AppTextStyles.caption.copyWith(
-              color: Colors.white,
+              color: context.themeTextPrimary,
               fontWeight: FontWeight.w600,
               fontSize: 11,
             ),
@@ -88,6 +88,7 @@ class ChatBubble extends StatelessWidget {
                   ),
                   if (message.reactionEmoji != null)
                     _buildReactionPill(
+                      context,
                       message.reactionEmoji!,
                       message.reactionCount ?? 1,
                     ),
@@ -108,7 +109,7 @@ class ChatBubble extends StatelessWidget {
                       vertical: AppSpacing.md,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
+                      color: context.themeCardBackground,
                       borderRadius: BorderRadius.circular(AppRadius.card),
                       border: Border.all(
                         color: AppColors.gradientCyan,
@@ -118,13 +119,14 @@ class ChatBubble extends StatelessWidget {
                     child: Text(
                       message.text ?? '',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontSize: 13,
                       ),
                     ),
                   ),
                   if (message.reactionEmoji != null)
                     _buildReactionPill(
+                      context,
                       message.reactionEmoji!,
                       message.reactionCount ?? 1,
                     ),
@@ -149,16 +151,16 @@ class ChatBubble extends StatelessWidget {
                       vertical: AppSpacing.md,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
+                      color: context.themeCardBackground,
                       borderRadius: BorderRadius.circular(AppRadius.card),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.themeBorder,
                       ),
                     ),
                     child: Text(
                       message.text ?? '',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontSize: 13,
                         height: 1.35,
                       ),
@@ -166,6 +168,7 @@ class ChatBubble extends StatelessWidget {
                   ),
                   if (message.reactionEmoji != null)
                     _buildReactionPill(
+                      context,
                       message.reactionEmoji!,
                       message.reactionCount ?? 1,
                     ),
@@ -200,6 +203,7 @@ class ChatBubble extends StatelessWidget {
                   ),
                   if (message.reactionEmoji != null)
                     _buildReactionPill(
+                      context,
                       message.reactionEmoji!,
                       message.reactionCount ?? 1,
                     ),
@@ -217,10 +221,10 @@ class ChatBubble extends StatelessWidget {
                   Container(
                     width: 210,
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
+                      color: context.themeCardBackground,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.1),
+                        color: context.themeBorder,
                       ),
                     ),
                     child: ClipRRect(
@@ -272,7 +276,7 @@ class ChatBubble extends StatelessWidget {
                               horizontal: AppSpacing.md,
                               vertical: AppSpacing.sm,
                             ),
-                            color: AppColors.cardBackground,
+                            color: context.themeCardBackground,
                             child: Row(
                               children: <Widget>[
                                 ClipOval(
@@ -288,7 +292,7 @@ class ChatBubble extends StatelessWidget {
                                   child: Text(
                                     message.postAuthor ?? "@ashinorbit's post",
                                     style: AppTextStyles.caption.copyWith(
-                                      color: Colors.white,
+                                      color: context.themeTextPrimary,
                                       fontWeight: FontWeight.w600,
                                       fontSize: 11,
                                     ),
@@ -303,6 +307,7 @@ class ChatBubble extends StatelessWidget {
                   ),
                   if (message.reactionEmoji != null)
                     _buildReactionPill(
+                      context,
                       message.reactionEmoji!,
                       message.reactionCount ?? 1,
                     ),
@@ -315,7 +320,7 @@ class ChatBubble extends StatelessWidget {
             Text(
               'Read 9:14',
               style: AppTextStyles.caption.copyWith(
-                color: Colors.white38,
+                color: context.themeTextMuted,
                 fontSize: 11,
               ),
             ),

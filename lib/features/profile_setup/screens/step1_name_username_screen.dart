@@ -50,7 +50,7 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
     final int bioLength = _bioController.text.length;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -76,7 +76,9 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
                       // Main Title: "What should we call you?"
                       Text(
                         l10n.profileSetupStep1Title,
-                        style: AppTextStyles.authHeaderTitle,
+                        style: AppTextStyles.authHeaderTitle.copyWith(
+                          color: context.themeTextPrimary,
+                        ),
                       ),
 
                       const SizedBox(height: AppSpacing.xs),
@@ -84,7 +86,9 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
                       // Subtitle
                       Text(
                         l10n.profileSetupStep1Sub,
-                        style: AppTextStyles.authHeaderSub,
+                        style: AppTextStyles.authHeaderSub.copyWith(
+                          color: context.themeTextSecondary,
+                        ),
                       ),
 
                       const SizedBox(height: AppSpacing.xxl),
@@ -93,7 +97,7 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
                       Text(
                         l10n.profileDisplayNameLabel,
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: Colors.white54,
+                          color: context.themeTextMuted,
                           letterSpacing: 1.2,
                         ),
                       ),
@@ -113,7 +117,7 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
                       Text(
                         l10n.profileUsernameLabel,
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: Colors.white54,
+                          color: context.themeTextMuted,
                           letterSpacing: 1.2,
                         ),
                       ),
@@ -156,14 +160,14 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
                           Text(
                             l10n.profileBioLabel,
                             style: AppTextStyles.labelSmall.copyWith(
-                              color: Colors.white54,
+                              color: context.themeTextMuted,
                               letterSpacing: 1.2,
                             ),
                           ),
                           Text(
                             ' · $bioLength / 250',
                             style: AppTextStyles.labelSmall.copyWith(
-                              color: Colors.white54,
+                              color: context.themeTextMuted,
                               letterSpacing: 1.2,
                             ),
                           ),

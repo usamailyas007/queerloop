@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -38,12 +39,16 @@ class AuthHeader extends StatelessWidget {
         const SizedBox(height: AppSpacing.xl),
         Text(
           title,
-          style: AppTextStyles.authHeaderTitle,
+          style: AppTextStyles.authHeaderTitle.copyWith(
+            color: context.themeTextPrimary,
+          ),
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
           subtitle,
-          style: AppTextStyles.authHeaderSub,
+          style: AppTextStyles.authHeaderSub.copyWith(
+            color: context.themeTextSecondary,
+          ),
         ),
       ],
     );

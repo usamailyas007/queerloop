@@ -11,6 +11,8 @@ import '../../../core/widgets/app_social_button.dart';
 import '../../../core/widgets/app_switch.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../home/provider/home_feed_provider.dart';
+import '../../home/screens/home_screen.dart';
 import '../auth_provider.dart';
 import '../widgets/auth_divider.dart';
 import '../widgets/auth_footer_link.dart';
@@ -38,16 +40,29 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _submit() {
     if (_formKey.currentState?.validate() ?? false) {
+      context.read<HomeFeedProvider>().resetToHome();
       context.read<AuthProvider>().signIn(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        AppRoutes.home,
-        (Route<dynamic> route) => false,
-      );
+      _goHome(context);
     }
+  }
+
+  /// Navigates to HomeScreen with NO transition animation.
+  /// A zero-duration instant swap prevents the layout-calculation window
+  /// that causes the bottom nav bar to briefly appear at the top during a
+  /// standard MaterialPageRoute slide-in animation.
+  static void _goHome(BuildContext context, {bool isGuest = false}) {
+    Navigator.pushAndRemoveUntil<void>(
+      context,
+      PageRouteBuilder<void>(
+        pageBuilder: (ctx, anim, anim2) => HomeScreen(isGuest: isGuest),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+      (Route<dynamic> route) => false,
+    );
   }
 
   @override
@@ -61,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -142,7 +157,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(width: AppSpacing.xs),
                           Text(
                             l10n.authStaySignedIn,
-                            style: AppTextStyles.staySignedInText,
+                            style: AppTextStyles.staySignedInText.copyWith(
+                              color: context.themeTextSecondary,
+                            ),
                           ),
                           const Spacer(),
                           GestureDetector(
@@ -220,14 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     normalText: l10n.authJustLooking,
                     highlightedText: l10n.authBrowseAsGuest,
                     highlightGradient: AppColors.primaryGradientButton,
-                    onTap: () {
-                      Navigator.pushNamedAndRemoveUntil(
-                        context,
-                        AppRoutes.home,
-                        (Route<dynamic> route) => false,
-                        arguments: true,
-                      );
-                    },
+                    onTap: () => _goHome(context, isGuest: true),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   AuthFooterLink(

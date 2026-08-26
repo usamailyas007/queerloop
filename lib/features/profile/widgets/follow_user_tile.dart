@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
@@ -52,7 +53,7 @@ class FollowUserTile extends StatelessWidget {
                         Text(
                           username,
                           style: AppTextStyles.titleSmall.copyWith(
-                            color: Colors.white,
+                            color: context.themeTextPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
                           ),
@@ -61,7 +62,7 @@ class FollowUserTile extends StatelessWidget {
                         Text(
                           '$name • $pronouns',
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: Colors.white54,
+                            color: context.themeTextSecondary,
                             fontSize: 12,
                           ),
                         ),

@@ -62,9 +62,9 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
         widget.username.startsWith('@') ? widget.username : '@${widget.username}';
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
@@ -83,7 +83,7 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: context.themeBorderStrong,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -96,9 +96,9 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                 children: <Widget>[
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(
+                    child: Icon(
                       Icons.chevron_left_rounded,
-                      color: Colors.white,
+                      color: context.themeIcon,
                       size: 24,
                     ),
                   ),
@@ -107,7 +107,7 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                     child: Text(
                       'Why are you reporting this comment?',
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 16,
                       ),
@@ -122,10 +122,10 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: AppColors.cardBackground,
+                  color: context.themeCardBackground,
                   borderRadius: BorderRadius.circular(AppRadius.card),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: context.themeBorder,
                   ),
                 ),
                 child: Row(
@@ -146,7 +146,7 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                           Text(
                             '$cleanUsername commented',
                             style: AppTextStyles.bodyMedium.copyWith(
-                              color: Colors.white,
+                              color: context.themeTextPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
                             ),
@@ -157,7 +157,7 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: Colors.white54,
+                              color: context.themeTextMuted,
                               fontSize: 12,
                             ),
                           ),
@@ -184,12 +184,12 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                       vertical: AppSpacing.md,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
+                      color: context.themeCardBackground,
                       borderRadius: BorderRadius.circular(AppRadius.card),
                       border: Border.all(
                         color: isSelected
                             ? AppColors.gradientCyan
-                            : Colors.white.withValues(alpha: 0.08),
+                            : context.themeBorder,
                         width: isSelected ? 1.5 : 1.0,
                       ),
                     ),
@@ -199,7 +199,7 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                         Text(
                           reason,
                           style: AppTextStyles.bodyMedium.copyWith(
-                            color: Colors.white,
+                            color: context.themeTextPrimary,
                             fontWeight:
                                 isSelected ? FontWeight.w700 : FontWeight.w500,
                             fontSize: 14,
@@ -211,7 +211,7 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                               : Icons.radio_button_unchecked_rounded,
                           color: isSelected
                               ? AppColors.gradientCyan
-                              : Colors.white24,
+                              : context.themeBorderStrong,
                           size: 20,
                         ),
                       ],
@@ -229,10 +229,10 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                   vertical: AppSpacing.sm,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.cardBackground,
+                  color: context.themeCardBackground,
                   borderRadius: BorderRadius.circular(AppRadius.card),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: context.themeBorder,
                   ),
                 ),
                 child: Row(
@@ -241,7 +241,7 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                     Text(
                       'Also block $cleanUsername',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: Colors.white70,
+                        color: context.themeTextSecondary,
                         fontWeight: FontWeight.w500,
                         fontSize: 13,
                       ),

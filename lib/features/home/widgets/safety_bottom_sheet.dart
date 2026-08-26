@@ -23,9 +23,9 @@ class SafetyBottomSheet extends StatelessWidget {
         username.startsWith('@') ? username : '@$username';
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF12101A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
         top: 12,
@@ -45,7 +45,7 @@ class SafetyBottomSheet extends StatelessWidget {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: context.themeBorderStrong,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -68,8 +68,8 @@ class SafetyBottomSheet extends StatelessWidget {
                 const SizedBox(width: 10),
                 Text(
                   l10n.safetyTitle,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.themeTextPrimary,
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                   ),
@@ -82,8 +82,8 @@ class SafetyBottomSheet extends StatelessWidget {
             // ── Subtitle ─────────────────────────────────────────────────────
             Text(
               l10n.safetySub,
-              style: const TextStyle(
-                color: Colors.white54,
+              style: TextStyle(
+                color: context.themeTextMuted,
                 fontSize: 13,
                 height: 1.35,
               ),
@@ -97,8 +97,8 @@ class SafetyBottomSheet extends StatelessWidget {
                 AppIcons.report,
                 width: 18,
                 height: 18,
-                colorFilter: const ColorFilter.mode(
-                  Colors.white70,
+                colorFilter: ColorFilter.mode(
+                  context.themeTextSecondary,
                   BlendMode.srcIn,
                 ),
               ),
@@ -119,9 +119,9 @@ class SafetyBottomSheet extends StatelessWidget {
 
             // ── 2. Block User Tile ───────────────────────────────────────────
             _SafetyActionTile(
-              iconChild: const Icon(
+              iconChild: Icon(
                 Icons.block_rounded,
-                color: Colors.white70,
+                color: context.themeTextSecondary,
                 size: 20,
               ),
               title: l10n.safetyBlockTitle,
@@ -145,17 +145,17 @@ class SafetyBottomSheet extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E1B26),
+                  color: context.themeCardBackground,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.12),
+                    color: context.themeBorder,
                   ),
                 ),
                 child: Center(
                   child: Text(
                     l10n.shareCancelBtn,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.themeTextPrimary,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -185,26 +185,36 @@ class _SafetyActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1B26),
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.12),
+            color: context.themeBorder,
           ),
         ),
         child: Row(
           children: <Widget>[
             Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(
-                color: Color(0xFF2C2738),
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.transparent,
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : context.themeBorder,
+                  width: 1.1,
+                ),
               ),
               child: Center(child: iconChild),
             ),
@@ -215,8 +225,8 @@ class _SafetyActionTile extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.themeTextPrimary,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -224,17 +234,17 @@ class _SafetyActionTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: Colors.white54,
+                    style: TextStyle(
+                      color: context.themeTextMuted,
                       fontSize: 12,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
-              color: Colors.white38,
+              color: context.themeTextMuted,
               size: 20,
             ),
           ],

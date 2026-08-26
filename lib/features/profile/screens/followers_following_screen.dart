@@ -4,10 +4,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_follow_button.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_text_field.dart';
-import '../widgets/follow_user_tile.dart';
 
 class FollowersFollowingScreen extends StatefulWidget {
   const FollowersFollowingScreen({
@@ -66,7 +66,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
     },
   ];
 
-  static const List<Map<String, String>> _users = <Map<String, String>>[
+  static final List<Map<String, String>> _users = <Map<String, String>>[
     <String, String>{
       'username': 'jules.does',
       'name': 'Jules',
@@ -106,12 +106,14 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
     final List<Map<String, String>> filteredUsers = _selectedTab == 1
         ? _users.where((Map<String, String> u) => u['isFollowing'] == 'true').toList()
         : _users;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -129,12 +131,20 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -145,7 +155,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                       child: Text(
                         'ashinorbit',
                         style: AppTextStyles.titleMedium.copyWith(
-                          color: Colors.white,
+                          color: context.themeTextPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 17,
                         ),
@@ -171,8 +181,8 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                           'Followers',
                           style: AppTextStyles.titleSmall.copyWith(
                             color: _selectedTab == 0
-                                ? Colors.white
-                                : Colors.white54,
+                                ? context.themeTextPrimary
+                                : context.themeTextMuted,
                             fontWeight: _selectedTab == 0
                                 ? FontWeight.w700
                                 : FontWeight.w500,
@@ -184,7 +194,9 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                           height: 2.5,
                           width: 48,
                           color: _selectedTab == 0
-                              ? AppColors.gradientPink
+                              ? (_selectedTab == 0 && !isDark
+                                  ? const Color(0xFF12101A)
+                                  : AppColors.gradientPink)
                               : Colors.transparent,
                         ),
                       ],
@@ -202,8 +214,8 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                           'Following',
                           style: AppTextStyles.titleSmall.copyWith(
                             color: _selectedTab == 1
-                                ? Colors.white
-                                : Colors.white54,
+                                ? context.themeTextPrimary
+                                : context.themeTextMuted,
                             fontWeight: _selectedTab == 1
                                 ? FontWeight.w700
                                 : FontWeight.w500,
@@ -215,7 +227,9 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                           height: 2.5,
                           width: 48,
                           color: _selectedTab == 1
-                              ? AppColors.gradientPink
+                              ? (_selectedTab == 1 && !isDark
+                                  ? const Color(0xFF12101A)
+                                  : AppColors.gradientPink)
                               : Colors.transparent,
                         ),
                       ],
@@ -224,7 +238,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
 
                   const SizedBox(width: AppSpacing.xl),
 
-                  // 3. Requests Tab (with Pink Count Badge)
+                  // 3. Requests Tab
                   GestureDetector(
                     onTap: () => setState(() => _selectedTab = 2),
                     child: Column(
@@ -235,8 +249,8 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                               'Requests',
                               style: AppTextStyles.titleSmall.copyWith(
                                 color: _selectedTab == 2
-                                    ? Colors.white
-                                    : Colors.white54,
+                                    ? context.themeTextPrimary
+                                    : context.themeTextMuted,
                                 fontWeight: _selectedTab == 2
                                     ? FontWeight.w700
                                     : FontWeight.w500,
@@ -245,20 +259,20 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                             ),
                             const SizedBox(width: 4),
                             Container(
-                              width: 18,
-                              height: 18,
-                              decoration: const BoxDecoration(
-                                color: AppColors.gradientPink,
-                                shape: BoxShape.circle,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
                               ),
-                              child: Center(
-                                child: Text(
-                                  '${_requests.length}',
-                                  style: AppTextStyles.caption.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 11,
-                                  ),
+                              decoration: BoxDecoration(
+                                color: AppColors.gradientPink,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                '4',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
@@ -267,7 +281,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                         const SizedBox(height: 6),
                         Container(
                           height: 2.5,
-                          width: 48,
+                          width: 58,
                           color: _selectedTab == 2
                               ? AppColors.gradientPink
                               : Colors.transparent,
@@ -279,7 +293,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
               ),
             ),
 
-            const Divider(color: Color(0xFF2A2733), height: 1),
+            Divider(color: context.themeDivider, height: 1),
 
             const SizedBox(height: AppSpacing.md),
 
@@ -288,119 +302,255 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: AppTextField(
                 controller: _searchController,
-                hintText: 'Search',
-                prefixIcon: const Icon(
+                hintText: _selectedTab == 2
+                    ? 'Search requests'
+                    : 'Search',
+                prefixIcon: Icon(
                   Icons.search_rounded,
-                  color: Colors.white54,
+                  color: context.themeIconMuted,
                   size: 20,
                 ),
               ),
             ),
 
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.sm),
 
-            // ── List Body ───────────────────────────────────────────────────
+            // ── Body List ───────────────────────────────────────────────────
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                children: <Widget>[
-                  // Tab 2: Requests ONLY
-                  if (_selectedTab == 2) ...<Widget>[
-                    ..._requests.map((Map<String, String> req) {
-                      return Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: AppColors.cardBackground,
-                          borderRadius: BorderRadius.circular(AppRadius.card),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.08),
-                          ),
-                        ),
-                        child: Row(
-                          children: <Widget>[
-                            ClipOval(
-                              child: Image.asset(
-                                req['avatar']!,
-                                width: 40,
-                                height: 40,
-                                fit: BoxFit.cover,
-                              ),
+              child: _selectedTab == 2
+                  ? ListView.separated(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.md,
+                      ),
+                      itemCount: _requests.length,
+                      separatorBuilder: (BuildContext context, int index) =>
+                          const SizedBox(height: AppSpacing.md),
+                      itemBuilder: (BuildContext context, int index) {
+                        final Map<String, String> req = _requests[index];
+
+                        return Container(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          decoration: BoxDecoration(
+                            color: context.themeCardBackground,
+                            borderRadius: BorderRadius.circular(AppRadius.card),
+                            border: Border.all(
+                              color: context.themeBorder,
                             ),
-                            const SizedBox(width: AppSpacing.md),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Row(
                                 children: <Widget>[
-                                  Text(
-                                    req['username']!,
-                                    style: AppTextStyles.titleSmall.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
+                                  ClipOval(
+                                    child: Image.asset(
+                                      req['avatar']!,
+                                      width: 40,
+                                      height: 40,
+                                      fit: BoxFit.cover,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    req['subtitle']!,
-                                    style: AppTextStyles.bodySmall.copyWith(
-                                      color: Colors.white54,
-                                      fontSize: 12,
+                                  const SizedBox(width: AppSpacing.md),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(
+                                          '@${req['username']}',
+                                          style: AppTextStyles.titleSmall
+                                              .copyWith(
+                                            color: context.themeTextPrimary,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          req['subtitle']!,
+                                          style: AppTextStyles.bodySmall
+                                              .copyWith(
+                                            color: context.themeTextSecondary,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: AppSpacing.md),
+                              Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: AppGradientButton(
+                                      text: 'Accept',
+                                      height: 36,
+                                      onPressed: () {
+                                        setState(() {
+                                          _requests.removeAt(index);
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.md),
+                                  Expanded(
+                                    child: AppOutlineButton(
+                                      text: 'Decline',
+                                      height: 36,
+                                      onPressed: () {
+                                        setState(() {
+                                          _requests.removeAt(index);
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.xs,
+                      ),
+                      children: <Widget>[
+                        // Top Request Banner in Followers Tab (Matching Image 2)
+                        if (_selectedTab == 0 && _requests.isNotEmpty) ...<Widget>[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm + 2,
                             ),
-                            const SizedBox(width: AppSpacing.sm),
-                            AppGradientButton(
-                              text: 'Accept',
-                              height: 32,
-                              width: 76,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.pill),
-                              onPressed: () {
-                                setState(() {
-                                  _requests.removeWhere(
-                                      (r) => r['username'] == req['username']);
-                                });
-                              },
+                            decoration: BoxDecoration(
+                              color: context.themeCardBackground,
+                              borderRadius: BorderRadius.circular(AppRadius.card),
+                              border: Border.all(
+                                color: context.themeBorder,
+                              ),
                             ),
-                            const SizedBox(width: AppSpacing.xs),
-                            AppOutlineButton(
-                              text: 'Decline',
-                              height: 32,
-                              width: 76,
-                              onPressed: () {
-                                setState(() {
-                                  _requests.removeWhere(
-                                      (r) => r['username'] == req['username']);
-                                });
-                              },
+                            child: Row(
+                              children: <Widget>[
+                                ClipOval(
+                                  child: Image.asset(
+                                    _requests.first['avatar']!,
+                                    width: 38,
+                                    height: 38,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        _requests.first['username']!,
+                                        style: AppTextStyles.titleSmall.copyWith(
+                                          color: context.themeTextPrimary,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      Text(
+                                        _requests.first['subtitle']!,
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: context.themeTextSecondary,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                AppFollowButton(
+                                  isFollowing: false,
+                                  onTap: () {
+                                    setState(() {
+                                      _requests.removeAt(0);
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                AppOutlineButton(
+                                  text: 'Decline',
+                                  height: 30,
+                                  width: 68,
+                                  fontSize: 11,
+                                  onPressed: () {
+                                    setState(() {
+                                      _requests.removeAt(0);
+                                    });
+                                  },
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ]
+                          ),
+                        ],
 
-                  // Tab 0 & 1: Followers / Following List
-                  else ...<Widget>[
-                    ...filteredUsers.map((Map<String, String> user) {
-                      return FollowUserTile(
-                        username: user['username']!,
-                        name: user['name']!,
-                        pronouns: user['pronouns']!,
-                        avatarAsset: user['avatar']!,
-                        isFollowing: user['isFollowing'] == 'true',
-                        onTapUser: () {},
-                        onToggleFollow: () {},
-                      );
-                    }),
-                  ],
-
-                  const SizedBox(height: AppSpacing.xl),
-                ],
-              ),
+                        // Follow List
+                        ...filteredUsers.map((Map<String, String> user) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                            child: Row(
+                              children: <Widget>[
+                                ClipOval(
+                                  child: Image.asset(
+                                    user['avatar']!,
+                                    width: 44,
+                                    height: 44,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        user['username']!,
+                                        style: AppTextStyles.titleSmall.copyWith(
+                                          color: context.themeTextPrimary,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${user['name']} • ${user['pronouns']}',
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: context.themeTextSecondary,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.md),
+                                AppFollowButton(
+                                  isFollowing: user['isFollowing'] == 'true',
+                                  onTap: () {
+                                    setState(() {
+                                      user['isFollowing'] =
+                                          user['isFollowing'] == 'true'
+                                              ? 'false'
+                                              : 'true';
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
             ),
           ],
         ),

@@ -28,8 +28,8 @@ class StepProgressHeader extends StatelessWidget {
             AuthBackButton(onTap: onBack),
             Text(
               'STEP $currentStep OF $totalSteps',
-              style: const TextStyle(
-                color: Colors.white54,
+              style: TextStyle(
+                color: context.themeTextMuted,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 1.5,
@@ -38,12 +38,12 @@ class StepProgressHeader extends StatelessWidget {
             onSkip != null
                 ? GestureDetector(
                     onTap: onSkip,
-                    child: const Padding(
-                      padding: EdgeInsets.all(8.0),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
                       child: Text(
                         'Skip',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: context.themeTextSecondary,
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -66,7 +66,7 @@ class StepProgressHeader extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isFilled
                       ? AppColors.gradientPink
-                      : Colors.white.withValues(alpha: 0.12),
+                      : context.themeBorder,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),

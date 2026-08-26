@@ -60,7 +60,8 @@ class ChatMessageActionSheet extends StatefulWidget {
 class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
   bool _showAllEmojis = false;
 
-  Widget _buildActionItem({
+  Widget _buildActionItem(
+    BuildContext context, {
     required Widget iconWidget,
     required String label,
     bool isCyanHighlight = false,
@@ -81,7 +82,9 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
             Text(
               label,
               style: AppTextStyles.bodyMedium.copyWith(
-                color: isCyanHighlight ? AppColors.gradientCyan : Colors.white,
+                color: isCyanHighlight
+                    ? AppColors.gradientCyan
+                    : context.themeTextPrimary,
                 fontWeight: isCyanHighlight ? FontWeight.w700 : FontWeight.w500,
                 fontSize: 14,
               ),
@@ -115,10 +118,10 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
                 vertical: AppSpacing.xs,
               ),
               decoration: BoxDecoration(
-                color: AppColors.cardBackground,
+                color: context.themeCardBackground,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.12),
+                  color: context.themeBorder,
                 ),
               ),
               child: SingleChildScrollView(
@@ -158,14 +161,22 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
                         padding: const EdgeInsets.all(4),
                         margin: const EdgeInsets.only(left: 4),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.08),
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.transparent,
                           shape: BoxShape.circle,
+                          border: Border.all(
+                            color: context.isDarkMode
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : context.themeBorder,
+                            width: 1.1,
+                          ),
                         ),
                         child: Icon(
                           _showAllEmojis
                               ? Icons.remove_rounded
                               : Icons.add_rounded,
-                          color: Colors.white70,
+                          color: context.themeIconMuted,
                           size: 18,
                         ),
                       ),
@@ -181,10 +192,10 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
             Container(
               padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
-                color: AppColors.cardBackground,
+                color: context.themeCardBackground,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
+                  color: context.themeBorder,
                 ),
               ),
               child: Column(
@@ -192,9 +203,10 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
                 children: <Widget>[
                   // 1. Reply
                   _buildActionItem(
-                    iconWidget: const Icon(
+                    context,
+                    iconWidget: Icon(
                       Icons.reply_rounded,
-                      color: Colors.white70,
+                      color: context.themeTextSecondary,
                       size: 20,
                     ),
                     label: 'Reply',
@@ -208,12 +220,13 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
 
                   // 2. Copy (using AppIcons.copyLink)
                   _buildActionItem(
+                    context,
                     iconWidget: SvgPicture.asset(
                       AppIcons.copyLink,
                       width: 18,
                       height: 18,
-                      colorFilter: const ColorFilter.mode(
-                        Colors.white70,
+                      colorFilter: ColorFilter.mode(
+                        context.themeTextSecondary,
                         BlendMode.srcIn,
                       ),
                     ),
@@ -237,12 +250,13 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
 
                   // 3. Delete for me (available on both received & sent msgs, using AppIcons.hide)
                   _buildActionItem(
+                    context,
                     iconWidget: SvgPicture.asset(
                       AppIcons.hide,
                       width: 18,
                       height: 18,
-                      colorFilter: const ColorFilter.mode(
-                        Colors.white70,
+                      colorFilter: ColorFilter.mode(
+                        context.themeTextSecondary,
                         BlendMode.srcIn,
                       ),
                     ),
@@ -259,6 +273,7 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
                   if (widget.isMe) ...<Widget>[
                     const SizedBox(height: AppSpacing.xs),
                     _buildActionItem(
+                      context,
                       iconWidget: SvgPicture.asset(
                         AppIcons.delete,
                         width: 18,

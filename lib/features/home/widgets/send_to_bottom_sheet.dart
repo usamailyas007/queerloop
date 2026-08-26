@@ -45,9 +45,9 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.82,
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
         top: 12,
@@ -63,7 +63,7 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: context.themeBorderStrong,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -78,9 +78,9 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                 children: <Widget>[
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(
+                    child: Icon(
                       Icons.chevron_left_rounded,
-                      color: Colors.white,
+                      color: context.themeIcon,
                       size: AppSizes.iconLg,
                     ),
                   ),
@@ -88,7 +88,7 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                   Text(
                     l10n.sendToTitle,
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -96,7 +96,7 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                   Text(
                     l10n.sendToSelected,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                     ),
                   ),
                 ],
@@ -114,10 +114,10 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
+                      color: context.themeCardBackground,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.12),
+                        color: context.themeBorder,
                       ),
                     ),
                     child: Row(
@@ -132,23 +132,23 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                           ),
                         ),
                         const SizedBox(width: AppSpacing.md),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Text(
                                 "@ashinorbit's post",
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              SizedBox(height: 2),
+                              const SizedBox(height: 2),
                               Text(
                                 'Binder fit check · 12.4K views',
                                 style: TextStyle(
-                                  color: Colors.white54,
+                                  color: context.themeTextMuted,
                                   fontSize: 12,
                                 ),
                               ),
@@ -174,7 +174,7 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                   Text(
                     l10n.sendToTopConnections,
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       letterSpacing: 1.2,
                     ),
                   ),
@@ -239,32 +239,32 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                           ),
                         ),
                         const SizedBox(width: AppSpacing.md),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Text(
                                 'kit.lumen',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              SizedBox(height: 2),
+                              const SizedBox(height: 2),
                               Text(
                                 "Private account · can't receive posts",
                                 style: TextStyle(
-                                  color: Colors.white54,
+                                  color: context.themeTextMuted,
                                   fontSize: 12,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const Icon(
+                        Icon(
                           Icons.lock_outline_rounded,
-                          color: Colors.white38,
+                          color: context.themeIconMuted,
                           size: AppSizes.iconSm,
                         ),
                       ],
@@ -366,7 +366,7 @@ class _ContactListTile extends StatelessWidget {
                   Text(
                     handle,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -374,7 +374,7 @@ class _ContactListTile extends StatelessWidget {
                   Text(
                     subText,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                     ),
                   ),
                 ],
@@ -387,7 +387,9 @@ class _ContactListTile extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: isSelected ? AppColors.gradientPink : Colors.transparent,
                 border: Border.all(
-                  color: isSelected ? AppColors.gradientPink : Colors.white38,
+                  color: isSelected
+                      ? AppColors.gradientPink
+                      : (context.isDarkMode ? Colors.white38 : AppColors.lightBorderStrong),
                   width: 1.5,
                 ),
               ),

@@ -46,6 +46,8 @@ class ChatOptionsBottomSheet extends StatelessWidget {
     bool isCyanHighlight = false,
     VoidCallback? onTap,
   }) {
+    final bool isDark = context.isDarkMode;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -55,24 +57,38 @@ class ChatOptionsBottomSheet extends StatelessWidget {
           vertical: AppSpacing.md,
         ),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
             color: isCyanHighlight
                 ? AppColors.gradientCyan
-                : Colors.white.withValues(alpha: 0.08),
+                : context.themeBorder,
             width: isCyanHighlight ? 1.5 : 1.0,
           ),
         ),
         child: Row(
           children: <Widget>[
-            // Icon in dark circular container
+            // Icon in circular container matching requested style
             Container(
-              width: 36,
-              height: 36,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
+                color: isDark
+                    ? (isCyanHighlight
+                        ? AppColors.gradientCyan.withValues(alpha: 0.15)
+                        : Colors.white.withValues(alpha: 0.08))
+                    : Colors.transparent,
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark
+                      ? (isCyanHighlight
+                          ? AppColors.gradientCyan.withValues(alpha: 0.3)
+                          : Colors.white.withValues(alpha: 0.12))
+                      : (isCyanHighlight
+                          ? AppColors.gradientCyan.withValues(alpha: 0.4)
+                          : context.themeBorder),
+                  width: 1.1,
+                ),
               ),
               child: Center(child: icon),
             ),
@@ -89,7 +105,7 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                     style: AppTextStyles.bodyMedium.copyWith(
                       color: isCyanHighlight
                           ? AppColors.gradientCyan
-                          : Colors.white,
+                          : context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
                     ),
@@ -98,7 +114,7 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                   Text(
                     subtitle,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       fontSize: 12,
                     ),
                   ),
@@ -123,9 +139,9 @@ class ChatOptionsBottomSheet extends StatelessWidget {
         username.startsWith('@') ? username : '@$username';
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
@@ -144,7 +160,7 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: context.themeBorderStrong,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -156,7 +172,7 @@ class ChatOptionsBottomSheet extends StatelessWidget {
               Text(
                 cleanUsername,
                 style: AppTextStyles.titleMedium.copyWith(
-                  color: Colors.white,
+                  color: context.themeTextPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 18,
                 ),
@@ -169,18 +185,18 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                 context: context,
                 icon: SvgPicture.asset(
                   AppIcons.mute,
-                  width: 20,
-                  height: 20,
-                  colorFilter: const ColorFilter.mode(
-                    Colors.white70,
+                  width: 18,
+                  height: 18,
+                  colorFilter: ColorFilter.mode(
+                    context.themeTextSecondary,
                     BlendMode.srcIn,
                   ),
                 ),
                 title: 'Mute conversation',
                 subtitle: 'Pick how long — you can undo anytime',
-                trailing: const Icon(
+                trailing: Icon(
                   Icons.chevron_right_rounded,
-                  color: Colors.white38,
+                  color: context.themeIconMuted,
                   size: 20,
                 ),
                 onTap: () {
@@ -199,18 +215,18 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                 context: context,
                 icon: SvgPicture.asset(
                   AppIcons.hide,
-                  width: 20,
-                  height: 20,
-                  colorFilter: const ColorFilter.mode(
-                    Colors.white70,
+                  width: 18,
+                  height: 18,
+                  colorFilter: ColorFilter.mode(
+                    context.themeTextSecondary,
                     BlendMode.srcIn,
                   ),
                 ),
                 title: 'Restrict $cleanUsername',
                 subtitle: 'Their messages move to requests automatically',
-                trailing: const Icon(
+                trailing: Icon(
                   Icons.chevron_right_rounded,
-                  color: Colors.white38,
+                  color: context.themeIconMuted,
                   size: 20,
                 ),
                 onTap: () {
@@ -229,7 +245,7 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                 icon: const Icon(
                   Icons.block_rounded,
                   color: AppColors.gradientCyan,
-                  size: 20,
+                  size: 18,
                 ),
                 title: 'Block $cleanUsername',
                 subtitle: 'Ends the conversation, removes all contact',
@@ -250,7 +266,7 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                 icon: const Icon(
                   Icons.flag_outlined,
                   color: AppColors.gradientCyan,
-                  size: 20,
+                  size: 18,
                 ),
                 title: 'Report $cleanUsername',
                 subtitle: 'Send this conversation to a moderator',
@@ -268,10 +284,10 @@ class ChatOptionsBottomSheet extends StatelessWidget {
               // 5. Typing Indicator toggle switch
               _buildOptionTile(
                 context: context,
-                icon: const Icon(
+                icon: Icon(
                   Icons.keyboard_outlined,
-                  color: Colors.white70,
-                  size: 20,
+                  color: context.themeTextSecondary,
+                  size: 18,
                 ),
                 title: 'Typing Indicator',
                 subtitle: "Let others see when you're typing a message.",
@@ -291,17 +307,17 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: AppColors.cardBackground,
+                    color: context.themeCardBackground,
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.1),
+                      color: context.themeBorder,
                     ),
                   ),
                   child: Center(
                     child: Text(
                       'Cancel',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

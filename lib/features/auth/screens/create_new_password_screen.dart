@@ -51,11 +51,11 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool isDark = context.isDarkMode;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
-        top: false,
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.screenPaddingHorizontal,
@@ -65,7 +65,7 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.lg),
                 const AuthBackButton(),
                 const SizedBox(height: AppSpacing.xxxxl),
 
@@ -74,10 +74,14 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2C1929),
+                    color: isDark
+                        ? const Color(0xFF2C1929)
+                        : const Color(0xFFFFEBF2),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: AppColors.gradientPink.withValues(alpha: 0.3),
+                      color: AppColors.gradientPink.withValues(
+                        alpha: isDark ? 0.3 : 0.2,
+                      ),
                       width: 1,
                     ),
                   ),
@@ -98,12 +102,16 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
 
                 Text(
                   l10n.authCreateNewPasswordTitle,
-                  style: AppTextStyles.authHeaderTitle,
+                  style: AppTextStyles.authHeaderTitle.copyWith(
+                    color: context.themeTextPrimary,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   l10n.authCreateNewPasswordSub,
-                  style: AppTextStyles.authHeaderSub,
+                  style: AppTextStyles.authHeaderSub.copyWith(
+                    color: context.themeTextSecondary,
+                  ),
                 ),
 
                 const SizedBox(height: AppSpacing.xxl),
@@ -115,7 +123,7 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
                   textInputAction: TextInputAction.next,
                   prefixIconPath: AppIcons.password,
                   validator: (String? value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return l10n.authEnterPasswordError;
                     }
                     if (value.length < 6) {
@@ -135,17 +143,14 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
                   prefixIconPath: AppIcons.password,
                   onSubmitted: (_) => _submit(),
                   validator: (String? value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return l10n.authEnterPasswordError;
-                    }
-                    if (value != _newPasswordController.text) {
-                      return l10n.authPasswordsDoNotMatch;
                     }
                     return null;
                   },
                 ),
 
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.xxl),
 
                 AppGradientButton(
                   text: l10n.authSaveNewPasswordBtn,

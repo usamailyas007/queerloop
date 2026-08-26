@@ -95,9 +95,9 @@ class _SelectCommunityBottomSheetState
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.65,
-      decoration: const BoxDecoration(
-        color: AppColors.bottomSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBottomSheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
         top: 12,
@@ -116,7 +116,7 @@ class _SelectCommunityBottomSheetState
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: context.themeBorderStrong,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -130,7 +130,10 @@ class _SelectCommunityBottomSheetState
               children: <Widget>[
                 Text(
                   'Select Community',
-                  style: AppTextStyles.headingMedium.copyWith(fontSize: 20),
+                  style: AppTextStyles.headingMedium.copyWith(
+                    color: context.themeTextPrimary,
+                    fontSize: 20,
+                  ),
                 ),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
@@ -138,12 +141,14 @@ class _SelectCommunityBottomSheetState
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
+                      color: context.isDarkMode
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.black.withValues(alpha: 0.04),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.close_rounded,
-                      color: Colors.white70,
+                      color: context.themeIconMuted,
                       size: 18,
                     ),
                   ),
@@ -183,12 +188,12 @@ class _SelectCommunityBottomSheetState
                       duration: const Duration(milliseconds: 180),
                       padding: const EdgeInsets.all(AppSpacing.md),
                       decoration: BoxDecoration(
-                        color: AppColors.cardBackground,
+                        color: context.themeCardBackground,
                         borderRadius: BorderRadius.circular(AppRadius.card),
                         border: Border.all(
                           color: isSelected
                               ? AppColors.gradientCyan
-                              : Colors.white.withValues(alpha: 0.08),
+                              : context.themeBorder,
                           width: isSelected ? 1.5 : 1.0,
                         ),
                       ),
@@ -211,7 +216,7 @@ class _SelectCommunityBottomSheetState
                                 Text(
                                   name,
                                   style: AppTextStyles.titleSmall.copyWith(
-                                    color: Colors.white,
+                                    color: context.themeTextPrimary,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -219,7 +224,7 @@ class _SelectCommunityBottomSheetState
                                 Text(
                                   item['members']!,
                                   style: AppTextStyles.bodySmall.copyWith(
-                                    color: Colors.white54,
+                                    color: context.themeTextMuted,
                                     fontSize: 12,
                                   ),
                                 ),

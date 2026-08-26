@@ -36,9 +36,9 @@ class ConversationTile extends StatelessWidget {
                     : null,
               ),
               child: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.background,
+                  color: context.themeBackground,
                 ),
                 padding: EdgeInsets.all(conversation.hasStoryRing ? 2.0 : 0),
                 child: ClipOval(
@@ -64,7 +64,7 @@ class ConversationTile extends StatelessWidget {
                       Text(
                         conversation.username,
                         style: AppTextStyles.titleSmall.copyWith(
-                          color: Colors.white,
+                          color: context.themeTextPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                         ),
@@ -75,8 +75,8 @@ class ConversationTile extends StatelessWidget {
                           AppIcons.mute,
                           width: 14,
                           height: 14,
-                          colorFilter: const ColorFilter.mode(
-                            Colors.white38,
+                          colorFilter: ColorFilter.mode(
+                            context.themeIconMuted,
                             BlendMode.srcIn,
                           ),
                         ),
@@ -91,7 +91,7 @@ class ConversationTile extends StatelessWidget {
                     style: AppTextStyles.bodySmall.copyWith(
                       color: conversation.isTyping
                           ? AppColors.gradientCyan
-                          : Colors.white54,
+                          : context.themeTextMuted,
                       fontWeight: conversation.unreadCount > 0
                           ? FontWeight.w600
                           : FontWeight.w400,
@@ -111,7 +111,7 @@ class ConversationTile extends StatelessWidget {
                 Text(
                   conversation.timeAgo,
                   style: AppTextStyles.caption.copyWith(
-                    color: Colors.white38,
+                    color: context.themeTextMuted,
                     fontSize: 11,
                   ),
                 ),

@@ -5,6 +5,7 @@ import 'package:provider/single_child_widget.dart';
 import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
 import '../core/theme/app_theme.dart';
+import '../core/theme/theme_provider.dart';
 import '../features/auth/auth_provider.dart';
 import '../features/create_post/provider/create_post_provider.dart';
 import '../features/home/provider/home_feed_provider.dart';
@@ -22,6 +23,9 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: <SingleChildWidget>[
+        ChangeNotifierProvider<ThemeProvider>(
+          create: (_) => ThemeProvider(),
+        ),
         Provider<ApiClient>(create: (_) => ApiClient()),
         ChangeNotifierProvider<AuthProvider>(
           create: (BuildContext ctx) =>
@@ -38,22 +42,28 @@ class App extends StatelessWidget {
         ChangeNotifierProvider<MessagesProvider>(
             create: (_) => MessagesProvider()),
       ],
-      child: MaterialApp(
-        title: 'QueerLoop+',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.app,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        routes: AppRoutes.routes,
-        onGenerateRoute: AppRoutes.onGenerateRoute,
-        builder: (BuildContext context, Widget? child) {
-          return GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-            child: _EnvBanner(child: child ?? const SizedBox.shrink()),
+      child: Consumer<ThemeProvider>(
+        builder: (BuildContext context, ThemeProvider themeProvider, _) {
+          return MaterialApp(
+            title: 'QueerLoop+',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            darkTheme: AppTheme.dark,
+            themeMode: themeProvider.themeMode,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            routes: AppRoutes.routes,
+            onGenerateRoute: AppRoutes.onGenerateRoute,
+            builder: (BuildContext context, Widget? child) {
+              return GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+                child: _EnvBanner(child: child ?? const SizedBox.shrink()),
+              );
+            },
+            home: const AppRouter(),
           );
         },
-        home: const AppRouter(),
       ),
     );
   }

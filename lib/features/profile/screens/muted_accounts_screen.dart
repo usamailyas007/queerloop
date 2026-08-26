@@ -84,7 +84,7 @@ class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -102,12 +102,20 @@ class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -117,7 +125,7 @@ class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
                       'Muted accounts',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 17,
                       ),
@@ -147,7 +155,7 @@ class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
                   Text(
                     "Muted accounts can still see and interact with your posts — you just won't see theirs.",
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextSecondary,
                       fontSize: 13,
                       height: 1.35,
                     ),
@@ -157,12 +165,15 @@ class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
 
                   // Muted Accounts List
                   if (filtered.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
                       child: Center(
                         child: Text(
                           'No muted accounts found.',
-                          style: TextStyle(color: Colors.white38, fontSize: 14),
+                          style: TextStyle(
+                            color: context.themeTextMuted,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     )
@@ -191,7 +202,7 @@ class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
                                   Text(
                                     user.username,
                                     style: AppTextStyles.bodyMedium.copyWith(
-                                      color: Colors.white,
+                                      color: context.themeTextPrimary,
                                       fontWeight: FontWeight.w700,
                                       fontSize: 14,
                                     ),
@@ -200,7 +211,7 @@ class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
                                   Text(
                                     user.mutedDate,
                                     style: AppTextStyles.bodySmall.copyWith(
-                                      color: Colors.white38,
+                                      color: context.themeTextMuted,
                                       fontSize: 12,
                                     ),
                                   ),
@@ -217,16 +228,16 @@ class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
                                   vertical: 8,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.cardBackground,
+                                  color: context.themeCardBackground,
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.12),
+                                    color: context.themeBorder,
                                   ),
                                 ),
                                 child: Text(
                                   'Unmute',
                                   style: AppTextStyles.bodyMedium.copyWith(
-                                    color: Colors.white,
+                                    color: context.themeTextPrimary,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 13,
                                   ),

@@ -27,6 +27,8 @@ class HomeTopHeaderTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool isDark = context.isDarkMode;
+    final bool isReels = activeSubMode == SubMode.reels;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -45,24 +47,27 @@ class HomeTopHeaderTabs extends StatelessWidget {
                   _HeaderTabItem(
                     title: l10n.homeTabFollowing,
                     isSelected: activeTab == TopTab.following,
+                    isReels: isReels,
                     onTap: () => onTabSelected(TopTab.following),
                   ),
 
-                  const SizedBox(width: AppSpacing.sm),
+                  const SizedBox(width: AppSpacing.md),
 
                   // For You Tab
                   _HeaderTabItem(
                     title: l10n.homeTabForYou,
                     isSelected: activeTab == TopTab.forYou,
+                    isReels: isReels,
                     onTap: () => onTabSelected(TopTab.forYou),
                   ),
 
-                  const SizedBox(width: AppSpacing.sm),
+                  const SizedBox(width: AppSpacing.md),
 
                   // Communities Tab
                   _HeaderTabItem(
                     title: l10n.homeTabCommunities,
                     isSelected: activeTab == TopTab.communities,
+                    isReels: isReels,
                     onTap: () => onTabSelected(TopTab.communities),
                   ),
                 ],
@@ -111,33 +116,54 @@ class HomeTopHeaderTabs extends StatelessWidget {
 
         const SizedBox(height: AppSpacing.md),
 
-        // ── Sub-Mode Toggle Container (Reels vs Posts - Matching Image 3) ──
+        // ── Sub-Mode Toggle Container (Reels vs Posts) ──
         Container(
           height: 38,
-          padding: const EdgeInsets.all(4),
+          padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.2),
+            color: isReels
+                ? Colors.black.withValues(alpha: 0.4)
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : const Color(0xFFF0EFF4)),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+            border: Border.all(
+              color: isReels
+                  ? Colors.white.withValues(alpha: 0.18)
+                  : (isDark
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : context.themeBorder),
+            ),
+            boxShadow: !isReels && !isDark
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              // Reels Toggle Item (Solid White Active Pill with Dark Black Text/Icon)
+              // Reels Toggle Item
               _SubModeToggleItem(
                 title: l10n.homeSubReels,
                 iconPath: AppIcons.play,
-                isSelected: activeSubMode == SubMode.reels,
+                isSelected: isReels,
+                isReelsMode: isReels,
                 onTap: () => onSubModeSelected(SubMode.reels),
               ),
 
-              const SizedBox(width: 4),
+              const SizedBox(width: 3),
 
               // Posts Toggle Item
               _SubModeToggleItem(
                 title: l10n.homeSubPosts,
                 iconPath: AppIcons.posts,
-                isSelected: activeSubMode == SubMode.posts,
+                isSelected: !isReels,
+                isReelsMode: isReels,
                 onTap: () => onSubModeSelected(SubMode.posts),
               ),
             ],
@@ -152,15 +178,25 @@ class _HeaderTabItem extends StatelessWidget {
   const _HeaderTabItem({
     required this.title,
     required this.isSelected,
+    required this.isReels,
     required this.onTap,
   });
 
   final String title;
   final bool isSelected;
+  final bool isReels;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
+    // When on full-screen video Reels, ALWAYS use bright white so it's readable over any video
+    final Color activeColor =
+        (isReels || isDark) ? Colors.white : context.themeTextPrimary;
+    final Color inactiveColor =
+        (isReels || isDark) ? Colors.white.withValues(alpha: 0.75) : context.themeTextSecondary;
+
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -169,19 +205,37 @@ class _HeaderTabItem extends StatelessWidget {
           Text(
             title,
             style: TextStyle(
-              color: isSelected ? Colors.white : Colors.white54,
-              fontSize: 13,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected ? activeColor : inactiveColor,
+              fontSize: 14,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+              shadows: isReels
+                  ? const <Shadow>[
+                      Shadow(
+                        color: Colors.black54,
+                        blurRadius: 8,
+                        offset: Offset(0, 1),
+                      ),
+                    ]
+                  : null,
             ),
           ),
           const SizedBox(height: 4),
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            height: 2,
+            height: 2.5,
             width: isSelected ? 24 : 0,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(1),
+              color: activeColor,
+              borderRadius: BorderRadius.circular(1.5),
+              boxShadow: isReels && isSelected
+                  ? const <BoxShadow>[
+                      BoxShadow(
+                        color: Colors.black54,
+                        blurRadius: 4,
+                        offset: Offset(0, 1),
+                      ),
+                    ]
+                  : null,
             ),
           ),
         ],
@@ -195,16 +249,27 @@ class _SubModeToggleItem extends StatelessWidget {
     required this.title,
     required this.iconPath,
     required this.isSelected,
+    required this.isReelsMode,
     required this.onTap,
   });
 
   final String title;
   final String iconPath;
   final bool isSelected;
+  final bool isReelsMode;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
+    // Unselected text & icon colors
+    final Color unselectedColor =
+        (isReelsMode || isDark) ? Colors.white : context.themeTextPrimary;
+
+    // Selected text & icon colors
+    final Color selectedColor = Colors.black;
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -213,6 +278,15 @@ class _SubModeToggleItem extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
+          boxShadow: isSelected
+              ? <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isReelsMode ? 0.3 : 0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -222,7 +296,7 @@ class _SubModeToggleItem extends StatelessWidget {
               width: 14,
               height: 14,
               colorFilter: ColorFilter.mode(
-                isSelected ? Colors.black : Colors.black,
+                isSelected ? selectedColor : unselectedColor,
                 BlendMode.srcIn,
               ),
             ),
@@ -230,7 +304,7 @@ class _SubModeToggleItem extends StatelessWidget {
             Text(
               title,
               style: TextStyle(
-                color: Colors.black,
+                color: isSelected ? selectedColor : unselectedColor,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),

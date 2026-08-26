@@ -17,7 +17,7 @@ class MessageRequestsScreen extends StatelessWidget {
     final MessagesProvider provider = context.watch<MessagesProvider>();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -36,12 +36,20 @@ class MessageRequestsScreen extends StatelessWidget {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -51,7 +59,7 @@ class MessageRequestsScreen extends StatelessWidget {
                     child: Text(
                       'Message requests',
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 18,
                       ),
@@ -69,7 +77,7 @@ class MessageRequestsScreen extends StatelessWidget {
               child: Text(
                 "These people don't follow you. Accepting moves them to your main inbox — nothing sends until you reply.",
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: Colors.white54,
+                  color: context.themeTextSecondary,
                   fontSize: 13,
                   height: 1.4,
                 ),
@@ -98,10 +106,10 @@ class MessageRequestsScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(AppSpacing.md),
                           decoration: BoxDecoration(
-                            color: AppColors.cardBackground,
+                            color: context.themeCardBackground,
                             borderRadius: BorderRadius.circular(AppRadius.card),
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.08),
+                              color: context.themeBorder,
                             ),
                           ),
                           child: Row(
@@ -122,7 +130,7 @@ class MessageRequestsScreen extends StatelessWidget {
                                     Text(
                                       cleanUsername,
                                       style: AppTextStyles.titleSmall.copyWith(
-                                        color: Colors.white,
+                                        color: context.themeTextPrimary,
                                         fontWeight: FontWeight.w700,
                                         fontSize: 14,
                                       ),
@@ -133,7 +141,7 @@ class MessageRequestsScreen extends StatelessWidget {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: AppTextStyles.bodySmall.copyWith(
-                                        color: Colors.white54,
+                                        color: context.themeTextSecondary,
                                         fontSize: 12,
                                       ),
                                     ),
@@ -146,7 +154,7 @@ class MessageRequestsScreen extends StatelessWidget {
 
                         const SizedBox(height: AppSpacing.sm),
 
-                        // Action Buttons Row (Accept, Delete, Block using reusable AppGradientButton & AppOutlineButton)
+                        // Action Buttons Row (Accept, Delete, Block)
                         Row(
                           children: <Widget>[
                             // Accept (AppGradientButton)

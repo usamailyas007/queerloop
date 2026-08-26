@@ -40,7 +40,9 @@ class ProfileFeedTabsWidget extends StatelessWidget {
                         Text(
                           tabs[index],
                           style: AppTextStyles.titleSmall.copyWith(
-                            color: isSelected ? Colors.white : Colors.white54,
+                            color: isSelected
+                                ? context.themeTextPrimary
+                                : context.themeTextMuted,
                             fontWeight:
                                 isSelected ? FontWeight.w700 : FontWeight.w500,
                             fontSize: 13,
@@ -53,7 +55,9 @@ class ProfileFeedTabsWidget extends StatelessWidget {
                             width: 12,
                             height: 12,
                             colorFilter: ColorFilter.mode(
-                              isSelected ? Colors.white : Colors.white54,
+                              isSelected
+                                  ? context.themeTextPrimary
+                                  : context.themeTextMuted,
                               BlendMode.srcIn,
                             ),
                           ),
@@ -73,7 +77,7 @@ class ProfileFeedTabsWidget extends StatelessWidget {
             );
           }),
         ),
-        const Divider(color: Color(0xFF2A2733), height: 1),
+        Divider(color: context.themeDivider, height: 1),
         const SizedBox(height: AppSpacing.md),
       ],
     );

@@ -28,8 +28,10 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -44,7 +46,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                   Text(
                     'ashinorbit',
                     style: AppTextStyles.titleLarge.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 20,
                     ),
@@ -54,8 +56,8 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     AppIcons.password,
                     width: 14,
                     height: 14,
-                    colorFilter: const ColorFilter.mode(
-                      Colors.white70,
+                    colorFilter: ColorFilter.mode(
+                      context.themeTextSecondary,
                       BlendMode.srcIn,
                     ),
                   ),
@@ -75,16 +77,24 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
                       child: Center(
                         child: SvgPicture.asset(
                           AppIcons.bell,
-                          width: 20,
-                          height: 20,
-                          colorFilter: const ColorFilter.mode(
-                            Colors.white,
+                          width: 18,
+                          height: 18,
+                          colorFilter: ColorFilter.mode(
+                            context.themeTextPrimary,
                             BlendMode.srcIn,
                           ),
                         ),
@@ -108,16 +118,24 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
                       child: Center(
                         child: SvgPicture.asset(
                           AppIcons.settings,
-                          width: 20,
-                          height: 20,
-                          colorFilter: const ColorFilter.mode(
-                            Colors.white,
+                          width: 18,
+                          height: 18,
+                          colorFilter: ColorFilter.mode(
+                            context.themeTextPrimary,
                             BlendMode.srcIn,
                           ),
                         ),
@@ -214,10 +232,10 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       padding: const EdgeInsets.all(AppSpacing.md),
                       margin: const EdgeInsets.only(bottom: AppSpacing.md),
                       decoration: BoxDecoration(
-                        color: AppColors.cardBackground,
+                        color: context.themeCardBackground,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.08),
+                          color: context.themeBorder,
                         ),
                       ),
                       child: Column(
@@ -240,7 +258,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                   Text(
                                     '@ashinorbit',
                                     style: AppTextStyles.titleSmall.copyWith(
-                                      color: Colors.white,
+                                      color: context.themeTextPrimary,
                                       fontWeight: FontWeight.w700,
                                       fontSize: 13,
                                     ),
@@ -248,7 +266,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                   Text(
                                     'she/they • 2h',
                                     style: AppTextStyles.caption.copyWith(
-                                      color: Colors.white54,
+                                      color: context.themeTextMuted,
                                       fontSize: 11,
                                     ),
                                   ),
@@ -260,7 +278,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                           Text(
                             'Golden hour film photography practice in the park today 🌻✨',
                             style: AppTextStyles.bodyMedium.copyWith(
-                              color: Colors.white,
+                              color: context.themeTextPrimary,
                               fontSize: 13,
                               height: 1.35,
                             ),

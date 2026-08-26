@@ -36,7 +36,7 @@ class _WhoCanCommentScreenState extends State<WhoCanCommentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -52,12 +52,20 @@ class _WhoCanCommentScreenState extends State<WhoCanCommentScreen> {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: context.isDarkMode
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.transparent,
                     shape: BoxShape.circle,
+                    border: Border.all(
+                      color: context.isDarkMode
+                          ? Colors.white.withValues(alpha: 0.12)
+                          : context.themeBorder,
+                      width: 1.1,
+                    ),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.chevron_left_rounded,
-                    color: Colors.white,
+                    color: context.themeIcon,
                     size: 24,
                   ),
                 ),
@@ -69,7 +77,7 @@ class _WhoCanCommentScreenState extends State<WhoCanCommentScreen> {
               Text(
                 'Who Can Comment',
                 style: AppTextStyles.headingMedium.copyWith(
-                  color: Colors.white,
+                  color: context.themeTextPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 22,
                 ),
@@ -81,7 +89,7 @@ class _WhoCanCommentScreenState extends State<WhoCanCommentScreen> {
               Text(
                 'Choose who can comment on your posts.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: Colors.white54,
+                  color: context.themeTextSecondary,
                   fontSize: 13,
                   height: 1.35,
                 ),

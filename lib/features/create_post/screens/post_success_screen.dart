@@ -13,7 +13,7 @@ class PostSuccessScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -30,7 +30,10 @@ class PostSuccessScreen extends StatelessWidget {
                 // Title
                 Text(
                   'Posted',
-                  style: AppTextStyles.headingMedium.copyWith(fontSize: 22),
+                  style: AppTextStyles.headingMedium.copyWith(
+                    color: context.themeTextPrimary,
+                    fontSize: 22,
+                  ),
                   textAlign: TextAlign.center,
                 ),
 
@@ -41,7 +44,7 @@ class PostSuccessScreen extends StatelessWidget {
                   "Your post is live. It's visible to\nthe audience you picked on the\nlast screen.",
                   textAlign: TextAlign.center,
                   style: AppTextStyles.authHeaderSub.copyWith(
-                    color: Colors.white54,
+                    color: context.themeTextSecondary,
                     fontSize: 14,
                     height: 1.45,
                   ),

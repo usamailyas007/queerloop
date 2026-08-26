@@ -9,9 +9,9 @@ class AppOutlineButton extends StatelessWidget {
     required this.text,
     required this.onPressed,
     super.key,
-    this.backgroundColor = AppColors.cardBackground,
+    this.backgroundColor,
     this.borderColor,
-    this.textColor = Colors.white,
+    this.textColor,
     this.height = AppSizes.buttonHeight,
     this.width = double.infinity,
     this.fontSize = 13,
@@ -19,23 +19,27 @@ class AppOutlineButton extends StatelessWidget {
 
   final String text;
   final VoidCallback onPressed;
-  final Color backgroundColor;
+  final Color? backgroundColor;
   final Color? borderColor;
-  final Color textColor;
+  final Color? textColor;
   final double height;
   final double width;
   final double fontSize;
 
   @override
   Widget build(BuildContext context) {
+    final Color effectiveBg = backgroundColor ?? context.themeCardBackground;
+    final Color effectiveBorder = borderColor ?? context.themeBorder;
+    final Color effectiveText = textColor ?? context.themeTextPrimary;
+
     return Container(
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: backgroundColor,
+        color: effectiveBg,
         borderRadius: BorderRadius.circular(AppRadius.button),
         border: Border.all(
-          color: borderColor ?? Colors.white.withValues(alpha: 0.12),
+          color: effectiveBorder,
         ),
       ),
       child: Material(
@@ -52,7 +56,7 @@ class AppOutlineButton extends StatelessWidget {
                   text,
                   maxLines: 1,
                   style: AppTextStyles.buttonText.copyWith(
-                    color: textColor,
+                    color: effectiveText,
                     fontSize: fontSize,
                     fontWeight: FontWeight.w600,
                   ),

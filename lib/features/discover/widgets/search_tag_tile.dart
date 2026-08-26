@@ -35,10 +35,10 @@ class SearchTagTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: context.themeBorder,
           ),
         ),
         child: Row(
@@ -65,7 +65,7 @@ class SearchTagTile extends StatelessWidget {
                   Text(
                     tag.name,
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
                     ),
@@ -74,7 +74,7 @@ class SearchTagTile extends StatelessWidget {
                   Text(
                     '${tag.postsCount} posts · ${tag.weeklyCount} this week',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextSecondary,
                       fontSize: 12,
                     ),
                   ),

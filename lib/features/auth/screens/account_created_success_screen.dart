@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/success_animation_circle.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../app/routes.dart';
 
 class AccountCreatedSuccessScreen extends StatelessWidget {
   const AccountCreatedSuccessScreen({super.key});
@@ -16,7 +16,7 @@ class AccountCreatedSuccessScreen extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: SingleChildScrollView(
           child: ConstrainedBox(
@@ -43,7 +43,9 @@ class AccountCreatedSuccessScreen extends StatelessWidget {
 
                     Text(
                       l10n.authAccountCreatedTitle,
-                      style: AppTextStyles.successTitle,
+                      style: AppTextStyles.successTitle.copyWith(
+                        color: context.themeTextPrimary,
+                      ),
                       textAlign: TextAlign.center,
                     ),
 
@@ -51,7 +53,9 @@ class AccountCreatedSuccessScreen extends StatelessWidget {
 
                     Text(
                       l10n.authAccountCreatedSub,
-                      style: AppTextStyles.successSub,
+                      style: AppTextStyles.successSub.copyWith(
+                        color: context.themeTextSecondary,
+                      ),
                       textAlign: TextAlign.center,
                     ),
 

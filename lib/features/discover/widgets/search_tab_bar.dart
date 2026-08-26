@@ -43,21 +43,22 @@ class SearchTabBar extends StatelessWidget {
                       child: Text(
                         tabs[i],
                         style: AppTextStyles.bodyMedium.copyWith(
-                          color:
-                              selectedIndex == i ? Colors.white : Colors.white54,
+                          color: selectedIndex == i
+                              ? context.themeTextPrimary
+                              : context.themeTextMuted,
                           fontWeight: selectedIndex == i
                               ? FontWeight.w700
-                              : FontWeight.w400,
+                              : FontWeight.w500,
                         ),
                       ),
                     ),
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
-                      height: 2,
+                      height: 2.5,
                       width: selectedIndex == i ? 28 : 0,
                       decoration: BoxDecoration(
                         color: AppColors.gradientPink,
-                        borderRadius: BorderRadius.circular(1),
+                        borderRadius: BorderRadius.circular(1.5),
                       ),
                     ),
                   ],

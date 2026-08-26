@@ -196,7 +196,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,16 +216,21 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen> {
                       width: AppSizes.backButtonSize,
                       height: AppSizes.backButtonSize,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E1B26),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.12),
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
                         ),
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Icon(
                           Icons.chevron_left_rounded,
-                          color: Colors.white,
+                          color: context.themeIcon,
                           size: 22,
                         ),
                       ),
@@ -253,7 +258,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen> {
                         Text(
                           widget.postsCount,
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: Colors.white54,
+                            color: context.themeTextSecondary,
                           ),
                         ),
                       ],
@@ -264,8 +269,8 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen> {
                     AppIcons.search,
                     width: 22,
                     height: 22,
-                    colorFilter: const ColorFilter.mode(
-                      Colors.white54,
+                    colorFilter: ColorFilter.mode(
+                      context.themeIconMuted,
                       BlendMode.srcIn,
                     ),
                   ),
@@ -274,9 +279,9 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen> {
             ),
 
             // ── Divider ──────────────────────────────────────────────────────
-            Container(
+            Divider(
               height: 1,
-              color: Colors.white.withValues(alpha: 0.06),
+              color: context.themeDivider,
             ),
 
             // ── Posts Feed ───────────────────────────────────────────────────

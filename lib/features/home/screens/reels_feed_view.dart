@@ -175,7 +175,13 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
               _showCommentsSheet(context, item.commentsCount);
             }
           },
-          onOpenShare: () => _showShareSheet(context),
+          onOpenShare: () {
+            if (provider.isGuest) {
+              widget.onGuestActionTriggered?.call();
+            } else {
+              _showShareSheet(context);
+            }
+          },
           onOpenSafety: () => _showSafetySheet(context),
           onOpenFilterCommunities: () =>
               _showFilterCommunitiesSheet(context, provider),

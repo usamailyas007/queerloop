@@ -9,6 +9,7 @@ import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_tag_chip.dart';
 import '../../home/models/post_item_model.dart';
+import '../../home/screens/hashtag_posts_screen.dart';
 import '../../home/widgets/comments_bottom_sheet.dart';
 import '../../home/widgets/post_feed_card.dart';
 import '../models/discover_models.dart';
@@ -65,7 +66,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final DiscoverProvider provider = context.watch<DiscoverProvider>();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -129,8 +130,10 @@ class _SearchIdleBody extends StatelessWidget {
               child: Text(
                 'Clear Search History',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.gradientPink,
-                  fontWeight: FontWeight.w600,
+                  color: context.isDarkMode
+                      ? AppColors.gradientPink
+                      : context.themeTextPrimary,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -153,7 +156,23 @@ class _SearchIdleBody extends StatelessWidget {
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
           children: provider.suggestedTags
-              .map((String tag) => AppTagChip(label: tag))
+              .map(
+                (String tag) => AppTagChip(
+                  label: tag,
+                  onTap: () {
+                    Navigator.push<void>(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => HashtagPostsScreen(
+                          hashtag: tag,
+                          postsCount: '4.2K posts',
+                          rankColor: AppColors.gradientCyan,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              )
               .toList(),
         ),
 
@@ -218,6 +237,7 @@ class _SearchResultsBody extends StatelessWidget {
   ];
 
   Widget _buildSectionHeader({
+    required BuildContext context,
     required String title,
     required VoidCallback onSeeAll,
   }) {
@@ -227,7 +247,7 @@ class _SearchResultsBody extends StatelessWidget {
         Text(
           title,
           style: AppTextStyles.labelSmall.copyWith(
-            color: Colors.white54,
+            color: context.themeTextMuted,
             letterSpacing: 1.2,
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -258,7 +278,7 @@ class _SearchResultsBody extends StatelessWidget {
           selectedIndex: provider.selectedSearchTab,
           onTabSelected: provider.setSelectedSearchTab,
         ),
-        const Divider(color: Color(0xFF2A2733), height: 1),
+        Divider(color: context.themeDivider, height: 1),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.symmetric(
@@ -266,10 +286,11 @@ class _SearchResultsBody extends StatelessWidget {
               vertical: AppSpacing.md,
             ),
             children: <Widget>[
-              // ── Tab 0: All (Comprehensive Overview - Image 3) ──────────────
+              // ── Tab 0: All (Comprehensive Overview) ────────────────────────
               if (provider.selectedSearchTab == 0) ...<Widget>[
                 // 1. TOP POSTS Section
                 _buildSectionHeader(
+                  context: context,
                   title: 'TOP POSTS',
                   onSeeAll: () => provider.setSelectedSearchTab(1),
                 ),
@@ -282,6 +303,7 @@ class _SearchResultsBody extends StatelessWidget {
 
                 // 2. TOP TAGS Section
                 _buildSectionHeader(
+                  context: context,
                   title: 'TOP TAGS',
                   onSeeAll: () => provider.setSelectedSearchTab(4),
                 ),
@@ -291,7 +313,18 @@ class _SearchResultsBody extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                         child: SearchTagTile(
                           tag: t,
-                          onTap: () => provider.setSelectedSearchTab(4),
+                          onTap: () {
+                            Navigator.push<void>(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => HashtagPostsScreen(
+                                  hashtag: t.name,
+                                  postsCount: '${t.postsCount} posts',
+                                  rankColor: AppColors.gradientCyan,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -300,6 +333,7 @@ class _SearchResultsBody extends StatelessWidget {
 
                 // 3. PEOPLE Section
                 _buildSectionHeader(
+                  context: context,
                   title: 'PEOPLE',
                   onSeeAll: () => provider.setSelectedSearchTab(3),
                 ),
@@ -319,6 +353,7 @@ class _SearchResultsBody extends StatelessWidget {
 
                 // 4. COMMUNITIES TO EXPLORE Section
                 _buildSectionHeader(
+                  context: context,
                   title: 'COMMUNITIES TO EXPLORE',
                   onSeeAll: () => provider.setSelectedSearchTab(5),
                 ),
@@ -336,7 +371,7 @@ class _SearchResultsBody extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xl),
               ],
 
-              // ── Tab 1: Posts (Full Posts Feed - Image 2) ───────────────────
+              // ── Tab 1: Posts (Full Posts Feed) ─────────────────────────────
               if (provider.selectedSearchTab == 1) ...<Widget>[
                 ..._samplePosts.map(
                   (PostItemModel p) => Padding(
@@ -376,12 +411,26 @@ class _SearchResultsBody extends StatelessWidget {
                   ),
                 ),
 
-              // ── Tab 4: Tags (Tags List Screen - Image 1) ───────────────────
+              // ── Tab 4: Tags (Tags List Screen) ─────────────────────────────
               if (provider.selectedSearchTab == 4) ...<Widget>[
                 ...provider.tagResults.map(
                   (TagSearchResultItem t) => Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: SearchTagTile(tag: t),
+                    child: SearchTagTile(
+                      tag: t,
+                      onTap: () {
+                        Navigator.push<void>(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => HashtagPostsScreen(
+                              hashtag: t.name,
+                              postsCount: '${t.postsCount} posts',
+                              rankColor: AppColors.gradientCyan,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
               ],
@@ -434,7 +483,7 @@ class _NoResultsBody extends StatelessWidget {
           selectedIndex: provider.selectedSearchTab,
           onTabSelected: provider.setSelectedSearchTab,
         ),
-        const Divider(color: Color(0xFF2A2733), height: 1),
+        Divider(color: context.themeDivider, height: 1),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -446,10 +495,10 @@ class _NoResultsBody extends StatelessWidget {
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: AppColors.cardBackground,
+                    color: context.themeCardBackground,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.1),
+                      color: context.themeBorder,
                     ),
                   ),
                   child: const Icon(
@@ -463,13 +512,17 @@ class _NoResultsBody extends StatelessWidget {
               Text(
                 'No Results Found',
                 textAlign: TextAlign.center,
-                style: AppTextStyles.headingMedium,
+                style: AppTextStyles.headingMedium.copyWith(
+                  color: context.themeTextPrimary,
+                ),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 "We couldn't find what you're looking for, but\nthere's more to discover.",
                 textAlign: TextAlign.center,
-                style: AppTextStyles.authHeaderSub,
+                style: AppTextStyles.authHeaderSub.copyWith(
+                  color: context.themeTextSecondary,
+                ),
               ),
               const SizedBox(height: AppSpacing.xl),
               // Action buttons

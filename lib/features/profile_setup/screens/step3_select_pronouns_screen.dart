@@ -50,7 +50,7 @@ class _Step3SelectPronounsScreenState extends State<Step3SelectPronounsScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -74,12 +74,16 @@ class _Step3SelectPronounsScreenState extends State<Step3SelectPronounsScreen> {
                     children: <Widget>[
                       Text(
                         l10n.profileStep3Title,
-                        style: AppTextStyles.authHeaderTitle,
+                        style: AppTextStyles.authHeaderTitle.copyWith(
+                          color: context.themeTextPrimary,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
                         l10n.profileStep3Sub,
-                        style: AppTextStyles.authHeaderSub,
+                        style: AppTextStyles.authHeaderSub.copyWith(
+                          color: context.themeTextSecondary,
+                        ),
                       ),
 
                       const SizedBox(height: AppSpacing.xxl),
@@ -105,18 +109,20 @@ class _Step3SelectPronounsScreenState extends State<Step3SelectPronounsScreen> {
                                     : null,
                                 color: isSelected
                                     ? null
-                                    : const Color(0xFF1E1B26),
+                                    : context.themeCardBackground,
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
                                   color: isSelected
                                       ? Colors.transparent
-                                      : Colors.white.withValues(alpha: 0.12),
+                                      : context.themeBorder,
                                 ),
                               ),
                               child: Text(
                                 pronoun,
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : context.themeTextPrimary,
                                   fontSize: 13,
                                   fontWeight: isSelected
                                       ? FontWeight.w700
@@ -131,10 +137,10 @@ class _Step3SelectPronounsScreenState extends State<Step3SelectPronounsScreen> {
                       const SizedBox(height: AppSpacing.xxl),
 
                       // ── ADD YOUR OWN Section ──────────────────────────────────
-                      const Text(
+                      Text(
                         'ADD YOUR OWN',
                         style: TextStyle(
-                          color: Colors.white54,
+                          color: context.themeTextMuted,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 1.2,
@@ -180,10 +186,10 @@ class _Step3SelectPronounsScreenState extends State<Step3SelectPronounsScreen> {
                       Container(
                         padding: const EdgeInsets.all(AppSpacing.lg),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E1B26),
+                          color: context.themeCardBackground,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.12),
+                            color: context.themeBorder,
                           ),
                         ),
                         child: Row(
@@ -192,10 +198,10 @@ class _Step3SelectPronounsScreenState extends State<Step3SelectPronounsScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
-                                  const Text(
+                                  Text(
                                     "Turn this off if you'd prefer to keep your pronouns private.",
                                     style: TextStyle(
-                                      color: Colors.white,
+                                      color: context.themeTextPrimary,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                       height: 1.3,
@@ -206,8 +212,8 @@ class _Step3SelectPronounsScreenState extends State<Step3SelectPronounsScreen> {
                                     provider.isPronounsPrivate
                                         ? 'Only you can see them'
                                         : 'Off means only you can see them',
-                                    style: const TextStyle(
-                                      color: Colors.white38,
+                                    style: TextStyle(
+                                      color: context.themeTextMuted,
                                       fontSize: 12,
                                     ),
                                   ),

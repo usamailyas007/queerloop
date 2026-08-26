@@ -40,10 +40,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
         vertical: AppSpacing.md,
       ),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: context.themeCardBackground,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: context.themeBorder,
         ),
       ),
       child: Row(
@@ -56,7 +56,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                 Text(
                   title,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: Colors.white,
+                    color: context.themeTextPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -65,7 +65,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                 Text(
                   subtitle,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: Colors.white38,
+                    color: context.themeTextMuted,
                     fontSize: 12,
                   ),
                 ),
@@ -95,10 +95,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
           vertical: AppSpacing.md,
         ),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: context.themeBorder,
           ),
         ),
         child: Row(
@@ -110,7 +110,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                 Text(
                   title,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: Colors.white,
+                    color: context.themeTextPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -119,15 +119,15 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                 Text(
                   subtitle,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: Colors.white38,
+                    color: context.themeTextMuted,
                     fontSize: 12,
                   ),
                 ),
               ],
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
-              color: Colors.white38,
+              color: context.themeIconMuted,
               size: 20,
             ),
           ],
@@ -139,7 +139,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -157,12 +157,20 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : context.themeBorder,
+                          width: 1.1,
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.chevron_left_rounded,
-                        color: Colors.white,
+                        color: context.themeIcon,
                         size: 24,
                       ),
                     ),
@@ -172,7 +180,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                       'Privacy',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white,
+                        color: context.themeTextPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 17,
                       ),
@@ -192,7 +200,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                   Text(
                     'ACCOUNT',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       letterSpacing: 1.2,
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -228,7 +236,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                   Text(
                     'INTERACTIONS',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       letterSpacing: 1.2,
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -291,7 +299,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                   Text(
                     'STATUS',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: Colors.white54,
+                      color: context.themeTextMuted,
                       letterSpacing: 1.2,
                       fontSize: 11,
                       fontWeight: FontWeight.w700,

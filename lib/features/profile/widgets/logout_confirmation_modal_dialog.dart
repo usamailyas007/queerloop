@@ -47,14 +47,14 @@ class LogoutConfirmationModalDialog extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.xl),
         decoration: BoxDecoration(
-          color: const Color(0xFF191622),
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: context.themeBorder,
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.5),
+              color: Colors.black.withValues(alpha: context.isDarkMode ? 0.5 : 0.08),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -80,10 +80,10 @@ class LogoutConfirmationModalDialog extends StatelessWidget {
                   fit: BoxFit.cover,
                   errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) =>
                       Container(
-                    color: const Color(0xFF2C2738),
-                    child: const Icon(
+                    color: context.themeChipBackground,
+                    child: Icon(
                       Icons.person_rounded,
-                      color: Colors.white70,
+                      color: context.themeIconMuted,
                       size: 32,
                     ),
                   ),
@@ -98,7 +98,7 @@ class LogoutConfirmationModalDialog extends StatelessWidget {
               'Log out of $cleanUsername?',
               textAlign: TextAlign.center,
               style: AppTextStyles.titleMedium.copyWith(
-                color: Colors.white,
+                color: context.themeTextPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
               ),
@@ -111,7 +111,7 @@ class LogoutConfirmationModalDialog extends StatelessWidget {
               "Your posts, drafts and messages stay on your account. You'll need your password or a login code to get back in.",
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white54,
+                color: context.themeTextSecondary,
                 fontSize: 12,
                 height: 1.35,
               ),

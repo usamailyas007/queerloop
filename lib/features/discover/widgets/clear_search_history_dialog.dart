@@ -34,9 +34,16 @@ class ClearSearchHistoryDialog extends StatelessWidget {
           vertical: AppSpacing.xxxl,
         ),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          border: Border.all(color: context.themeBorder),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withValues(alpha: context.isDarkMode ? 0.5 : 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -46,7 +53,7 @@ class ClearSearchHistoryDialog extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: AppColors.gradientCyan.withValues(alpha: 0.12),
+                color: context.themeCyanBadgeBackground,
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -67,7 +74,10 @@ class ClearSearchHistoryDialog extends StatelessWidget {
             // ── Title ────────────────────────────────────────────────────
             Text(
               'Clear search history?',
-              style: AppTextStyles.headingMedium.copyWith(fontSize: 20),
+              style: AppTextStyles.headingMedium.copyWith(
+                color: context.themeTextPrimary,
+                fontSize: 20,
+              ),
               textAlign: TextAlign.center,
             ),
 
@@ -76,7 +86,9 @@ class ClearSearchHistoryDialog extends StatelessWidget {
             // ── Subtitle ─────────────────────────────────────────────────
             Text(
               'This removes all recent searches from this account. Suggestions stay, and nothing you searched for was ever shown to anyone else.',
-              style: AppTextStyles.authHeaderSub,
+              style: AppTextStyles.authHeaderSub.copyWith(
+                color: context.themeTextSecondary,
+              ),
               textAlign: TextAlign.center,
             ),
 

@@ -48,7 +48,7 @@ class _Step4ChooseCommunitiesScreenState
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -71,12 +71,16 @@ class _Step4ChooseCommunitiesScreenState
                     children: <Widget>[
                       Text(
                         l10n.profileStep4Title,
-                        style: AppTextStyles.authHeaderTitle,
+                        style: AppTextStyles.authHeaderTitle.copyWith(
+                          color: context.themeTextPrimary,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
                         l10n.profileStep4Sub,
-                        style: AppTextStyles.authHeaderSub,
+                        style: AppTextStyles.authHeaderSub.copyWith(
+                          color: context.themeTextSecondary,
+                        ),
                       ),
 
                       const SizedBox(height: AppSpacing.xxl),

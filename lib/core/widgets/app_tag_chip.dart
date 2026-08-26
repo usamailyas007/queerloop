@@ -27,9 +27,11 @@ class AppTagChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
     final TextStyle defaultTextStyle = AppTextStyles.bodySmall.copyWith(
-      color: Colors.white,
-      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+      color: isDark ? Colors.white : context.themeTextPrimary,
+      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
       letterSpacing: 0.1,
     );
 
@@ -42,13 +44,20 @@ class AppTagChip extends StatelessWidget {
               ? AppColors.secondaryGradientButton
               : null,
           color: backgroundColor ??
-              (isSelected ? null : const Color(0xFF1E1B26)),
+              (isSelected
+                  ? null
+                  : (isDark
+                      ? const Color(0xFF1E1B26)
+                      : context.themeCardBackground)),
           borderRadius: BorderRadius.circular(borderRadius),
           border: Border.all(
             color: borderColor ??
                 (isSelected
                     ? Colors.transparent
-                    : Colors.white.withValues(alpha: 0.12)),
+                    : (isDark
+                        ? Colors.white.withValues(alpha: 0.12)
+                        : context.themeBorder)),
+            width: isDark ? 1.0 : 1.2,
           ),
         ),
         child: Text(

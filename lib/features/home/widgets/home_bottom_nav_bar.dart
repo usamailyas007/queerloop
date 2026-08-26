@@ -22,9 +22,8 @@ class HomeBottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool isDark = context.isDarkMode;
 
-    // System navigation bar ka bottom inset check karo
-    // Agar system nav bar hai (buttons wala) to zyada padding, warna sirf 8px
     final double systemNavBarHeight =
         MediaQuery.of(context).viewPadding.bottom;
     final double bottomPadding =
@@ -37,12 +36,14 @@ class HomeBottomNavBar extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: AppColors.bottomBarBackground.withValues(alpha: 0.96),
+          color: context.themeBottomBarBackground.withValues(alpha: 0.96),
           borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          border: Border.all(color: context.themeBorder),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.4)
+                  : Colors.black.withValues(alpha: 0.08),
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),
@@ -76,7 +77,11 @@ class HomeBottomNavBar extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: isGuest ? null : AppColors.secondaryGradientButton,
-                  color: isGuest ? Colors.white.withValues(alpha: 0.12) : null,
+                  color: isGuest
+                      ? (isDark
+                          ? Colors.white.withValues(alpha: 0.12)
+                          : Colors.black.withValues(alpha: 0.06))
+                      : null,
                   boxShadow: isGuest
                       ? null
                       : <BoxShadow>[
@@ -91,7 +96,9 @@ class HomeBottomNavBar extends StatelessWidget {
                 ),
                 child: Icon(
                   isGuest ? Icons.lock_outline_rounded : Icons.add_rounded,
-                  color: isGuest ? Colors.white54 : Colors.white,
+                  color: isGuest
+                      ? (isDark ? Colors.white54 : AppColors.lightTextSecondary)
+                      : Colors.white,
                   size: isGuest ? AppSizes.iconMd : 28,
                 ),
               ),
@@ -135,7 +142,7 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color activeColor = AppColors.gradientPink;
-    final Color inactiveColor = Colors.white54;
+    final Color inactiveColor = context.themeTextMuted;
 
     return GestureDetector(
       onTap: onTap,

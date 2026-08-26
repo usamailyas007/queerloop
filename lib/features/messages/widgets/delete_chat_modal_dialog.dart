@@ -44,10 +44,10 @@ class DeleteChatModalDialog extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.xl),
         decoration: BoxDecoration(
-          color: AppColors.bottomSheetBackground,
+          color: context.themeCardBackground,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: context.themeBorder,
           ),
         ),
         child: Column(
@@ -58,7 +58,7 @@ class DeleteChatModalDialog extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: const Color(0xFF0F242A),
+                color: context.themeCyanBadgeBackground,
                 borderRadius: BorderRadius.circular(18),
               ),
               child: Center(
@@ -81,7 +81,7 @@ class DeleteChatModalDialog extends StatelessWidget {
               'Delete this chat?',
               textAlign: TextAlign.center,
               style: AppTextStyles.titleMedium.copyWith(
-                color: Colors.white,
+                color: context.themeTextPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 17,
               ),
@@ -94,7 +94,7 @@ class DeleteChatModalDialog extends StatelessWidget {
               'This only removes it from your inbox. $cleanUsername keeps their copy and can still message you — a new message brings the thread right back.',
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.white54,
+                color: context.themeTextSecondary,
                 fontSize: 13,
                 height: 1.4,
               ),
