@@ -10,6 +10,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_follow_button.dart';
 import '../../../core/widgets/app_user_avatar.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../profile/screens/user_profile_screen.dart';
 import '../models/reel_item_model.dart';
 
 class ReelFeedCard extends StatefulWidget {
@@ -138,10 +139,12 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     final double paddingBottom = MediaQuery.of(context).padding.bottom;
     final double systemBottomInset =
         viewPaddingBottom > paddingBottom ? viewPaddingBottom : paddingBottom;
-    final double rightActionsBottom =
-        (widget.hasBottomBar ? 110 : 28) + systemBottomInset;
-    final double leftDetailsBottom =
-        (widget.hasBottomBar ? 100 : 20) + systemBottomInset;
+    final double rightActionsBottom = widget.hasBottomBar
+        ? (66.0 + (systemBottomInset > 0 ? systemBottomInset * 0.25 : 0))
+        : (20.0 + systemBottomInset);
+    final double leftDetailsBottom = widget.hasBottomBar
+        ? (62.0 + (systemBottomInset > 0 ? systemBottomInset * 0.25 : 0))
+        : (14.0 + systemBottomInset);
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return GestureDetector(
@@ -491,34 +494,56 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                       ],
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
+                  const SizedBox(height: 6),
                 ],
 
                 // User info row
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    AppUserAvatar(imageAsset: item.avatarAsset, size: 38),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          item.username,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push<void>(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => UserProfileScreen(
+                              username: item.username.replaceAll('@', ''),
+                              name: item.username
+                                  .replaceAll('@', '')
+                                  .split('.')
+                                  .first,
+                              avatarAsset: item.avatarAsset,
+                            ),
                           ),
-                        ),
-                        Text(
-                          item.pronounsTime,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
+                        );
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          AppUserAvatar(imageAsset: item.avatarAsset, size: 38),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                item.username,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                item.pronounsTime,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                     const SizedBox(width: 12),
                     AppFollowButton(
@@ -529,7 +554,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                   ],
                 ),
 
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: 6),
 
                 // Caption
                 Text(

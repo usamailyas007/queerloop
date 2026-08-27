@@ -8,6 +8,7 @@ import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../profile/screens/user_profile_screen.dart';
 import 'report_comment_bottom_sheet.dart';
 
 class CommentItemModel {
@@ -824,12 +825,29 @@ class _CommentItemTile extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              ClipOval(
-                child: Image.asset(
-                  comment.avatarAsset,
-                  width: 36,
-                  height: 36,
-                  fit: BoxFit.cover,
+              GestureDetector(
+                onTap: () {
+                  Navigator.push<void>(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => UserProfileScreen(
+                        username: comment.username.replaceAll('@', ''),
+                        name: comment.username
+                            .replaceAll('@', '')
+                            .split('.')
+                            .first,
+                        avatarAsset: comment.avatarAsset,
+                      ),
+                    ),
+                  );
+                },
+                child: ClipOval(
+                  child: Image.asset(
+                    comment.avatarAsset,
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -839,12 +857,30 @@ class _CommentItemTile extends StatelessWidget {
                   children: <Widget>[
                     Row(
                       children: <Widget>[
-                        Text(
-                          comment.username,
-                          style: TextStyle(
-                            color: context.themeTextPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push<void>(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => UserProfileScreen(
+                                  username:
+                                      comment.username.replaceAll('@', ''),
+                                  name: comment.username
+                                      .replaceAll('@', '')
+                                      .split('.')
+                                      .first,
+                                  avatarAsset: comment.avatarAsset,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Text(
+                            comment.username,
+                            style: TextStyle(
+                              color: context.themeTextPrimary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -944,12 +980,32 @@ class _CommentItemTile extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  ClipOval(
-                    child: Image.asset(
-                      comment.authorReplyAvatar ?? AppImages.user2,
-                      width: 28,
-                      height: 28,
-                      fit: BoxFit.cover,
+                  GestureDetector(
+                    onTap: () {
+                      final String authorName =
+                          comment.authorReplyUser ?? 'rowankeeps';
+                      Navigator.push<void>(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => UserProfileScreen(
+                            username: authorName.replaceAll('@', ''),
+                            name: authorName
+                                .replaceAll('@', '')
+                                .split('.')
+                                .first,
+                            avatarAsset:
+                                comment.authorReplyAvatar ?? AppImages.user2,
+                          ),
+                        ),
+                      );
+                    },
+                    child: ClipOval(
+                      child: Image.asset(
+                        comment.authorReplyAvatar ?? AppImages.user2,
+                        width: 28,
+                        height: 28,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -959,12 +1015,34 @@ class _CommentItemTile extends StatelessWidget {
                       children: <Widget>[
                         Row(
                           children: <Widget>[
-                            Text(
-                              comment.authorReplyUser ?? 'rowankeeps',
-                              style: TextStyle(
-                                color: context.themeTextPrimary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
+                            GestureDetector(
+                              onTap: () {
+                                final String authorName =
+                                    comment.authorReplyUser ?? 'rowankeeps';
+                                Navigator.push<void>(
+                                  context,
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => UserProfileScreen(
+                                      username:
+                                          authorName.replaceAll('@', ''),
+                                      name: authorName
+                                          .replaceAll('@', '')
+                                          .split('.')
+                                          .first,
+                                      avatarAsset:
+                                          comment.authorReplyAvatar ??
+                                              AppImages.user2,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Text(
+                                comment.authorReplyUser ?? 'rowankeeps',
+                                style: TextStyle(
+                                  color: context.themeTextPrimary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 6),

@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../profile/screens/user_profile_screen.dart';
 import '../models/post_item_model.dart';
 import 'safety_bottom_sheet.dart';
 
@@ -41,40 +42,54 @@ class PostFeedCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           // ── Header Row (Avatar + Handle + Pronouns/Time) ──
-          Row(
-            children: <Widget>[
-              ClipOval(
-                child: Image.asset(
-                  post.avatarAsset,
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
+          GestureDetector(
+            onTap: () {
+              Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => UserProfileScreen(
+                    username: post.username.replaceAll('@', ''),
+                    name: post.username.replaceAll('@', '').split('.').first,
+                    avatarAsset: post.avatarAsset,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      post.username,
-                      style: TextStyle(
-                        color: context.themeTextPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      post.pronounsTime,
-                      style: TextStyle(
-                        color: context.themeTextMuted,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+              );
+            },
+            child: Row(
+              children: <Widget>[
+                ClipOval(
+                  child: Image.asset(
+                    post.avatarAsset,
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.cover,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        post.username,
+                        style: TextStyle(
+                          color: context.themeTextPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        post.pronounsTime,
+                        style: TextStyle(
+                          color: context.themeTextMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
 
           const SizedBox(height: AppSpacing.md),

@@ -6,6 +6,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
+import '../../profile/screens/user_profile_screen.dart';
 import '../models/message_models.dart';
 import '../provider/messages_provider.dart';
 
@@ -103,52 +104,72 @@ class MessageRequestsScreen extends StatelessWidget {
                     child: Column(
                       children: <Widget>[
                         // Request Info Card
-                        Container(
-                          padding: const EdgeInsets.all(AppSpacing.md),
-                          decoration: BoxDecoration(
-                            color: context.themeCardBackground,
-                            borderRadius: BorderRadius.circular(AppRadius.card),
-                            border: Border.all(
-                              color: context.themeBorder,
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push<void>(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => UserProfileScreen(
+                                  username: req.username.replaceAll('@', ''),
+                                  name: req.username
+                                      .replaceAll('@', '')
+                                      .split('.')
+                                      .first,
+                                  avatarAsset: req.avatarAsset,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(AppSpacing.md),
+                            decoration: BoxDecoration(
+                              color: context.themeCardBackground,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.card),
+                              border: Border.all(
+                                color: context.themeBorder,
+                              ),
                             ),
-                          ),
-                          child: Row(
-                            children: <Widget>[
-                              ClipOval(
-                                child: Image.asset(
-                                  req.avatarAsset,
-                                  width: 40,
-                                  height: 40,
-                                  fit: BoxFit.cover,
+                            child: Row(
+                              children: <Widget>[
+                                ClipOval(
+                                  child: Image.asset(
+                                    req.avatarAsset,
+                                    width: 40,
+                                    height: 40,
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: AppSpacing.md),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text(
-                                      cleanUsername,
-                                      style: AppTextStyles.titleSmall.copyWith(
-                                        color: context.themeTextPrimary,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 14,
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        cleanUsername,
+                                        style:
+                                            AppTextStyles.titleSmall.copyWith(
+                                          color: context.themeTextPrimary,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      req.previewMessage,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                        color: context.themeTextSecondary,
-                                        fontSize: 12,
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        req.previewMessage,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: context.themeTextSecondary,
+                                          fontSize: 12,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
 

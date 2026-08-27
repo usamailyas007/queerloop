@@ -26,32 +26,30 @@ class HomeBottomNavBar extends StatelessWidget {
 
     final double systemNavBarHeight =
         MediaQuery.of(context).viewPadding.bottom;
-    final double bottomPadding =
-        systemNavBarHeight > 0 ? systemNavBarHeight + 4 : 8;
+    final double bottomMargin =
+        systemNavBarHeight > 0 ? (systemNavBarHeight * 0.25 + 2) : 6;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomPadding),
-      child: Container(
-        height: 72,
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: context.themeBottomBarBackground.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: context.themeBorder),
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: isDark
-                  ? Colors.black.withValues(alpha: 0.4)
-                  : Colors.black.withValues(alpha: 0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: <Widget>[
+    return Container(
+      height: 64,
+      margin: EdgeInsets.fromLTRB(16, 0, 16, bottomMargin),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: context.themeBottomBarBackground.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: context.themeBorder),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.4)
+                : Colors.black.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: <Widget>[
             // 1. Home
             _NavItem(
               iconPath: AppIcons.home,
@@ -121,7 +119,7 @@ class HomeBottomNavBar extends StatelessWidget {
             ),
           ],
         ),
-      ),
+      
     );
   }
 }

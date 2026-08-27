@@ -9,6 +9,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import 'followers_following_screen.dart';
+import 'user_profile_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -224,12 +225,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   // 1. Likes notification
                   Row(
                     children: <Widget>[
-                      ClipOval(
-                        child: Image.asset(
-                          AppImages.user2,
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.cover,
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push<void>(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const UserProfileScreen(
+                                username: 'jules.does',
+                                name: 'Jules',
+                                avatarAsset: AppImages.user2,
+                              ),
+                            ),
+                          );
+                        },
+                        child: ClipOval(
+                          child: Image.asset(
+                            AppImages.user2,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                       const SizedBox(width: AppSpacing.md),
@@ -283,12 +298,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     children: <Widget>[
                       Row(
                         children: <Widget>[
-                          ClipOval(
-                            child: Image.asset(
-                              AppImages.user4,
-                              width: 40,
-                              height: 40,
-                              fit: BoxFit.cover,
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push<void>(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const UserProfileScreen(
+                                    username: 'sam.arroyo',
+                                    name: 'Sam',
+                                    avatarAsset: AppImages.user4,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: ClipOval(
+                              child: Image.asset(
+                                AppImages.user4,
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
                           const SizedBox(width: AppSpacing.md),
@@ -379,12 +408,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   // 3. Comment reply notification
                   Row(
                     children: <Widget>[
-                      ClipOval(
-                        child: Image.asset(
-                          AppImages.user3,
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.cover,
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push<void>(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const UserProfileScreen(
+                                username: 'moss.and.oat',
+                                name: 'Moss',
+                                avatarAsset: AppImages.user3,
+                              ),
+                            ),
+                          );
+                        },
+                        child: ClipOval(
+                          child: Image.asset(
+                            AppImages.user3,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                       const SizedBox(width: AppSpacing.md),
@@ -448,12 +491,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   // 1. Follow notification (Nadia builds)
                   Row(
                     children: <Widget>[
-                      ClipOval(
-                        child: Image.asset(
-                          AppImages.user4,
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.cover,
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push<void>(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const UserProfileScreen(
+                                username: 'nadia.builds',
+                                name: 'Nadia',
+                                avatarAsset: AppImages.user4,
+                              ),
+                            ),
+                          );
+                        },
+                        child: ClipOval(
+                          child: Image.asset(
+                            AppImages.user4,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                       const SizedBox(width: AppSpacing.md),

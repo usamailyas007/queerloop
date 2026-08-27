@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../profile/screens/user_profile_screen.dart';
 import '../models/message_models.dart';
 
 class ConversationTile extends StatelessWidget {
@@ -27,26 +28,43 @@ class ConversationTile extends StatelessWidget {
         child: Row(
           children: <Widget>[
             // Avatar with optional Story Gradient Ring
-            Container(
-              padding: EdgeInsets.all(conversation.hasStoryRing ? 2.5 : 0),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: conversation.hasStoryRing
-                    ? AppColors.primaryGradientButton
-                    : null,
-              ),
+            GestureDetector(
+              onTap: () {
+                Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => UserProfileScreen(
+                      username: conversation.username.replaceAll('@', ''),
+                      name: conversation.username
+                          .replaceAll('@', '')
+                          .split('.')
+                          .first,
+                      avatarAsset: conversation.avatarAsset,
+                    ),
+                  ),
+                );
+              },
               child: Container(
+                padding: EdgeInsets.all(conversation.hasStoryRing ? 2.5 : 0),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: context.themeBackground,
+                  gradient: conversation.hasStoryRing
+                      ? AppColors.primaryGradientButton
+                      : null,
                 ),
-                padding: EdgeInsets.all(conversation.hasStoryRing ? 2.0 : 0),
-                child: ClipOval(
-                  child: Image.asset(
-                    conversation.avatarAsset,
-                    width: 44,
-                    height: 44,
-                    fit: BoxFit.cover,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: context.themeBackground,
+                  ),
+                  padding: EdgeInsets.all(conversation.hasStoryRing ? 2.0 : 0),
+                  child: ClipOval(
+                    child: Image.asset(
+                      conversation.avatarAsset,
+                      width: 44,
+                      height: 44,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
               ),

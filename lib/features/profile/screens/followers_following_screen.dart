@@ -8,6 +8,7 @@ import '../../../core/widgets/app_follow_button.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_text_field.dart';
+import 'user_profile_screen.dart';
 
 class FollowersFollowingScreen extends StatefulWidget {
   const FollowersFollowingScreen({
@@ -341,44 +342,59 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              Row(
-                                children: <Widget>[
-                                  ClipOval(
-                                    child: Image.asset(
-                                      req['avatar']!,
-                                      width: 40,
-                                      height: 40,
-                                      fit: BoxFit.cover,
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.push<void>(
+                                    context,
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => UserProfileScreen(
+                                        username: req['username']!
+                                            .replaceAll('@', ''),
+                                        name: req['name'] ?? req['username']!,
+                                        avatarAsset: req['avatar']!,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: AppSpacing.md),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: <Widget>[
-                                        Text(
-                                          '@${req['username']}',
-                                          style: AppTextStyles.titleSmall
-                                              .copyWith(
-                                            color: context.themeTextPrimary,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          req['subtitle']!,
-                                          style: AppTextStyles.bodySmall
-                                              .copyWith(
-                                            color: context.themeTextSecondary,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
+                                  );
+                                },
+                                child: Row(
+                                  children: <Widget>[
+                                    ClipOval(
+                                      child: Image.asset(
+                                        req['avatar']!,
+                                        width: 40,
+                                        height: 40,
+                                        fit: BoxFit.cover,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: AppSpacing.md),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Text(
+                                            '@${req['username']}',
+                                            style: AppTextStyles.titleSmall
+                                                .copyWith(
+                                              color: context.themeTextPrimary,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            req['subtitle']!,
+                                            style: AppTextStyles.bodySmall
+                                                .copyWith(
+                                              color: context.themeTextSecondary,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                               const SizedBox(height: AppSpacing.md),
                               Row(
@@ -436,36 +452,78 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                             ),
                             child: Row(
                               children: <Widget>[
-                                ClipOval(
-                                  child: Image.asset(
-                                    _requests.first['avatar']!,
-                                    width: 38,
-                                    height: 38,
-                                    fit: BoxFit.cover,
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.push<void>(
+                                      context,
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => UserProfileScreen(
+                                          username: _requests.first['username']!
+                                              .replaceAll('@', ''),
+                                          name: _requests.first['name'] ??
+                                              _requests.first['username']!,
+                                          avatarAsset:
+                                              _requests.first['avatar']!,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      ClipOval(
+                                        child: Image.asset(
+                                          _requests.first['avatar']!,
+                                          width: 38,
+                                          height: 38,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.md),
                                 Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      Text(
-                                        _requests.first['username']!,
-                                        style: AppTextStyles.titleSmall.copyWith(
-                                          color: context.themeTextPrimary,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      Navigator.push<void>(
+                                        context,
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => UserProfileScreen(
+                                            username: _requests
+                                                .first['username']!
+                                                .replaceAll('@', ''),
+                                            name: _requests.first['name'] ??
+                                                _requests.first['username']!,
+                                            avatarAsset:
+                                                _requests.first['avatar']!,
+                                          ),
                                         ),
-                                      ),
-                                      Text(
-                                        _requests.first['subtitle']!,
-                                        style: AppTextStyles.bodySmall.copyWith(
-                                          color: context.themeTextSecondary,
-                                          fontSize: 11,
+                                      );
+                                    },
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(
+                                          _requests.first['username']!,
+                                          style: AppTextStyles.titleSmall
+                                              .copyWith(
+                                            color: context.themeTextPrimary,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                        Text(
+                                          _requests.first['subtitle']!,
+                                          style: AppTextStyles.bodySmall
+                                              .copyWith(
+                                            color: context.themeTextSecondary,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.sm),
@@ -500,37 +558,70 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                             padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                             child: Row(
                               children: <Widget>[
-                                ClipOval(
-                                  child: Image.asset(
-                                    user['avatar']!,
-                                    width: 44,
-                                    height: 44,
-                                    fit: BoxFit.cover,
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.push<void>(
+                                      context,
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => UserProfileScreen(
+                                          username: user['username']!.replaceAll('@', ''),
+                                          name: user['name'] ?? user['username']!,
+                                          avatarAsset: user['avatar']!,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      ClipOval(
+                                        child: Image.asset(
+                                          user['avatar']!,
+                                          width: 44,
+                                          height: 44,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.md),
                                 Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      Text(
-                                        user['username']!,
-                                        style: AppTextStyles.titleSmall.copyWith(
-                                          color: context.themeTextPrimary,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      Navigator.push<void>(
+                                        context,
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => UserProfileScreen(
+                                            username: user['username']!.replaceAll('@', ''),
+                                            name: user['name'] ?? user['username']!,
+                                            avatarAsset: user['avatar']!,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${user['name']} • ${user['pronouns']}',
-                                        style: AppTextStyles.bodySmall.copyWith(
-                                          color: context.themeTextSecondary,
-                                          fontSize: 12,
+                                      );
+                                    },
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(
+                                          user['username']!,
+                                          style: AppTextStyles.titleSmall.copyWith(
+                                            color: context.themeTextPrimary,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${user['name']} • ${user['pronouns']}',
+                                          style: AppTextStyles.bodySmall.copyWith(
+                                            color: context.themeTextSecondary,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.md),
