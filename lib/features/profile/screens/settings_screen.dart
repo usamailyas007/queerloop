@@ -399,17 +399,21 @@ class SettingsScreen extends StatelessWidget {
                   // Log Out Button (Themed Outlined Button with Exit Icon)
                   GestureDetector(
                     onTap: () {
+                      final String userHandle =
+                          context.read<AuthProvider>().user?.email ?? '@user';
                       LogoutConfirmationModalDialog.show(
                         context,
-                        username: '@ashinorbit',
-                        onConfirmLogout: () {
+                        username: userHandle,
+                        onConfirmLogout: () async {
                           context.read<HomeFeedProvider>().resetToHome();
-                          context.read<AuthProvider>().signOut();
-                          Navigator.pushNamedAndRemoveUntil(
-                            context,
-                            AppRoutes.login,
-                            (Route<dynamic> route) => false,
-                          );
+                          await context.read<AuthProvider>().signOut();
+                          if (context.mounted) {
+                            Navigator.pushNamedAndRemoveUntil(
+                              context,
+                              AppRoutes.login,
+                              (Route<dynamic> route) => false,
+                            );
+                          }
                         },
                       );
                     },

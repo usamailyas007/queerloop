@@ -11,6 +11,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../auth/auth_provider.dart';
 import '../provider/profile_setup_provider.dart';
 import '../widgets/step_progress_header.dart';
 
@@ -45,11 +46,28 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
     } catch (_) {}
   }
 
+  Future<void> _handleContinue() async {
+    final ProfileSetupProvider provider =
+        context.read<ProfileSetupProvider>();
+    final String? userId = context.read<AuthProvider>().userId;
+    if (userId != null &&
+        userId.isNotEmpty &&
+        provider.profilePhotoPath != null) {
+      final String avatarUrl = provider.avatarUrl ??
+          'https://picsum.photos/seed/${provider.username.isNotEmpty ? provider.username : "user"}/400';
+      await provider.saveStep2(userId, avatarUrl: avatarUrl);
+    }
+    if (mounted) {
+      widget.onNext();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final ProfileSetupProvider provider = context.watch<ProfileSetupProvider>();
-    final String? photoPath = provider.profilePhotoPath;
+    final ProfileSetupProvider provider =
+        context.watch<ProfileSetupProvider>();
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool hasPhoto = provider.profilePhotoPath != null;
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -72,82 +90,121 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        l10n.profileStep2Title,
-                        style: AppTextStyles.authHeaderTitle.copyWith(
-                          color: context.themeTextPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        l10n.profileStep2Sub,
-                        style: AppTextStyles.authHeaderSub.copyWith(
-                          color: context.themeTextSecondary,
+                      // ── Header Text (Centered) ─────────────────────────────
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              l10n.profileStep2Title,
+                              style: AppTextStyles.authHeaderTitle.copyWith(
+                                color: context.themeTextPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              l10n.profileStep2Sub,
+                              style: AppTextStyles.authHeaderSub.copyWith(
+                                color: context.themeTextSecondary,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
 
                       const SizedBox(height: AppSpacing.xxl),
 
-                      // ── Gradient Circle Avatar Preview ─────────────────────────
-                      Center(
-                        child: Container(
-                          width: 124,
-                          height: 124,
-                          padding: const EdgeInsets.all(3),
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: <Color>[
-                                AppColors.gradientPink,
-                                AppColors.gradientCyan,
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                          ),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: context.themeBackground,
-                              shape: BoxShape.circle,
-                            ),
-                            padding: const EdgeInsets.all(3),
-                            child: ClipOval(
-                              child: photoPath != null && photoPath.isNotEmpty
-                                  ? Image.file(
-                                      File(photoPath),
-                                      width: 112,
-                                      height: 112,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Container(
-                                      color: context.isDarkMode
-                                          ? const Color(0xFF2C1929)
-                                          : const Color(0xFFFFEBF2),
-                                      child: Icon(
-                                        Icons.person_rounded,
-                                        color: context.isDarkMode
-                                            ? Colors.white70
-                                            : AppColors.gradientPink,
-                                        size: 56,
+                      // ── Avatar Display (Interactive) ───────────────────────
+                      GestureDetector(
+                        onTap: () => _pickImage(ImageSource.gallery),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: <Widget>[
+                            // Outer Gradient Ring or Dashed Border
+                            Container(
+                              width: 140,
+                              height: 140,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: hasPhoto
+                                    ? AppColors.primaryGradientButton
+                                    : null,
+                                border: hasPhoto
+                                    ? null
+                                    : Border.all(
+                                        color: context.themeBorder,
+                                        width: 2,
                                       ),
-                                    ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(3.0),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: context.themeBackground,
+                                    image: hasPhoto
+                                        ? DecorationImage(
+                                            image: FileImage(
+                                              File(provider.profilePhotoPath!),
+                                            ),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null,
+                                  ),
+                                  child: hasPhoto
+                                      ? null
+                                      : Center(
+                                          child: SvgPicture.asset(
+                                            AppIcons.user,
+                                            width: 48,
+                                            height: 48,
+                                            colorFilter: ColorFilter.mode(
+                                              context.themeIconMuted,
+                                              BlendMode.srcIn,
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                              ),
                             ),
-                          ),
+
+                            // Small Camera Badge
+                            Positioned(
+                              bottom: 4,
+                              right: 4,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: AppColors.primaryGradientButton,
+                                ),
+                                child: SvgPicture.asset(
+                                  AppIcons.cameraSvg,
+                                  width: 14,
+                                  height: 14,
+                                  colorFilter: const ColorFilter.mode(
+                                    Colors.white,
+                                    BlendMode.srcIn,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
 
                       const SizedBox(height: AppSpacing.xxl),
 
-                      // ── Compact Take Photo & Upload Action Buttons ────────────────
+                      // ── Photo Selection Options Row (Camera & Upload) ──────
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
+                          horizontal: AppSpacing.sm,
                         ),
                         child: Row(
                           children: <Widget>[
-                            // Take Photo
+                            // Camera
                             Expanded(
                               child: GestureDetector(
                                 onTap: () => _pickImage(ImageSource.camera),
@@ -245,9 +302,15 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
               // ── Bottom Fixed Button ────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                child: AppGradientButton(
-                  text: l10n.profileContinueBtn,
-                  onPressed: widget.onNext,
+                child: Selector<ProfileSetupProvider, bool>(
+                  selector: (_, ProfileSetupProvider p) => p.isBusy,
+                  builder: (BuildContext context, bool isBusy, _) {
+                    return AppGradientButton(
+                      text: l10n.profileContinueBtn,
+                      isLoading: isBusy,
+                      onPressed: isBusy ? () {} : _handleContinue,
+                    );
+                  },
                 ),
               ),
             ],

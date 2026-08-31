@@ -8,6 +8,7 @@ import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_switch.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../auth/auth_provider.dart';
 import '../provider/profile_setup_provider.dart';
 import '../widgets/step_progress_header.dart';
 
@@ -41,6 +42,16 @@ class _Step3SelectPronounsScreenState extends State<Step3SelectPronounsScreen> {
     if (text.isNotEmpty) {
       provider.addCustomPronoun(text);
       _customPronounController.clear();
+    }
+  }
+
+  Future<void> _handleContinue() async {
+    final String? userId = context.read<AuthProvider>().userId;
+    if (userId != null && userId.isNotEmpty) {
+      await context.read<ProfileSetupProvider>().saveStep3(userId);
+    }
+    if (mounted) {
+      widget.onNext();
     }
   }
 
@@ -240,9 +251,15 @@ class _Step3SelectPronounsScreenState extends State<Step3SelectPronounsScreen> {
                   top: AppSpacing.md,
                   bottom: AppSpacing.lg,
                 ),
-                child: AppGradientButton(
-                  text: l10n.profileContinueBtn,
-                  onPressed: widget.onNext,
+                child: Selector<ProfileSetupProvider, bool>(
+                  selector: (_, ProfileSetupProvider p) => p.isBusy,
+                  builder: (BuildContext context, bool isBusy, _) {
+                    return AppGradientButton(
+                      text: l10n.profileContinueBtn,
+                      isLoading: isBusy,
+                      onPressed: isBusy ? () {} : _handleContinue,
+                    );
+                  },
                 ),
               ),
             ],

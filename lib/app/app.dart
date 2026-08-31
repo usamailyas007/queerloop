@@ -4,12 +4,15 @@ import 'package:provider/single_child_widget.dart';
 
 import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
+import '../core/network/network_info.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/theme_provider.dart';
+import '../core/widgets/offline_banner.dart';
 import '../features/auth/auth_provider.dart';
 import '../features/create_post/provider/create_post_provider.dart';
 import '../features/home/provider/home_feed_provider.dart';
 import '../features/messages/provider/messages_provider.dart';
+import '../features/profile_setup/profile_setup_service.dart';
 import '../features/profile_setup/provider/profile_setup_provider.dart';
 import '../features/splash_welcome/provider/splash_provider.dart';
 import '../l10n/app_localizations.dart';
@@ -26,6 +29,9 @@ class App extends StatelessWidget {
         ChangeNotifierProvider<ThemeProvider>(
           create: (_) => ThemeProvider(),
         ),
+        ChangeNotifierProvider<NetworkInfo>(
+          create: (_) => NetworkInfo(),
+        ),
         Provider<ApiClient>(create: (_) => ApiClient()),
         ChangeNotifierProvider<AuthProvider>(
           create: (BuildContext ctx) =>
@@ -34,7 +40,10 @@ class App extends StatelessWidget {
         ChangeNotifierProvider<SplashProvider>(
             create: (_) => SplashProvider()),
         ChangeNotifierProvider<ProfileSetupProvider>(
-            create: (_) => ProfileSetupProvider()),
+          create: (BuildContext ctx) => ProfileSetupProvider(
+            service: ProfileSetupService(ctx.read<ApiClient>()),
+          ),
+        ),
         ChangeNotifierProvider<HomeFeedProvider>(
             create: (_) => HomeFeedProvider()),
         ChangeNotifierProvider<CreatePostProvider>(
@@ -58,7 +67,9 @@ class App extends StatelessWidget {
               return GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-                child: _EnvBanner(child: child ?? const SizedBox.shrink()),
+                child: _EnvBanner(
+                  child: OfflineBanner(child: child ?? const SizedBox.shrink()),
+                ),
               );
             },
             home: const AppRouter(),

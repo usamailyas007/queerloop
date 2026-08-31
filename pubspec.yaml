@@ -23,6 +23,9 @@ dependencies:
   video_player: ^2.9.2
   photo_manager: ^3.7.0
   share_plus: ^13.3.0
+  flutter_secure_storage: ^11.0.0
+  connectivity_plus: ^6.1.4
+  shared_preferences: ^2.5.2
 
 dev_dependencies:
   flutter_test:

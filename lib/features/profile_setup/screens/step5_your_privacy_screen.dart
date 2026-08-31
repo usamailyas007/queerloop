@@ -8,6 +8,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_switch.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../auth/auth_provider.dart';
 import '../provider/profile_setup_provider.dart';
 import '../widgets/step_progress_header.dart';
 
@@ -136,9 +137,26 @@ class Step5YourPrivacyScreen extends StatelessWidget {
                   top: AppSpacing.md,
                   bottom: AppSpacing.lg,
                 ),
-                child: AppGradientButton(
-                  text: l10n.profileEnterQueerLoop,
-                  onPressed: onFinish,
+                child: Selector<ProfileSetupProvider, bool>(
+                  selector: (_, ProfileSetupProvider p) => p.isBusy,
+                  builder: (BuildContext context, bool isBusy, _) {
+                    return AppGradientButton(
+                      text: l10n.profileEnterQueerLoop,
+                      isLoading: isBusy,
+                      onPressed: isBusy
+                          ? () {}
+                          : () async {
+                              final String? userId =
+                                  context.read<AuthProvider>().userId;
+                              if (userId != null && userId.isNotEmpty) {
+                                await context
+                                    .read<ProfileSetupProvider>()
+                                    .saveStep5(userId);
+                              }
+                              onFinish();
+                            },
+                    );
+                  },
                 ),
               ),
             ],

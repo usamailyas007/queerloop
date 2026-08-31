@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 
 import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
@@ -11,6 +12,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../l10n/app_localizations.dart';
+import '../auth_provider.dart';
 import '../widgets/auth_back_button.dart';
 
 class VerifyCodeScreen extends StatefulWidget {
@@ -25,7 +27,8 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
   final FocusNode _otpFocusNode = FocusNode();
 
   Timer? _timer;
-  int _startSeconds = 30; // 30 seconds for testing
+  int _startSeconds = 60;
+  String _email = '';
 
   @override
   void initState() {
@@ -34,9 +37,20 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
     _startTimer();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final dynamic args = ModalRoute.of(context)?.settings.arguments;
+    if (args is String && args.isNotEmpty) {
+      _email = args;
+    } else if (args is Map && args['email'] != null) {
+      _email = args['email'] as String;
+    }
+  }
+
   void _startTimer() {
     _timer?.cancel();
-    _startSeconds = 30; // 30 seconds for testing
+    _startSeconds = 60;
     _timer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
       if (_startSeconds == 0) {
         timer.cancel();
@@ -76,16 +90,46 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
     super.dispose();
   }
 
-  void _submit() {
-    _timer?.cancel();
-    if (_startSeconds == 0) {
-      Navigator.pushReplacementNamed(
+  Future<void> _submit() async {
+    final String otp = _otpController.text.trim();
+    if (otp.length < 6) return;
+
+    final String? resetTicket =
+        await context.read<AuthProvider>().verifyPasswordResetOtp(
+              email: _email,
+              otp: otp,
+            );
+
+    if (resetTicket != null && resetTicket.isNotEmpty && mounted) {
+      _timer?.cancel();
+      Navigator.pushNamed(
         context,
-        AppRoutes.codeExpired,
-        arguments: _otpController.text,
+        AppRoutes.createNewPassword,
+        arguments: <String, dynamic>{
+          'email': _email,
+          'resetTicket': resetTicket,
+        },
       );
-    } else {
-      Navigator.pushNamed(context, AppRoutes.createNewPassword);
+    }
+  }
+
+  Future<void> _handleResend() async {
+    if (_email.isEmpty) return;
+    final bool ok =
+        await context.read<AuthProvider>().requestPasswordReset(_email);
+    if (ok && mounted) {
+      _startTimer();
+      _otpController.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('A fresh verification code was sent to $_email'),
+          backgroundColor: AppColors.gradientPink,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
     }
   }
 
@@ -149,7 +193,9 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                l10n.authEnterYourCodeSub,
+                _email.isNotEmpty
+                    ? 'We sent a 6-digit code to $_email'
+                    : l10n.authEnterYourCodeSub,
                 style: AppTextStyles.authHeaderSub.copyWith(
                   color: context.themeTextSecondary,
                 ),
@@ -157,7 +203,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 
               const SizedBox(height: AppSpacing.xxl),
 
-              // ── 5 Hidden Input Boxes Overlay ─────────────────────────
+              // ── 6 Hidden Input Boxes Overlay ─────────────────────────
               GestureDetector(
                 onTap: () {
                   _otpFocusNode.requestFocus();
@@ -174,33 +220,33 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                         keyboardType: TextInputType.number,
                         inputFormatters: <TextInputFormatter>[
                           FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(5),
+                          LengthLimitingTextInputFormatter(6),
                         ],
                         onChanged: (String val) {
                           setState(() {});
-                          if (val.length == 5) {
+                          if (val.length == 6) {
                             _submit();
                           }
                         },
                       ),
                     ),
 
-                    // Visual 5 custom digit boxes
+                    // Visual 6 custom digit boxes
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: List<Widget>.generate(5, (int index) {
+                      children: List<Widget>.generate(6, (int index) {
                         final bool hasChar = index < otpText.length;
                         final bool isCurrentFocus =
                             isFocused && index == otpText.length;
 
                         return Container(
-                          width: 56,
-                          height: 56,
+                          width: 48,
+                          height: 54,
                           decoration: BoxDecoration(
                             color: isDark
                                 ? const Color(0xFF1E1B26)
                                 : context.themeCardBackground,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(14),
                             border: Border.all(
                               color: isCurrentFocus
                                   ? AppColors.gradientCyan
@@ -217,6 +263,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                               hasChar ? otpText[index] : '',
                               style: AppTextStyles.otpDigitText.copyWith(
                                 color: context.themeTextPrimary,
+                                fontSize: 20,
                               ),
                             ),
                           ),
@@ -225,6 +272,24 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                     ),
                   ],
                 ),
+              ),
+
+              // Error display
+              Selector<AuthProvider, String?>(
+                selector: (_, AuthProvider p) => p.error,
+                builder: (_, String? error, _) {
+                  if (error == null) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.md),
+                    child: Center(
+                      child: Text(
+                        error,
+                        style: AppTextStyles.inputErrorText,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                },
               ),
 
               const SizedBox(height: AppSpacing.xl),
@@ -251,10 +316,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                       )
                     else
                       GestureDetector(
-                        onTap: () {
-                          _startTimer();
-                          _otpController.clear();
-                        },
+                        onTap: _handleResend,
                         child: Text(
                           'Resend now',
                           style: AppTextStyles.bodyMedium.copyWith(
@@ -269,9 +331,13 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 
               const SizedBox(height: AppSpacing.xxl),
 
-              AppGradientButton(
-                text: l10n.authEnterCodeBtn,
-                onPressed: _submit,
+              Selector<AuthProvider, bool>(
+                selector: (_, AuthProvider p) => p.isBusy,
+                builder: (_, bool busy, _) => AppGradientButton(
+                  text: l10n.authEnterCodeBtn,
+                  isLoading: busy,
+                  onPressed: busy ? () {} : _submit,
+                ),
               ),
 
               const SizedBox(height: AppSpacing.xl),

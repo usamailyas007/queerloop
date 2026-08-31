@@ -7,6 +7,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../auth/auth_provider.dart';
 import '../provider/profile_setup_provider.dart';
 import '../widgets/step_progress_header.dart';
 
@@ -42,11 +43,34 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
     super.dispose();
   }
 
+  Future<void> _handleContinue() async {
+    final String? userId = context.read<AuthProvider>().userId;
+    if (userId == null || userId.isEmpty) {
+      widget.onNext();
+      return;
+    }
+
+    final bool ok =
+        await context.read<ProfileSetupProvider>().saveStep1(userId);
+    if (ok && mounted) {
+      widget.onNext();
+    } else if (mounted) {
+      final String? err = context.read<ProfileSetupProvider>().error;
+      if (err != null && err.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(err),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final ProfileSetupProvider provider = context.watch<ProfileSetupProvider>();
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final bool isUsernameValid = _usernameController.text.trim().length >= 3;
     final int bioLength = _bioController.text.length;
 
     return Scaffold(
@@ -106,8 +130,7 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
                         controller: _displayNameController,
                         hintText: l10n.profileDisplayNameHint,
                         onChanged: (String val) {
-                          setState(() {});
-                          provider.setDisplayName(val);
+                          context.read<ProfileSetupProvider>().setDisplayName(val);
                         },
                       ),
 
@@ -122,35 +145,84 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xs),
-                      AppTextField(
-                        controller: _usernameController,
-                        hintText: l10n.profileUsernameHint,
-                        prefixText: '@ ',
-                        suffixIcon: isUsernameValid
-                            ? const Icon(
-                                Icons.check_rounded,
-                                color: AppColors.gradientCyan,
-                                size: AppSizes.iconMd,
-                              )
-                            : null,
-                        onChanged: (String val) {
-                          setState(() {});
-                          provider.setUsername(val);
+                      Selector<ProfileSetupProvider, ({bool checking, bool? available})>(
+                        selector: (_, ProfileSetupProvider p) =>
+                            (checking: p.checkingUsername, available: p.isUsernameAvailable),
+                        builder: (BuildContext context, ({bool checking, bool? available}) status, _) {
+                          Widget? suffixIcon;
+                          if (status.checking) {
+                            suffixIcon = const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.gradientCyan),
+                                ),
+                              ),
+                            );
+                          } else if (status.available == true) {
+                            suffixIcon = const Icon(
+                              Icons.check_rounded,
+                              color: AppColors.gradientCyan,
+                              size: AppSizes.iconMd,
+                            );
+                          } else if (status.available == false) {
+                            suffixIcon = const Icon(
+                              Icons.close_rounded,
+                              color: AppColors.danger,
+                              size: AppSizes.iconMd,
+                            );
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              AppTextField(
+                                controller: _usernameController,
+                                hintText: l10n.profileUsernameHint,
+                                prefixText: '@ ',
+                                suffixIcon: suffixIcon,
+                                onChanged: (String val) {
+                                  context.read<ProfileSetupProvider>().setUsername(val);
+                                },
+                              ),
+                              if (status.checking) ...<Widget>[
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Checking availability...',
+                                  style: TextStyle(
+                                    color: context.themeTextMuted,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ] else if (status.available == true) ...<Widget>[
+                                const SizedBox(height: 6),
+                                Text(
+                                  l10n.profileUsernameAvailable,
+                                  style: const TextStyle(
+                                    color: AppColors.gradientCyan,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ] else if (status.available == false) ...<Widget>[
+                                const SizedBox(height: 6),
+                                const Text(
+                                  'Username is already taken',
+                                  style: TextStyle(
+                                    color: AppColors.danger,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
                         },
                       ),
-
-                      // Dynamic Status Text: "Available" in Cyan
-                      if (isUsernameValid) ...<Widget>[
-                        const SizedBox(height: 6),
-                        Text(
-                          l10n.profileUsernameAvailable,
-                          style: const TextStyle(
-                            color: AppColors.gradientCyan,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
 
                       const SizedBox(height: AppSpacing.lg),
 
@@ -181,7 +253,7 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
                         maxLength: 250,
                         onChanged: (String val) {
                           setState(() {});
-                          provider.setBio(val);
+                          context.read<ProfileSetupProvider>().setBio(val);
                         },
                       ),
 
@@ -197,9 +269,15 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
                   top: AppSpacing.md,
                   bottom: AppSpacing.lg,
                 ),
-                child: AppGradientButton(
-                  text: l10n.profileContinueBtn,
-                  onPressed: widget.onNext,
+                child: Selector<ProfileSetupProvider, bool>(
+                  selector: (_, ProfileSetupProvider p) => p.isBusy,
+                  builder: (BuildContext context, bool isBusy, _) {
+                    return AppGradientButton(
+                      text: l10n.profileContinueBtn,
+                      isLoading: isBusy,
+                      onPressed: isBusy ? () {} : _handleContinue,
+                    );
+                  },
                 ),
               ),
             ],

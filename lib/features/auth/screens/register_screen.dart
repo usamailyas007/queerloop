@@ -36,7 +36,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final AppLocalizations l10n = AppLocalizations.of(context);
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(
@@ -44,19 +44,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ).showSnackBar(SnackBar(content: Text(l10n.authAcceptTermsError)));
       return;
     }
-    if (_formKey.currentState?.validate() ?? false) {
-      context.read<AuthProvider>().signIn(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-      Navigator.pushNamed(context, AppRoutes.accountCreatedSuccess);
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
     }
+
+    final bool ok = await context.read<AuthProvider>().signUp(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+
+    if (!ok || !mounted) {
+      return; // provider already set _error; Selector below will show it
+    }
+
+    Navigator.pushNamed(context, AppRoutes.accountCreatedSuccess);
   }
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String? authError = context.watch<AuthProvider>().error;
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -198,15 +204,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                       const SizedBox(height: AppSpacing.xl),
 
-                      AppGradientButton(
-                        text: l10n.authSignUpEmail,
-                        onPressed: _submit,
+                      // ── Sign-up button — rebuilds only when isBusy flips
+                      Selector<AuthProvider, bool>(
+                        selector: (_, AuthProvider p) => p.isBusy,
+                        builder: (_, bool busy, _) => AppGradientButton(
+                          text: l10n.authSignUpEmail,
+                          isLoading: busy,
+                          onPressed: busy ? () {} : _submit,
+                        ),
                       ),
 
-                      if (authError != null) ...<Widget>[
-                        const SizedBox(height: AppSpacing.md),
-                        Text(authError, style: AppTextStyles.inputErrorText),
-                      ],
+                      // ── Error banner — only this Text rebuilds on error
+                      Selector<AuthProvider, String?>(
+                        selector: (_, AuthProvider p) => p.error,
+                        builder: (_, String? error, _) {
+                          if (error == null) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: AppSpacing.md),
+                            child: Text(
+                              error,
+                              style: AppTextStyles.inputErrorText,
+                            ),
+                          );
+                        },
+                      ),
 
                       const SizedBox(height: AppSpacing.md),
 

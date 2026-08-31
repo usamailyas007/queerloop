@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 
 import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
@@ -9,6 +10,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
+import '../auth_provider.dart';
 import '../widgets/auth_back_button.dart';
 
 class CreateNewPasswordScreen extends StatefulWidget {
@@ -25,6 +27,18 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
       TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
+  String _resetTicket = '';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final dynamic args = ModalRoute.of(context)?.settings.arguments;
+    if (args is String) {
+      _resetTicket = args;
+    } else if (args is Map && args['resetTicket'] != null) {
+      _resetTicket = args['resetTicket'] as String;
+    }
+  }
 
   @override
   void dispose() {
@@ -33,18 +47,34 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    if (_formKey.currentState?.validate() ?? false) {
-      if (_newPasswordController.text != _confirmPasswordController.text) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.authPasswordsDoNotMatch),
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_newPasswordController.text != _confirmPasswordController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.authPasswordsDoNotMatch),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
+        ),
+      );
+      return;
+    }
+
+    final bool ok = await context.read<AuthProvider>().confirmPasswordReset(
+          resetTicket: _resetTicket,
+          newPassword: _newPasswordController.text,
         );
-        return;
-      }
-      Navigator.pushNamed(context, AppRoutes.passwordResetSuccess);
+
+    if (ok && mounted) {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.passwordResetSuccess,
+        (Route<dynamic> route) => route.settings.name == AppRoutes.login,
+      );
     }
   }
 
@@ -116,45 +146,72 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
 
                 const SizedBox(height: AppSpacing.xxl),
 
-                AppTextField(
-                  controller: _newPasswordController,
-                  hintText: l10n.authNewPasswordHint,
-                  isPassword: true,
-                  textInputAction: TextInputAction.next,
-                  prefixIconPath: AppIcons.password,
-                  validator: (String? value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return l10n.authEnterPasswordError;
-                    }
-                    if (value.length < 6) {
-                      return l10n.authPasswordLengthError;
-                    }
-                    return null;
-                  },
+                Selector<AuthProvider, bool>(
+                  selector: (_, AuthProvider p) => p.isBusy,
+                  builder: (_, bool busy, _) => AppTextField(
+                    controller: _newPasswordController,
+                    enabled: !busy,
+                    hintText: l10n.authNewPasswordHint,
+                    isPassword: true,
+                    textInputAction: TextInputAction.next,
+                    prefixIconPath: AppIcons.password,
+                    validator: (String? value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return l10n.authEnterPasswordError;
+                      }
+                      if (value.length < 6) {
+                        return l10n.authPasswordLengthError;
+                      }
+                      return null;
+                    },
+                  ),
                 ),
 
                 const SizedBox(height: AppSpacing.md),
 
-                AppTextField(
-                  controller: _confirmPasswordController,
-                  hintText: l10n.authConfirmPasswordHint,
-                  isPassword: true,
-                  textInputAction: TextInputAction.done,
-                  prefixIconPath: AppIcons.password,
-                  onSubmitted: (_) => _submit(),
-                  validator: (String? value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return l10n.authEnterPasswordError;
-                    }
-                    return null;
+                Selector<AuthProvider, bool>(
+                  selector: (_, AuthProvider p) => p.isBusy,
+                  builder: (_, bool busy, _) => AppTextField(
+                    controller: _confirmPasswordController,
+                    enabled: !busy,
+                    hintText: l10n.authConfirmPasswordHint,
+                    isPassword: true,
+                    textInputAction: TextInputAction.done,
+                    prefixIconPath: AppIcons.password,
+                    onSubmitted: (_) => _submit(),
+                    validator: (String? value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return l10n.authEnterPasswordError;
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+
+                // Error display
+                Selector<AuthProvider, String?>(
+                  selector: (_, AuthProvider p) => p.error,
+                  builder: (_, String? error, _) {
+                    if (error == null) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.md),
+                      child: Text(
+                        error,
+                        style: AppTextStyles.inputErrorText,
+                      ),
+                    );
                   },
                 ),
 
                 const SizedBox(height: AppSpacing.xxl),
 
-                AppGradientButton(
-                  text: l10n.authSaveNewPasswordBtn,
-                  onPressed: _submit,
+                Selector<AuthProvider, bool>(
+                  selector: (_, AuthProvider p) => p.isBusy,
+                  builder: (_, bool busy, _) => AppGradientButton(
+                    text: l10n.authSaveNewPasswordBtn,
+                    isLoading: busy,
+                    onPressed: busy ? () {} : _submit,
+                  ),
                 ),
 
                 const SizedBox(height: AppSpacing.xl),

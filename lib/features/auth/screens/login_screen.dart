@@ -38,15 +38,26 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _submit() {
-    if (_formKey.currentState?.validate() ?? false) {
-      context.read<HomeFeedProvider>().resetToHome();
-      context.read<AuthProvider>().signIn(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
-      _goHome(context);
+  // ── Submit ────────────────────────────────────────────────────────────────
+  // await the provider call so we only navigate on a real success response.
+  // isBusy guard inside the provider prevents double-submissions.
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
     }
+
+    final bool ok = await context.read<AuthProvider>().signIn(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+
+    if (!ok || !mounted) {
+      return; // provider already set _error; UI rebuilds via Selector
+    }
+
+    context.read<HomeFeedProvider>().resetToHome();
+    _goHome(context);
   }
 
   /// Navigates to HomeScreen with NO transition animation.
@@ -68,12 +79,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String? authError = context.select<AuthProvider, String?>(
-      (AuthProvider provider) => provider.error,
-    );
-    final bool isBusy = context.select<AuthProvider, bool>(
-      (AuthProvider provider) => provider.isBusy,
-    );
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -100,46 +105,54 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: AppSpacing.xl),
 
-                      AppTextField(
-                        controller: _emailController,
-                        enabled: !isBusy,
-                        hintText: l10n.authEmailPlaceholder,
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        prefixIconPath: AppIcons.mail,
-                        validator: (String? value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return l10n.authEnterEmailError;
-                          }
-                          final bool isValidEmail = RegExp(
-                            r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                          ).hasMatch(value.trim());
-                          if (!isValidEmail) {
-                            return l10n.authEnterValidEmailError;
-                          }
-                          return null;
-                        },
+                      // ── Email field — reads isBusy via Selector so only
+                      //    the enabled state triggers a rebuild here.
+                      Selector<AuthProvider, bool>(
+                        selector: (_, AuthProvider p) => p.isBusy,
+                        builder: (_, bool busy, _) => AppTextField(
+                          controller: _emailController,
+                          enabled: !busy,
+                          hintText: l10n.authEmailPlaceholder,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
+                          prefixIconPath: AppIcons.mail,
+                          validator: (String? value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return l10n.authEnterEmailError;
+                            }
+                            if (!RegExp(
+                              r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                            ).hasMatch(value.trim())) {
+                              return l10n.authEnterValidEmailError;
+                            }
+                            return null;
+                          },
+                        ),
                       ),
 
                       const SizedBox(height: AppSpacing.md),
 
-                      AppTextField(
-                        controller: _passwordController,
-                        enabled: !isBusy,
-                        hintText: '•••••••••',
-                        isPassword: true,
-                        textInputAction: TextInputAction.done,
-                        prefixIconPath: AppIcons.password,
-                        onSubmitted: (_) => _submit(),
-                        validator: (String? value) {
-                          if (value == null || value.isEmpty) {
-                            return l10n.authEnterPasswordError;
-                          }
-                          if (value.length < 6) {
-                            return l10n.authPasswordLengthError;
-                          }
-                          return null;
-                        },
+                      // ── Password field
+                      Selector<AuthProvider, bool>(
+                        selector: (_, AuthProvider p) => p.isBusy,
+                        builder: (_, bool busy, _) => AppTextField(
+                          controller: _passwordController,
+                          enabled: !busy,
+                          hintText: '•••••••••',
+                          isPassword: true,
+                          textInputAction: TextInputAction.done,
+                          prefixIconPath: AppIcons.password,
+                          onSubmitted: (_) => _submit(),
+                          validator: (String? value) {
+                            if (value == null || value.isEmpty) {
+                              return l10n.authEnterPasswordError;
+                            }
+                            if (value.length < 6) {
+                              return l10n.authPasswordLengthError;
+                            }
+                            return null;
+                          },
+                        ),
                       ),
 
                       const SizedBox(height: AppSpacing.lg),
@@ -177,17 +190,32 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
 
-                      if (authError != null) ...<Widget>[
-                        const SizedBox(height: AppSpacing.md),
-                        Text(authError, style: AppTextStyles.inputErrorText),
-                      ],
+                      // ── Error banner — only this Text rebuilds on error
+                      Selector<AuthProvider, String?>(
+                        selector: (_, AuthProvider p) => p.error,
+                        builder: (_, String? error, _) {
+                          if (error == null) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding:
+                                const EdgeInsets.only(top: AppSpacing.md),
+                            child:
+                                Text(error, style: AppTextStyles.inputErrorText),
+                          );
+                        },
+                      ),
 
                       const SizedBox(height: AppSpacing.xl),
 
-                      AppGradientButton(
-                        text: l10n.authLogIn,
-                        isLoading: isBusy,
-                        onPressed: _submit,
+                      // ── Login button — rebuilds only when isBusy flips
+                      Selector<AuthProvider, bool>(
+                        selector: (_, AuthProvider p) => p.isBusy,
+                        builder: (_, bool busy, _) => AppGradientButton(
+                          text: l10n.authLogIn,
+                          isLoading: busy,
+                          onPressed: busy ? () {} : _submit,
+                        ),
                       ),
 
                       const SizedBox(height: AppSpacing.lg),

@@ -12,7 +12,7 @@ abstract final class AppConfig {
 
   static const bool useMockApi = bool.fromEnvironment(
     'USE_MOCK_API',
-    defaultValue: true,
+    defaultValue: false,
   );
 
   static Env get env => _envName == 'prod' ? Env.prod : Env.staging;

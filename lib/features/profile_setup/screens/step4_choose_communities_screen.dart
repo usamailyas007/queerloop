@@ -39,12 +39,35 @@ class _Step4ChooseCommunitiesScreenState
     super.dispose();
   }
 
+  Future<void> _handleContinue() async {
+    final ProfileSetupProvider provider =
+        context.read<ProfileSetupProvider>();
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (provider.joinedCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.profileSelectCommunityRequired),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final bool ok = await provider.saveStep4();
+    if (ok && mounted) {
+      widget.onNext();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ProfileSetupProvider provider =
         context.watch<ProfileSetupProvider>();
     final List<CommunityModel> communities = provider.filteredCommunities;
-    final int joinedCount = provider.joinedCount;
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
@@ -160,26 +183,19 @@ class _Step4ChooseCommunitiesScreenState
                   top: AppSpacing.md,
                   bottom: AppSpacing.lg,
                 ),
-                child: AppGradientButton(
-                  text: joinedCount > 0
-                      ? '${l10n.profileContinueBtn} · $joinedCount joined'
-                      : l10n.profileContinueBtn,
-                  isEnabled: joinedCount > 0,
-                  onPressed: () {
-                    if (joinedCount == 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(l10n.profileSelectCommunityRequired),
-                          backgroundColor: AppColors.gradientPink,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      );
-                      return;
-                    }
-                    widget.onNext();
+                child: Selector<ProfileSetupProvider, ({bool isBusy, int joinedCount})>(
+                  selector: (_, ProfileSetupProvider p) =>
+                      (isBusy: p.isBusy, joinedCount: p.joinedCount),
+                  builder: (BuildContext context,
+                      ({bool isBusy, int joinedCount}) data, _) {
+                    return AppGradientButton(
+                      text: data.joinedCount > 0
+                          ? '${l10n.profileContinueBtn} · ${data.joinedCount} joined'
+                          : l10n.profileContinueBtn,
+                      isEnabled: data.joinedCount > 0,
+                      isLoading: data.isBusy,
+                      onPressed: data.isBusy ? () {} : _handleContinue,
+                    );
                   },
                 ),
               ),

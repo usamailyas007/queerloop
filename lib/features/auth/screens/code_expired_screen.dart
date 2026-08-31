@@ -17,15 +17,22 @@ class CodeExpiredScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool isDark = context.isDarkMode;
-    final String codeStr = (expiredCode != null && expiredCode!.isNotEmpty)
-        ? expiredCode!
-        : '49999';
+    final dynamic routeArgs = ModalRoute.of(context)?.settings.arguments;
+    String? email;
+    String codeStr = expiredCode ?? '';
+    if (routeArgs is String) {
+      codeStr = routeArgs;
+    } else if (routeArgs is Map) {
+      email = routeArgs['email'] as String?;
+      codeStr = (routeArgs['code'] as String?) ?? '';
+    }
+    if (codeStr.isEmpty) codeStr = '123456';
 
-    final List<String> expiredDigits = List<String>.generate(5, (int i) {
+    final List<String> expiredDigits = List<String>.generate(6, (int i) {
       if (i < codeStr.length) {
         return codeStr[i];
       }
-      return '9';
+      return '-';
     });
 
     return Scaffold(
@@ -85,18 +92,18 @@ class CodeExpiredScreen extends StatelessWidget {
 
               const SizedBox(height: AppSpacing.xxl),
 
-              // ── 5 Expired Red OTP Boxes ──────────────────────────────
+              // ── 6 Expired Red OTP Boxes ──────────────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List<Widget>.generate(5, (int index) {
+                children: List<Widget>.generate(6, (int index) {
                   return Container(
-                    width: 56,
-                    height: 56,
+                    width: 48,
+                    height: 54,
                     decoration: BoxDecoration(
                       color: isDark
                           ? const Color(0xFF1E1B26)
                           : context.themeCardBackground,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: const Color(0xFFFF5252).withValues(alpha: 0.6),
                         width: 1.5,
@@ -105,7 +112,9 @@ class CodeExpiredScreen extends StatelessWidget {
                     child: Center(
                       child: Text(
                         expiredDigits[index],
-                        style: AppTextStyles.otpExpiredDigitText,
+                        style: AppTextStyles.otpExpiredDigitText.copyWith(
+                          fontSize: 20,
+                        ),
                       ),
                     ),
                   );
@@ -127,7 +136,18 @@ class CodeExpiredScreen extends StatelessWidget {
               AppGradientButton(
                 text: l10n.authSendNewCodeBtn,
                 onPressed: () {
-                  Navigator.pushReplacementNamed(context, AppRoutes.verifyCode);
+                  if (email != null && email.isNotEmpty) {
+                    Navigator.pushReplacementNamed(
+                      context,
+                      AppRoutes.verifyCode,
+                      arguments: email,
+                    );
+                  } else {
+                    Navigator.pushReplacementNamed(
+                      context,
+                      AppRoutes.forgotPassword,
+                    );
+                  }
                 },
               ),
 
