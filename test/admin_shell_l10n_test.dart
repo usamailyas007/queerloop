@@ -5,11 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:queerloop/admin/auth/provider/admin_auth_provider.dart';
 import 'package:queerloop/admin/moderator_view/moderator_shell.dart';
+import 'package:queerloop/core/api/api_client.dart';
 import 'package:queerloop/l10n/app_localizations.dart';
 
 Widget wrap(Locale locale) {
   return ChangeNotifierProvider<AdminAuthProvider>(
-    create: (BuildContext context) => AdminAuthProvider(),
+    create: (BuildContext context) =>
+        AdminAuthProvider(client: ApiClient(baseUrl: 'http://localhost')),
     child: MaterialApp(
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,

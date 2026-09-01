@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text_styles.dart';
+import 'shimmer_text.dart';
 
 class AppGradientButton extends StatelessWidget {
   const AppGradientButton({
@@ -17,6 +18,7 @@ class AppGradientButton extends StatelessWidget {
     this.fontSize,
     this.isLoading = false,
     this.isEnabled = true,
+    this.shimmerLabelWhileLoading = false,
   });
 
   final String text;
@@ -30,8 +32,16 @@ class AppGradientButton extends StatelessWidget {
   final bool isLoading;
   final bool isEnabled;
 
+  /// When loading, sweep a shimmer across the label instead of showing a spinner.
+  final bool shimmerLabelWhileLoading;
+
   @override
   Widget build(BuildContext context) {
+    final TextStyle resolvedTextStyle = textStyle ??
+        (fontSize != null
+            ? AppTextStyles.buttonText.copyWith(fontSize: fontSize)
+            : AppTextStyles.buttonText);
+
     return Opacity(
       opacity: isEnabled ? 1.0 : 0.5,
       child: Container(
@@ -56,7 +66,7 @@ class AppGradientButton extends StatelessWidget {
                 ? borderRadius as BorderRadius
                 : BorderRadius.circular(AppRadius.button),
             child: Center(
-              child: isLoading
+              child: (isLoading && !shimmerLabelWhileLoading)
                   ? const SizedBox(
                       width: 24,
                       height: 24,
@@ -71,16 +81,18 @@ class AppGradientButton extends StatelessWidget {
                       ),
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
-                        child: Text(
-                          text,
-                          maxLines: 1,
-                          style: textStyle ??
-                              (fontSize != null
-                                  ? AppTextStyles.buttonText.copyWith(
-                                      fontSize: fontSize,
-                                    )
-                                  : AppTextStyles.buttonText),
-                        ),
+                        child: (isLoading && shimmerLabelWhileLoading)
+                            ? ShimmerText(
+                                text,
+                                style: resolvedTextStyle,
+                                baseColor:
+                                    resolvedTextStyle.color ?? Colors.white,
+                              )
+                            : Text(
+                                text,
+                                maxLines: 1,
+                                style: resolvedTextStyle,
+                              ),
                       ),
                     ),
             ),

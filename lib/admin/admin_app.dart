@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/api/api_client.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_theme.dart';
@@ -10,6 +11,7 @@ import '../l10n/app_localizations.dart';
 import 'auth/provider/admin_auth_provider.dart';
 import 'auth/screens/admin_login_screen.dart';
 import 'admin_view/admin_shell.dart';
+import 'admin_view/users/provider/admin_users_provider.dart';
 import 'moderator_view/moderator_shell.dart';
 
 class AdminApp extends StatelessWidget {
@@ -19,8 +21,14 @@ class AdminApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider<ApiClient>(create: (_) => ApiClient()),
         ChangeNotifierProvider<AdminAuthProvider>(
-          create: (BuildContext context) => AdminAuthProvider(),
+          create: (BuildContext context) =>
+              AdminAuthProvider(client: context.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<AdminUsersProvider>(
+          create: (BuildContext context) =>
+              AdminUsersProvider(client: context.read<ApiClient>()),
         ),
       ],
       child: MaterialApp(

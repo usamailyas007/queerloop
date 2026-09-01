@@ -22,6 +22,10 @@ abstract final class ApiEndpoints {
   static String user(String id) => '/users/$id';
   static const String usernameAvailable = '/users/username-available';
 
+  // ── Admin ─────────────────────────────────────────────────────────────────
+  /// Paginated account list for the admin console. GET /admin/users
+  static const String adminUsers = '/admin/users';
+
   // ── Communities ───────────────────────────────────────────────────────────
   /// Replace :id at call site: ApiEndpoints.joinCommunity('comm-id')
   static String joinCommunity(String communityId) =>

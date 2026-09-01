@@ -15,7 +15,7 @@ class AdminLoginScreen extends StatefulWidget {
 
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final TextEditingController _emailController = TextEditingController(
-    text: 'you@queerloop.app',
+    text: '',
   );
   final TextEditingController _passwordController = TextEditingController();
 
@@ -26,8 +26,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     super.dispose();
   }
 
-  void _submit() {
-    context.read<AdminAuthProvider>().signIn(
+  Future<void> _submit() async {
+    await context.read<AdminAuthProvider>().signIn(
       email: _emailController.text.trim(),
       password: _passwordController.text,
     );
@@ -118,15 +118,20 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          AppTextField(
-                            controller: _emailController,
-                            hintText: 'you@queerloop.app',
-                            keyboardType: TextInputType.emailAddress,
-                            fillColor: AppColors.adminRowDivider,
-                            prefixIcon: const Icon(
-                              Icons.mail_outline_rounded,
-                              color: AppColors.adminTextFaint,
-                              size: 17,
+                          Selector<AdminAuthProvider, bool>(
+                            selector: (_, AdminAuthProvider p) => p.isBusy,
+                            builder: (_, bool busy, _) => AppTextField(
+                              controller: _emailController,
+                              enabled: !busy,
+                              hintText: 'you@queerloop.app',
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
+                              fillColor: AppColors.adminRowDivider,
+                              prefixIcon: const Icon(
+                                Icons.mail_outline_rounded,
+                                color: AppColors.adminTextFaint,
+                                size: 17,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -139,37 +144,70 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          AppTextField(
-                            controller: _passwordController,
-                            hintText: 'Enter your password',
-                            isPassword: true,
-                            fillColor: AppColors.adminRowDivider,
-                            prefixIcon: const Icon(
-                              Icons.lock_outline_rounded,
-                              color: AppColors.adminTextFaint,
-                              size: 17,
+                          Selector<AdminAuthProvider, bool>(
+                            selector: (_, AdminAuthProvider p) => p.isBusy,
+                            builder: (_, bool busy, _) => AppTextField(
+                              controller: _passwordController,
+                              enabled: !busy,
+                              hintText: 'Enter your password',
+                              isPassword: true,
+                              textInputAction: TextInputAction.done,
+                              onSubmitted: (_) => _submit(),
+                              fillColor: AppColors.adminRowDivider,
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                                color: AppColors.adminTextFaint,
+                                size: 17,
+                              ),
                             ),
                           ),
+
+                          // ── Error banner — only this rebuilds on error ────
+                          Selector<AdminAuthProvider, String?>(
+                            selector: (_, AdminAuthProvider p) => p.error,
+                            builder: (_, String? error, _) {
+                              if (error == null) {
+                                return const SizedBox.shrink();
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Text(
+                                  error,
+                                  style: const TextStyle(
+                                    color: AppColors.danger,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+
                           const SizedBox(height: 22),
-                          AppGradientButton(
-                            text: 'Sign in →',
-                            height: 48,
-                            borderRadius: BorderRadius.circular(13),
-                            gradient: const LinearGradient(
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                              colors: <Color>[
-                                AppColors.adminPink,
-                                AppColors.adminPurple,
-                              ],
+                          Selector<AdminAuthProvider, bool>(
+                            selector: (_, AdminAuthProvider p) => p.isBusy,
+                            builder: (_, bool busy, _) => AppGradientButton(
+                              text: 'Sign in →',
+                              isLoading: busy,
+                              shimmerLabelWhileLoading: true,
+                              height: 48,
+                              borderRadius: BorderRadius.circular(13),
+                              gradient: const LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                colors: <Color>[
+                                  AppColors.adminPink,
+                                  AppColors.adminPurple,
+                                ],
+                              ),
+                              textStyle: const TextStyle(
+                                color: AppColors.textInverse,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                letterSpacing: -0.14,
+                              ),
+                              onPressed: busy ? () {} : _submit,
                             ),
-                            textStyle: const TextStyle(
-                              color: AppColors.textInverse,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14,
-                              letterSpacing: -0.14,
-                            ),
-                            onPressed: _submit,
                           ),
                         ],
                       ),
