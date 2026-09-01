@@ -8,6 +8,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
 import '../auth_provider.dart';
@@ -36,21 +37,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final bool ok =
         await context.read<AuthProvider>().requestPasswordReset(email);
     if (ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Verification code sent to $email'),
-          backgroundColor: AppColors.gradientPink,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      AppSnackBar.showSuccess(
+        context,
+        title: 'Code Sent',
+        subtitle: 'Verification code has been sent to $email',
       );
       Navigator.pushNamed(
         context,
         AppRoutes.verifyCode,
         arguments: email,
       );
+    } else if (!ok && mounted) {
+      final String? errorMsg = context.read<AuthProvider>().error;
+      if (errorMsg != null && errorMsg.isNotEmpty) {
+        AppSnackBar.showError(
+          context,
+          title: 'Request Failed',
+          subtitle: errorMsg,
+        );
+      }
     }
   }
 

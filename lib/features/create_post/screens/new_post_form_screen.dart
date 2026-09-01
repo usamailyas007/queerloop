@@ -9,6 +9,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../home/provider/home_feed_provider.dart';
@@ -652,11 +653,10 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                     child: AppOutlineButton(
                       text: 'Draft',
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Saved to drafts'),
-                            duration: Duration(seconds: 1),
-                          ),
+                        AppSnackBar.showSuccess(
+                          context,
+                          title: 'Draft Saved',
+                          subtitle: 'Your post has been saved to drafts.',
                         );
                         Navigator.popUntil(context, (route) => route.isFirst);
                       },

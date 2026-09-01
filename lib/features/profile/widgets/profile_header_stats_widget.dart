@@ -14,9 +14,10 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
     required this.followingCount,
     required this.onFollowersTap,
     required this.onFollowingTap,
-    this.pronounsPill = 'she / they',
-    this.pronounsList = const <String>['she/her', 'they/them'],
+    this.pronounsPill = '',
+    this.pronounsList = const <String>[],
     this.identityList = const <String>['Lesbian', 'Bisexual', 'Non-binary'],
+    this.interestsList = const <String>[],
     this.interestsText =
         'Music • Gaming • Fashion • Fitness • Travel • Art • Movies',
     this.actionButtons,
@@ -34,6 +35,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
   final String pronounsPill;
   final List<String> pronounsList;
   final List<String> identityList;
+  final List<String> interestsList;
   final String interestsText;
   final Widget? actionButtons;
 
@@ -73,21 +75,25 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
     String text,
     Color borderColor,
     Color textColor,
+    Color backgroundColor,
   ) {
     return Container(
-      margin: const EdgeInsets.only(right: AppSpacing.xs),
+      margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: 4,
+        horizontal: 14,
+        vertical: 5,
       ),
       decoration: BoxDecoration(
-        color: context.themeCardBackground,
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: borderColor),
+        border: Border.all(
+          color: borderColor.withValues(alpha: 0.6),
+          width: 1.1,
+        ),
       ),
       child: Text(
         text,
-        style: AppTextStyles.caption.copyWith(
+        style: TextStyle(
           color: textColor,
           fontWeight: FontWeight.w600,
           fontSize: 12,
@@ -99,6 +105,11 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isDark = context.isDarkMode;
+
+    final Color pinkPillBg =
+        isDark ? const Color(0xFF2A1622) : const Color(0xFFFFF0F5);
+    final Color cyanPillBg =
+        isDark ? const Color(0xFF0F262A) : const Color(0xFFE8FAF8);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,12 +133,45 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
                   color: context.themeBackground,
                 ),
                 child: ClipOval(
-                  child: Image.asset(
-                    avatarAsset,
-                    width: 76,
-                    height: 76,
-                    fit: BoxFit.cover,
-                  ),
+                  child: avatarAsset.startsWith('http')
+                      ? Image.network(
+                          avatarAsset,
+                          width: 76,
+                          height: 76,
+                          fit: BoxFit.cover,
+                          errorBuilder: (
+                            BuildContext ctx,
+                            Object err,
+                            StackTrace? trace,
+                          ) => Container(
+                            width: 76,
+                            height: 76,
+                            color: context.themeCardBackground,
+                            child: const Icon(
+                              Icons.person,
+                              color: AppColors.gradientPink,
+                            ),
+                          ),
+                        )
+                      : Image.asset(
+                          avatarAsset,
+                          width: 76,
+                          height: 76,
+                          fit: BoxFit.cover,
+                          errorBuilder: (
+                            BuildContext ctx,
+                            Object err,
+                            StackTrace? trace,
+                          ) => Container(
+                            width: 76,
+                            height: 76,
+                            color: context.themeCardBackground,
+                            child: const Icon(
+                              Icons.person,
+                              color: AppColors.gradientPink,
+                            ),
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -164,7 +208,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
 
         const SizedBox(height: AppSpacing.lg),
 
-        // Name + Pill Badge
+        // Name + Pill Badge (e.g. Ash Mercado  she / they)
         Row(
           children: <Widget>[
             Text(
@@ -179,20 +223,23 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
+                  horizontal: 10,
                   vertical: 3,
                 ),
                 decoration: BoxDecoration(
                   color: isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.05),
+                      ? Colors.white.withValues(alpha: 0.1)
+                      : const Color(0xFFEBEBF0),
                   borderRadius: BorderRadius.circular(AppRadius.pill),
                 ),
                 child: Text(
                   pronounsPill,
-                  style: AppTextStyles.caption.copyWith(
-                    color: context.themeTextSecondary,
+                  style: TextStyle(
+                    color: isDark
+                        ? Colors.white70
+                        : const Color(0xFF6E6E78),
                     fontSize: 11,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
@@ -202,6 +249,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
 
         const SizedBox(height: 4),
 
+        // Bio Text
         Text(
           bio,
           style: AppTextStyles.bodySmall.copyWith(
@@ -215,22 +263,35 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
         if (pronounsList.isNotEmpty) ...<Widget>[
           const SizedBox(height: AppSpacing.md),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              Text(
-                'PRONOUNS',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: context.themeTextMuted,
-                  fontSize: 10,
-                  letterSpacing: 1.0,
+              SizedBox(
+                width: 80,
+                child: Text(
+                  'PRONOUNS',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: context.themeTextMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0,
+                  ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
-              ...pronounsList.map(
-                (String item) => _buildPillBadge(
-                  context,
-                  item,
-                  AppColors.gradientPink,
-                  AppColors.gradientPink,
+              Expanded(
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: pronounsList
+                      .map(
+                        (String item) => _buildPillBadge(
+                          context,
+                          item,
+                          AppColors.gradientPink,
+                          AppColors.gradientPink,
+                          pinkPillBg,
+                        ),
+                      )
+                      .toList(),
                 ),
               ),
             ],
@@ -241,22 +302,35 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
         if (identityList.isNotEmpty) ...<Widget>[
           const SizedBox(height: AppSpacing.sm),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              Text(
-                'IDENTITY',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: context.themeTextMuted,
-                  fontSize: 10,
-                  letterSpacing: 1.0,
+              SizedBox(
+                width: 80,
+                child: Text(
+                  'IDENTITY',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: context.themeTextMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0,
+                  ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
-              ...identityList.map(
-                (String item) => _buildPillBadge(
-                  context,
-                  item,
-                  AppColors.gradientCyan,
-                  AppColors.gradientCyan,
+              Expanded(
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: identityList
+                      .map(
+                        (String item) => _buildPillBadge(
+                          context,
+                          item,
+                          AppColors.gradientCyan,
+                          AppColors.gradientCyan,
+                          cyanPillBg,
+                        ),
+                      )
+                      .toList(),
                 ),
               ),
             ],
@@ -264,25 +338,35 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
         ],
 
         // INTERESTS Row
-        if (interestsText.isNotEmpty) ...<Widget>[
+        if (interestsList.isNotEmpty || interestsText.isNotEmpty) ...<Widget>[
           const SizedBox(height: AppSpacing.sm),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(
-                'INTERESTS',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: context.themeTextMuted,
-                  fontSize: 10,
-                  letterSpacing: 1.0,
+              SizedBox(
+                width: 80,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    'INTERESTS',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: context.themeTextMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Text(
-                  interestsText,
+                  interestsList.isNotEmpty
+                      ? interestsList.join(' • ')
+                      : interestsText,
                   style: AppTextStyles.bodySmall.copyWith(
                     color: context.themeTextSecondary,
-                    fontSize: 12,
+                    fontSize: 12.5,
+                    height: 1.35,
                   ),
                 ),
               ),

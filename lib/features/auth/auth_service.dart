@@ -135,20 +135,20 @@ class AuthService {
   // ── Sign out ──────────────────────────────────────────────────────────────
 
   Future<void> signOut({String? refreshToken}) async {
+    final String? storedRefresh =
+        refreshToken ?? await _storage.read(key: _StorageKey.refreshToken);
     if (!AppConfig.useMockApi) {
-      final String? storedRefresh =
-          refreshToken ?? await _storage.read(key: _StorageKey.refreshToken);
-      debugPrint('🚀 [AuthService] Logging out user...');
+      debugPrint(
+          '🚀 [AuthService] Logging out user (POST ${ApiEndpoints.logout})\n   Payload: {refreshToken: $storedRefresh}');
       try {
-        await _client.post(
+        final dynamic data = await _client.post(
           ApiEndpoints.logout,
-          body: storedRefresh != null && storedRefresh.isNotEmpty
-              ? <String, dynamic>{'refreshToken': storedRefresh}
-              : null,
+          body: <String, dynamic>{'refreshToken': storedRefresh ?? ''},
         );
-        debugPrint('📥 [AuthService] Logout success');
+        debugPrint('📥 [AuthService] Logout success: $data');
       } catch (e) {
-        debugPrint('⚠️ [AuthService] Logout error (clearing local session): $e');
+        debugPrint(
+            '⚠️ [AuthService] Logout API error (clearing local session): $e');
       }
     }
     await _clearTokens();

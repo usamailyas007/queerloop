@@ -7,6 +7,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
 import '../models/community_model.dart';
@@ -44,15 +45,10 @@ class _Step4ChooseCommunitiesScreenState
         context.read<ProfileSetupProvider>();
     final AppLocalizations l10n = AppLocalizations.of(context);
     if (provider.joinedCount == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.profileSelectCommunityRequired),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      AppSnackBar.showError(
+        context,
+        title: 'Community Required',
+        subtitle: l10n.profileSelectCommunityRequired,
       );
       return;
     }

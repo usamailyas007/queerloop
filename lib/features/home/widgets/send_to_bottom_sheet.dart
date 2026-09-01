@@ -5,6 +5,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -292,11 +293,10 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                   GestureDetector(
                     onTap: () {
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Message sent successfully!'),
-                          duration: Duration(seconds: 1),
-                        ),
+                      AppSnackBar.showSuccess(
+                        context,
+                        title: 'Sent',
+                        subtitle: 'Message sent successfully!',
                       );
                     },
                     child: Container(

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
@@ -10,6 +11,8 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../auth/auth_provider.dart';
+import '../provider/profile_provider.dart';
 import '../widgets/identity_bottom_sheet.dart';
 import '../widgets/interests_bottom_sheet.dart';
 import '../widgets/pronouns_bottom_sheet.dart';
@@ -22,28 +25,42 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final TextEditingController _nameController =
-      TextEditingController(text: 'Ash Mercado');
-  final TextEditingController _usernameController =
-      TextEditingController(text: '@ashinorbit');
-  final TextEditingController _bioController = TextEditingController(
-    text: 'Film nerd, softball catcher, chronically making playlists.',
-  );
+  late final TextEditingController _nameController;
+  late final TextEditingController _usernameController;
+  late final TextEditingController _bioController;
 
   List<String> _pronouns = <String>['she / her', 'they / them'];
   List<String> _identity = <String>['Lesbian', 'Bisexual', 'Non-binary'];
-  List<String> _interests = <String>[
-    'Music',
-    'Gaming',
-    'Fashion',
-    'Fitness',
-    'Travel',
-    'Photography',
-    'Cooking',
-  ];
+  List<String> _interests = <String>[];
   final String _dateOfBirth = '14 June 1998';
   String? _profilePhotoPath;
   final ImagePicker _picker = ImagePicker();
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final ProfileProvider provider = context.read<ProfileProvider>();
+    _nameController = TextEditingController(text: provider.displayName);
+    _usernameController = TextEditingController(
+      text: provider.username.startsWith('@')
+          ? provider.username
+          : '@${provider.username}',
+    );
+    _bioController = TextEditingController(text: provider.bio);
+    if (provider.pronouns.isNotEmpty) {
+      _pronouns = List<String>.from(provider.pronouns);
+    }
+    _interests = List<String>.from(provider.interests);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _usernameController.dispose();
+    _bioController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -218,11 +235,99 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
+  bool _areListsEqual(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    final Set<String> setA = a.toSet();
+    final Set<String> setB = b.toSet();
+    return setA.length == setB.length && setA.containsAll(setB);
+  }
+
+  Future<void> _handleSave() async {
+    final String? userId = context.read<AuthProvider>().userId;
+    if (userId == null || userId.isEmpty) {
+      Navigator.pop(context);
+      return;
+    }
+    final ProfileProvider profileProvider = context.read<ProfileProvider>();
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final NavigatorState navigator = Navigator.of(context);
+
+    final String cleanUsername =
+        _usernameController.text.trim().replaceAll('@', '');
+    final String newDisplayName = _nameController.text.trim();
+    final String newBio = _bioController.text.trim();
+
+    final String currentDisplayName = profileProvider.displayName.trim();
+    final String currentUsername =
+        profileProvider.username.replaceAll('@', '').trim();
+    final String currentBio = profileProvider.bio.trim();
+
+    final String? updateDisplayName =
+        (newDisplayName != currentDisplayName) ? newDisplayName : null;
+    final String? updateUsername =
+        (cleanUsername != currentUsername && cleanUsername.isNotEmpty)
+            ? cleanUsername
+            : null;
+    final String? updateBio = (newBio != currentBio) ? newBio : null;
+    final List<String>? updatePronouns =
+        !_areListsEqual(_pronouns, profileProvider.pronouns) ? _pronouns : null;
+    final List<String>? updateInterests =
+        !_areListsEqual(_interests, profileProvider.interests)
+            ? _interests
+            : null;
+    final String? updateAvatarUrl = _profilePhotoPath != null
+        ? 'https://picsum.photos/seed/${cleanUsername.isNotEmpty ? cleanUsername : "user"}/400'
+        : null;
+
+    final bool hasChanges = updateDisplayName != null ||
+        updateUsername != null ||
+        updateBio != null ||
+        updatePronouns != null ||
+        updateInterests != null ||
+        updateAvatarUrl != null;
+
+    if (!hasChanges) {
+      navigator.pop();
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    final bool ok = await profileProvider.updateProfile(
+      userId,
+      displayName: updateDisplayName,
+      username: updateUsername,
+      bio: updateBio,
+      pronouns: updatePronouns,
+      interests: updateInterests,
+      avatarUrl: updateAvatarUrl,
+    );
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    if (ok) {
+      navigator.pop();
+      AppSnackBar.showSuccess(
+        context,
+        title: 'Profile Updated',
+        subtitle: 'Your profile changes have been saved',
+        messenger: messenger,
+      );
+    } else {
+      final String? err = profileProvider.error;
+      AppSnackBar.showError(
+        context,
+        title: 'Update Failed',
+        subtitle: err ?? 'Failed to update profile.',
+        messenger: messenger,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final String pronounsDisplay = _pronouns.join(', ');
     final String identityDisplay = _identity.join(', ');
-    final String interestsDisplay = '${_interests.length} selected';
+    final String interestsDisplay =
+        _interests.isEmpty ? 'None' : '${_interests.length} selected';
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -257,23 +362,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                   ),
                   GestureDetector(
-                    onTap: () {
-                      final ScaffoldMessengerState messenger =
-                          ScaffoldMessenger.of(context);
-                      Navigator.pop(context);
-                      AppSnackBar.show(
-                        context,
-                        messenger: messenger,
-                        title: 'Profile updated',
-                        subtitle: 'Your profile changes have been saved',
-                        icon: const Icon(
-                          Icons.check_circle_rounded,
-                          color: AppColors.gradientCyan,
-                          size: 18,
-                        ),
-                        actionLabel: null,
-                      );
-                    },
+                    onTap: _isSaving ? null : _handleSave,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 18,
@@ -283,14 +372,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         gradient: AppColors.primaryGradientButton,
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text(
-                        'Save',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              'Save',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
                     ),
                   ),
                 ],
@@ -324,12 +422,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     height: 82,
                                     fit: BoxFit.cover,
                                   )
-                                : Image.asset(
-                                    AppImages.user1,
-                                    width: 82,
-                                    height: 82,
-                                    fit: BoxFit.cover,
-                                  ),
+                                : (context
+                                        .watch<ProfileProvider>()
+                                        .avatarUrl
+                                        .startsWith('http')
+                                    ? Image.network(
+                                        context
+                                            .watch<ProfileProvider>()
+                                            .avatarUrl,
+                                        width: 82,
+                                        height: 82,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (
+                                          BuildContext ctx,
+                                          Object err,
+                                          StackTrace? trace,
+                                        ) =>
+                                            Image.asset(
+                                          AppImages.user1,
+                                          width: 82,
+                                          height: 82,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      )
+                                    : Image.asset(
+                                        AppImages.user1,
+                                        width: 82,
+                                        height: 82,
+                                        fit: BoxFit.cover,
+                                      )),
                           ),
                         ),
                         const SizedBox(height: AppSpacing.xs + 2),

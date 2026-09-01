@@ -10,12 +10,27 @@ import '../provider/profile_setup_provider.dart';
 import '../widgets/privacy_option_card.dart';
 
 class ProfileVisibilityScreen extends StatelessWidget {
-  const ProfileVisibilityScreen({super.key});
+  const ProfileVisibilityScreen({super.key, this.initialSelection});
+
+  final String? initialSelection;
+
+  bool _isMatch(String opt, String selected) {
+    final String o = opt.toLowerCase().trim();
+    final String s = selected.toLowerCase().trim();
+    if (o == s) return true;
+    if (o.contains('everyone') && s.contains('everyone')) return true;
+    if (o.contains('nobody') && s.contains('nobody')) return true;
+    if (o.contains('mutual') && s.contains('mutual')) return true;
+    if (o.contains('follow') && s.contains('follow')) return true;
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final ProfileSetupProvider provider = context.watch<ProfileSetupProvider>();
-    final String currentSelection = provider.profileVisibility;
+    final ProfileSetupProvider? setupProvider =
+        context.watch<ProfileSetupProvider?>();
+    final String currentSelection =
+        initialSelection ?? setupProvider?.profileVisibility ?? 'everyone';
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     final List<String> options = <String>[
@@ -64,7 +79,7 @@ class ProfileVisibilityScreen extends StatelessWidget {
                     const SizedBox(height: AppSpacing.md),
                 itemBuilder: (context, index) {
                   final String option = options[index];
-                  final bool isSelected = currentSelection == option;
+                  final bool isSelected = _isMatch(option, currentSelection);
                   final bool isRecommended =
                       option == l10n.profileOptionPeopleYouFollow;
 
@@ -73,8 +88,10 @@ class ProfileVisibilityScreen extends StatelessWidget {
                     isSelected: isSelected,
                     isRecommended: isRecommended,
                     onTap: () {
-                      provider.setProfileVisibility(option);
-                      Navigator.pop(context);
+                      if (setupProvider != null) {
+                        setupProvider.setProfileVisibility(option);
+                      }
+                      Navigator.pop(context, option);
                     },
                   );
                 },

@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_switch.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/auth_provider.dart';
@@ -146,12 +147,24 @@ class Step5YourPrivacyScreen extends StatelessWidget {
                       onPressed: isBusy
                           ? () {}
                           : () async {
+                              final ProfileSetupProvider provider =
+                                  context.read<ProfileSetupProvider>();
                               final String? userId =
                                   context.read<AuthProvider>().userId;
                               if (userId != null && userId.isNotEmpty) {
-                                await context
-                                    .read<ProfileSetupProvider>()
-                                    .saveStep5(userId);
+                                final bool ok =
+                                    await provider.saveStep5(userId);
+                                if (!ok && context.mounted) {
+                                  final String? err = provider.error;
+                                  if (err != null && err.isNotEmpty) {
+                                    AppSnackBar.showError(
+                                      context,
+                                      title: 'Save Failed',
+                                      subtitle: err,
+                                    );
+                                    return;
+                                  }
+                                }
                               }
                               onFinish();
                             },

@@ -11,6 +11,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../auth_provider.dart';
 import '../widgets/auth_back_button.dart';
@@ -102,6 +103,11 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 
     if (resetTicket != null && resetTicket.isNotEmpty && mounted) {
       _timer?.cancel();
+      AppSnackBar.showSuccess(
+        context,
+        title: 'Code Verified',
+        subtitle: 'OTP verified successfully.',
+      );
       Navigator.pushNamed(
         context,
         AppRoutes.createNewPassword,
@@ -110,6 +116,15 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
           'resetTicket': resetTicket,
         },
       );
+    } else if (mounted) {
+      final String? errorMsg = context.read<AuthProvider>().error;
+      if (errorMsg != null && errorMsg.isNotEmpty) {
+        AppSnackBar.showError(
+          context,
+          title: 'Verification Failed',
+          subtitle: errorMsg,
+        );
+      }
     }
   }
 
@@ -120,16 +135,20 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
     if (ok && mounted) {
       _startTimer();
       _otpController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('A fresh verification code was sent to $_email'),
-          backgroundColor: AppColors.gradientPink,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      AppSnackBar.showSuccess(
+        context,
+        title: 'Code Resent',
+        subtitle: 'A fresh verification code was sent to $_email',
       );
+    } else if (!ok && mounted) {
+      final String? errorMsg = context.read<AuthProvider>().error;
+      if (errorMsg != null && errorMsg.isNotEmpty) {
+        AppSnackBar.showError(
+          context,
+          title: 'Resend Failed',
+          subtitle: errorMsg,
+        );
+      }
     }
   }
 

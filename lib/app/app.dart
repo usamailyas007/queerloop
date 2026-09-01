@@ -12,6 +12,7 @@ import '../features/auth/auth_provider.dart';
 import '../features/create_post/provider/create_post_provider.dart';
 import '../features/home/provider/home_feed_provider.dart';
 import '../features/messages/provider/messages_provider.dart';
+import '../features/profile/provider/profile_provider.dart';
 import '../features/profile_setup/profile_setup_service.dart';
 import '../features/profile_setup/provider/profile_setup_provider.dart';
 import '../features/splash_welcome/provider/splash_provider.dart';
@@ -42,6 +43,11 @@ class App extends StatelessWidget {
         ChangeNotifierProvider<ProfileSetupProvider>(
           create: (BuildContext ctx) => ProfileSetupProvider(
             service: ProfileSetupService(ctx.read<ApiClient>()),
+          ),
+        ),
+        ChangeNotifierProvider<ProfileProvider>(
+          create: (BuildContext ctx) => ProfileProvider(
+            client: ctx.read<ApiClient>(),
           ),
         ),
         ChangeNotifierProvider<HomeFeedProvider>(

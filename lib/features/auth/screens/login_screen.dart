@@ -7,6 +7,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_social_button.dart';
 import '../../../core/widgets/app_switch.dart';
 import '../../../core/widgets/app_text_field.dart';
@@ -47,15 +48,27 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final bool ok = await context.read<AuthProvider>().signIn(
+    final AuthProvider authProvider = context.read<AuthProvider>();
+    final bool ok = await authProvider.signIn(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
 
-    if (!ok || !mounted) {
-      return; // provider already set _error; UI rebuilds via Selector
+    if (!ok) {
+      if (mounted) {
+        final String? errorMsg = authProvider.error;
+        if (errorMsg != null && errorMsg.isNotEmpty) {
+          AppSnackBar.showError(
+            context,
+            title: 'Login Failed',
+            subtitle: errorMsg,
+          );
+        }
+      }
+      return;
     }
 
+    if (!mounted) return;
     context.read<HomeFeedProvider>().resetToHome();
     _goHome(context);
   }

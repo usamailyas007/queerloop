@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../auth/auth_provider.dart';
 import '../../create_post/widgets/custom_gradient_switch.dart';
+import '../provider/profile_provider.dart';
 
 class NotificationsSettingsScreen extends StatefulWidget {
   const NotificationsSettingsScreen({super.key});
@@ -16,15 +19,42 @@ class NotificationsSettingsScreen extends StatefulWidget {
 class _NotificationsSettingsScreenState
     extends State<NotificationsSettingsScreen> {
   bool _masterPush = true;
-  bool _likes = false;
-  bool _comments = false;
-  bool _newFollowers = false;
+  late bool _likes;
+  late bool _comments;
+  late bool _newFollowers;
   bool _followRequests = false;
-  bool _messages = false;
+  late bool _messages;
   bool _communityPosts = false;
 
   bool _moderationUpdates = false;
   bool _announcements = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final ProfileProvider provider = context.read<ProfileProvider>();
+    _likes = provider.notifyOnLike;
+    _comments = provider.notifyOnComment;
+    _newFollowers = provider.notifyOnFollow;
+    _messages = provider.notifyOnMessage;
+  }
+
+  void _syncSetting({
+    bool? notifyOnLike,
+    bool? notifyOnComment,
+    bool? notifyOnFollow,
+    bool? notifyOnMessage,
+  }) {
+    final String? userId = context.read<AuthProvider>().userId;
+    if (userId == null || userId.isEmpty) return;
+    context.read<ProfileProvider>().updateProfile(
+          userId,
+          notifyOnLike: notifyOnLike,
+          notifyOnComment: notifyOnComment,
+          notifyOnFollow: notifyOnFollow,
+          notifyOnMessage: notifyOnMessage,
+        );
+  }
 
   Widget _buildToggleRow({
     required String title,
@@ -211,23 +241,30 @@ class _NotificationsSettingsScreenState
                           title: 'Likes',
                           subtitle: 'When someone likes your post or reel',
                           value: _likes,
-                          onChanged: (bool val) => setState(() => _likes = val),
+                          onChanged: (bool val) {
+                            setState(() => _likes = val);
+                            _syncSetting(notifyOnLike: val);
+                          },
                         ),
                         Divider(color: context.themeDivider, height: 1),
                         _buildToggleRow(
                           title: 'Comments',
                           subtitle: 'When someone comments on your post',
                           value: _comments,
-                          onChanged: (bool val) =>
-                              setState(() => _comments = val),
+                          onChanged: (bool val) {
+                            setState(() => _comments = val);
+                            _syncSetting(notifyOnComment: val);
+                          },
                         ),
                         Divider(color: context.themeDivider, height: 1),
                         _buildToggleRow(
                           title: 'New followers',
                           subtitle: 'When someone follows your profile',
                           value: _newFollowers,
-                          onChanged: (bool val) =>
-                              setState(() => _newFollowers = val),
+                          onChanged: (bool val) {
+                            setState(() => _newFollowers = val);
+                            _syncSetting(notifyOnFollow: val);
+                          },
                         ),
                         Divider(color: context.themeDivider, height: 1),
                         _buildToggleRow(
@@ -273,8 +310,10 @@ class _NotificationsSettingsScreenState
                           title: 'Direct messages',
                           subtitle: 'When someone sends you a message',
                           value: _messages,
-                          onChanged: (bool val) =>
-                              setState(() => _messages = val),
+                          onChanged: (bool val) {
+                            setState(() => _messages = val);
+                            _syncSetting(notifyOnMessage: val);
+                          },
                         ),
                         Divider(color: context.themeDivider, height: 1),
                         _buildToggleRow(

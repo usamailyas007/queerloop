@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 
+import '../../../core/api/api_client.dart';
+import '../../../core/config/api_endpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
@@ -10,6 +13,7 @@ import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../messages/models/message_models.dart';
 import '../../messages/screens/chat_screen.dart';
+import '../../profile_setup/models/profile_models.dart';
 import '../widgets/profile_feed_tabs_widget.dart';
 import '../widgets/profile_header_stats_widget.dart';
 import '../widgets/profile_media_grid_widget.dart';
@@ -17,6 +21,7 @@ import '../widgets/user_profile_options_bottom_sheet.dart';
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({
+    this.userId,
     this.username = 'rowankeeps',
     this.name = 'Rowan',
     this.avatarAsset = AppImages.user1,
@@ -24,6 +29,7 @@ class UserProfileScreen extends StatefulWidget {
     super.key,
   });
 
+  final String? userId;
   final String username;
   final String name;
   final String avatarAsset;
@@ -37,10 +43,41 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   int _selectedTabIndex = 1; // Default: Reels
   bool _isRequested = false; // Default: Not requested (shows Follow initially)
   bool _isFollowing = false; // Default: Not following (shows Follow initially)
+  UserProfile? _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.userId != null && widget.userId!.isNotEmpty) {
+      _fetchUserProfile(widget.userId!);
+    }
+  }
+
+  Future<void> _fetchUserProfile(String userId) async {
+    try {
+      final ApiClient client = context.read<ApiClient>();
+      final dynamic data = await client.get(ApiEndpoints.user(userId));
+      if (mounted && data is Map<String, dynamic>) {
+        setState(() {
+          _profile = UserProfile.fromJson(data);
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
-    final bool isPrivateAccount = widget.isPrivate || widget.username.contains('kit.lumen');
+    final bool isPrivateAccount =
+        _profile?.isPrivate ?? (widget.isPrivate || widget.username.contains('kit.lumen'));
+    final String currentUsername = _profile?.username ?? widget.username;
+    final String currentName = _profile?.displayName ?? widget.name;
+    final String currentAvatar = _profile?.avatarUrl ?? widget.avatarAsset;
+    final String currentBio = _profile?.bio ??
+        (isPrivateAccount
+            ? 'Private account.'
+            : 'Documenting recovery, one honest video at a time. Ask me anything about scar care.');
+    final String currentPronouns = _profile?.formattedPronouns ??
+        (isPrivateAccount ? 'he / him' : '');
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -86,7 +123,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
                           Text(
-                            widget.username,
+                            currentUsername.startsWith('@')
+                                ? currentUsername
+                                : '@$currentUsername',
                             style: AppTextStyles.titleMedium.copyWith(
                               color: context.themeTextPrimary,
                               fontWeight: FontWeight.w700,
@@ -115,7 +154,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     onTap: () {
                       UserProfileOptionsBottomSheet.show(
                         context,
-                        username: widget.username,
+                        username: currentUsername,
                       );
                     },
                     child: Container(
@@ -151,26 +190,29 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 children: <Widget>[
                   // Profile Header & Stats Widget
                   ProfileHeaderStatsWidget(
-                    avatarAsset: widget.avatarAsset,
-                    name: isPrivateAccount ? 'Kit' : widget.name,
-                    bio: isPrivateAccount
-                        ? 'Private account.'
-                        : 'Documenting recovery, one honest video at a time. Ask me anything about scar care.',
-                    postsCount: isPrivateAccount ? '64' : '402',
-                    followersCount: isPrivateAccount ? '1,102' : '41.2K',
-                    followingCount: isPrivateAccount ? '228' : '190',
+                    avatarAsset: currentAvatar,
+                    name: currentName,
+                    bio: currentBio,
+                    postsCount: _profile?.postsCount != null
+                        ? '${_profile!.postsCount}'
+                        : (isPrivateAccount ? '64' : '402'),
+                    followersCount: _profile?.followersCount != null
+                        ? '${_profile!.followersCount}'
+                        : (isPrivateAccount ? '1,102' : '41.2K'),
+                    followingCount: _profile?.followingCount != null
+                        ? '${_profile!.followingCount}'
+                        : (isPrivateAccount ? '228' : '190'),
                     onFollowersTap: () {},
                     onFollowingTap: () {},
-                    pronounsPill: isPrivateAccount ? 'he / him' : '',
-                    pronounsList: isPrivateAccount
-                        ? const <String>[]
-                        : const <String>['they/them'],
+                    pronounsPill: currentPronouns,
+                    pronounsList: _profile?.pronouns ??
+                        (isPrivateAccount
+                            ? const <String>[]
+                            : const <String>['they/them']),
                     identityList: isPrivateAccount
                         ? const <String>[]
                         : const <String>['Transgender', 'Queer'],
-                    interestsText: isPrivateAccount
-                        ? ''
-                        : 'Skincare • Recovery • Film photography • Hiking',
+                    interestsList: _profile?.interests ?? const <String>[],
                     actionButtons: Row(
                       children: <Widget>[
                         Expanded(

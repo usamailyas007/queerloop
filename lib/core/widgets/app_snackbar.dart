@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
+enum SnackBarType { success, error, info }
+
 class AppSnackBar {
   const AppSnackBar._();
 
@@ -10,10 +12,11 @@ class AppSnackBar {
     required String title,
     String? subtitle,
     Widget? icon,
-    String? actionLabel = 'Undo',
+    String? actionLabel,
     VoidCallback? onAction,
     Duration duration = const Duration(seconds: 4),
     ScaffoldMessengerState? messenger,
+    SnackBarType type = SnackBarType.info,
   }) {
     final ScaffoldMessengerState? targetMessenger =
         messenger ?? ScaffoldMessenger.maybeOf(context);
@@ -23,6 +26,43 @@ class AppSnackBar {
     final bool isDark = context.isDarkMode;
 
     targetMessenger.hideCurrentSnackBar();
+
+    Color badgeBg;
+    Color badgeBorder;
+    Widget defaultIcon;
+
+    switch (type) {
+      case SnackBarType.success:
+        badgeBg = isDark
+            ? const Color(0xFF0F2F34)
+            : const Color(0xFFE6F8F6);
+        badgeBorder = AppColors.gradientCyan.withValues(alpha: isDark ? 0.2 : 0.35);
+        defaultIcon = const Icon(
+          Icons.check_circle_rounded,
+          color: AppColors.gradientCyan,
+          size: 18,
+        );
+      case SnackBarType.error:
+        badgeBg = isDark
+            ? const Color(0xFF331522)
+            : const Color(0xFFFFE8EE);
+        badgeBorder = AppColors.danger.withValues(alpha: isDark ? 0.3 : 0.4);
+        defaultIcon = const Icon(
+          Icons.error_outline_rounded,
+          color: AppColors.danger,
+          size: 18,
+        );
+      case SnackBarType.info:
+        badgeBg = isDark
+            ? const Color(0xFF192538)
+            : context.themeCyanBadgeBackground;
+        badgeBorder = AppColors.gradientCyan.withValues(alpha: isDark ? 0.2 : 0.35);
+        defaultIcon = const Icon(
+          Icons.info_outline_rounded,
+          color: AppColors.gradientCyan,
+          size: 18,
+        );
+    }
 
     targetMessenger.showSnackBar(
       SnackBar(
@@ -57,21 +97,12 @@ class AppSnackBar {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF0F2F34)
-                      : context.themeCyanBadgeBackground,
+                  color: badgeBg,
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.gradientCyan.withValues(alpha: isDark ? 0.2 : 0.35),
-                  ),
+                  border: Border.all(color: badgeBorder),
                 ),
                 child: Center(
-                  child: icon ??
-                      const Icon(
-                        Icons.block_rounded,
-                        color: AppColors.gradientCyan,
-                        size: 18,
-                      ),
+                  child: icon ?? defaultIcon,
                 ),
               ),
               const SizedBox(width: 12),
@@ -133,6 +164,63 @@ class AppSnackBar {
           ),
         ),
       ),
+    );
+  }
+
+  static void showSuccess(
+    BuildContext context, {
+    required String title,
+    String? subtitle,
+    Widget? icon,
+    Duration duration = const Duration(seconds: 4),
+    ScaffoldMessengerState? messenger,
+  }) {
+    show(
+      context,
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      type: SnackBarType.success,
+      duration: duration,
+      messenger: messenger,
+    );
+  }
+
+  static void showError(
+    BuildContext context, {
+    required String title,
+    String? subtitle,
+    Widget? icon,
+    Duration duration = const Duration(seconds: 4),
+    ScaffoldMessengerState? messenger,
+  }) {
+    show(
+      context,
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      type: SnackBarType.error,
+      duration: duration,
+      messenger: messenger,
+    );
+  }
+
+  static void showInfo(
+    BuildContext context, {
+    required String title,
+    String? subtitle,
+    Widget? icon,
+    Duration duration = const Duration(seconds: 4),
+    ScaffoldMessengerState? messenger,
+  }) {
+    show(
+      context,
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      type: SnackBarType.info,
+      duration: duration,
+      messenger: messenger,
     );
   }
 }

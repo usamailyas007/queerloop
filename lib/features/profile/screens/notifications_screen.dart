@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import 'followers_following_screen.dart';
 import 'user_profile_screen.dart';
 
@@ -81,11 +82,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   const Spacer(),
                   GestureDetector(
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('All notifications marked as read.'),
-                          duration: Duration(seconds: 2),
-                        ),
+                      AppSnackBar.showSuccess(
+                        context,
+                        title: 'Notifications',
+                        subtitle: 'All notifications marked as read.',
                       );
                     },
                     child: Text(

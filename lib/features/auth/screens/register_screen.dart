@@ -7,6 +7,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_social_button.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
@@ -39,24 +40,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _submit() async {
     final AppLocalizations l10n = AppLocalizations.of(context);
     if (!_agreedToTerms) {
-      ScaffoldMessenger.of(
+      AppSnackBar.showError(
         context,
-      ).showSnackBar(SnackBar(content: Text(l10n.authAcceptTermsError)));
+        title: 'Terms Required',
+        subtitle: l10n.authAcceptTermsError,
+      );
       return;
     }
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
-    final bool ok = await context.read<AuthProvider>().signUp(
+    final AuthProvider authProvider = context.read<AuthProvider>();
+    final bool ok = await authProvider.signUp(
       email: _emailController.text.trim(),
       password: _passwordController.text.trim(),
     );
 
-    if (!ok || !mounted) {
-      return; // provider already set _error; Selector below will show it
+    if (!ok) {
+      if (mounted) {
+        final String? errorMsg = authProvider.error;
+        if (errorMsg != null && errorMsg.isNotEmpty) {
+          AppSnackBar.showError(
+            context,
+            title: 'Sign Up Failed',
+            subtitle: errorMsg,
+          );
+        }
+      }
+      return;
     }
 
+    if (!mounted) return;
     Navigator.pushNamed(context, AppRoutes.accountCreatedSuccess);
   }
 

@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../l10n/app_localizations.dart';
 
 class ShareThisPostBottomSheet extends StatelessWidget {
@@ -150,11 +151,10 @@ class ShareThisPostBottomSheet extends StatelessWidget {
                   iconColor: context.themeIcon,
                   labelColor: context.themeTextSecondary,
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Link copied to clipboard!'),
-                        duration: Duration(seconds: 1),
-                      ),
+                    AppSnackBar.showSuccess(
+                      context,
+                      title: 'Link Copied',
+                      subtitle: 'Link copied to clipboard!',
                     );
                   },
                 ),

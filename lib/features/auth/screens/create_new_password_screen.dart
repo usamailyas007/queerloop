@@ -8,6 +8,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
 import '../auth_provider.dart';
@@ -51,15 +52,10 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_newPasswordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.authPasswordsDoNotMatch),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      AppSnackBar.showError(
+        context,
+        title: 'Passwords Mismatch',
+        subtitle: l10n.authPasswordsDoNotMatch,
       );
       return;
     }
@@ -70,11 +66,25 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
         );
 
     if (ok && mounted) {
+      AppSnackBar.showSuccess(
+        context,
+        title: 'Password Updated',
+        subtitle: 'Your password has been changed successfully.',
+      );
       Navigator.pushNamedAndRemoveUntil(
         context,
         AppRoutes.passwordResetSuccess,
         (Route<dynamic> route) => route.settings.name == AppRoutes.login,
       );
+    } else if (!ok && mounted) {
+      final String? errorMsg = context.read<AuthProvider>().error;
+      if (errorMsg != null && errorMsg.isNotEmpty) {
+        AppSnackBar.showError(
+          context,
+          title: 'Reset Failed',
+          subtitle: errorMsg,
+        );
+      }
     }
   }
 

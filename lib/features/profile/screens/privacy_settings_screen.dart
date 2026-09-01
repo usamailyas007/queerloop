@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../auth/auth_provider.dart';
 import '../../create_post/widgets/custom_gradient_switch.dart';
 import '../../profile_setup/screens/allow_messages_from_screen.dart';
 import '../../profile_setup/screens/profile_visibility_screen.dart';
+import '../provider/profile_provider.dart';
 import 'who_can_comment_screen.dart';
 
 class PrivacySettingsScreen extends StatefulWidget {
@@ -16,16 +19,46 @@ class PrivacySettingsScreen extends StatefulWidget {
 }
 
 class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
-  bool _privateAccount = true;
-  bool _appearInExplore = false;
-  bool _hideLikes = true;
+  late bool _privateAccount;
+  late bool _appearInExplore;
+  late bool _hideLikes;
 
   bool _showActivityStatus = true;
   bool _sendReadReceipts = true;
 
-  String _whoCanMessage = 'People I follow';
+  late String _whoCanMessage;
   String _whoCanComment = 'Everyone';
-  String _profileVisibility = 'People I follow';
+  late String _profileVisibility;
+
+  @override
+  void initState() {
+    super.initState();
+    final ProfileProvider provider = context.read<ProfileProvider>();
+    _privateAccount = provider.isPrivate;
+    _appearInExplore = provider.showInDiscover;
+    _hideLikes = provider.hideMyLikes;
+    _whoCanMessage = provider.allowMessagesFromLabel;
+    _profileVisibility = provider.profileVisibilityLabel;
+  }
+
+  void _syncSetting({
+    bool? isPrivate,
+    bool? showInDiscover,
+    bool? hideMyLikes,
+    String? allowMessagesFrom,
+    String? profileVisibility,
+  }) {
+    final String? userId = context.read<AuthProvider>().userId;
+    if (userId == null || userId.isEmpty) return;
+    context.read<ProfileProvider>().updateProfile(
+          userId,
+          isPrivate: isPrivate,
+          showInDiscover: showInDiscover,
+          hideMyLikes: hideMyLikes,
+          allowMessagesFrom: allowMessagesFrom,
+          profileVisibility: profileVisibility,
+        );
+  }
 
   Widget _buildCardToggle({
     required String title,
@@ -213,21 +246,28 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                     title: 'Private account',
                     subtitle: 'Followers need approval',
                     value: _privateAccount,
-                    onChanged: (bool val) =>
-                        setState(() => _privateAccount = val),
+                    onChanged: (bool val) {
+                      setState(() => _privateAccount = val);
+                      _syncSetting(isPrivate: val);
+                    },
                   ),
                   _buildCardToggle(
                     title: 'Appear in Explore',
                     subtitle: 'Search and suggestions',
                     value: _appearInExplore,
-                    onChanged: (bool val) =>
-                        setState(() => _appearInExplore = val),
+                    onChanged: (bool val) {
+                      setState(() => _appearInExplore = val);
+                      _syncSetting(showInDiscover: val);
+                    },
                   ),
                   _buildCardToggle(
                     title: 'Hide my likes',
                     subtitle: 'Nobody sees what you liked',
                     value: _hideLikes,
-                    onChanged: (bool val) => setState(() => _hideLikes = val),
+                    onChanged: (bool val) {
+                      setState(() => _hideLikes = val);
+                      _syncSetting(hideMyLikes: val);
+                    },
                   ),
 
                   const SizedBox(height: AppSpacing.lg),
@@ -252,11 +292,14 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                       final dynamic res = await Navigator.push<dynamic>(
                         context,
                         MaterialPageRoute<dynamic>(
-                          builder: (_) => const AllowMessagesFromScreen(),
+                          builder: (_) => AllowMessagesFromScreen(
+                            initialSelection: _whoCanMessage,
+                          ),
                         ),
                       );
-                      if (res is String) {
+                      if (res is String && mounted) {
                         setState(() => _whoCanMessage = res);
+                        _syncSetting(allowMessagesFrom: res);
                       }
                     },
                   ),
@@ -272,7 +315,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                           ),
                         ),
                       );
-                      if (res != null) {
+                      if (res != null && mounted) {
                         setState(() => _whoCanComment = res);
                       }
                     },
@@ -284,11 +327,14 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                       final dynamic res = await Navigator.push<dynamic>(
                         context,
                         MaterialPageRoute<dynamic>(
-                          builder: (_) => const ProfileVisibilityScreen(),
+                          builder: (_) => ProfileVisibilityScreen(
+                            initialSelection: _profileVisibility,
+                          ),
                         ),
                       );
-                      if (res is String) {
+                      if (res is String && mounted) {
                         setState(() => _profileVisibility = res);
+                        _syncSetting(profileVisibility: res);
                       }
                     },
                   ),

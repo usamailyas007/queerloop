@@ -69,17 +69,6 @@ class _InterestsBottomSheetState extends State<InterestsBottomSheet> {
   void initState() {
     super.initState();
     _selected = List<String>.from(widget.selectedInterests);
-    if (_selected.isEmpty) {
-      _selected = <String>[
-        'Music',
-        'Gaming',
-        'Fashion',
-        'Fitness',
-        'Travel',
-        'Photography',
-        'Cooking',
-      ];
-    }
   }
 
   void _toggle(String item) {

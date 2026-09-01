@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/app_snackbar.dart';
 import 'provider/home_feed_provider.dart';
 import 'screens/discover_tab_screen.dart';
 import 'screens/messages_tab_screen.dart';
@@ -82,11 +83,10 @@ class _HomeScreenBody extends StatelessWidget {
                 currentIndex: navIndex,
                 onTap: (int index) {
                   if (index == 2) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Create Post / Reel option tapped'),
-                        duration: Duration(seconds: 1),
-                      ),
+                    AppSnackBar.showInfo(
+                      context,
+                      title: 'Create',
+                      subtitle: 'Create Post / Reel option tapped',
                     );
                   } else {
                     provider.setBottomNavIndex(index);

@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../profile/screens/user_profile_screen.dart';
@@ -146,13 +147,10 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
       _hiddenComments.add(comment);
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$typeName from @${comment.username} hidden'),
-        duration: const Duration(seconds: 2),
-        backgroundColor: const Color(0xFF2C2836),
-        behavior: SnackBarBehavior.floating,
-      ),
+    AppSnackBar.showSuccess(
+      context,
+      title: 'Hidden',
+      subtitle: '$typeName from @${comment.username} hidden',
     );
   }
 
@@ -291,13 +289,10 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                   onTap: () {
                     Clipboard.setData(ClipboardData(text: comment.content));
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('$typeName copied to clipboard'),
-                        duration: const Duration(seconds: 2),
-                        backgroundColor: const Color(0xFF2C2836),
-                        behavior: SnackBarBehavior.floating,
-                      ),
+                    AppSnackBar.showSuccess(
+                      context,
+                      title: 'Copied',
+                      subtitle: '$typeName copied to clipboard',
                     );
                   },
                 ),

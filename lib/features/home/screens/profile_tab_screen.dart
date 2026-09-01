@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -8,6 +9,8 @@ import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_outline_button.dart';
+import '../../auth/auth_provider.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../../profile/screens/edit_profile_screen.dart';
 import '../../profile/screens/followers_following_screen.dart';
 import '../../profile/screens/notifications_screen.dart';
@@ -27,15 +30,34 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
   int _selectedTabIndex = 0; // Default: Posts
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProfile();
+    });
+  }
+
+  Future<void> _loadProfile() async {
+    final String? userId = context.read<AuthProvider>().userId;
+    if (userId != null && userId.isNotEmpty) {
+      await context.read<ProfileProvider>().fetchProfile(userId);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final bool isDark = context.isDarkMode;
+    final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+    final String username = profileProvider.username;
+    final String displayUsername =
+        username.startsWith('@') ? username : '@$username';
 
     return Scaffold(
       backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
           children: <Widget>[
-            // ── Top Header Bar (ashinorbit + password.svg lock icon & Bell/Settings Icons)
+            // ── Top Header Bar ─────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.lg,
@@ -44,7 +66,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
               child: Row(
                 children: <Widget>[
                   Text(
-                    'ashinorbit',
+                    displayUsername,
                     style: AppTextStyles.titleLarge.copyWith(
                       color: context.themeTextPrimary,
                       fontWeight: FontWeight.w700,
@@ -148,72 +170,80 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
 
             // ── Scrollable Profile Body ─────────────────────────────────────
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                children: <Widget>[
-                  // Profile Header & Stats Widget
-                  ProfileHeaderStatsWidget(
-                    avatarAsset: AppImages.user2,
-                    name: 'Ash Mercado',
-                    bio:
-                        'Film nerd, softball catcher, chronically making playlists.',
-                    postsCount: '128',
-                    followersCount: '4,290',
-                    followingCount: '311',
-                    onFollowersTap: () {
-                      Navigator.push<void>(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => const FollowersFollowingScreen(
-                            initialTabIndex: 0,
+              child: RefreshIndicator(
+                onRefresh: _loadProfile,
+                color: AppColors.gradientPink,
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  children: <Widget>[
+                    // Profile Header & Stats Widget with Dynamic API Data
+                    ProfileHeaderStatsWidget(
+                      avatarAsset: profileProvider.avatarUrl,
+                      name: profileProvider.displayName,
+                      bio: profileProvider.bio,
+                      pronounsPill: profileProvider.pronounsFormatted,
+                      pronounsList: profileProvider.pronouns,
+                      interestsList: profileProvider.interests,
+                      postsCount: profileProvider.postsCount,
+                      followersCount: profileProvider.followersCount,
+                      followingCount: profileProvider.followingCount,
+                      onFollowersTap: () {
+                        Navigator.push<void>(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => const FollowersFollowingScreen(
+                              initialTabIndex: 0,
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                    onFollowingTap: () {
-                      Navigator.push<void>(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => const FollowersFollowingScreen(
-                            initialTabIndex: 1,
+                        );
+                      },
+                      onFollowingTap: () {
+                        Navigator.push<void>(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => const FollowersFollowingScreen(
+                              initialTabIndex: 1,
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                    actionButtons: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: AppOutlineButton(
-                            text: 'Edit profile',
-                            onPressed: () {
-                              Navigator.push<void>(
-                                context,
-                                MaterialPageRoute<void>(
-                                  builder: (_) => const EditProfileScreen(),
-                                ),
-                              );
-                            },
+                        );
+                      },
+                      actionButtons: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: AppOutlineButton(
+                              text: 'Edit profile',
+                              onPressed: () async {
+                                await Navigator.push<void>(
+                                  context,
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => const EditProfileScreen(),
+                                  ),
+                                );
+                                _loadProfile();
+                              },
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: AppOutlineButton(
-                            text: 'Share profile',
-                            onPressed: () {
-                              SharePlus.instance.share(
-                                ShareParams(
-                                  text:
-                                      'Check out @ashinorbit on QueerLoop+! https://queerloop.app/profile/ashinorbit',
-                                  subject:
-                                      'QueerLoop+ Profile - Ash Mercado (@ashinorbit)',
-                                ),
-                              );
-                            },
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: AppOutlineButton(
+                              text: 'Share profile',
+                              onPressed: () {
+                                final String handle = profileProvider.username;
+                                final String name = profileProvider.displayName;
+                                SharePlus.instance.share(
+                                  ShareParams(
+                                    text:
+                                        'Check out @$handle on QueerLoop+! https://queerloop.app/profile/$handle',
+                                    subject:
+                                        'QueerLoop+ Profile - $name (@$handle)',
+                                  ),
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
 
                   const SizedBox(height: AppSpacing.xl),
 
@@ -315,9 +345,10 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

@@ -118,8 +118,25 @@ class ProfileSetupProvider extends ChangeNotifier {
   bool get isPrivateAccount => _isPrivateAccount;
   bool get showInDiscover => _showInDiscover;
   bool get hideMyLikes => _hideMyLikes;
-  String get allowMessagesFrom => _allowMessagesFrom;
-  String get profileVisibility => _profileVisibility;
+  String get allowMessagesFrom => _formatPrivacyLabel(_allowMessagesFrom);
+  String get profileVisibility => _formatPrivacyLabel(_profileVisibility);
+
+  static String _formatPrivacyLabel(String val) {
+    final String lower = val.toLowerCase().trim();
+    if (lower == 'everyone') return 'Everyone';
+    if (lower == 'followers' ||
+        lower == 'people_you_follow' ||
+        lower == 'people you follow') {
+      return 'People you follow';
+    }
+    if (lower == 'mutuals' ||
+        lower == 'mutual_follows' ||
+        lower == 'mutual follows') {
+      return 'Mutual follows';
+    }
+    if (lower == 'nobody') return 'Nobody';
+    return val;
+  }
 
   bool get isBusy => _isBusy;
   String? get error => _error;
@@ -366,24 +383,13 @@ class ProfileSetupProvider extends ChangeNotifier {
   }
 
   // ── Step 4 — API: join selected communities ───────────────────────────────
-
+  // Note: Backend join call is bypassed for now because communities are static.
   Future<bool> saveStep4() async {
-    if (_joinedCommunityIds.isEmpty) return true; // skipped — still ok
-    if (_isBusy) return false;
-    _setBusy(true);
-
-    try {
-      await _service.joinCommunities(_joinedCommunityIds);
-      _error = null;
-      notifyListeners();
-      return true;
-    } on ApiException catch (e) {
-      _error = e.message;
-      notifyListeners();
-      return false;
-    } finally {
-      _setBusy(false);
-    }
+    debugPrint(
+      'ℹ️ [ProfileSetup] Step 4: Community join API skipped (communities are static). '
+      'Selected: $_joinedCommunityIds',
+    );
+    return true;
   }
 
   // ── Step 5 local setters ──────────────────────────────────────────────────

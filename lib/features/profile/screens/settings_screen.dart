@@ -9,8 +9,10 @@ import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../auth/auth_provider.dart';
 import '../../home/provider/home_feed_provider.dart';
+import '../provider/profile_provider.dart';
 
 import '../widgets/logout_confirmation_modal_dialog.dart';
 import 'blocked_accounts_screen.dart';
@@ -92,6 +94,20 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isDark = context.isDarkMode;
+    final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+    final String currentName =
+        profileProvider.displayName.isNotEmpty ? profileProvider.displayName : name;
+    final String currentAvatar =
+        profileProvider.avatarUrl.isNotEmpty ? profileProvider.avatarUrl : avatarAsset;
+    final String handle = profileProvider.username.isNotEmpty
+        ? (profileProvider.username.startsWith('@')
+            ? profileProvider.username
+            : '@${profileProvider.username}')
+        : '@user';
+    final String pronouns = profileProvider.pronounsFormatted;
+    final String currentHandleWithPronouns = pronouns.isNotEmpty
+        ? '$handle · $pronouns'
+        : handle;
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -210,12 +226,30 @@ class SettingsScreen extends StatelessWidget {
                       child: Row(
                         children: <Widget>[
                           ClipOval(
-                            child: Image.asset(
-                              avatarAsset,
-                              width: 48,
-                              height: 48,
-                              fit: BoxFit.cover,
-                            ),
+                            child: currentAvatar.startsWith('http')
+                                ? Image.network(
+                                    currentAvatar,
+                                    width: 48,
+                                    height: 48,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (
+                                      BuildContext ctx,
+                                      Object err,
+                                      StackTrace? trace,
+                                    ) =>
+                                        Image.asset(
+                                      AppImages.user1,
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  )
+                                : Image.asset(
+                                    currentAvatar,
+                                    width: 48,
+                                    height: 48,
+                                    fit: BoxFit.cover,
+                                  ),
                           ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
@@ -223,7 +257,7 @@ class SettingsScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
                                 Text(
-                                  name,
+                                  currentName,
                                   style: AppTextStyles.bodyMedium.copyWith(
                                     color: context.themeTextPrimary,
                                     fontWeight: FontWeight.w700,
@@ -232,7 +266,7 @@ class SettingsScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  handleWithPronouns,
+                                  currentHandleWithPronouns,
                                   style: AppTextStyles.bodySmall.copyWith(
                                     color: context.themeTextMuted,
                                     fontSize: 12,
@@ -399,15 +433,19 @@ class SettingsScreen extends StatelessWidget {
                   // Log Out Button (Themed Outlined Button with Exit Icon)
                   GestureDetector(
                     onTap: () {
-                      final String userHandle =
-                          context.read<AuthProvider>().user?.email ?? '@user';
                       LogoutConfirmationModalDialog.show(
                         context,
-                        username: userHandle,
+                        username: handle,
                         onConfirmLogout: () async {
                           context.read<HomeFeedProvider>().resetToHome();
                           await context.read<AuthProvider>().signOut();
                           if (context.mounted) {
+                            AppSnackBar.showSuccess(
+                              context,
+                              title: 'Logged out',
+                              subtitle:
+                                  'You have been logged out of your account.',
+                            );
                             Navigator.pushNamedAndRemoveUntil(
                               context,
                               AppRoutes.login,

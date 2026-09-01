@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/auth_provider.dart';
@@ -44,25 +45,68 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
   }
 
   Future<void> _handleContinue() async {
+    final ProfileSetupProvider provider =
+        context.read<ProfileSetupProvider>();
+    final String displayName = _displayNameController.text.trim();
+    final String username = _usernameController.text.trim();
+    final String bio = _bioController.text.trim();
+
+    if (displayName.isEmpty) {
+      AppSnackBar.showError(
+        context,
+        title: 'Name Required',
+        subtitle: 'Please enter your display name.',
+      );
+      return;
+    }
+
+    if (username.isEmpty) {
+      AppSnackBar.showError(
+        context,
+        title: 'Username Required',
+        subtitle: 'Please enter a username.',
+      );
+      return;
+    }
+
+    if (provider.isUsernameAvailable == false) {
+      AppSnackBar.showError(
+        context,
+        title: 'Username Unavailable',
+        subtitle: 'Username is already taken. Please choose another one.',
+      );
+      return;
+    }
+
+    if (provider.checkingUsername) {
+      AppSnackBar.showInfo(
+        context,
+        title: 'Checking Availability',
+        subtitle: 'Checking username availability, please wait...',
+      );
+      return;
+    }
+
+    provider.setDisplayName(displayName);
+    provider.setUsername(username);
+    provider.setBio(bio);
+
     final String? userId = context.read<AuthProvider>().userId;
     if (userId == null || userId.isEmpty) {
       widget.onNext();
       return;
     }
 
-    final bool ok =
-        await context.read<ProfileSetupProvider>().saveStep1(userId);
+    final bool ok = await provider.saveStep1(userId);
     if (ok && mounted) {
       widget.onNext();
     } else if (mounted) {
-      final String? err = context.read<ProfileSetupProvider>().error;
+      final String? err = provider.error;
       if (err != null && err.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(err),
-            backgroundColor: AppColors.danger,
-            behavior: SnackBarBehavior.floating,
-          ),
+        AppSnackBar.showError(
+          context,
+          title: 'Setup Failed',
+          subtitle: err,
         );
       }
     }

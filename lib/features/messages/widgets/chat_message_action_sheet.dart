@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_snackbar.dart';
 
 class ChatMessageActionSheet extends StatefulWidget {
   const ChatMessageActionSheet({
@@ -236,11 +237,10 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
                       Clipboard.setData(
                         ClipboardData(text: widget.messageText),
                       );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Message copied to clipboard'),
-                          duration: Duration(seconds: 2),
-                        ),
+                      AppSnackBar.showSuccess(
+                        context,
+                        title: 'Copied',
+                        subtitle: 'Message copied to clipboard',
                       );
                       if (widget.onCopy != null) widget.onCopy!();
                     },
