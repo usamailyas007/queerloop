@@ -35,6 +35,16 @@ class _Step4ChooseCommunitiesScreenState
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<ProfileSetupProvider>().fetchCommunities();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -56,6 +66,15 @@ class _Step4ChooseCommunitiesScreenState
     final bool ok = await provider.saveStep4();
     if (ok && mounted) {
       widget.onNext();
+    } else if (mounted) {
+      final String? err = provider.error;
+      if (err != null && err.isNotEmpty) {
+        AppSnackBar.showError(
+          context,
+          title: 'Join Failed',
+          subtitle: err,
+        );
+      }
     }
   }
 

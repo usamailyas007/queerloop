@@ -54,6 +54,18 @@ class ProfileProvider extends ChangeNotifier {
   bool get notifyOnFollow => _profile?.notifyOnFollow ?? true;
   bool get notifyOnMessage => _profile?.notifyOnMessage ?? true;
 
+  String get allowCommentsFrom => _profile?.allowCommentsFrom ?? 'everyone';
+  String get allowCommentsFromLabel =>
+      formatPrivacyLabel(_profile?.allowCommentsFrom);
+  bool get showActivityStatus => _profile?.showActivityStatus ?? true;
+  bool get sendReadReceipts => _profile?.sendReadReceipts ?? true;
+  bool get notifyOnFollowRequests => _profile?.notifyOnFollowRequests ?? true;
+  bool get notifyOnCommunityPosts => _profile?.notifyOnCommunityPosts ?? true;
+  bool get notifyOnAnnouncementsFeatures =>
+      _profile?.notifyOnAnnouncementsFeatures ?? true;
+  bool get notifyOnSafetyModerationUpdates =>
+      _profile?.notifyOnSafetyModerationUpdates ?? true;
+
   static String formatPrivacyLabel(String? val) {
     if (val == null || val.isEmpty) return 'Everyone';
     final String lower = val.toLowerCase().trim();
@@ -119,6 +131,7 @@ class ProfileProvider extends ChangeNotifier {
     String? username,
     String? bio,
     String? avatarUrl,
+    String? avatarBase64,
     List<String>? pronouns,
     bool? pronounsPrivate,
     List<String>? interests,
@@ -127,10 +140,17 @@ class ProfileProvider extends ChangeNotifier {
     String? allowMessagesFrom,
     bool? hideMyLikes,
     String? profileVisibility,
+    String? allowCommentsFrom,
+    bool? showActivityStatus,
+    bool? sendReadReceipts,
     bool? notifyOnLike,
     bool? notifyOnComment,
     bool? notifyOnFollow,
     bool? notifyOnMessage,
+    bool? notifyOnFollowRequests,
+    bool? notifyOnCommunityPosts,
+    bool? notifyOnAnnouncementsFeatures,
+    bool? notifyOnSafetyModerationUpdates,
   }) async {
     if (userId.isEmpty) return false;
 
@@ -142,7 +162,11 @@ class ProfileProvider extends ChangeNotifier {
     if (displayName != null) payload['displayName'] = displayName.trim();
     if (username != null) payload['username'] = username.trim();
     if (bio != null) payload['bio'] = bio.trim();
-    if (avatarUrl != null) payload['avatarUrl'] = avatarUrl.trim();
+    if (avatarBase64 != null && avatarBase64.isNotEmpty) {
+      payload['avatarBase64'] = avatarBase64;
+    } else if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      payload['avatarUrl'] = avatarUrl.trim();
+    }
     if (pronouns != null) payload['pronouns'] = pronouns;
     if (pronounsPrivate != null) payload['pronounsPrivate'] = pronounsPrivate;
     if (interests != null) payload['interests'] = interests;
@@ -151,14 +175,36 @@ class ProfileProvider extends ChangeNotifier {
     if (allowMessagesFrom != null) {
       payload['allowMessagesFrom'] = _normalizePrivacy(allowMessagesFrom);
     }
+    if (allowCommentsFrom != null) {
+      payload['allowCommentsFrom'] = _normalizePrivacy(allowCommentsFrom);
+    }
     if (hideMyLikes != null) payload['hideMyLikes'] = hideMyLikes;
     if (profileVisibility != null) {
       payload['profileVisibility'] = _normalizePrivacy(profileVisibility);
+    }
+    if (showActivityStatus != null) {
+      payload['showActivityStatus'] = showActivityStatus;
+    }
+    if (sendReadReceipts != null) {
+      payload['sendReadReceipts'] = sendReadReceipts;
     }
     if (notifyOnLike != null) payload['notifyOnLike'] = notifyOnLike;
     if (notifyOnComment != null) payload['notifyOnComment'] = notifyOnComment;
     if (notifyOnFollow != null) payload['notifyOnFollow'] = notifyOnFollow;
     if (notifyOnMessage != null) payload['notifyOnMessage'] = notifyOnMessage;
+    if (notifyOnFollowRequests != null) {
+      payload['notifyOnFollowRequests'] = notifyOnFollowRequests;
+    }
+    if (notifyOnCommunityPosts != null) {
+      payload['notifyOnCommunityPosts'] = notifyOnCommunityPosts;
+    }
+    if (notifyOnAnnouncementsFeatures != null) {
+      payload['notifyOnAnnouncementsFeatures'] = notifyOnAnnouncementsFeatures;
+    }
+    if (notifyOnSafetyModerationUpdates != null) {
+      payload['notifyOnSafetyModerationUpdates'] =
+          notifyOnSafetyModerationUpdates;
+    }
 
     if (payload.isEmpty) {
       _isBusy = false;
@@ -192,12 +238,19 @@ class ProfileProvider extends ChangeNotifier {
             isPrivate: isPrivate,
             showInDiscover: showInDiscover,
             allowMessagesFrom: allowMessagesFrom,
+            allowCommentsFrom: allowCommentsFrom,
             hideMyLikes: hideMyLikes,
             profileVisibility: profileVisibility,
+            showActivityStatus: showActivityStatus,
+            sendReadReceipts: sendReadReceipts,
             notifyOnLike: notifyOnLike,
             notifyOnComment: notifyOnComment,
             notifyOnFollow: notifyOnFollow,
             notifyOnMessage: notifyOnMessage,
+            notifyOnFollowRequests: notifyOnFollowRequests,
+            notifyOnCommunityPosts: notifyOnCommunityPosts,
+            notifyOnAnnouncementsFeatures: notifyOnAnnouncementsFeatures,
+            notifyOnSafetyModerationUpdates: notifyOnSafetyModerationUpdates,
           ),
         );
       }

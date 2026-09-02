@@ -33,6 +33,13 @@ class _WhoCanCommentScreenState extends State<WhoCanCommentScreen> {
     _currentSelection = widget.initialSelection;
   }
 
+  bool _isMatch(String option, String selection) {
+    if (option == selection) return true;
+    final String o = option.toLowerCase().replaceAll(' ', '_');
+    final String s = selection.toLowerCase().replaceAll(' ', '_');
+    return o == s;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -106,7 +113,7 @@ class _WhoCanCommentScreenState extends State<WhoCanCommentScreen> {
                       const SizedBox(height: AppSpacing.md),
                   itemBuilder: (BuildContext context, int index) {
                     final String option = _options[index];
-                    final bool isSelected = _currentSelection == option;
+                    final bool isSelected = _isMatch(option, _currentSelection);
                     final bool isRecommended = option == 'People you follow';
 
                     return PrivacyOptionCard(
