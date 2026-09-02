@@ -26,7 +26,22 @@ abstract final class ApiEndpoints {
   /// Paginated account list for the admin console. GET /admin/users
   static const String adminUsers = '/admin/users';
 
+  /// Aggregate counts for the Users tab. GET /admin/users/stats
+  static const String adminUsersStats = '/admin/users/stats';
+
+  /// Suspend / reactivate an account. PATCH /admin/users/:id/status
+  static String adminUserStatus(String id) => '/admin/users/$id/status';
+
+  /// Moderator roster + invites. GET / POST /admin/moderators
+  static const String adminModerators = '/admin/moderators';
+
+  /// Community roster with admin metrics. GET /admin/communities
+  static const String adminCommunities = '/admin/communities';
+
   // ── Communities ───────────────────────────────────────────────────────────
+  /// List / create communities. GET / POST /communities
+  static const String communities = '/communities';
+
   /// Replace :id at call site: ApiEndpoints.joinCommunity('comm-id')
   static String joinCommunity(String communityId) =>
       '/communities/$communityId/join';

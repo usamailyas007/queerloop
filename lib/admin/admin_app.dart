@@ -11,6 +11,8 @@ import '../l10n/app_localizations.dart';
 import 'auth/provider/admin_auth_provider.dart';
 import 'auth/screens/admin_login_screen.dart';
 import 'admin_view/admin_shell.dart';
+import 'admin_view/communities/provider/communities_provider.dart';
+import 'admin_view/moderators/provider/moderators_provider.dart';
 import 'admin_view/users/provider/admin_users_provider.dart';
 import 'moderator_view/moderator_shell.dart';
 
@@ -29,6 +31,14 @@ class AdminApp extends StatelessWidget {
         ChangeNotifierProvider<AdminUsersProvider>(
           create: (BuildContext context) =>
               AdminUsersProvider(client: context.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<CommunitiesProvider>(
+          create: (BuildContext context) =>
+              CommunitiesProvider(client: context.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<ModeratorsProvider>(
+          create: (BuildContext context) =>
+              ModeratorsProvider(client: context.read<ApiClient>()),
         ),
       ],
       child: MaterialApp(

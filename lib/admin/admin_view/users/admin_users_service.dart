@@ -1,11 +1,10 @@
-// Admin Users service — GET /admin/users with page-based pagination.
+// Admin Users service — every /admin/users* call.
 // Mirrors the app-side feature services (see features/profile_setup/profile_setup_service.dart).
 
 import 'package:flutter/foundation.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/config/api_endpoints.dart';
-import '../../../core/config/app_config.dart';
 import 'models/admin_user_account.dart';
 
 class AdminUsersService {
@@ -13,17 +12,13 @@ class AdminUsersService {
 
   final ApiClient _client;
 
-  /// One page of accounts. `page` is 1-based.
+  /// GET /admin/users — one page of accounts. `page` is 1-based.
   Future<AdminUsersPage> fetchUsers({
     required int page,
-    int limit = 20,
+    required int limit,
     String? search,
     AdminAccountStatus? status,
   }) async {
-    if (AppConfig.useMockApi) {
-      return const AdminUsersPage(items: <AdminUserAccount>[], total: 0, page: 1, limit: 20);
-    }
-
     final Map<String, dynamic> query = <String, dynamic>{
       'page': page,
       'limit': limit,
@@ -37,12 +32,32 @@ class AdminUsersService {
       query: query,
       useCache: false,
     );
-    final AdminUsersPage result =
-        AdminUsersPage.fromJson(data as Map<String, dynamic>);
-    debugPrint(
-      '📥 [AdminUsersService] page ${result.page}/${(result.total / (result.limit == 0 ? 1 : result.limit)).ceil()} '
-      '(${result.items.length} of ${result.total})',
+    return AdminUsersPage.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// GET /admin/users/stats — aggregate counts for the header.
+  Future<AdminUsersStats> fetchStats() async {
+    debugPrint('🚀 [AdminUsersService] GET ${ApiEndpoints.adminUsersStats}');
+    final dynamic data = await _client.get(
+      ApiEndpoints.adminUsersStats,
+      useCache: false,
     );
-    return result;
+    return AdminUsersStats.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// PATCH /admin/users/:id/status — suspend (with days) or reactivate.
+  Future<void> updateStatus({
+    required String userId,
+    required AdminAccountStatus status,
+    int? suspendDays,
+  }) async {
+    final Map<String, dynamic> body = <String, dynamic>{
+      'status': status.query,
+      if (status == AdminAccountStatus.suspended && suspendDays != null)
+        'suspendDays': suspendDays,
+    };
+
+    debugPrint('🚀 [AdminUsersService] PATCH ${ApiEndpoints.adminUserStatus(userId)} $body');
+    await _client.patch(ApiEndpoints.adminUserStatus(userId), body: body);
   }
 }

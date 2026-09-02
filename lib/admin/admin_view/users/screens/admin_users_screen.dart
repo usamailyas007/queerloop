@@ -18,9 +18,6 @@ class AdminUsersScreen extends StatefulWidget {
 }
 
 class _AdminUsersScreenState extends State<AdminUsersScreen> {
-  final ScrollController _scrollController = ScrollController();
-
-  // 0: All, 1: Suspended, 2: Banned — index maps to _statusFilters below.
   static const List<String> _statusLabels = <String>[
     'All status',
     'Suspended',
@@ -32,6 +29,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     AdminAccountStatus.banned,
   ];
 
+  // label → suspend length in days, sent as `suspendDays`.
   static const Map<String, int> _suspendOptions = <String, int>{
     'Suspend · 1 day': 1,
     'Suspend · 3 days': 3,
@@ -43,10 +41,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
-    // IndexedStack builds every shell tab up-front; loadInitial() no-ops until
-    // this screen is first shown and actually scrolled/interacted with is fine
-    // too, but preloading keeps the tab instant.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<AdminUsersProvider>().loadInitial();
@@ -54,23 +48,16 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    _scrollController
-      ..removeListener(_onScroll)
-      ..dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (!_scrollController.hasClients) {
-      return;
-    }
-    final double threshold =
-        _scrollController.position.maxScrollExtent - 320;
-    if (_scrollController.position.pixels >= threshold) {
-      context.read<AdminUsersProvider>().loadMore();
-    }
+  void _onError(String message) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+      context.read<AdminUsersProvider>().clearError();
+    });
   }
 
   @override
@@ -106,14 +93,19 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                       Expanded(
                         child: Consumer<AdminUsersProvider>(
                           builder: (_, AdminUsersProvider provider, _) {
+                            // Surface mutation / paging failures without wiping the list.
+                            if (provider.error != null &&
+                                provider.users.isNotEmpty) {
+                              _onError(provider.error!);
+                            }
                             return _UsersTableBody(
                               provider: provider,
-                              scrollController: _scrollController,
                               suspendOptions: _suspendOptions,
                             );
                           },
                         ),
                       ),
+                      const _PaginationBar(),
                     ],
                   ),
                 ),
@@ -126,7 +118,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }
 }
 
-// ── Header ──────────────────────────────────────────────────────────────────
+// ── Header (title + stats + search + status filter) ─────────────────────────
 
 class _Header extends StatelessWidget {
   const _Header({
@@ -161,13 +153,13 @@ class _Header extends StatelessWidget {
               const SizedBox(height: 4),
               Selector<AdminUsersProvider, (int, int, bool)>(
                 selector: (_, AdminUsersProvider p) =>
-                    (p.total, p.suspendedCount, p.isLoading),
+                    (p.stats.total, p.stats.suspended, p.isLoading),
                 builder: (_, (int, int, bool) data, _) {
                   final (int total, int suspended, bool loading) = data;
                   final String text = loading && total == 0
                       ? 'Loading accounts…'
-                      : '$total account${total == 1 ? '' : 's'}'
-                          '${suspended > 0 ? ' · $suspended suspended on screen' : ''}';
+                      : '$total user${total == 1 ? '' : 's'} · '
+                          '$suspended suspended';
                   return Text(
                     text,
                     style: const TextStyle(
@@ -239,11 +231,7 @@ class _Header extends StatelessWidget {
         const SizedBox(width: AppSpacing.md),
         SizedBox(
           width: 100,
-          child: AppOutlineButton(
-            text: 'Export',
-            height: 40,
-            onPressed: () {},
-          ),
+          child: AppOutlineButton(text: 'Export', height: 40, onPressed: () {}),
         ),
       ],
     );
@@ -272,24 +260,19 @@ class _TableHeaderRow extends StatelessWidget {
           Expanded(flex: 1, child: _ColumnHeader('POSTS')),
           Expanded(flex: 2, child: _ColumnHeader('REPORTS AGAINST')),
           Expanded(flex: 2, child: _ColumnHeader('STATUS')),
-          SizedBox(width: 110),
+          SizedBox(width: 128),
         ],
       ),
     );
   }
 }
 
-// ── Table body: loading / error / empty / list ──────────────────────────────
+// ── Table body: loading / error / empty / rows ─────────────────────────────
 
 class _UsersTableBody extends StatelessWidget {
-  const _UsersTableBody({
-    required this.provider,
-    required this.scrollController,
-    required this.suspendOptions,
-  });
+  const _UsersTableBody({required this.provider, required this.suspendOptions});
 
   final AdminUsersProvider provider;
-  final ScrollController scrollController;
   final Map<String, int> suspendOptions;
 
   @override
@@ -308,112 +291,210 @@ class _UsersTableBody extends StatelessWidget {
     }
 
     if (provider.error != null && provider.users.isEmpty) {
-      return _ErrorState(
-        message: provider.error!,
-        onRetry: provider.refresh,
-      );
+      return _ErrorState(message: provider.error!, onRetry: provider.refresh);
     }
 
     if (provider.isEmpty) {
       return const _EmptyState();
     }
 
-    final int rowCount = provider.users.length;
-    return RefreshIndicator(
-      color: AppColors.adminPink,
-      backgroundColor: AppColors.adminSurface,
-      onRefresh: provider.refresh,
-      child: ListView.separated(
-        controller: scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: rowCount + 1, // +1 = footer
-        separatorBuilder: (_, int i) => i < rowCount - 1
-            ? Divider(height: 1, color: AppColors.adminRowDivider)
-            : const SizedBox.shrink(),
-        itemBuilder: (BuildContext context, int index) {
-          if (index == rowCount) {
-            return _ListFooter(provider: provider);
-          }
-          final AdminUserAccount user = provider.users[index];
-          return _UserRow(
-            user: user,
-            suspendOptions: suspendOptions,
-            onSetActive: () => provider.applyStatusLocally(
-              user.id,
-              AdminAccountStatus.active,
+    final List<AdminUserAccount> users = provider.users;
+    return Stack(
+      children: <Widget>[
+        ListView.separated(
+          padding: EdgeInsets.zero,
+          itemCount: users.length,
+          separatorBuilder: (_, _) =>
+              Divider(height: 1, color: AppColors.adminRowDivider),
+          itemBuilder: (_, int index) {
+            final AdminUserAccount user = users[index];
+            return _UserRow(
+              user: user,
+              busy: provider.isMutating(user.id),
+              suspendOptions: suspendOptions,
+              onSuspend: (int days) => provider.suspendUser(user.id, days),
+              onReactivate: () => provider.reactivateUser(user.id),
+            );
+          },
+        ),
+        // Thin progress strip while a page swap / refresh is in flight.
+        if (provider.isLoading)
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: LinearProgressIndicator(
+              minHeight: 2,
+              color: AppColors.adminPink,
+              backgroundColor: Colors.transparent,
             ),
-            onSuspend: (int days) => provider.applyStatusLocally(
-              user.id,
-              AdminAccountStatus.suspended,
-              expiresAt: DateTime.now().add(Duration(days: days)),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Pagination bar: Back · 1 2 3 … · Next ──────────────────────────────────
+
+class _PaginationBar extends StatelessWidget {
+  const _PaginationBar();
+
+  /// Page numbers to render; `null` marks an ellipsis gap.
+  static List<int?> _window(int current, int count) {
+    if (count <= 7) {
+      return <int?>[for (int i = 1; i <= count; i++) i];
+    }
+    final Set<int> keep = <int>{
+      1,
+      count,
+      current - 1,
+      current,
+      current + 1,
+    }..removeWhere((int p) => p < 1 || p > count);
+    final List<int> sorted = keep.toList()..sort();
+
+    final List<int?> out = <int?>[];
+    int? prev;
+    for (final int p in sorted) {
+      if (prev != null && p - prev > 1) {
+        out.add(null);
+      }
+      out.add(p);
+      prev = p;
+    }
+    return out;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<AdminUsersProvider, (int, int, int, int, int, bool, bool)>(
+      selector: (_, AdminUsersProvider p) => (
+        p.page,
+        p.pageCount,
+        p.rangeStart,
+        p.rangeEnd,
+        p.total,
+        p.canPrev,
+        p.canNext,
+      ),
+      builder: (BuildContext context, _, _) {
+        final AdminUsersProvider provider = context.read<AdminUsersProvider>();
+        final int count = provider.pageCount;
+        if (provider.total == 0) {
+          return const SizedBox.shrink();
+        }
+
+        return Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xl,
+            vertical: AppSpacing.md,
+          ),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: AppColors.adminDivider)),
+          ),
+          child: Row(
+            children: <Widget>[
+              Text(
+                'Showing ${provider.rangeStart}–${provider.rangeEnd} of ${provider.total}',
+                style: const TextStyle(
+                  color: AppColors.adminTextMuted,
+                  fontSize: 12,
+                ),
+              ),
+              const Spacer(),
+              _PageChip(
+                label: 'Back',
+                enabled: provider.canPrev,
+                onTap: provider.prevPage,
+              ),
+              const SizedBox(width: 6),
+              for (final int? p in _window(provider.page, count)) ...<Widget>[
+                if (p == null)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Text('…',
+                        style: TextStyle(color: AppColors.adminTextMuted)),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: _PageChip(
+                      label: '$p',
+                      selected: p == provider.page,
+                      onTap: () => provider.goToPage(p),
+                    ),
+                  ),
+              ],
+              const SizedBox(width: 6),
+              _PageChip(
+                label: 'Next',
+                enabled: provider.canNext,
+                onTap: provider.nextPage,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PageChip extends StatelessWidget {
+  const _PageChip({
+    required this.label,
+    required this.onTap,
+    this.selected = false,
+    this.enabled = true,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final bool selected;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool interactive = enabled && !selected;
+    return Opacity(
+      opacity: enabled ? 1 : 0.4,
+      child: Material(
+        color: selected
+            ? AppColors.moderatorChipSelected
+            : AppColors.adminSurfaceAlt,
+        borderRadius: BorderRadius.circular(9),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(9),
+          onTap: interactive ? onTap : null,
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 34),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(
+                color: selected
+                    ? Colors.transparent
+                    : AppColors.adminButtonBorder,
+              ),
             ),
-            onBan: () => provider.applyStatusLocally(
-              user.id,
-              AdminAccountStatus.banned,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected
+                    ? AppColors.adminTextPrimary
+                    : AppColors.adminTextSecondary,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
 }
 
-class _ListFooter extends StatelessWidget {
-  const _ListFooter({required this.provider});
-
-  final AdminUsersProvider provider;
-
-  @override
-  Widget build(BuildContext context) {
-    if (provider.isLoadingMore) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-        child: Center(
-          child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppColors.adminPink,
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (provider.error != null && provider.users.isNotEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Center(
-          child: TextButton(
-            onPressed: provider.loadMore,
-            child: Text(
-              'Couldn\'t load more — tap to retry',
-              style: const TextStyle(color: AppColors.adminPink, fontSize: 12),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (!provider.hasMore && provider.users.isNotEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Center(
-          child: Text(
-            'All ${provider.total} accounts loaded',
-            style: const TextStyle(
-              color: AppColors.adminTextMuted,
-              fontSize: 11,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return const SizedBox(height: AppSpacing.md);
-  }
-}
+// ── Empty / error states ───────────────────────────────────────────────────
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});
@@ -502,16 +583,16 @@ class _ColumnHeader extends StatelessWidget {
 class _UserRow extends StatelessWidget {
   const _UserRow({
     required this.user,
-    required this.onSetActive,
+    required this.busy,
     required this.onSuspend,
-    required this.onBan,
+    required this.onReactivate,
     required this.suspendOptions,
   });
 
   final AdminUserAccount user;
-  final VoidCallback onSetActive;
+  final bool busy;
   final ValueChanged<int> onSuspend;
-  final VoidCallback onBan;
+  final VoidCallback onReactivate;
   final Map<String, int> suspendOptions;
 
   static final DateFormat _joinedFormat = DateFormat('d MMM yyyy');
@@ -623,12 +704,16 @@ class _UserRow extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 110,
-            child: _ManageMenu(
-              onSetActive: onSetActive,
-              onSuspend: onSuspend,
-              onBan: onBan,
-              suspendOptions: suspendOptions,
+            width: 128,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _RowAction(
+                status: user.status,
+                busy: busy,
+                suspendOptions: suspendOptions,
+                onSuspend: onSuspend,
+                onReactivate: onReactivate,
+              ),
             ),
           ),
         ],
@@ -646,79 +731,140 @@ class _UserRow extends StatelessWidget {
   }
 }
 
-class _ManageMenu extends StatelessWidget {
-  const _ManageMenu({
-    required this.onSetActive,
-    required this.onSuspend,
-    required this.onBan,
+// ── Row action: "Manage" popup (active) or "Reactivate" button (suspended) ──
+
+class _RowAction extends StatelessWidget {
+  const _RowAction({
+    required this.status,
+    required this.busy,
     required this.suspendOptions,
+    required this.onSuspend,
+    required this.onReactivate,
   });
 
-  final VoidCallback onSetActive;
-  final ValueChanged<int> onSuspend;
-  final VoidCallback onBan;
+  final AdminAccountStatus status;
+  final bool busy;
   final Map<String, int> suspendOptions;
+  final ValueChanged<int> onSuspend;
+  final VoidCallback onReactivate;
 
   @override
   Widget build(BuildContext context) {
+    if (busy) {
+      return const SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: AppColors.adminPink,
+        ),
+      );
+    }
+
+    if (status != AdminAccountStatus.active) {
+      return _ActionPill(
+        label: 'Reactivate',
+        onTap: onReactivate,
+        accent: AppColors.adminTeal,
+      );
+    }
+
     return PopupMenuButton<String>(
       color: AppColors.adminSurfaceAlt,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: BorderSide(color: AppColors.adminButtonBorder),
       ),
-      onSelected: (String value) {
-        if (value == 'active') {
-          onSetActive();
-        } else if (value == 'ban') {
-          onBan();
-        } else {
-          onSuspend(suspendOptions[value]!);
+      onSelected: (String option) {
+        if (option == _banValue) {
+          // Ban gets its own endpoint later — surface intent, do nothing yet.
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              const SnackBar(content: Text('Ban is not wired up yet.')),
+            );
+          return;
         }
+        onSuspend(suspendOptions[option]!);
       },
-      itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-        const PopupMenuItem<String>(
-          value: 'active',
-          child: Text('Active',
-              style:
-                  TextStyle(color: AppColors.adminTextPrimary, fontSize: 13)),
-        ),
-        const PopupMenuDivider(),
+      itemBuilder: (_) => <PopupMenuEntry<String>>[
         for (final String option in suspendOptions.keys)
           PopupMenuItem<String>(
             value: option,
-            child: Text(option,
-                style: const TextStyle(
-                    color: AppColors.adminTextSecondary, fontSize: 13)),
+            child: Text(
+              option,
+              style: const TextStyle(
+                color: AppColors.adminTextSecondary,
+                fontSize: 13,
+              ),
+            ),
           ),
         const PopupMenuDivider(),
         const PopupMenuItem<String>(
-          value: 'ban',
-          child: Text('Ban permanently',
-              style: TextStyle(color: AppColors.adminPink, fontSize: 13)),
+          value: _banValue,
+          child: Text(
+            'Ban permanently',
+            style: TextStyle(color: AppColors.adminPink, fontSize: 13),
+          ),
         ),
       ],
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.adminSurfaceAlt,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.adminButtonBorder),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text('Manage',
-                style: TextStyle(
-                    color: AppColors.adminTextPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12)),
-            SizedBox(width: 4),
-            Icon(Icons.expand_more,
-                size: 16, color: AppColors.adminTextSecondary),
-          ],
+      child: _ActionPill(label: 'Manage', trailingIcon: Icons.expand_more),
+    );
+  }
+}
+
+const String _banValue = '__ban_permanently__';
+
+class _ActionPill extends StatelessWidget {
+  const _ActionPill({
+    required this.label,
+    this.onTap,
+    this.trailingIcon,
+    this.accent,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final IconData? trailingIcon;
+  final Color? accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget pill = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.adminSurfaceAlt,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: accent?.withValues(alpha: 0.5) ?? AppColors.adminButtonBorder,
         ),
       ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            label,
+            style: TextStyle(
+              color: accent ?? AppColors.adminTextPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+          if (trailingIcon != null) ...<Widget>[
+            const SizedBox(width: 4),
+            Icon(trailingIcon, size: 16, color: AppColors.adminTextSecondary),
+          ],
+        ],
+      ),
+    );
+
+    if (onTap == null) {
+      return pill;
+    }
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: pill,
     );
   }
 }

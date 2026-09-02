@@ -1,9 +1,10 @@
-// Models for GET /admin/users — one account row and one page of results.
+// Models for the admin Users tab: one account row, one page of results,
+// and the aggregate stats card.
 
 enum AdminAccountStatus { active, suspended, banned }
 
 extension AdminAccountStatusX on AdminAccountStatus {
-  /// Value the API expects as the `?status=` filter.
+  /// Wire value — used both for `?status=` filtering and the PATCH body.
   String get query => name;
 
   String get label => switch (this) {
@@ -98,4 +99,21 @@ class AdminUsersPage {
   final int total;
   final int page;
   final int limit;
+}
+
+/// GET /admin/users/stats → { total, suspended }
+class AdminUsersStats {
+  const AdminUsersStats({required this.total, required this.suspended});
+
+  factory AdminUsersStats.fromJson(Map<String, dynamic> json) {
+    return AdminUsersStats(
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      suspended: (json['suspended'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  static const AdminUsersStats empty = AdminUsersStats(total: 0, suspended: 0);
+
+  final int total;
+  final int suspended;
 }
