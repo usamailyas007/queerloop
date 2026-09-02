@@ -20,7 +20,10 @@ class ApiClient {
       ..baseUrl = url
       ..connectTimeout = const Duration(seconds: 15)
       ..receiveTimeout = const Duration(seconds: 20)
-      ..sendTimeout = const Duration(seconds: 20)
+      // `sendTimeout` on the web adapter throws for body-less requests
+      // ("cannot be used without a request body to send on Web"), so keep it
+      // off the web build — bodyless GET/DELETE are the common case there.
+      ..sendTimeout = kIsWeb ? null : const Duration(seconds: 20)
       ..headers = <String, String>{'Accept': 'application/json'};
 
     _dio.interceptors.add(

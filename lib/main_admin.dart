@@ -12,3 +12,10 @@ void main() async {
   AppConfig.assertValid();
   runApp(const AdminApp());
 }
+
+
+// Command for running admin staging web in sandbox
+
+// flutter run -d chrome -t lib/main_admin.dart --dart-define-from-file=env/staging.json \
+//   --web-browser-flag "--disable-web-security" \
+//   --web-browser-flag "--user-data-dir=/tmp/ql-admin-dev"

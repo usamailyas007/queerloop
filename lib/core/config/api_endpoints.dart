@@ -35,8 +35,15 @@ abstract final class ApiEndpoints {
   /// Moderator roster + invites. GET / POST /admin/moderators
   static const String adminModerators = '/admin/moderators';
 
+  /// Publish an announcement. POST /admin/announcements
+  static const String adminAnnouncements = '/admin/announcements';
+
   /// Community roster with admin metrics. GET /admin/communities
   static const String adminCommunities = '/admin/communities';
+
+  // ── Engagement ────────────────────────────────────────────────────────────
+  /// Published announcement feed. GET /engagement/announcements
+  static const String engagementAnnouncements = '/engagement/announcements';
 
   // ── Communities ───────────────────────────────────────────────────────────
   /// List / create communities. GET / POST /communities
