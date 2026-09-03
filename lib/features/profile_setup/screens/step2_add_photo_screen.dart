@@ -51,11 +51,7 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
         context.read<ProfileSetupProvider>();
     final String? userId = context.read<AuthProvider>().userId;
     if (userId != null && userId.isNotEmpty) {
-      final String seed =
-          provider.username.isNotEmpty ? provider.username : 'ash';
-      final String avatarUrl =
-          provider.avatarUrl ?? 'https://picsum.photos/seed/$seed/400';
-      await provider.saveStep2(userId, avatarUrl: avatarUrl);
+      await provider.saveStep2(userId);
     }
     if (mounted) {
       widget.onNext();

@@ -16,12 +16,19 @@ class UserProfile {
     this.isPrivate,
     this.showInDiscover,
     this.allowMessagesFrom,
+    this.allowCommentsFrom,
     this.hideMyLikes,
     this.profileVisibility,
+    this.showActivityStatus,
+    this.sendReadReceipts,
     this.notifyOnLike,
     this.notifyOnComment,
     this.notifyOnFollow,
     this.notifyOnMessage,
+    this.notifyOnFollowRequests,
+    this.notifyOnCommunityPosts,
+    this.notifyOnAnnouncementsFeatures,
+    this.notifyOnSafetyModerationUpdates,
     this.createdAt,
     this.updatedAt,
     this.followersCount,
@@ -47,12 +54,21 @@ class UserProfile {
       isPrivate: json['isPrivate'] as bool?,
       showInDiscover: json['showInDiscover'] as bool?,
       allowMessagesFrom: json['allowMessagesFrom'] as String?,
+      allowCommentsFrom: json['allowCommentsFrom'] as String?,
       hideMyLikes: json['hideMyLikes'] as bool?,
       profileVisibility: json['profileVisibility'] as String?,
+      showActivityStatus: json['showActivityStatus'] as bool?,
+      sendReadReceipts: json['sendReadReceipts'] as bool?,
       notifyOnLike: json['notifyOnLike'] as bool?,
       notifyOnComment: json['notifyOnComment'] as bool?,
       notifyOnFollow: json['notifyOnFollow'] as bool?,
       notifyOnMessage: json['notifyOnMessage'] as bool?,
+      notifyOnFollowRequests: json['notifyOnFollowRequests'] as bool?,
+      notifyOnCommunityPosts: json['notifyOnCommunityPosts'] as bool?,
+      notifyOnAnnouncementsFeatures:
+          json['notifyOnAnnouncementsFeatures'] as bool?,
+      notifyOnSafetyModerationUpdates:
+          json['notifyOnSafetyModerationUpdates'] as bool?,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String)
           : null,
@@ -79,12 +95,19 @@ class UserProfile {
   final bool? isPrivate;
   final bool? showInDiscover;
   final String? allowMessagesFrom;
+  final String? allowCommentsFrom;
   final bool? hideMyLikes;
   final String? profileVisibility;
+  final bool? showActivityStatus;
+  final bool? sendReadReceipts;
   final bool? notifyOnLike;
   final bool? notifyOnComment;
   final bool? notifyOnFollow;
   final bool? notifyOnMessage;
+  final bool? notifyOnFollowRequests;
+  final bool? notifyOnCommunityPosts;
+  final bool? notifyOnAnnouncementsFeatures;
+  final bool? notifyOnSafetyModerationUpdates;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final int? followersCount;
@@ -114,12 +137,24 @@ class UserProfile {
       isPrivate: other.isPrivate ?? isPrivate,
       showInDiscover: other.showInDiscover ?? showInDiscover,
       allowMessagesFrom: other.allowMessagesFrom ?? allowMessagesFrom,
+      allowCommentsFrom: other.allowCommentsFrom ?? allowCommentsFrom,
       hideMyLikes: other.hideMyLikes ?? hideMyLikes,
       profileVisibility: other.profileVisibility ?? profileVisibility,
+      showActivityStatus: other.showActivityStatus ?? showActivityStatus,
+      sendReadReceipts: other.sendReadReceipts ?? sendReadReceipts,
       notifyOnLike: other.notifyOnLike ?? notifyOnLike,
       notifyOnComment: other.notifyOnComment ?? notifyOnComment,
       notifyOnFollow: other.notifyOnFollow ?? notifyOnFollow,
       notifyOnMessage: other.notifyOnMessage ?? notifyOnMessage,
+      notifyOnFollowRequests:
+          other.notifyOnFollowRequests ?? notifyOnFollowRequests,
+      notifyOnCommunityPosts:
+          other.notifyOnCommunityPosts ?? notifyOnCommunityPosts,
+      notifyOnAnnouncementsFeatures:
+          other.notifyOnAnnouncementsFeatures ?? notifyOnAnnouncementsFeatures,
+      notifyOnSafetyModerationUpdates:
+          other.notifyOnSafetyModerationUpdates ??
+              notifyOnSafetyModerationUpdates,
       createdAt: other.createdAt ?? createdAt,
       updatedAt: other.updatedAt ?? updatedAt,
       followersCount: other.followersCount ?? followersCount,

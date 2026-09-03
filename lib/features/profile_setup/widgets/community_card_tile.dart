@@ -44,14 +44,28 @@ class CommunityCardTile extends StatelessWidget {
               child: SizedBox(
                 width: 40,
                 height: 40,
-                child: Image.asset(
-                  community.avatarAsset,
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      _buildFallbackAvatar(),
-                ),
+                child: community.imageUrl != null &&
+                        community.imageUrl!.isNotEmpty
+                    ? Image.network(
+                        community.imageUrl!,
+                        width: 40,
+                        height: 40,
+                        fit: BoxFit.cover,
+                        errorBuilder: (BuildContext ctx, Object err,
+                                StackTrace? trace) =>
+                            _buildFallbackAvatar(),
+                      )
+                    : (community.avatarAsset.isNotEmpty
+                        ? Image.asset(
+                            community.avatarAsset,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                            errorBuilder: (BuildContext ctx, Object err,
+                                    StackTrace? trace) =>
+                                _buildFallbackAvatar(),
+                          )
+                        : _buildFallbackAvatar()),
               ),
             ),
             const SizedBox(width: AppSpacing.md),

@@ -69,14 +69,7 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
       return;
     }
 
-    if (provider.isUsernameAvailable == false) {
-      AppSnackBar.showError(
-        context,
-        title: 'Username Unavailable',
-        subtitle: 'Username is already taken. Please choose another one.',
-      );
-      return;
-    }
+    final String? userId = context.read<AuthProvider>().userId;
 
     if (provider.checkingUsername) {
       AppSnackBar.showInfo(
@@ -87,11 +80,24 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
       return;
     }
 
+    if (provider.isUsernameAvailable == null) {
+      await provider.checkUsername(username);
+      if (!mounted) return;
+    }
+
+    if (provider.isUsernameAvailable != true) {
+      AppSnackBar.showError(
+        context,
+        title: 'Username Unavailable',
+        subtitle: 'Username is already taken. Please choose another one.',
+      );
+      return;
+    }
+
     provider.setDisplayName(displayName);
     provider.setUsername(username);
     provider.setBio(bio);
 
-    final String? userId = context.read<AuthProvider>().userId;
     if (userId == null || userId.isEmpty) {
       widget.onNext();
       return;
@@ -313,13 +319,27 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
                   top: AppSpacing.md,
                   bottom: AppSpacing.lg,
                 ),
-                child: Selector<ProfileSetupProvider, bool>(
-                  selector: (_, ProfileSetupProvider p) => p.isBusy,
-                  builder: (BuildContext context, bool isBusy, _) {
+                child: Consumer<ProfileSetupProvider>(
+                  builder: (BuildContext context, ProfileSetupProvider p, _) {
+                    final bool isChecking = p.checkingUsername;
+                    final bool isUnavailable = p.isUsernameAvailable == false;
                     return AppGradientButton(
                       text: l10n.profileContinueBtn,
-                      isLoading: isBusy,
-                      onPressed: isBusy ? () {} : _handleContinue,
+                      isLoading: p.isBusy || isChecking,
+                      onPressed: p.isBusy || isChecking
+                          ? () {}
+                          : () {
+                              if (isUnavailable) {
+                                AppSnackBar.showError(
+                                  context,
+                                  title: 'Username Unavailable',
+                                  subtitle:
+                                      'Username is already taken. Please choose another one.',
+                                );
+                                return;
+                              }
+                              _handleContinue();
+                            },
                     );
                   },
                 ),

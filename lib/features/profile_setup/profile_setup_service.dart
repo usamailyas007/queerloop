@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/config/api_endpoints.dart';
 import '../../../core/config/app_config.dart';
+import 'models/community_model.dart';
 import 'models/profile_models.dart';
 
 class ProfileSetupService {
@@ -66,22 +67,27 @@ class ProfileSetupService {
     return UserProfile.fromJson(data as Map<String, dynamic>);
   }
 
-  // ── Step 2 — Avatar URL ───────────────────────────────────────────────────
-  // PATCH /users/:id  { avatarUrl }
+  // ── Step 2 — Avatar ───────────────────────────────────────────────────────
+  // PATCH /users/:id  { avatarBase64 }
   // Returns: updated UserProfile
 
-  Future<UserProfile> saveAvatarUrl({
+  Future<UserProfile> saveAvatar({
     required String userId,
-    required String avatarUrl,
+    required String avatarBase64,
   }) async {
     if (AppConfig.useMockApi) {
-      return UserProfile(id: userId, avatarUrl: avatarUrl);
+      return UserProfile(
+        id: userId,
+        avatarUrl:
+            'https://cdn.queerloop.example/mock/image/$userId/mock-avatar',
+      );
     }
 
-    debugPrint('🚀 [ProfileSetup] Saving Step 2 (Avatar) for user: $userId');
+    debugPrint(
+        '🚀 [ProfileSetup] Saving Step 2 (Avatar Base64) for user: $userId');
     final dynamic data = await _client.patch(
       ApiEndpoints.user(userId),
-      body: <String, dynamic>{'avatarUrl': avatarUrl},
+      body: <String, dynamic>{'avatarBase64': avatarBase64},
     );
     debugPrint('📥 [ProfileSetup] Step 2 Response: $data');
     return UserProfile.fromJson(data as Map<String, dynamic>);
@@ -112,6 +118,26 @@ class ProfileSetupService {
     return UserProfile.fromJson(data as Map<String, dynamic>);
   }
 
+  // ── Step 4 — Fetch communities ────────────────────────────────────────────
+  // GET /communities
+  // Returns: List<CommunityModel>
+
+  Future<List<CommunityModel>> getCommunities() async {
+    if (AppConfig.useMockApi) {
+      return const <CommunityModel>[];
+    }
+    debugPrint('🚀 [ProfileSetup] Fetching communities (GET /communities)');
+    final dynamic data = await _client.get(ApiEndpoints.communities);
+    debugPrint('📥 [ProfileSetup] Communities received: $data');
+    if (data is List) {
+      return data
+          .map((dynamic item) =>
+              CommunityModel.fromJson(item as Map<String, dynamic>))
+          .toList();
+    }
+    return <CommunityModel>[];
+  }
+
   // ── Step 4 — Join a community ─────────────────────────────────────────────
   // POST /communities/:communityId/join
   // Returns: 201 (no body needed)
@@ -120,7 +146,8 @@ class ProfileSetupService {
     if (AppConfig.useMockApi) {
       return;
     }
-    debugPrint('🚀 [ProfileSetup] Joining Community: $communityId');
+    debugPrint(
+        '🚀 [ProfileSetup] Joining Community: $communityId (POST /communities/$communityId/join)');
     await _client.post(ApiEndpoints.joinCommunity(communityId));
   }
 

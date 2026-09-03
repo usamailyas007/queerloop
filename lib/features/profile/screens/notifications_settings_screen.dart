@@ -37,6 +37,10 @@ class _NotificationsSettingsScreenState
     _comments = provider.notifyOnComment;
     _newFollowers = provider.notifyOnFollow;
     _messages = provider.notifyOnMessage;
+    _followRequests = provider.notifyOnFollowRequests;
+    _communityPosts = provider.notifyOnCommunityPosts;
+    _announcements = provider.notifyOnAnnouncementsFeatures;
+    _moderationUpdates = provider.notifyOnSafetyModerationUpdates;
   }
 
   void _syncSetting({
@@ -44,6 +48,10 @@ class _NotificationsSettingsScreenState
     bool? notifyOnComment,
     bool? notifyOnFollow,
     bool? notifyOnMessage,
+    bool? notifyOnFollowRequests,
+    bool? notifyOnCommunityPosts,
+    bool? notifyOnAnnouncementsFeatures,
+    bool? notifyOnSafetyModerationUpdates,
   }) {
     final String? userId = context.read<AuthProvider>().userId;
     if (userId == null || userId.isEmpty) return;
@@ -53,6 +61,10 @@ class _NotificationsSettingsScreenState
           notifyOnComment: notifyOnComment,
           notifyOnFollow: notifyOnFollow,
           notifyOnMessage: notifyOnMessage,
+          notifyOnFollowRequests: notifyOnFollowRequests,
+          notifyOnCommunityPosts: notifyOnCommunityPosts,
+          notifyOnAnnouncementsFeatures: notifyOnAnnouncementsFeatures,
+          notifyOnSafetyModerationUpdates: notifyOnSafetyModerationUpdates,
         );
   }
 
@@ -271,8 +283,10 @@ class _NotificationsSettingsScreenState
                           title: 'Follow requests',
                           subtitle: 'When someone requests to follow you',
                           value: _followRequests,
-                          onChanged: (bool val) =>
-                              setState(() => _followRequests = val),
+                          onChanged: (bool val) {
+                            setState(() => _followRequests = val);
+                            _syncSetting(notifyOnFollowRequests: val);
+                          },
                         ),
                       ],
                     ),
@@ -320,8 +334,10 @@ class _NotificationsSettingsScreenState
                           title: 'Community posts',
                           subtitle: 'Trending posts in communities you joined',
                           value: _communityPosts,
-                          onChanged: (bool val) =>
-                              setState(() => _communityPosts = val),
+                          onChanged: (bool val) {
+                            setState(() => _communityPosts = val);
+                            _syncSetting(notifyOnCommunityPosts: val);
+                          },
                         ),
                       ],
                     ),
@@ -359,16 +375,20 @@ class _NotificationsSettingsScreenState
                           title: 'Safety & moderation updates',
                           subtitle: 'Reports you filed and policy updates',
                           value: _moderationUpdates,
-                          onChanged: (bool val) =>
-                              setState(() => _moderationUpdates = val),
+                          onChanged: (bool val) {
+                            setState(() => _moderationUpdates = val);
+                            _syncSetting(notifyOnSafetyModerationUpdates: val);
+                          },
                         ),
                         Divider(color: context.themeDivider, height: 1),
                         _buildToggleRow(
                           title: 'Announcements & features',
                           subtitle: 'New features and community events',
                           value: _announcements,
-                          onChanged: (bool val) =>
-                              setState(() => _announcements = val),
+                          onChanged: (bool val) {
+                            setState(() => _announcements = val);
+                            _syncSetting(notifyOnAnnouncementsFeatures: val);
+                          },
                         ),
                       ],
                     ),

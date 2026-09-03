@@ -6,6 +6,8 @@
 //   • Per-step error strings are distinct so screens only watch their own error.
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/api/api_exception.dart';
@@ -72,7 +74,7 @@ class ProfileSetupProvider extends ChangeNotifier {
   UserProfile? _savedProfile;
 
   // ── Available communities ─────────────────────────────────────────────────
-  final List<CommunityModel> _allCommunities = const <CommunityModel>[
+  List<CommunityModel> _allCommunities = const <CommunityModel>[
     CommunityModel(id: 'lesbian', name: 'Lesbian', avatarAsset: AppImages.lesbian),
     CommunityModel(id: 'gay', name: 'Gay', avatarAsset: AppImages.gay),
     CommunityModel(id: 'bisexual', name: 'Bisexual', avatarAsset: AppImages.bisexual),
@@ -88,8 +90,10 @@ class ProfileSetupProvider extends ChangeNotifier {
     CommunityModel(id: 'transfemme', name: 'Transfemme', avatarAsset: AppImages.transfemme),
     CommunityModel(id: 'allies', name: 'LGBTQ+ Allies', avatarAsset: AppImages.allies),
   ];
+  bool _isLoadingCommunities = false;
 
   // ── Public getters ────────────────────────────────────────────────────────
+  bool get isLoadingCommunities => _isLoadingCommunities;
 
   int get currentStep => _currentStep;
 
@@ -274,18 +278,32 @@ class ProfileSetupProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Step 2 — API: save avatar URL ─────────────────────────────────────────
+  // ── Step 2 — API: save avatar (Base64) ───────────────────────────────────
 
-  Future<bool> saveStep2(String userId, {required String avatarUrl}) async {
+  Future<bool> saveStep2(String userId, {String? avatarBase64}) async {
     if (_isBusy) return false;
     _setBusy(true);
 
     try {
-      final UserProfile result = await _service.saveAvatarUrl(
+      String? base64String = avatarBase64;
+      if (base64String == null || base64String.isEmpty) {
+        if (_profilePhotoPath != null) {
+          final File file = File(_profilePhotoPath!);
+          if (await file.exists()) {
+            final Uint8List bytes = await file.readAsBytes();
+            base64String = base64Encode(bytes);
+          }
+        }
+      }
+
+      base64String ??=
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+      final UserProfile result = await _service.saveAvatar(
         userId: userId,
-        avatarUrl: avatarUrl,
+        avatarBase64: base64String,
       );
-      _avatarUrl = result.avatarUrl ?? avatarUrl;
+      _avatarUrl = result.avatarUrl ?? _avatarUrl;
       _savedProfile = (_savedProfile ?? UserProfile(id: userId)).merge(result);
       _error = null;
       notifyListeners();
@@ -382,14 +400,55 @@ class ProfileSetupProvider extends ChangeNotifier {
     }
   }
 
+  // ── Step 4 — API: fetch communities ───────────────────────────────────────
+
+  Future<void> fetchCommunities() async {
+    _isLoadingCommunities = true;
+    notifyListeners();
+
+    try {
+      final List<CommunityModel> remote = await _service.getCommunities();
+      if (remote.isNotEmpty) {
+        _allCommunities = remote;
+      }
+      _error = null;
+    } on ApiException catch (e) {
+      _error = e.message;
+      debugPrint('⚠️ [ProfileSetup] Failed to fetch communities: ${e.message}');
+    } catch (e) {
+      debugPrint('⚠️ [ProfileSetup] Failed to fetch communities: $e');
+    } finally {
+      _isLoadingCommunities = false;
+      notifyListeners();
+    }
+  }
+
   // ── Step 4 — API: join selected communities ───────────────────────────────
-  // Note: Backend join call is bypassed for now because communities are static.
+
   Future<bool> saveStep4() async {
-    debugPrint(
-      'ℹ️ [ProfileSetup] Step 4: Community join API skipped (communities are static). '
-      'Selected: $_joinedCommunityIds',
-    );
-    return true;
+    if (_isBusy) return false;
+    _setBusy(true);
+
+    try {
+      if (_joinedCommunityIds.isNotEmpty) {
+        debugPrint(
+            '🚀 [ProfileSetup] Step 4: Joining ${_joinedCommunityIds.length} communities: $_joinedCommunityIds');
+        await _service.joinCommunities(_joinedCommunityIds);
+      }
+      _error = null;
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _error = e.message;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Failed to join communities.';
+      notifyListeners();
+      return false;
+    } finally {
+      _setBusy(false);
+    }
   }
 
   // ── Step 5 local setters ──────────────────────────────────────────────────

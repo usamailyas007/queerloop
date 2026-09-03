@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -275,16 +277,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         !_areListsEqual(_interests, profileProvider.interests)
             ? _interests
             : null;
-    final String? updateAvatarUrl = _profilePhotoPath != null
-        ? 'https://picsum.photos/seed/${cleanUsername.isNotEmpty ? cleanUsername : "user"}/400'
-        : null;
+    String? updateAvatarBase64;
+    if (_profilePhotoPath != null) {
+      final File file = File(_profilePhotoPath!);
+      if (await file.exists()) {
+        final Uint8List bytes = await file.readAsBytes();
+        updateAvatarBase64 = base64Encode(bytes);
+      }
+    }
 
     final bool hasChanges = updateDisplayName != null ||
         updateUsername != null ||
         updateBio != null ||
         updatePronouns != null ||
         updateInterests != null ||
-        updateAvatarUrl != null;
+        updateAvatarBase64 != null;
 
     if (!hasChanges) {
       navigator.pop();
@@ -299,7 +306,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       bio: updateBio,
       pronouns: updatePronouns,
       interests: updateInterests,
-      avatarUrl: updateAvatarUrl,
+      avatarBase64: updateAvatarBase64,
     );
     if (!mounted) return;
     setState(() => _isSaving = false);

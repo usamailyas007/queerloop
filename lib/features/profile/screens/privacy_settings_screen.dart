@@ -27,7 +27,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   bool _sendReadReceipts = true;
 
   late String _whoCanMessage;
-  String _whoCanComment = 'Everyone';
+  late String _whoCanComment;
   late String _profileVisibility;
 
   @override
@@ -38,7 +38,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     _appearInExplore = provider.showInDiscover;
     _hideLikes = provider.hideMyLikes;
     _whoCanMessage = provider.allowMessagesFromLabel;
+    _whoCanComment = provider.allowCommentsFromLabel;
     _profileVisibility = provider.profileVisibilityLabel;
+    _showActivityStatus = provider.showActivityStatus;
+    _sendReadReceipts = provider.sendReadReceipts;
   }
 
   void _syncSetting({
@@ -47,6 +50,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     bool? hideMyLikes,
     String? allowMessagesFrom,
     String? profileVisibility,
+    String? allowCommentsFrom,
+    bool? showActivityStatus,
+    bool? sendReadReceipts,
   }) {
     final String? userId = context.read<AuthProvider>().userId;
     if (userId == null || userId.isEmpty) return;
@@ -57,6 +63,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
           hideMyLikes: hideMyLikes,
           allowMessagesFrom: allowMessagesFrom,
           profileVisibility: profileVisibility,
+          allowCommentsFrom: allowCommentsFrom,
+          showActivityStatus: showActivityStatus,
+          sendReadReceipts: sendReadReceipts,
         );
   }
 
@@ -317,6 +326,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                       );
                       if (res != null && mounted) {
                         setState(() => _whoCanComment = res);
+                        _syncSetting(allowCommentsFrom: res);
                       }
                     },
                   ),
@@ -358,15 +368,19 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                     title: 'Show activity status',
                     subtitle: "Lets people you follow see when you're active",
                     value: _showActivityStatus,
-                    onChanged: (bool val) =>
-                        setState(() => _showActivityStatus = val),
+                    onChanged: (bool val) {
+                      setState(() => _showActivityStatus = val);
+                      _syncSetting(showActivityStatus: val);
+                    },
                   ),
                   _buildCardToggle(
                     title: 'Send read receipts',
                     subtitle: 'Shows "Read" under messages you\'ve opened',
                     value: _sendReadReceipts,
-                    onChanged: (bool val) =>
-                        setState(() => _sendReadReceipts = val),
+                    onChanged: (bool val) {
+                      setState(() => _sendReadReceipts = val);
+                      _syncSetting(sendReadReceipts: val);
+                    },
                   ),
 
                   const SizedBox(height: AppSpacing.xl),
