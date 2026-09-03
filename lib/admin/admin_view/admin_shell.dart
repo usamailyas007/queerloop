@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:provider/provider.dart';
-import '../../core/widgets/app_user_avatar.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_images.dart';
 import '../../core/theme/app_spacing.dart';
-import '../auth/provider/admin_auth_provider.dart';
+import '../widgets/admin_logout_dialog.dart';
 import 'admin_icons.dart';
 import 'analytics/screens/admin_analytics_screen.dart';
 import 'announcements/screens/admin_announcements_screen.dart';
@@ -97,13 +95,6 @@ class _AdminSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String? email = context.select<AdminAuthProvider, String?>(
-      (AdminAuthProvider provider) => provider.email,
-    );
-    final String name = email == null
-        ? 'Dana Okafor'
-        : email.split('@').first.replaceAll('.', ' ');
-
     return Container(
       width: 248,
       decoration: BoxDecoration(
@@ -137,53 +128,7 @@ class _AdminSidebar extends StatelessWidget {
           ),
           Divider(color: AppColors.adminBorder),
           const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: <Widget>[
-              AppUserAvatar(
-                imageAsset: AppImages.user2,
-                size: 36,
-                hasGradientBorder: false,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      name,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.adminTextPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12.5,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'Admin',
-                      style: TextStyle(color: AppColors.adminTextSecondary, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: AppColors.adminTeal,
-                  shape: BoxShape.circle,
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: AppColors.adminTeal.withValues(alpha: 0.18),
-                      blurRadius: 0,
-                      spreadRadius: 3,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          const SidebarLogoutButton(color: AppColors.adminPinkLight),
         ],
       ),
     );

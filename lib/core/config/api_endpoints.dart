@@ -41,9 +41,21 @@ abstract final class ApiEndpoints {
   /// Community roster with admin metrics. GET /admin/communities
   static const String adminCommunities = '/admin/communities';
 
+  /// Conversation of the day. POST /admin/cotd · GET /admin/cotd/history
+  static const String adminCotd = '/admin/cotd';
+  static const String adminCotdHistory = '/admin/cotd/history';
+  static String adminCotdAnswerFeature(String answerId) =>
+      '/admin/cotd/answers/$answerId/feature';
+  static String adminCotdAnswerHide(String answerId) =>
+      '/admin/cotd/answers/$answerId/hide';
+
   // ── Engagement ────────────────────────────────────────────────────────────
   /// Published announcement feed. GET /engagement/announcements
   static const String engagementAnnouncements = '/engagement/announcements';
+
+  /// Answers to a conversation-of-the-day question. GET /engagement/cotd/:id/answers
+  static String cotdAnswers(String questionId) =>
+      '/engagement/cotd/$questionId/answers';
 
   // ── Communities ───────────────────────────────────────────────────────────
   /// List / create communities. GET / POST /communities

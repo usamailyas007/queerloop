@@ -13,6 +13,7 @@ import 'auth/screens/admin_login_screen.dart';
 import 'admin_view/admin_shell.dart';
 import 'admin_view/announcements/provider/announcements_provider.dart';
 import 'admin_view/communities/provider/communities_provider.dart';
+import 'admin_view/conversation_of_the_day/provider/cotd_provider.dart';
 import 'admin_view/moderators/provider/moderators_provider.dart';
 import 'admin_view/users/provider/admin_users_provider.dart';
 import 'moderator_view/moderator_shell.dart';
@@ -44,6 +45,10 @@ class AdminApp extends StatelessWidget {
         ChangeNotifierProvider<AnnouncementsProvider>(
           create: (BuildContext context) =>
               AnnouncementsProvider(client: context.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<CotdProvider>(
+          create: (BuildContext context) =>
+              CotdProvider(client: context.read<ApiClient>()),
         ),
       ],
       child: MaterialApp(

@@ -45,26 +45,34 @@ class AdminAuthService {
 
   // ── Sign out ──────────────────────────────────────────────────────────────
 
-  Future<void> signOut({String? refreshToken}) async {
-    if (!AppConfig.useMockApi) {
-      final String? storedRefresh =
-          refreshToken ?? await _storage.read(key: _StorageKey.refreshToken);
-      debugPrint('🚀 [AdminAuthService] Logging out...');
-      try {
-        await _client.post(
-          ApiEndpoints.logout,
-          body: storedRefresh != null && storedRefresh.isNotEmpty
-              ? <String, dynamic>{'refreshToken': storedRefresh}
-              : null,
-        );
-        debugPrint('📥 [AdminAuthService] Logout success');
-      } catch (e) {
-        debugPrint(
-          '⚠️ [AdminAuthService] Logout error (clearing local session): $e',
-        );
-      }
+  /// Revokes the session server-side (POST /auth/logout needs the Bearer access
+  /// token + a `refreshToken` string body) then always clears local tokens.
+  /// Returns true when the server call succeeded.
+  Future<bool> signOut({String? refreshToken}) async {
+    if (AppConfig.useMockApi) {
+      await _clearTokens();
+      return true;
     }
+
+    final String refresh = (refreshToken != null && refreshToken.isNotEmpty)
+        ? refreshToken
+        : await _storage.read(key: _StorageKey.refreshToken) ?? '';
+
+    bool ok = false;
+    debugPrint('🚀 [AdminAuthService] POST ${ApiEndpoints.logout}');
+    try {
+      await _client.post(
+        ApiEndpoints.logout,
+        body: <String, dynamic>{'refreshToken': refresh},
+      );
+      debugPrint('📥 [AdminAuthService] Logout success');
+      ok = true;
+    } catch (e) {
+      debugPrint('⚠️ [AdminAuthService] Logout error (clearing local session): $e');
+    }
+
     await _clearTokens();
+    return ok;
   }
 
   // ── Restore from secure storage ───────────────────────────────────────────

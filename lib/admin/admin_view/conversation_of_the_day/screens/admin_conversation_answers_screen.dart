@@ -1,78 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../../core/widgets/app_user_avatar.dart';
-import '../../../../core/theme/app_colors.dart';
+import 'package:provider/provider.dart';
 
-import '../../../../core/theme/app_images.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_gradient_button.dart';
 import '../../../../core/widgets/app_outline_button.dart';
-import '../../../../core/widgets/app_text_field.dart';
-import '../../admin_icons.dart';
-import 'admin_conversation_history_screen.dart';
+import '../models/cotd_models.dart';
+import '../provider/cotd_provider.dart';
 
-class _Answer {
-  const _Answer({
-    required this.handle,
-    required this.avatar,
-    required this.answer,
-    required this.likes,
-    required this.postedAgo,
-    this.isFlagged = false,
-  });
-
-  final String handle;
-  final String avatar;
-  final String answer;
-  final int likes;
-  final String postedAgo;
-  final bool isFlagged;
-}
-
-class AdminConversationAnswersScreen extends StatelessWidget {
+class AdminConversationAnswersScreen extends StatefulWidget {
   const AdminConversationAnswersScreen({
-    required this.question,
     required this.onBack,
     required this.onPublishNew,
     super.key,
   });
 
-  final ConversationQuestion question;
   final VoidCallback onBack;
   final VoidCallback onPublishNew;
 
-  static const List<_Answer> _answers = <_Answer>[
-    _Answer(
-      handle: '@ashinorbit',
-      avatar: AppImages.user1,
-      answer: 'The people who show up on the bad days, not just the good ones.',
-      likes: 412,
-      postedAgo: '2h',
-    ),
-    _Answer(
-      handle: '@rowankeeps',
-      avatar: AppImages.user2,
-      answer:
-          "My roommates threw me a party the week I came out. That's family.",
-      likes: 388,
-      postedAgo: '3h',
-    ),
-    _Answer(
-      handle: '@jules.does',
-      avatar: AppImages.user1,
-      answer: 'Not needing to explain myself twice.',
-      likes: 301,
-      postedAgo: '4h',
-    ),
-    _Answer(
-      handle: '@dg_returns',
-      avatar: AppImages.user3,
-      answer: 'go be miserable somewhere else lol',
-      likes: 2,
-      postedAgo: '5h',
-      isFlagged: true,
-    ),
-  ];
+  @override
+  State<AdminConversationAnswersScreen> createState() =>
+      _AdminConversationAnswersScreenState();
+}
+
+class _AdminConversationAnswersScreenState
+    extends State<AdminConversationAnswersScreen> {
+  void _onError(String message) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+      context.read<CotdProvider>().clearAnswersError();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,237 +45,441 @@ class AdminConversationAnswersScreen extends StatelessWidget {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              const Text(
-                'Conversation of the day /',
-                style: TextStyle(color: AppColors.adminTextMuted, fontSize: 12),
-              ),
-              const SizedBox(height: 4),
-              Row(
+          child: Consumer<CotdProvider>(
+            builder: (_, CotdProvider provider, _) {
+              final CotdQuestion? question = provider.selectedQuestion;
+              if (provider.answersError != null &&
+                  provider.answers.isNotEmpty) {
+                _onError(provider.answersError!);
+              }
+
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const Expanded(
-                    child: Text(
-                      'Answers',
-                      style: TextStyle(
-                        color: AppColors.adminTextPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 24,
+                  const Text(
+                    'Conversation of the day /',
+                    style: TextStyle(
+                      color: AppColors.adminTextMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      const Expanded(
+                        child: Text(
+                          'Answers',
+                          style: TextStyle(
+                            color: AppColors.adminTextPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 24,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 100,
+                        child: AppOutlineButton(
+                          text: 'History',
+                          height: 44,
+                          backgroundColor: AppColors.adminSurfaceAlt,
+                          onPressed: widget.onBack,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      SizedBox(
+                        width: 170,
+                        height: 44,
+                        child: AppGradientButton(
+                          text: 'Publish new question',
+                          textStyle: const TextStyle(
+                            color: AppColors.textInverse,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
+                          onPressed: widget.onPublishNew,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      decoration: BoxDecoration(
+                        color: AppColors.adminSurface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.adminBorder),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            question == null
+                                ? 'Answers'
+                                : "Answers · '${question.question}'",
+                            style: const TextStyle(
+                              color: AppColors.adminTextPrimary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Shown to users as comments under the question',
+                            style: TextStyle(
+                              color: AppColors.adminTextMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          const _AnswersHeaderRow(),
+                          Expanded(child: _AnswersBody(provider: provider)),
+                        ],
                       ),
                     ),
                   ),
-                  SizedBox(
-                    width: 220,
-                    child: AppTextField(
-                      hintText: 'Search past questions',
-                      prefixIconPath: AdminIcons.search,
-                      fillColor: AppColors.adminSurface,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  SizedBox(
-                    width: 90,
-                    child: AppOutlineButton(
-                      text: 'History',
-                      height: 44,
-                      backgroundColor: AppColors.adminSurfaceAlt,
-                      onPressed: onBack,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  SizedBox(
-                    width: 160,
-                    height: 44,
-                    child: AppGradientButton(
-                      text: 'Publish new question',
-                      textStyle: const TextStyle(
-                        color: AppColors.textInverse,
-                        fontWeight: FontWeight.w800,
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnswersBody extends StatelessWidget {
+  const _AnswersBody({required this.provider});
+
+  final CotdProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    if (provider.isLoadingAnswers && provider.answers.isEmpty) {
+      return const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            color: AppColors.adminPink,
+          ),
+        ),
+      );
+    }
+    if (provider.answersError != null && provider.answers.isEmpty) {
+      return _Centered(
+        message: provider.answersError!,
+        onRetry: provider.refreshAnswers,
+      );
+    }
+    if (provider.isAnswersEmpty) {
+      return const _Centered(message: 'No answers yet.');
+    }
+
+    return RefreshIndicator(
+      color: AppColors.adminPink,
+      backgroundColor: AppColors.adminSurface,
+      onRefresh: provider.refreshAnswers,
+      child: ListView.separated(
+        padding: EdgeInsets.zero,
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: provider.answers.length,
+        separatorBuilder: (_, _) =>
+            Divider(height: 1, color: AppColors.adminRowDivider),
+        itemBuilder: (_, int index) {
+          final CotdAnswer a = provider.answers[index];
+          return _AnswerRow(
+            answer: a,
+            busy: provider.isAnswerMutating(a.id),
+            onFeature: () => provider.featureAnswer(a.id),
+            onHide: () => provider.hideAnswer(a.id),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AnswerRow extends StatelessWidget {
+  const _AnswerRow({
+    required this.answer,
+    required this.busy,
+    required this.onFeature,
+    required this.onHide,
+  });
+
+  final CotdAnswer answer;
+  final bool busy;
+  final VoidCallback onFeature;
+  final VoidCallback onHide;
+
+  static final DateFormat _date = DateFormat('d MMM · h:mm a');
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: answer.hidden ? 0.55 : 1,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: <Widget>[
+                  _InitialsAvatar(seed: answer.handle),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      answer.handle,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.adminTextPrimary,
+                        fontWeight: FontWeight.w600,
                         fontSize: 13,
                       ),
-                      onPressed: onPublishNew,
                     ),
                   ),
                 ],
               ),
-
-              const SizedBox(height: AppSpacing.xl),
-
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: AppColors.adminSurface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppColors.adminBorder,
+            ),
+            Expanded(
+              flex: 4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    answer.body,
+                    style: const TextStyle(
+                      color: AppColors.adminTextSecondary,
+                      fontSize: 13,
+                    ),
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  if (answer.featured || answer.hidden) ...<Widget>[
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
                       children: <Widget>[
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                "Answers: '${question.question}'",
-                                style: const TextStyle(
-                                  color: AppColors.adminTextPrimary,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'Shown to users as comments under the question',
-                                style: TextStyle(
-                                  color: AppColors.adminTextMuted,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
+                        if (answer.featured)
+                          const _Tag(text: 'Featured', color: AppColors.adminTeal),
+                        if (answer.hidden)
+                          const _Tag(
+                            text: 'Hidden',
+                            color: AppColors.adminPinkLight,
                           ),
-                        ),
-                        Text(
-                          'View all ${NumberFormat.decimalPattern().format(question.answers)}',
-                          style: const TextStyle(
-                            color: AppColors.adminBlue,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
                       ],
                     ),
-
-                    const SizedBox(height: AppSpacing.lg),
-
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: AppSpacing.sm,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.symmetric(
-                          horizontal: BorderSide(
-                            color: AppColors.adminDivider,
-                          ),
-                        ),
-                      ),
-                      child: const Row(
-                        children: <Widget>[
-                          Expanded(flex: 2, child: _Header('PERSON')),
-                          Expanded(flex: 4, child: _Header('ANSWER')),
-                          Expanded(flex: 1, child: _Header('LIKES')),
-                          Expanded(flex: 1, child: _Header('POSTED')),
-                          SizedBox(width: 70),
-                        ],
-                      ),
-                    ),
-                    for (final _Answer a in _answers)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.md,
-                        ),
-                        child: Row(
-                          children: <Widget>[
-                            Expanded(
-                              flex: 2,
-                              child: Row(
-                                children: <Widget>[
-                                  AppUserAvatar(
-                                    imageAsset: a.avatar,
-                                    size: 26,
-                                    hasGradientBorder: false,
-                                  ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Expanded(
-                                    child: Text(
-                                      a.handle,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: AppColors.adminTextPrimary,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              flex: 4,
-                              child: Text(
-                                a.answer,
-                                style: const TextStyle(
-                                  color: AppColors.adminTextSecondary,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 1,
-                              child: Text(
-                                '${a.likes}',
-                                style: const TextStyle(
-                                  color: AppColors.adminTextSecondary,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 1,
-                              child: Text(
-                                a.postedAgo,
-                                style: const TextStyle(
-                                  color: AppColors.adminTextSecondary,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: 70,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.adminSurfaceAlt,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: a.isFlagged
-                                        ? const Color(
-                                            0xFFFF8080,
-                                          ).withValues(alpha: 0.4)
-                                        : AppColors.adminBorder,
-                                  ),
-                                ),
-                                child: Text(
-                                  a.isFlagged ? 'Hide' : 'Feature',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: a.isFlagged
-                                        ? AppColors.adminPinkLight
-                                        : AppColors.adminTextPrimary,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                   ],
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Text(
+                _date.format(answer.createdAt.toLocal()),
+                style: const TextStyle(
+                  color: AppColors.adminTextMuted,
+                  fontSize: 12,
                 ),
               ),
-            ],
+            ),
+            SizedBox(
+              width: 150,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.adminPink,
+                        ),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          _MiniButton(
+                            label: 'Feature',
+                            color: AppColors.adminTeal,
+                            enabled: !answer.featured,
+                            onTap: onFeature,
+                          ),
+                          const SizedBox(width: 6),
+                          _MiniButton(
+                            label: 'Hide',
+                            color: AppColors.adminPinkLight,
+                            enabled: !answer.hidden,
+                            onTap: onHide,
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniButton extends StatelessWidget {
+  const _MiniButton({
+    required this.label,
+    required this.color,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color color;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : 0.4,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: enabled ? onTap : null,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.adminSurfaceAlt,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.4)),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _Tag extends StatelessWidget {
+  const _Tag({required this.text, required this.color});
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 10,
+        ),
+      ),
+    );
+  }
+}
+
+class _AnswersHeaderRow extends StatelessWidget {
+  const _AnswersHeaderRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.adminDivider)),
+      ),
+      child: const Row(
+        children: <Widget>[
+          Expanded(flex: 2, child: _Header('PERSON')),
+          Expanded(flex: 4, child: _Header('ANSWER')),
+          Expanded(flex: 1, child: _Header('POSTED')),
+          SizedBox(width: 150),
+        ],
+      ),
+    );
+  }
+}
+
+class _InitialsAvatar extends StatelessWidget {
+  const _InitialsAvatar({required this.seed});
+
+  final String seed;
+
+  @override
+  Widget build(BuildContext context) {
+    final String clean = seed.replaceAll('@', '');
+    final String initial =
+        clean.isEmpty ? '?' : clean.characters.first.toUpperCase();
+    return Container(
+      width: 26,
+      height: 26,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.adminPurple.withValues(alpha: 0.22),
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColors.adminPurple.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: AppColors.adminPurple,
+          fontWeight: FontWeight.w700,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+}
+
+class _Centered extends StatelessWidget {
+  const _Centered({required this.message, this.onRetry});
+
+  final String message;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.adminTextSecondary,
+              fontSize: 13,
+            ),
+          ),
+          if (onRetry != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: 120,
+              child: AppOutlineButton(
+                text: 'Retry',
+                height: 38,
+                onPressed: onRetry!,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

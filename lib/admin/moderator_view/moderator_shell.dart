@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../core/widgets/app_user_avatar.dart';
-import '../../core/theme/app_colors.dart';
 
-import '../../core/theme/app_images.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../widgets/admin_logout_dialog.dart';
 import 'action_log/screens/moderator_action_log_screen.dart';
 import 'dashboard/screens/moderator_dashboard_screen.dart';
 import 'reports_queue/screens/moderator_reports_queue_screen.dart';
@@ -128,53 +127,9 @@ class _ModeratorSidebar extends StatelessWidget {
 
           const Spacer(),
 
-          // Bottom Divider
           Divider(color: AppColors.moderatorBorder),
           const SizedBox(height: AppSpacing.sm),
-
-          // Bottom User Profile Card (MOD-04 Priya)
-          Row(
-            children: <Widget>[
-              AppUserAvatar(
-                imageAsset: AppImages.user1,
-                size: 38,
-                hasGradientBorder: false,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: const <Widget>[
-                    Text(
-                      'MOD-04 · Priya',
-                      style: TextStyle(
-                        color: AppColors.moderatorTextPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Moderator',
-                      style: TextStyle(
-                        color: AppColors.moderatorTextFaint,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: AppColors.gradientCyan,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ],
-          ),
+          const SidebarLogoutButton(color: AppColors.adminPinkLight),
         ],
       ),
     );

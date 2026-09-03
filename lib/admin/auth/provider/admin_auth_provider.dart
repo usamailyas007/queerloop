@@ -95,14 +95,11 @@ class AdminAuthProvider extends ChangeNotifier {
 
   // ── Sign out ──────────────────────────────────────────────────────────────
 
+  /// Hits POST /auth/logout, then clears the session — which flips [status] to
+  /// [AdminAuthStatus.signedOut] so the router shows the login screen.
   Future<void> signOut() async {
-    try {
-      await _service.signOut(refreshToken: _refreshToken);
-    } on ApiException catch (_) {
-      // Best-effort logout — clear local state regardless.
-    } finally {
-      _clearSession();
-    }
+    await _service.signOut(refreshToken: _refreshToken);
+    _clearSession();
   }
 
   // ── Error management ──────────────────────────────────────────────────────
