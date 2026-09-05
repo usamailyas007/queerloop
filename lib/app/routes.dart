@@ -8,9 +8,11 @@ import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/password_reset_success_screen.dart';
 import '../features/auth/screens/register_screen.dart';
 import '../features/auth/screens/verify_code_screen.dart';
+import '../features/auth/screens/verify_email_otp_screen.dart';
 import '../features/home/screens/home_screen.dart';
 import '../features/profile_setup/screens/all_communities_screen.dart';
 import '../features/profile_setup/screens/allow_messages_from_screen.dart';
+import '../features/profile_setup/screens/interests_onboarding_screen.dart';
 import '../features/profile_setup/screens/profile_setup_flow_screen.dart';
 import '../features/profile_setup/screens/profile_visibility_screen.dart';
 import '../features/profile/screens/edit_profile_screen.dart';
@@ -25,6 +27,7 @@ abstract final class AppRoutes {
   static const String register = '/register';
   static const String forgotPassword = '/forgot-password';
   static const String verifyCode = '/verify-code';
+  static const String verifyEmailOtp = '/verify-email-otp';
   static const String codeExpired = '/code-expired';
   static const String createNewPassword = '/create-new-password';
   static const String passwordResetSuccess = '/password-reset-success';
@@ -33,6 +36,7 @@ abstract final class AppRoutes {
   static const String allCommunities = '/all-communities';
   static const String allowMessagesFrom = '/allow-messages-from';
   static const String profileVisibility = '/profile-visibility';
+  static const String interestsOnboarding = '/interests-onboarding';
   static const String home = '/home';
   static const String settings = '/settings';
   static const String editProfile = '/edit-profile';
@@ -44,6 +48,7 @@ abstract final class AppRoutes {
         register: (BuildContext context) => const RegisterScreen(),
         forgotPassword: (BuildContext context) => const ForgotPasswordScreen(),
         verifyCode: (BuildContext context) => const VerifyCodeScreen(),
+        verifyEmailOtp: (BuildContext context) => const VerifyEmailOtpScreen(),
         createNewPassword: (BuildContext context) =>
             const CreateNewPasswordScreen(),
         passwordResetSuccess: (BuildContext context) =>
@@ -58,6 +63,8 @@ abstract final class AppRoutes {
             const AllowMessagesFromScreen(),
         profileVisibility: (BuildContext context) =>
             const ProfileVisibilityScreen(),
+        interestsOnboarding: (BuildContext context) =>
+            const InterestsOnboardingScreen(),
         settings: (BuildContext context) => const SettingsScreen(),
         editProfile: (BuildContext context) => const EditProfileScreen(),
       };

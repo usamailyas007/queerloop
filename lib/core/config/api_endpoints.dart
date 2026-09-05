@@ -11,6 +11,8 @@ abstract final class ApiEndpoints {
   static const String me = '/auth/me';
   static const String sessions = '/auth/sessions';
   static const String verifyAge = '/auth/verify-age';
+  static const String verifyEmail = '/auth/verify-email';
+  static const String verifyEmailResend = '/auth/verify-email/resend';
 
   // ── Auth › Password Reset ─────────────────────────────────────────────────
   static const String passwordResetRequest = '/auth/password-reset/request';

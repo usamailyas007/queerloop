@@ -26,6 +26,8 @@ class AuthProvider extends ChangeNotifier {
   User? _user;
   String? _refreshToken;
   String? _error;
+  String? _errorCode;
+  int? _retryAfterSeconds;
   bool _isBusy = false;
 
   // ── Public getters ────────────────────────────────────────────────────────
@@ -34,6 +36,8 @@ class AuthProvider extends ChangeNotifier {
   User? get user => _user;
   String? get userId => _user?.id;
   String? get error => _error;
+  String? get errorCode => _errorCode;
+  int? get retryAfterSeconds => _retryAfterSeconds;
   bool get isBusy => _isBusy;
   bool get isSignedIn => _status == AuthStatus.signedIn;
 
@@ -70,6 +74,8 @@ class AuthProvider extends ChangeNotifier {
     }
     if (!isValidEmail(email) || password.isEmpty) {
       _error = 'Enter a valid email and password.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
       notifyListeners();
       return false;
     }
@@ -77,18 +83,103 @@ class AuthProvider extends ChangeNotifier {
     _setBusy(true);
 
     try {
-      final AuthSession session = await _service.register(
+      await _service.register(
         email: email.trim(),
         password: password,
+      );
+      _error = null;
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      _errorCode = failure.code;
+      _retryAfterSeconds = failure.retryAfterSeconds;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Unable to complete sign up. Please try again.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return false;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  // ── Verify Email OTP ──────────────────────────────────────────────────────
+
+  Future<bool> verifyEmailOtp({
+    required String email,
+    required String otp,
+    bool staySignedIn = false,
+  }) async {
+    if (_isBusy) return false;
+    if (otp.trim().length < 6) {
+      _error = 'Please enter a 6-digit verification code.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return false;
+    }
+
+    _setBusy(true);
+    try {
+      final AuthSession session = await _service.verifyEmail(
+        email: email.trim(),
+        otp: otp.trim(),
+        staySignedIn: staySignedIn,
       );
       _applySession(session);
       return true;
     } on ApiException catch (failure) {
       _error = failure.message;
+      _errorCode = failure.code;
+      _retryAfterSeconds = failure.retryAfterSeconds;
       notifyListeners();
       return false;
     } catch (e) {
-      _error = 'Unable to complete sign up. Please try again.';
+      _error = 'Invalid or expired verification code. Please try again.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return false;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  // ── Resend Email OTP ──────────────────────────────────────────────────────
+
+  Future<bool> resendEmailOtp(String email) async {
+    if (_isBusy) return false;
+    if (!isValidEmail(email)) {
+      _error = 'Enter a valid email address.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return false;
+    }
+
+    _setBusy(true);
+    try {
+      await _service.resendEmailOtp(email.trim());
+      _error = null;
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      _errorCode = failure.code;
+      _retryAfterSeconds = failure.retryAfterSeconds;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Failed to resend code. Please try again.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
       notifyListeners();
       return false;
     } finally {
@@ -107,6 +198,8 @@ class AuthProvider extends ChangeNotifier {
     }
     if (!isValidEmail(email) || password.isEmpty) {
       _error = 'Enter a valid email and password.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
       notifyListeners();
       return false;
     }
@@ -122,10 +215,14 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (failure) {
       _error = failure.message;
+      _errorCode = failure.code;
+      _retryAfterSeconds = failure.retryAfterSeconds;
       notifyListeners();
       return false;
     } catch (e) {
       _error = 'Unable to log in. Please check your credentials and try again.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
       notifyListeners();
       return false;
     } finally {
@@ -243,10 +340,12 @@ class AuthProvider extends ChangeNotifier {
   // ── Error management ──────────────────────────────────────────────────────
 
   void clearError() {
-    if (_error == null) {
+    if (_error == null && _errorCode == null) {
       return;
     }
     _error = null;
+    _errorCode = null;
+    _retryAfterSeconds = null;
     notifyListeners();
   }
 

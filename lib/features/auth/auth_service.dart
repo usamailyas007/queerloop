@@ -23,13 +23,17 @@ class AuthService {
   final FlutterSecureStorage _storage;
 
   // ── Register ──────────────────────────────────────────────────────────────
-  Future<AuthSession> register({
+  Future<RegisterResponse> register({
     required String email,
     required String password,
   }) async {
     if (AppConfig.useMockApi) {
-      debugPrint('ℹ️ [AuthService] Mock API is ON. Returning mock register session.');
-      return _mockSession(email);
+      debugPrint('ℹ️ [AuthService] Mock API is ON. Returning mock register response.');
+      return RegisterResponse(
+        verificationRequired: true,
+        email: email,
+        message: 'Mock verification code sent.',
+      );
     }
 
     debugPrint('🚀 [AuthService] Sending Register request for: $email');
@@ -38,10 +42,70 @@ class AuthService {
       body: <String, dynamic>{'email': email, 'password': password},
     );
     debugPrint('📥 [AuthService] Register Response: $data');
+    if (data is Map<String, dynamic>) {
+      return RegisterResponse.fromJson(data);
+    }
+    return RegisterResponse(
+      verificationRequired: true,
+      email: email,
+      message: 'Verification code sent.',
+    );
+  }
+
+  // ── Verify Email OTP ──────────────────────────────────────────────────────
+  // POST /auth/verify-email
+  // Body: { email, otp, staySignedIn?, deviceLabel? }
+  // Returns: { accessToken, refreshToken, user: { ... } }
+
+  Future<AuthSession> verifyEmail({
+    required String email,
+    required String otp,
+    bool staySignedIn = false,
+    String? deviceLabel,
+  }) async {
+    if (AppConfig.useMockApi) {
+      debugPrint('ℹ️ [AuthService] Mock API is ON. Returning mock verify session.');
+      return _mockSession(email);
+    }
+
+    debugPrint('🚀 [AuthService] Verifying Email OTP for: $email (OTP: $otp)');
+    final Map<String, dynamic> body = <String, dynamic>{
+      'email': email.trim(),
+      'otp': otp.trim(),
+      'staySignedIn': staySignedIn,
+    };
+    if (deviceLabel != null && deviceLabel.isNotEmpty) {
+      body['deviceLabel'] = deviceLabel;
+    }
+
+    final dynamic data = await _client.post(
+      ApiEndpoints.verifyEmail,
+      body: body,
+    );
+    debugPrint('📥 [AuthService] Verify Email Response: $data');
     final AuthSession session =
         AuthSession.fromJson(data as Map<String, dynamic>);
     await _persistTokens(session);
     return session;
+  }
+
+  // ── Resend Email OTP ──────────────────────────────────────────────────────
+  // POST /auth/verify-email/resend
+  // Body: { email }
+  // Returns: { message }
+
+  Future<void> resendEmailOtp(String email) async {
+    if (AppConfig.useMockApi) {
+      debugPrint('ℹ️ [AuthService] Mock resendEmailOtp for $email');
+      return;
+    }
+
+    debugPrint('🚀 [AuthService] Resending Email OTP for: $email');
+    final dynamic data = await _client.post(
+      ApiEndpoints.verifyEmailResend,
+      body: <String, dynamic>{'email': email.trim()},
+    );
+    debugPrint('📥 [AuthService] Resend Email OTP Response: $data');
   }
 
   // ── Sign in ───────────────────────────────────────────────────────────────
@@ -217,4 +281,24 @@ class AuthService {
       refreshToken: 'mock-refresh-token',
     );
   }
+}
+
+class RegisterResponse {
+  const RegisterResponse({
+    required this.verificationRequired,
+    required this.email,
+    required this.message,
+  });
+
+  factory RegisterResponse.fromJson(Map<String, dynamic> json) {
+    return RegisterResponse(
+      verificationRequired: json['verificationRequired'] as bool? ?? true,
+      email: json['email'] as String? ?? '',
+      message: json['message'] as String? ?? '',
+    );
+  }
+
+  final bool verificationRequired;
+  final String email;
+  final String message;
 }

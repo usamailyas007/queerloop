@@ -56,6 +56,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!ok) {
       if (mounted) {
+        if (authProvider.errorCode == 'EMAIL_NOT_VERIFIED') {
+          final String email = _emailController.text.trim();
+          authProvider.resendEmailOtp(email);
+          AppSnackBar.showInfo(
+            context,
+            title: 'Verification Required',
+            subtitle:
+                'Please verify your email address before signing in. A new verification code has been sent.',
+          );
+          Navigator.pushNamed(
+            context,
+            AppRoutes.verifyEmailOtp,
+            arguments: email,
+          );
+          return;
+        }
+
         final String? errorMsg = authProvider.error;
         if (errorMsg != null && errorMsg.isNotEmpty) {
           AppSnackBar.showError(

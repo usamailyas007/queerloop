@@ -156,10 +156,25 @@ class ApiClient {
       _ => ApiErrorKind.unknown,
     };
 
+    final dynamic body = error.response?.data;
+    String? code;
+    int? retryAfterSeconds;
+    if (body is Map) {
+      if (body['code'] is String) {
+        code = body['code'] as String;
+      }
+      if (body['retryAfterSeconds'] is num) {
+        retryAfterSeconds = (body['retryAfterSeconds'] as num).toInt();
+      }
+    }
+
     return ApiException(
-      _messageFor(kind, error.response?.data),
+      _messageFor(kind, body),
       statusCode: status,
       kind: kind,
+      code: code,
+      retryAfterSeconds: retryAfterSeconds,
+      data: body,
     );
   }
 

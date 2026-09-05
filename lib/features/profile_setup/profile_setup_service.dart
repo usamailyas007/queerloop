@@ -118,6 +118,26 @@ class ProfileSetupService {
     return UserProfile.fromJson(data as Map<String, dynamic>);
   }
 
+  // ── Onboarding — Interests ───────────────────────────────────────────────
+  // PATCH /users/:id  { interests: [] }
+
+  Future<UserProfile> saveInterests({
+    required String userId,
+    required List<String> interests,
+  }) async {
+    if (AppConfig.useMockApi) {
+      return UserProfile(id: userId, interests: interests);
+    }
+    debugPrint(
+        '🚀 [ProfileSetup] Saving Interests for user: $userId: $interests');
+    final dynamic data = await _client.patch(
+      ApiEndpoints.user(userId),
+      body: <String, dynamic>{'interests': interests},
+    );
+    debugPrint('📥 [ProfileSetup] Interests Response: $data');
+    return UserProfile.fromJson(data as Map<String, dynamic>);
+  }
+
   // ── Step 4 — Fetch communities ────────────────────────────────────────────
   // GET /communities
   // Returns: List<CommunityModel>
