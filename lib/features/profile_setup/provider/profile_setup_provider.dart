@@ -125,21 +125,14 @@ class ProfileSetupProvider extends ChangeNotifier {
   String get allowMessagesFrom => _formatPrivacyLabel(_allowMessagesFrom);
   String get profileVisibility => _formatPrivacyLabel(_profileVisibility);
 
-  static String _formatPrivacyLabel(String val) {
+  static String _formatPrivacyLabel(String? val) {
+    if (val == null || val.isEmpty) return 'Everyone';
     final String lower = val.toLowerCase().trim();
-    if (lower == 'everyone') return 'Everyone';
-    if (lower == 'followers' ||
-        lower == 'people_you_follow' ||
-        lower == 'people you follow') {
-      return 'People you follow';
-    }
-    if (lower == 'mutuals' ||
-        lower == 'mutual_follows' ||
-        lower == 'mutual follows') {
-      return 'Mutual follows';
-    }
-    if (lower == 'nobody') return 'Nobody';
-    return val;
+    if (lower.contains('everyone')) return 'Everyone';
+    if (lower.contains('nobody')) return 'Nobody';
+    if (lower.contains('mutual')) return 'Mutual follows';
+    if (lower.contains('follow')) return 'People you follow';
+    return 'Everyone';
   }
 
   bool get isBusy => _isBusy;

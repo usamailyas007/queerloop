@@ -34,10 +34,23 @@ class _WhoCanCommentScreenState extends State<WhoCanCommentScreen> {
   }
 
   bool _isMatch(String option, String selection) {
-    if (option == selection) return true;
-    final String o = option.toLowerCase().replaceAll(' ', '_');
-    final String s = selection.toLowerCase().replaceAll(' ', '_');
-    return o == s;
+    final String o = option.toLowerCase().trim();
+    final String s = selection.toLowerCase().trim();
+    if (o == s) return true;
+    if (o.contains('everyone') && s.contains('everyone')) return true;
+    if (o.contains('nobody') && s.contains('nobody')) return true;
+
+    final bool isOptMutual = o.contains('mutual');
+    final bool isSelectedMutual = s.contains('mutual');
+    if (isOptMutual && isSelectedMutual) return true;
+    if (isOptMutual || isSelectedMutual) return false;
+
+    final bool isOptFollow = o.contains('follow');
+    final bool isSelectedFollow =
+        s.contains('follow') || s.contains('following');
+    if (isOptFollow && isSelectedFollow) return true;
+
+    return false;
   }
 
   @override

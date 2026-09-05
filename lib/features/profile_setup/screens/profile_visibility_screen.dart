@@ -20,8 +20,17 @@ class ProfileVisibilityScreen extends StatelessWidget {
     if (o == s) return true;
     if (o.contains('everyone') && s.contains('everyone')) return true;
     if (o.contains('nobody') && s.contains('nobody')) return true;
-    if (o.contains('mutual') && s.contains('mutual')) return true;
-    if (o.contains('follow') && s.contains('follow')) return true;
+
+    final bool isOptMutual = o.contains('mutual');
+    final bool isSelectedMutual = s.contains('mutual');
+    if (isOptMutual && isSelectedMutual) return true;
+    if (isOptMutual || isSelectedMutual) return false;
+
+    final bool isOptFollow = o.contains('follow');
+    final bool isSelectedFollow =
+        s.contains('follow') || s.contains('following');
+    if (isOptFollow && isSelectedFollow) return true;
+
     return false;
   }
 

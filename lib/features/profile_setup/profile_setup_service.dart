@@ -242,8 +242,8 @@ class ProfileSetupService {
     val = val.toLowerCase().trim();
     if (val.contains('everyone')) return 'everyone';
     if (val.contains('nobody')) return 'nobody';
-    if (val.contains('mutual')) return 'mutuals';
-    if (val.contains('follow')) return 'followers';
+    if (val.contains('mutual')) return 'mutual';
+    if (val.contains('follow')) return 'following';
     return val;
   }
 }

@@ -69,19 +69,11 @@ class ProfileProvider extends ChangeNotifier {
   static String formatPrivacyLabel(String? val) {
     if (val == null || val.isEmpty) return 'Everyone';
     final String lower = val.toLowerCase().trim();
-    if (lower == 'everyone') return 'Everyone';
-    if (lower == 'followers' ||
-        lower == 'people_you_follow' ||
-        lower == 'people you follow') {
-      return 'People you follow';
-    }
-    if (lower == 'mutuals' ||
-        lower == 'mutual_follows' ||
-        lower == 'mutual follows') {
-      return 'Mutual follows';
-    }
-    if (lower == 'nobody') return 'Nobody';
-    return val;
+    if (lower.contains('everyone')) return 'Everyone';
+    if (lower.contains('nobody')) return 'Nobody';
+    if (lower.contains('mutual')) return 'Mutual follows';
+    if (lower.contains('follow')) return 'People you follow';
+    return 'Everyone';
   }
 
   // ── GET /users/:id ─────────────────────────────────────────────────────────
@@ -275,8 +267,8 @@ class ProfileProvider extends ChangeNotifier {
     val = val.toLowerCase().trim();
     if (val.contains('everyone')) return 'everyone';
     if (val.contains('nobody')) return 'nobody';
-    if (val.contains('mutual')) return 'mutuals';
-    if (val.contains('follow')) return 'followers';
+    if (val.contains('mutual')) return 'mutual';
+    if (val.contains('follow')) return 'following';
     return val;
   }
 
