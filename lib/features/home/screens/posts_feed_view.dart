@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../models/post_item_model.dart';
 import '../provider/home_feed_provider.dart';
 import '../widgets/comments_bottom_sheet.dart';
@@ -15,13 +16,20 @@ class PostsFeedView extends StatelessWidget {
 
   final VoidCallback? onGuestActionTriggered;
 
-  void _showCommentsSheet(BuildContext context, int totalComments) {
+  void _showCommentsSheet(
+      BuildContext context, String postId, int totalComments) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return CommentsBottomSheet(totalComments: totalComments);
+        return CommentsBottomSheet(
+          postId: postId,
+          totalComments: totalComments,
+          onCommentAdded: () {
+            context.read<HomeFeedProvider>().incrementCommentCount(postId);
+          },
+        );
       },
     );
   }
@@ -29,15 +37,6 @@ class PostsFeedView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final HomeFeedProvider provider = context.watch<HomeFeedProvider>();
-
-    if (provider.isFollowingEmpty) {
-      return HomeEmptyStateView(
-        onOpenExplore: () {
-          provider.setTopTab(TopTab.forYou);
-        },
-      );
-    }
-
     final List<PostItemModel> posts = provider.posts;
     final double topPadding = MediaQuery.of(context).padding.top + 105;
     final double viewPaddingBottom = MediaQuery.of(context).viewPadding.bottom;
@@ -46,40 +45,74 @@ class PostsFeedView extends StatelessWidget {
         viewPaddingBottom > paddingBottom ? viewPaddingBottom : paddingBottom;
     final double bottomPadding = 90 + systemBottomInset;
 
-    return ListView.builder(
-      padding: EdgeInsets.only(
-        top: topPadding,
-        bottom: bottomPadding,
-      ),
-      itemCount: posts.length,
-      itemBuilder: (context, index) {
-        final PostItemModel item = posts[index];
-
-        return PostFeedCard(
-          post: item,
-          onLikeToggle: () {
-            if (provider.isGuest) {
-              onGuestActionTriggered?.call();
-            } else {
-              provider.toggleLikePost(item.id);
-            }
-          },
-          onSaveToggle: () {
-            if (provider.isGuest) {
-              onGuestActionTriggered?.call();
-            } else {
-              provider.toggleSavePost(item.id);
-            }
-          },
-          onOpenComments: () {
-            if (provider.isGuest) {
-              onGuestActionTriggered?.call();
-            } else {
-              _showCommentsSheet(context, item.commentsCount);
-            }
-          },
+    if (posts.isEmpty) {
+      if (provider.isLoadingFeed) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const CircularProgressIndicator(
+                color: AppColors.gradientPink,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Loading posts...',
+                style: TextStyle(
+                  color: context.themeTextMuted,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         );
-      },
+      }
+      return HomeEmptyStateView(
+        onOpenExplore: () {
+          provider.setTopTab(TopTab.forYou);
+        },
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => provider.loadFeed(),
+      edgeOffset: topPadding,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          top: topPadding,
+          bottom: bottomPadding,
+        ),
+        itemCount: posts.length,
+        itemBuilder: (context, index) {
+          final PostItemModel item = posts[index];
+
+          return PostFeedCard(
+            post: item,
+            onLikeToggle: () {
+              if (provider.isGuest) {
+                onGuestActionTriggered?.call();
+              } else {
+                provider.toggleLikePost(item.id);
+              }
+            },
+            onSaveToggle: () {
+              if (provider.isGuest) {
+                onGuestActionTriggered?.call();
+              } else {
+                provider.toggleSavePost(item.id);
+              }
+            },
+            onOpenComments: () {
+              if (provider.isGuest) {
+                onGuestActionTriggered?.call();
+              } else {
+                _showCommentsSheet(context, item.id, item.commentsCount);
+              }
+            },
+          );
+        },
+      ),
     );
   }
 }

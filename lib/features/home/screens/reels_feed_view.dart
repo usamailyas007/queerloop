@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../models/reel_item_model.dart';
 import '../provider/home_feed_provider.dart';
 import '../widgets/comments_bottom_sheet.dart';
@@ -63,13 +64,20 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     );
   }
 
-  void _showCommentsSheet(BuildContext context, int totalComments) {
+  void _showCommentsSheet(
+      BuildContext context, String postId, int totalComments) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return CommentsBottomSheet(totalComments: totalComments);
+        return CommentsBottomSheet(
+          postId: postId,
+          totalComments: totalComments,
+          onCommentAdded: () {
+            context.read<HomeFeedProvider>().incrementCommentCount(postId);
+          },
+        );
       },
     );
   }
@@ -119,8 +127,33 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
   @override
   Widget build(BuildContext context) {
     final HomeFeedProvider provider = context.watch<HomeFeedProvider>();
+    final List<ReelItemModel> reels = widget.customReels ?? provider.reels;
 
-    if (widget.customReels == null && provider.isFollowingEmpty) {
+    if (reels.isEmpty) {
+      if (provider.isLoadingFeed) {
+        return Scaffold(
+          backgroundColor: Colors.black,
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const CircularProgressIndicator(
+                  color: AppColors.gradientPink,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Loading reels...',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return HomeEmptyStateView(
         onOpenExplore: () {
           provider.setTopTab(TopTab.forYou);
@@ -128,14 +161,15 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
       );
     }
 
-    final List<ReelItemModel> reels = widget.customReels ?? provider.reels;
-
     return PageView.builder(
       controller: _pageController,
       scrollDirection: Axis.vertical,
       itemCount: reels.length,
       onPageChanged: (int index) {
         setState(() => _activePage = index);
+        if (index < reels.length) {
+          provider.recordView(reels[index].id);
+        }
       },
       itemBuilder: (context, index) {
         final ReelItemModel item = reels[index];
@@ -172,7 +206,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
             if (provider.isGuest) {
               widget.onGuestActionTriggered?.call();
             } else {
-              _showCommentsSheet(context, item.commentsCount);
+              _showCommentsSheet(context, item.id, item.commentsCount);
             }
           },
           onOpenShare: () {

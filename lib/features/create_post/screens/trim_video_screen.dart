@@ -10,6 +10,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../models/create_post_models.dart';
 import '../provider/create_post_provider.dart';
+import '../widgets/media_processing_dialog.dart';
 import '../widgets/media_thumbnail_widget.dart';
 import 'new_post_form_screen.dart';
 
@@ -97,79 +98,97 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
     final GalleryMediaItem? selectedItem = provider.selectedMedia;
     final bool isDark = context.isDarkMode;
 
-    return Scaffold(
-      backgroundColor: context.themeBackground,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            // ── Top Bar (Back, Title "Trim", Done button) ─────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg,
-                vertical: AppSpacing.md,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  // Circular Back Button <
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: Border.all(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (didPop) {
+          context.read<CreatePostProvider>().cancelMediaUpload();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: context.themeBackground,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              // ── Top Bar (Back, Title "Trim", Done button) ─────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.md,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                    // Circular Back Button <
+                    GestureDetector(
+                      onTap: () {
+                        context.read<CreatePostProvider>().cancelMediaUpload();
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
                           color: isDark
-                              ? Colors.white.withValues(alpha: 0.12)
-                              : context.themeBorder,
-                          width: 1.1,
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.transparent,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : context.themeBorder,
+                            width: 1.1,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.chevron_left_rounded,
+                          color: context.themeIcon,
+                          size: 24,
                         ),
                       ),
-                      child: Icon(
-                        Icons.chevron_left_rounded,
-                        color: context.themeIcon,
-                        size: 24,
+                    ),
+
+                    // Title
+                    Text(
+                      'Trim',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: context.themeTextPrimary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ),
 
-                  // Title
-                  Text(
-                    'Trim',
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: context.themeTextPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-
-                  // Done Button -> Navigates to NewPostFormScreen
-                  AppGradientButton(
-                    text: 'Done',
-                    onPressed: () {
-                      _controller?.pause();
-                      Navigator.push<void>(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => const NewPostFormScreen(),
-                        ),
-                      ).then((_) {
-                        if (mounted && _isPlaying) {
-                          _controller?.play();
+                    // Done Button -> Navigates to NewPostFormScreen
+                    AppGradientButton(
+                      text: 'Done',
+                      onPressed: () async {
+                        _controller?.pause();
+                        final bool success = await MediaProcessingDialog.show(
+                          context,
+                          isVideo: true,
+                        );
+                        if (success && context.mounted) {
+                          Navigator.push<void>(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const NewPostFormScreen(),
+                            ),
+                          ).then((_) {
+                            if (mounted && _isPlaying) {
+                              _controller?.play();
+                            }
+                          });
+                        } else if (!success && context.mounted) {
+                          context.read<CreatePostProvider>().cancelMediaUpload();
                         }
-                      });
-                    },
-                    height: 32,
-                    width: 70,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                  ),
-                ],
+                      },
+                      height: 32,
+                      width: 70,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                  ],
+                ),
               ),
-            ),
 
             const SizedBox(height: AppSpacing.sm),
 
@@ -349,9 +368,11 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
+}
+
 
 class _VideoTrimTimelineStrip extends StatefulWidget {
   const _VideoTrimTimelineStrip({

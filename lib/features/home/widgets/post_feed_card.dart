@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../auth/auth_provider.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../models/post_item_model.dart';
+import '../screens/profile_tab_screen.dart';
 import 'safety_bottom_sheet.dart';
 
 class PostFeedCard extends StatelessWidget {
@@ -44,26 +47,53 @@ class PostFeedCard extends StatelessWidget {
           // ── Header Row (Avatar + Handle + Pronouns/Time) ──
           GestureDetector(
             onTap: () {
-              Navigator.push<void>(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (_) => UserProfileScreen(
-                    username: post.username.replaceAll('@', ''),
-                    name: post.username.replaceAll('@', '').split('.').first,
-                    avatarAsset: post.avatarAsset,
+              final AuthProvider auth = context.read<AuthProvider>();
+              final String? currentUserId = auth.userId;
+              final String? authorId = post.authorId;
+
+              final bool isCurrentUser = authorId != null &&
+                  currentUserId != null &&
+                  authorId.trim().toLowerCase() ==
+                      currentUserId.trim().toLowerCase();
+
+              if (isCurrentUser) {
+                Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ProfileTabScreen(),
                   ),
-                ),
-              );
+                );
+              } else {
+                Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => UserProfileScreen(
+                      userId: post.authorId,
+                      username: post.username.replaceAll('@', ''),
+                      name: post.username.replaceAll('@', '').split('.').first,
+                      avatarAsset: post.avatarAsset,
+                    ),
+                  ),
+                );
+              }
             },
             child: Row(
               children: <Widget>[
                 ClipOval(
-                  child: Image.asset(
-                    post.avatarAsset,
-                    width: 40,
-                    height: 40,
-                    fit: BoxFit.cover,
-                  ),
+                  child: post.avatarAsset.startsWith('http')
+                      ? Image.network(
+                          post.avatarAsset,
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const Icon(Icons.person, size: 40),
+                        )
+                      : Image.asset(
+                          post.avatarAsset,
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                        ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -105,7 +135,30 @@ class PostFeedCard extends StatelessWidget {
           ),
 
           // ── Optional Post Attached Image ──────────────────────────────────
-          if (post.postImageAsset != null) ...<Widget>[
+          if (post.postImageUrl != null && post.postImageUrl!.isNotEmpty) ...<Widget>[
+            const SizedBox(height: AppSpacing.md),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.network(
+                post.postImageUrl!,
+                width: double.infinity,
+                height: 220,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    height: 220,
+                    width: double.infinity,
+                    color: context.isDarkMode ? Colors.white10 : Colors.black12,
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
+                },
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+          ] else if (post.postImageAsset != null) ...<Widget>[
             const SizedBox(height: AppSpacing.md),
             ClipRRect(
               borderRadius: BorderRadius.circular(16),

@@ -2,6 +2,7 @@
 // Uses selective notifyListeners() so only relevant widgets rebuild.
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_exception.dart';
@@ -14,11 +15,32 @@ class AuthProvider extends ChangeNotifier {
   AuthProvider({required ApiClient client, AuthService? service})
       : _client = client,
         _service = service ?? AuthService(client) {
-    _client.onUnauthorized = _clearSession;
+    _client.onUnauthorized = _handleUnauthorized;
+    _client.onTokenRefresh = _handleTokenRefresh;
   }
 
   final ApiClient _client;
   final AuthService _service;
+
+  Future<String?> _handleTokenRefresh() async {
+    final String? candidate =
+        (_refreshToken != null && _refreshToken!.trim().isNotEmpty)
+            ? _refreshToken
+            : await _service.getRefreshToken();
+    final String? newToken = await _service.refreshToken(candidate);
+    if (newToken != null && newToken.isNotEmpty) {
+      final String? newRefresh = await _service.getRefreshToken();
+      if (newRefresh != null && newRefresh.isNotEmpty) {
+        _refreshToken = newRefresh;
+      }
+      return newToken;
+    }
+    return null;
+  }
+
+  void _handleUnauthorized() {
+    _clearSession();
+  }
 
   // ── Private state ─────────────────────────────────────────────────────────
 
@@ -358,6 +380,9 @@ class AuthProvider extends ChangeNotifier {
     _refreshToken = session.refreshToken;
     _status = AuthStatus.signedIn;
     _error = null;
+    SharedPreferences.getInstance().then((SharedPreferences prefs) {
+      prefs.setBool('onboarding_seen', true);
+    }).catchError((_) {});
     notifyListeners();
   }
 
@@ -368,6 +393,7 @@ class AuthProvider extends ChangeNotifier {
     _refreshToken = null;
     _status = AuthStatus.signedOut;
     _error = null;
+    _service.clearAllLocalData();
     notifyListeners();
   }
 

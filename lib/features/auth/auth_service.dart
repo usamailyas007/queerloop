@@ -1,10 +1,10 @@
-// Auth service: all API calls for authentication.
-// Tokens are persisted to the device's secure enclave via flutter_secure_storage.
-
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/cache/cache_manager.dart';
 import '../../core/config/api_endpoints.dart';
 import '../../core/config/app_config.dart';
 import 'user.dart';
@@ -21,6 +21,9 @@ class AuthService {
 
   final ApiClient _client;
   final FlutterSecureStorage _storage;
+
+  Future<String?> getAccessToken() => _storage.read(key: _StorageKey.accessToken);
+  Future<String?> getRefreshToken() => _storage.read(key: _StorageKey.refreshToken);
 
   // ── Register ──────────────────────────────────────────────────────────────
   Future<RegisterResponse> register({
@@ -85,6 +88,7 @@ class AuthService {
     debugPrint('📥 [AuthService] Verify Email Response: $data');
     final AuthSession session =
         AuthSession.fromJson(data as Map<String, dynamic>);
+    _client.authToken = session.accessToken;
     await _persistTokens(session);
     return session;
   }
@@ -127,6 +131,7 @@ class AuthService {
     debugPrint('📥 [AuthService] Login Response: $data');
     final AuthSession session =
         AuthSession.fromJson(data as Map<String, dynamic>);
+    _client.authToken = session.accessToken;
     await _persistTokens(session);
     return session;
   }
@@ -196,8 +201,141 @@ class AuthService {
     debugPrint('📥 [AuthService] Password Reset Confirm Response: $data');
   }
 
-  // ── Sign out ──────────────────────────────────────────────────────────────
+  // ── Refresh Token ──────────────────────────────────────────────────────────
+  // POST /auth/refresh
+  // Body: { "refreshToken": "..." }
+  // Returns: { "accessToken": "...", "refreshToken"?: "..." }
+  Future<String?> refreshToken([String? explicitRefreshToken]) async {
+    final String? candidate =
+        (explicitRefreshToken != null && explicitRefreshToken.trim().isNotEmpty)
+            ? explicitRefreshToken.trim()
+            : await _storage.read(key: _StorageKey.refreshToken);
+    if (candidate == null || candidate.trim().isEmpty) {
+      debugPrint('⚠️ [AuthService] No refresh token found in secure storage or memory.');
+      return null;
+    }
 
+    final String cleanRefresh = candidate.trim();
+
+    if (AppConfig.useMockApi) {
+      const String mockAccess = 'mock-refreshed-access-token';
+      await _storage.write(key: _StorageKey.accessToken, value: mockAccess);
+      _client.authToken = mockAccess;
+      return mockAccess;
+    }
+
+    try {
+      debugPrint(
+          '🔄 [AuthService] Calling POST ${ApiEndpoints.refresh} to refresh token...');
+      final Dio refreshDio = Dio(
+        BaseOptions(
+          baseUrl: _client.baseUrl,
+          connectTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
+          headers: <String, String>{
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      Response<dynamic> response;
+      try {
+        response = await refreshDio.post<dynamic>(
+          ApiEndpoints.refresh,
+          data: <String, dynamic>{
+            'refreshToken': cleanRefresh,
+          },
+        );
+      } on DioException catch (dioErr) {
+        if (dioErr.response?.statusCode == 401 &&
+            _client.authToken != null &&
+            _client.authToken!.isNotEmpty) {
+          debugPrint(
+              '🔄 [AuthService] Refresh without header returned 401. Retrying with old accessToken Bearer...');
+          response = await refreshDio.post<dynamic>(
+            ApiEndpoints.refresh,
+            data: <String, dynamic>{
+              'refreshToken': cleanRefresh,
+            },
+            options: Options(
+              headers: <String, String>{
+                'Authorization': 'Bearer ${_client.authToken}',
+              },
+            ),
+          );
+        } else {
+          rethrow;
+        }
+      }
+
+      debugPrint(
+          '📥 [AuthService] Refresh Token Response [${response.statusCode}]: ${response.data}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        dynamic data = response.data;
+        if (data is Map<String, dynamic>) {
+          if (data['data'] is Map<String, dynamic>) {
+            data = data['data'] as Map<String, dynamic>;
+          } else if (data['tokens'] is Map<String, dynamic>) {
+            data = data['tokens'] as Map<String, dynamic>;
+          }
+          final String? newAccessToken = (data['accessToken'] as String?) ??
+              (data['token'] as String?) ??
+              (data['access_token'] as String?) ??
+              (data['jwt'] as String?);
+          final String? newRefreshToken = (data['refreshToken'] as String?) ??
+              (data['refresh_token'] as String?);
+
+          if (newAccessToken != null && newAccessToken.isNotEmpty) {
+            await _storage.write(
+              key: _StorageKey.accessToken,
+              value: newAccessToken,
+            );
+            _client.authToken = newAccessToken;
+
+            if (newRefreshToken != null && newRefreshToken.isNotEmpty) {
+              await _storage.write(
+                key: _StorageKey.refreshToken,
+                value: newRefreshToken,
+              );
+            }
+            debugPrint(
+                '🔑 [AuthService] Successfully refreshed and persisted new access token.');
+            return newAccessToken;
+          }
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('❌ [AuthService] Token refresh API error: $e');
+      return null;
+    }
+  }
+
+  // ── Clear All Local Data ──────────────────────────────────────────────────
+  Future<void> clearAllLocalData() async {
+    debugPrint(
+        '🧹 [AuthService] Clearing all local data (SecureStorage, SharedPreferences, Cache)...');
+    try {
+      await _storage.deleteAll();
+    } catch (e) {
+      debugPrint('⚠️ [AuthService] Error clearing secure storage: $e');
+    }
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    } catch (e) {
+      debugPrint('⚠️ [AuthService] Error clearing SharedPreferences: $e');
+    }
+    try {
+      await CacheManager.instance.clearAll();
+    } catch (e) {
+      debugPrint('⚠️ [AuthService] Error clearing CacheManager: $e');
+    }
+  }
+
+  // ── Sign out ──────────────────────────────────────────────────────────────
   Future<void> signOut({String? refreshToken}) async {
     final String? storedRefresh =
         refreshToken ?? await _storage.read(key: _StorageKey.refreshToken);
@@ -215,12 +353,10 @@ class AuthService {
             '⚠️ [AuthService] Logout API error (clearing local session): $e');
       }
     }
-    await _clearTokens();
+    await clearAllLocalData();
   }
 
   // ── Restore from secure storage ───────────────────────────────────────────
-  // Called once at startup; returns null if no token is stored.
-
   Future<AuthSession?> restoreSession() async {
     if (AppConfig.useMockApi) {
       return null;
@@ -228,40 +364,76 @@ class AuthService {
 
     final String? accessToken =
         await _storage.read(key: _StorageKey.accessToken);
-    if (accessToken == null || accessToken.isEmpty) {
-      return null;
-    }
-
-    // Verify the stored token is still valid by calling /auth/me.
-    final dynamic data = await _client.get(ApiEndpoints.me);
-    final User user = User.fromJson(data as Map<String, dynamic>);
-
-    // Re-read the refresh token to rebuild the full session object.
     final String? refreshToken =
         await _storage.read(key: _StorageKey.refreshToken);
 
-    return AuthSession(
-      user: user,
-      accessToken: accessToken,
-      refreshToken: refreshToken ?? '',
-    );
+    if ((accessToken == null || accessToken.isEmpty) &&
+        (refreshToken == null || refreshToken.isEmpty)) {
+      return null;
+    }
+
+    // 1. Try with existing accessToken
+    if (accessToken != null && accessToken.isNotEmpty) {
+      _client.authToken = accessToken;
+      try {
+        final dynamic data = await _client.get(ApiEndpoints.me);
+        final User user = User.fromJson(data as Map<String, dynamic>);
+        return AuthSession(
+          user: user,
+          accessToken: accessToken,
+          refreshToken: refreshToken ?? '',
+        );
+      } catch (e) {
+        debugPrint(
+            '⚠️ [AuthService] /auth/me failed with stored accessToken: $e');
+      }
+    }
+
+    // 2. AccessToken expired or invalid -> Attempt refresh with refreshToken
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      final String? newAccessToken = await this.refreshToken();
+      if (newAccessToken != null && newAccessToken.isNotEmpty) {
+        try {
+          _client.authToken = newAccessToken;
+          final dynamic data = await _client.get(ApiEndpoints.me);
+          final User user = User.fromJson(data as Map<String, dynamic>);
+          final String updatedRefresh =
+              await _storage.read(key: _StorageKey.refreshToken) ??
+                  refreshToken;
+          return AuthSession(
+            user: user,
+            accessToken: newAccessToken,
+            refreshToken: updatedRefresh,
+          );
+        } catch (e) {
+          debugPrint(
+              '❌ [AuthService] /auth/me failed even after token refresh: $e');
+        }
+      }
+    }
+
+    // 3. Both tokens expired / invalid -> Clear everything
+    debugPrint(
+        '⚠️ [AuthService] Unable to restore session. Clearing local storage.');
+    await clearAllLocalData();
+    return null;
   }
 
   // ── Token helpers ─────────────────────────────────────────────────────────
 
   Future<void> _persistTokens(AuthSession session) async {
+    debugPrint('💾 [AuthService] Persisting tokens to SecureStorage:');
+    debugPrint(
+        '   accessToken: ${session.accessToken.isNotEmpty ? "EXISTS (${session.accessToken.length} chars)" : "EMPTY"}');
+    debugPrint(
+        '   refreshToken: ${session.refreshToken.isNotEmpty ? "EXISTS (${session.refreshToken.length} chars)" : "EMPTY"}');
     await Future.wait(<Future<void>>[
-      _storage.write(
-          key: _StorageKey.accessToken, value: session.accessToken),
-      _storage.write(
-          key: _StorageKey.refreshToken, value: session.refreshToken),
-    ]);
-  }
-
-  Future<void> _clearTokens() async {
-    await Future.wait(<Future<void>>[
-      _storage.delete(key: _StorageKey.accessToken),
-      _storage.delete(key: _StorageKey.refreshToken),
+      if (session.accessToken.isNotEmpty)
+        _storage.write(
+            key: _StorageKey.accessToken, value: session.accessToken),
+      if (session.refreshToken.isNotEmpty)
+        _storage.write(
+            key: _StorageKey.refreshToken, value: session.refreshToken),
     ]);
   }
 

@@ -65,6 +65,33 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
               ),
               child: Row(
                 children: <Widget>[
+                  if (Navigator.canPop(context)) ...<Widget>[
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        margin: const EdgeInsets.only(right: AppSpacing.sm),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.transparent,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : context.themeBorder,
+                            width: 1.1,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.chevron_left_rounded,
+                          color: context.themeIcon,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ],
                   Text(
                     displayUsername,
                     style: AppTextStyles.titleLarge.copyWith(

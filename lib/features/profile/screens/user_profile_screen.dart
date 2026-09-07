@@ -11,6 +11,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
+import '../../create_post/models/create_post_models.dart';
 import '../../messages/models/message_models.dart';
 import '../../messages/screens/chat_screen.dart';
 import '../../profile_setup/models/profile_models.dart';
@@ -43,7 +44,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   int _selectedTabIndex = 1; // Default: Reels
   bool _isRequested = false; // Default: Not requested (shows Follow initially)
   bool _isFollowing = false; // Default: Not following (shows Follow initially)
+  bool _isLoading = false;
   UserProfile? _profile;
+  List<PostResponseModel> _authorPosts = <PostResponseModel>[];
 
   @override
   void initState() {
@@ -54,15 +57,46 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _fetchUserProfile(String userId) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final ApiClient client = context.read<ApiClient>();
+
     try {
-      final ApiClient client = context.read<ApiClient>();
+      debugPrint('🚀 [UserProfile] Calling GET ${ApiEndpoints.user(userId)}');
       final dynamic data = await client.get(ApiEndpoints.user(userId));
+      debugPrint('📥 [UserProfile] User profile response: $data');
+
       if (mounted && data is Map<String, dynamic>) {
         setState(() {
           _profile = UserProfile.fromJson(data);
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('❌ [UserProfile] Failed to fetch user profile: $e');
+    }
+
+    try {
+      final dynamic postsData =
+          await client.get(ApiEndpoints.postsByAuthor(userId));
+      if (mounted && postsData is List) {
+        setState(() {
+          _authorPosts = postsData
+              .whereType<Map<String, dynamic>>()
+              .map(PostResponseModel.fromJson)
+              .toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('⚠️ [UserProfile] Could not fetch author posts: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -75,7 +109,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final String currentBio = _profile?.bio ??
         (isPrivateAccount
             ? 'Private account.'
-            : 'Documenting recovery, one honest video at a time. Ask me anything about scar care.');
+            : (widget.userId != null ? '' : 'Documenting recovery, one honest video at a time.'));
     final String currentPronouns = _profile?.formattedPronouns ??
         (isPrivateAccount ? 'he / him' : '');
 
@@ -185,34 +219,41 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
             // ── Scrollable Profile Body ─────────────────────────────────────
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                children: <Widget>[
-                  // Profile Header & Stats Widget
-                  ProfileHeaderStatsWidget(
-                    avatarAsset: currentAvatar,
-                    name: currentName,
-                    bio: currentBio,
-                    postsCount: _profile?.postsCount != null
-                        ? '${_profile!.postsCount}'
-                        : (isPrivateAccount ? '64' : '402'),
-                    followersCount: _profile?.followersCount != null
-                        ? '${_profile!.followersCount}'
-                        : (isPrivateAccount ? '1,102' : '41.2K'),
-                    followingCount: _profile?.followingCount != null
-                        ? '${_profile!.followingCount}'
-                        : (isPrivateAccount ? '228' : '190'),
-                    onFollowersTap: () {},
-                    onFollowingTap: () {},
-                    pronounsPill: currentPronouns,
-                    pronounsList: _profile?.pronouns ??
-                        (isPrivateAccount
-                            ? const <String>[]
-                            : const <String>['they/them']),
-                    identityList: isPrivateAccount
-                        ? const <String>[]
-                        : const <String>['Transgender', 'Queer'],
-                    interestsList: _profile?.interests ?? const <String>[],
+              child: _isLoading && _profile == null
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.gradientPink,
+                      ),
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                      children: <Widget>[
+                        // Profile Header & Stats Widget
+                        ProfileHeaderStatsWidget(
+                          avatarAsset: currentAvatar,
+                          name: currentName,
+                          bio: currentBio,
+                          postsCount: _profile?.postsCount != null
+                              ? '${_profile!.postsCount}'
+                              : '${_authorPosts.length}',
+                          followersCount: _profile?.followersCount != null
+                              ? '${_profile!.followersCount}'
+                              : '0',
+                          followingCount: _profile?.followingCount != null
+                              ? '${_profile!.followingCount}'
+                              : '0',
+                          onFollowersTap: () {},
+                          onFollowingTap: () {},
+                          pronounsPill: currentPronouns,
+                          pronounsList: _profile?.pronouns ??
+                              (isPrivateAccount
+                                  ? const <String>[]
+                                  : const <String>[]),
+                          identityList: _profile?.interests ??
+                              (isPrivateAccount
+                                  ? const <String>[]
+                                  : const <String>[]),
+                          interestsList: _profile?.interests ?? const <String>[],
                     actionButtons: Row(
                       children: <Widget>[
                         Expanded(
@@ -379,73 +420,95 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                     // Tab 0: Posts Feed Cards
                     if (_selectedTabIndex == 0) ...<Widget>[
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: context.themeCardBackground,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: context.themeBorder,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Row(
+                      if (_authorPosts.isNotEmpty) ...<Widget>[
+                        for (final PostResponseModel post in _authorPosts) ...<Widget>[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                            padding: const EdgeInsets.all(AppSpacing.md),
+                            decoration: BoxDecoration(
+                              color: context.themeCardBackground,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: context.themeBorder,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                ClipOval(
-                                  child: Image.asset(
-                                    widget.avatarAsset,
-                                    width: 32,
-                                    height: 32,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.sm),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                Row(
                                   children: <Widget>[
-                                    Text(
-                                      '@${widget.username}',
-                                      style: AppTextStyles.titleSmall.copyWith(
-                                        color: context.themeTextPrimary,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 13,
-                                      ),
+                                    ClipOval(
+                                      child: currentAvatar.startsWith('http')
+                                          ? Image.network(
+                                              currentAvatar,
+                                              width: 32,
+                                              height: 32,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, _, _) =>
+                                                  const Icon(Icons.person, size: 32),
+                                            )
+                                          : Image.asset(
+                                              currentAvatar,
+                                              width: 32,
+                                              height: 32,
+                                              fit: BoxFit.cover,
+                                            ),
                                     ),
-                                    Text(
-                                      'they/them • 18m',
-                                      style: AppTextStyles.caption.copyWith(
-                                        color: context.themeTextMuted,
-                                        fontSize: 11,
-                                      ),
+                                    const SizedBox(width: AppSpacing.sm),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(
+                                          currentUsername.startsWith('@')
+                                              ? currentUsername
+                                              : '@$currentUsername',
+                                          style: AppTextStyles.titleSmall.copyWith(
+                                            color: context.themeTextPrimary,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        if (post.createdAt != null)
+                                          Text(
+                                            post.createdAt!,
+                                            style: AppTextStyles.caption.copyWith(
+                                              color: context.themeTextMuted,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ],
                                 ),
+                                if (post.body.isNotEmpty) ...<Widget>[
+                                  const SizedBox(height: AppSpacing.md),
+                                  Text(
+                                    post.body,
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      color: context.themeTextPrimary,
+                                      fontSize: 13,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
-                            const SizedBox(height: AppSpacing.md),
-                            Text(
-                              'Told my grandma about Dev over the phone and she said "finally, you sounded lonely in December." Eleven months of rehearsing a speech for nothing.',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: context.themeTextPrimary,
-                                fontSize: 13,
-                                height: 1.35,
+                          ),
+                        ],
+                      ] else ...<Widget>[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl),
+                          child: Center(
+                            child: Text(
+                              'No posts yet.',
+                              style: TextStyle(
+                                color: context.themeTextMuted,
+                                fontSize: 14,
                               ),
                             ),
-                            const SizedBox(height: AppSpacing.md),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: Image.asset(
-                                AppImages.searchResult2,
-                                width: double.infinity,
-                                height: 180,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
 
                     // Tab 1: Reels Grid

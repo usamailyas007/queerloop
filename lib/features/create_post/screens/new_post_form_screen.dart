@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +12,7 @@ import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../home/provider/home_feed_provider.dart';
 import '../models/create_post_models.dart';
@@ -21,7 +23,6 @@ import '../widgets/media_thumbnail_widget.dart';
 import '../widgets/select_community_bottom_sheet.dart';
 import 'post_success_screen.dart';
 
-/// Controller that highlights hashtags (#word) in cyan color like Image 5.
 class _HashtagTextEditingController extends TextEditingController {
   _HashtagTextEditingController({super.text});
 
@@ -77,6 +78,15 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
     final CreatePostProvider provider = context.read<CreatePostProvider>();
     _captionController =
         _HashtagTextEditingController(text: provider.caption);
+
+    // Auto-start upload if media is selected and in idle status
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          provider.selectedMedia != null &&
+          provider.uploadStatus == MediaUploadStatus.idle) {
+        provider.startMediaUpload();
+      }
+    });
   }
 
   @override
@@ -85,39 +95,110 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
     super.dispose();
   }
 
-  void _publishPost(BuildContext context, CreatePostProvider provider) {
-    final HomeFeedProvider homeProvider = context.read<HomeFeedProvider>();
-    final GalleryMediaItem? item = provider.selectedMedia;
-
-    if (item != null && item.isVideo) {
-      final ReelItemModel newReel = ReelItemModel(
-        id: 'reel_${DateTime.now().millisecondsSinceEpoch}',
-        username: '@you',
-        pronounsTime: 'they/them · just now',
-        avatarAsset: AppImages.user1,
-        videoAsset:
-            item.videoAsset ?? (item.filePath ?? 'assets/videos/video1.mp4'),
-        videoFilePath: item.filePath,
-        caption: provider.caption,
-        likesCount: 0,
-        commentsCount: 0,
-        tags: provider.tags.isNotEmpty
-            ? provider.tags
-            : <String>[provider.selectedCommunity],
-        durationText:
-            '0:${provider.selectedDurationSeconds.toString().padLeft(2, '0')}',
+  Future<void> _publishPost(
+      BuildContext context, CreatePostProvider provider) async {
+    // 1. Client-side gating: ensure media is ready
+    if (provider.selectedMedia != null && !provider.isMediaReady) {
+      if (provider.uploadStatus == MediaUploadStatus.failed) {
+        AppSnackBar.showError(
+          context,
+          title: 'Upload Failed',
+          subtitle:
+              provider.uploadError ?? 'Please retry uploading your media.',
+        );
+        return;
+      }
+      AppSnackBar.showInfo(
+        context,
+        title: 'Processing Media',
+        subtitle: provider.uploadStatus == MediaUploadStatus.transcoding
+            ? 'AWS is transcoding your video. Ready in a few seconds.'
+            : 'Media is uploading, please wait...',
       );
-      homeProvider.addNewReel(newReel);
+      return;
     }
 
-    provider.resetPostForm();
+    // 2. Video 60-second limit check
+    if (provider.selectedMedia != null &&
+        provider.selectedMedia!.isVideo &&
+        !provider.isDurationWithinLimit) {
+      AppSnackBar.showError(
+        context,
+        title: 'Video Too Long',
+        subtitle:
+            'Video limit is 60 seconds for testing. Please adjust trimming.',
+      );
+      return;
+    }
 
-    Navigator.push<void>(
-      context,
-      MaterialPageRoute<void>(
-        builder: (_) => const PostSuccessScreen(),
-      ),
-    );
+    try {
+      final PostResponseModel? postResult = await provider.publishPost();
+
+      if (!context.mounted) return;
+
+      final HomeFeedProvider homeProvider = context.read<HomeFeedProvider>();
+      final GalleryMediaItem? item = provider.selectedMedia;
+      final bool isVideo = (item != null && item.isVideo) ||
+          (provider.mediaType == MediaType.video);
+
+      if (isVideo) {
+        final ReelItemModel newReel = ReelItemModel(
+          id: postResult?.id ?? 'reel_${DateTime.now().millisecondsSinceEpoch}',
+          username: '@you',
+          pronounsTime: 'they/them · just now',
+          avatarAsset: AppImages.user1,
+          videoAsset:
+              item?.videoAsset ?? (item?.filePath ?? 'assets/videos/video1.mp4'),
+          videoFilePath: item?.filePath,
+          videoUrl: provider.uploadResult?.downloadUrl ?? provider.uploadResult?.url,
+          thumbnailUrl: provider.uploadResult?.thumbnailUrl,
+          caption: provider.caption,
+          likesCount: 0,
+          commentsCount: 0,
+          tags: provider.tags.isNotEmpty
+              ? provider.tags
+              : <String>[provider.selectedCommunity],
+          durationText:
+              '0:${provider.selectedDurationSeconds.toString().padLeft(2, '0')}',
+        );
+        homeProvider.addNewReel(newReel);
+      } else {
+        final PostItemModel newPost = PostItemModel(
+          id: postResult?.id ?? 'post_${DateTime.now().millisecondsSinceEpoch}',
+          username: '@you',
+          pronounsTime: 'they/them · just now',
+          avatarAsset: AppImages.user4,
+          content: provider.caption,
+          likesCount: 0,
+          commentsCount: 0,
+          postImageAsset: (item != null && item.assetPath.isNotEmpty)
+              ? item.assetPath
+              : null,
+          postImageUrl: provider.uploadResult?.downloadUrl ?? provider.uploadResult?.url,
+          postType: item != null ? 'PHOTO' : 'TEXT',
+        );
+        homeProvider.addNewPost(newPost);
+      }
+
+      // Refresh live feed in background
+      homeProvider.loadFeed();
+
+      provider.resetPostForm();
+
+      Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => const PostSuccessScreen(),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      AppSnackBar.showError(
+        context,
+        title: 'Publish Failed',
+        subtitle: e.toString().replaceAll('Exception:', '').trim(),
+      );
+    }
   }
 
   @override
@@ -128,9 +209,11 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
     return Scaffold(
       backgroundColor: context.themeBackground,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: <Widget>[
-            // ── Top Navigation Bar (Back, Title "New post") ────────────────
+            Column(
+              children: <Widget>[
+                // ── Top Navigation Bar (Back, Title "New post") ────────────────
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.lg,
@@ -323,7 +406,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: AppSpacing.xl),
+                   const SizedBox(height: AppSpacing.lg),
 
                   // ── Form Option 1: Community ─────────────────────────────
                   GestureDetector(
@@ -665,7 +748,9 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: AppGradientButton(
-                      text: 'Publish',
+                      text: provider.isPublishing ? 'Publishing...' : 'Publish',
+                      isEnabled: provider.canPublish,
+                      isLoading: provider.isPublishing,
                       onPressed: () => _publishPost(context, provider),
                     ),
                   ),
@@ -674,8 +759,96 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
             ),
           ],
         ),
-      ),
-    );
+
+        // ── Full-Screen Processing Overlay ───────────────────────
+        if (provider.uploadStatus == MediaUploadStatus.requestingUrl ||
+            provider.uploadStatus == MediaUploadStatus.uploading ||
+            provider.uploadStatus == MediaUploadStatus.transcoding ||
+            provider.uploadStatus == MediaUploadStatus.completing)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withValues(alpha: 0.65),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: Center(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xxl,
+                    ),
+                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    decoration: BoxDecoration(
+                      color: context.themeCardBackground,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: context.themeBorder,
+                        width: 1.2,
+                      ),
+                      boxShadow: <BoxShadow>[
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          blurRadius: 24,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Container(
+                          width: 64,
+                          height: 64,
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              colors: <Color>[
+                                AppColors.gradientPink.withValues(alpha: 0.2),
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
+                          child: const Center(
+                            child: SizedBox(
+                              width: 44,
+                              height: 44,
+                              child: CircularProgressIndicator(
+                                color: AppColors.gradientPink,
+                                strokeWidth: 3.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        Text(
+                          provider.selectedMedia?.isVideo == true
+                              ? 'Processing this video...'
+                              : 'Processing this image...',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.titleMedium.copyWith(
+                            color: context.themeTextPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 17,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          'Please wait a moment...',
+                          style: AppTextStyles.caption.copyWith(
+                            color: context.themeTextMuted,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  ),
+);
   }
 }
 
@@ -720,3 +893,4 @@ class _VisibilityOptionChip extends StatelessWidget {
     );
   }
 }
+

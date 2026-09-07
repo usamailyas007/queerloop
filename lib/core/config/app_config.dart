@@ -31,4 +31,19 @@ abstract final class AppConfig {
       'USE_MOCK_API must be false in a production build.',
     );
   }
+
+  /// Builds a full URL for a microservice with a specific port (e.g., 3014 for Media, 3013 for Content).
+  static String serviceUrl(int port, String path) {
+    if (baseUrl.isEmpty) return path;
+    try {
+      final Uri uri = Uri.parse(baseUrl);
+      if (uri.hasPort) {
+        return uri.replace(port: port, path: path).toString();
+      }
+      final String cleanBase = baseUrl.replaceAll(RegExp(r'/+$'), '');
+      return '$cleanBase$path';
+    } catch (_) {
+      return '$baseUrl$path';
+    }
+  }
 }

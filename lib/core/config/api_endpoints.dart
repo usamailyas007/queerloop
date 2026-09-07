@@ -66,4 +66,36 @@ abstract final class ApiEndpoints {
   /// Replace :id at call site: ApiEndpoints.joinCommunity('comm-id')
   static String joinCommunity(String communityId) =>
       '/communities/$communityId/join';
+
+  // ── Media Service ──────────────────────────────────────────────────────────
+  /// Request pre-signed S3 upload URL. POST /media/upload-url
+  static const String mediaUploadUrl = '/media/upload-url';
+
+  /// Complete upload (image-only / mock-mode). POST /media/:id/complete
+  static String mediaComplete(String id) => '/media/$id/complete';
+
+  /// Poll media status (e.g. ready / transcoding / failed). GET /media/:id
+  static String mediaStatus(String id) => '/media/$id';
+
+  // ── Content Service ────────────────────────────────────────────────────────
+  /// Create / list posts. POST / GET /posts
+  static const String posts = '/posts';
+
+  /// Read one post. GET /posts/:id
+  static String post(String id) => '/posts/$id';
+
+  /// List posts by author. GET /posts?authorId=:authorId
+  static String postsByAuthor(String authorId) => '/posts?authorId=$authorId';
+
+  /// Trending posts (video-only). GET /posts/trending
+  static const String trendingPosts = '/posts/trending';
+
+  /// Record a view on a post. POST /posts/:id/view
+  static String postView(String id) => '/posts/$id/view';
+
+  /// Like a post. POST /posts/:id/like · Unlike: DELETE /posts/:id/like
+  static String postLike(String id) => '/posts/$id/like';
+
+  /// Comments for a post. GET / POST /posts/:id/comments
+  static String postComments(String id) => '/posts/$id/comments';
 }

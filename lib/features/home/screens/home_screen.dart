@@ -48,7 +48,11 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        context.read<HomeFeedProvider>().setGuestMode(widget.isGuest);
+        final HomeFeedProvider feed = context.read<HomeFeedProvider>();
+        feed.setGuestMode(widget.isGuest);
+        if (feed.reels.isEmpty && feed.posts.isEmpty && !feed.isLoadingFeed) {
+          feed.loadFeed();
+        }
       }
     });
   }
