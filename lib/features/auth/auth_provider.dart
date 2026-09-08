@@ -27,13 +27,23 @@ class AuthProvider extends ChangeNotifier {
         (_refreshToken != null && _refreshToken!.trim().isNotEmpty)
             ? _refreshToken
             : await _service.getRefreshToken();
-    final String? newToken = await _service.refreshToken(candidate);
-    if (newToken != null && newToken.isNotEmpty) {
-      final String? newRefresh = await _service.getRefreshToken();
-      if (newRefresh != null && newRefresh.isNotEmpty) {
-        _refreshToken = newRefresh;
+    final RefreshTokenResult result =
+        await _service.refreshTokenDetailed(candidate);
+
+    if (result.isSuccess) {
+      if (result.refreshToken != null && result.refreshToken!.isNotEmpty) {
+        _refreshToken = result.refreshToken;
       }
-      return newToken;
+      return result.accessToken;
+    }
+
+    if (result.isInvalidToken) {
+      debugPrint(
+          '⛔ [AuthProvider] Refresh token is permanently invalid/expired (${result.errorMessage}). Evicting session.');
+      _clearSession();
+    } else {
+      debugPrint(
+          '⚠️ [AuthProvider] Transient error refreshing token (${result.errorMessage}). Retaining user session.');
     }
     return null;
   }

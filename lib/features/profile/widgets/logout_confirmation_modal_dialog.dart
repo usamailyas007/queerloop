@@ -73,21 +73,37 @@ class LogoutConfirmationModalDialog extends StatelessWidget {
                 gradient: AppColors.primaryGradientButton,
               ),
               child: ClipOval(
-                child: Image.asset(
-                  avatarAsset,
-                  width: 58,
-                  height: 58,
-                  fit: BoxFit.cover,
-                  errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) =>
-                      Container(
-                    color: context.themeChipBackground,
-                    child: Icon(
-                      Icons.person_rounded,
-                      color: context.themeIconMuted,
-                      size: 32,
-                    ),
-                  ),
-                ),
+                child: avatarAsset.startsWith('http')
+                    ? Image.network(
+                        avatarAsset,
+                        width: 58,
+                        height: 58,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          color: context.themeChipBackground,
+                          child: Icon(
+                            Icons.person_rounded,
+                            color: context.themeIconMuted,
+                            size: 32,
+                          ),
+                        ),
+                      )
+                    : Image.asset(
+                        avatarAsset.isNotEmpty
+                            ? avatarAsset
+                            : AppImages.user1,
+                        width: 58,
+                        height: 58,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          color: context.themeChipBackground,
+                          child: Icon(
+                            Icons.person_rounded,
+                            color: context.themeIconMuted,
+                            size: 32,
+                          ),
+                        ),
+                      ),
               ),
             ),
 

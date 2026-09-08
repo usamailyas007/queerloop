@@ -14,6 +14,7 @@ import '../../../core/widgets/app_outline_button.dart';
 import '../../create_post/models/create_post_models.dart';
 import '../../messages/models/message_models.dart';
 import '../../messages/screens/chat_screen.dart';
+import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/models/profile_models.dart';
 import '../widgets/profile_feed_tabs_widget.dart';
 import '../widgets/profile_header_stats_widget.dart';
@@ -47,6 +48,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _isLoading = false;
   UserProfile? _profile;
   List<PostResponseModel> _authorPosts = <PostResponseModel>[];
+  List<CommunityModel> _userCommunities = <CommunityModel>[];
 
   @override
   void initState() {
@@ -90,6 +92,44 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       }
     } catch (e) {
       debugPrint('⚠️ [UserProfile] Could not fetch author posts: $e');
+    }
+
+    try {
+      dynamic commData;
+      try {
+        commData = await client.get(ApiEndpoints.userCommunities(userId));
+      } catch (e) {
+        commData = await client.get(ApiEndpoints.userCommunitiesAlt(userId));
+      }
+      List<dynamic> rawList = <dynamic>[];
+      if (commData is List) {
+        rawList = commData;
+      } else if (commData is Map<String, dynamic>) {
+        if (commData['data'] is List) {
+          rawList = commData['data'] as List<dynamic>;
+        } else if (commData['communities'] is List) {
+          rawList = commData['communities'] as List<dynamic>;
+        }
+      }
+      final List<CommunityModel> comms = <CommunityModel>[];
+      for (final dynamic item in rawList) {
+        if (item is Map<String, dynamic>) {
+          final Map<String, dynamic> m =
+              (item['community'] is Map<String, dynamic>)
+                  ? item['community'] as Map<String, dynamic>
+                  : item;
+          comms.add(CommunityModel.fromJson(m).copyWith(isJoined: true));
+        } else if (item is String) {
+          comms.add(CommunityModel(id: item, name: item, isJoined: true));
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _userCommunities = comms;
+        });
+      }
+    } catch (e) {
+      debugPrint('⚠️ [UserProfile] Could not fetch user communities: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -249,11 +289,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               (isPrivateAccount
                                   ? const <String>[]
                                   : const <String>[]),
-                          identityList: _profile?.interests ??
-                              (isPrivateAccount
-                                  ? const <String>[]
-                                  : const <String>[]),
-                          interestsList: _profile?.interests ?? const <String>[],
+                          identityList: const <String>[],
+                          interestsList:
+                              _profile?.interests ?? const <String>[],
+                          communitiesList: _userCommunities,
                     actionButtons: Row(
                       children: <Widget>[
                         Expanded(

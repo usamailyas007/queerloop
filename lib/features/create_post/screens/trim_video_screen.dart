@@ -168,16 +168,12 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
                           isVideo: true,
                         );
                         if (success && context.mounted) {
-                          Navigator.push<void>(
+                          Navigator.pushReplacement<void, void>(
                             context,
                             MaterialPageRoute<void>(
                               builder: (_) => const NewPostFormScreen(),
                             ),
-                          ).then((_) {
-                            if (mounted && _isPlaying) {
-                              _controller?.play();
-                            }
-                          });
+                          );
                         } else if (!success && context.mounted) {
                           context.read<CreatePostProvider>().cancelMediaUpload();
                         }

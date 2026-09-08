@@ -269,12 +269,23 @@ class _UserAvatarItem extends StatelessWidget {
       child: Column(
         children: <Widget>[
           ClipOval(
-            child: Image.asset(
-              avatarAsset,
-              width: 48,
-              height: 48,
-              fit: BoxFit.cover,
-            ),
+            child: avatarAsset.startsWith('http')
+                ? Image.network(
+                    avatarAsset,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(Icons.person, size: 48),
+                  )
+                : Image.asset(
+                    avatarAsset.isNotEmpty ? avatarAsset : AppImages.user1,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(Icons.person, size: 48),
+                  ),
           ),
           const SizedBox(height: 6),
           Text(

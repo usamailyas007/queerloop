@@ -14,6 +14,8 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../home/provider/home_feed_provider.dart';
 import '../../home/screens/home_screen.dart';
+import '../../home/services/reel_video_preloader.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../auth_provider.dart';
 import '../widgets/auth_divider.dart';
 import '../widgets/auth_footer_link.dart';
@@ -31,6 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _staySignedIn = true;
+  bool _isPreloadingFeed = false;
 
   @override
   void dispose() {
@@ -49,6 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final AuthProvider authProvider = context.read<AuthProvider>();
+    setState(() => _isPreloadingFeed = true);
     final bool ok = await authProvider.signIn(
           email: _emailController.text.trim(),
           password: _passwordController.text,
@@ -56,6 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!ok) {
       if (mounted) {
+        setState(() => _isPreloadingFeed = false);
         if (authProvider.errorCode == 'EMAIL_NOT_VERIFIED') {
           final String email = _emailController.text.trim();
           authProvider.resendEmailOtp(email);
@@ -86,7 +91,46 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     if (!mounted) return;
-    context.read<HomeFeedProvider>().resetToHome();
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    homeFeed.resetToHome();
+
+    // 🚀 Wait and prefetch feed + buffer initial reel video + own profile so they appear instantly!
+    final String? uid = authProvider.userId;
+    final List<Future<dynamic>> warmUpTasks = <Future<dynamic>>[];
+
+    if (uid != null && uid.isNotEmpty) {
+      warmUpTasks.add(
+        context.read<ProfileProvider>().fetchProfile(uid).catchError((_) {}),
+      );
+    }
+
+    warmUpTasks.add(() async {
+      try {
+        await homeFeed.loadFeed();
+        if (homeFeed.reels.isNotEmpty) {
+          final firstReel = homeFeed.reels.first;
+          final controller =
+              await ReelVideoPreloader.instance.getOrCreate(firstReel);
+          if (controller != null && !controller.value.isInitialized) {
+            await controller.initialize().timeout(
+                  const Duration(seconds: 4),
+                  onTimeout: () => controller,
+                );
+          }
+          ReelVideoPreloader.instance.preloadSurrounding(homeFeed.reels, 0);
+        }
+      } catch (e) {
+        debugPrint('⚠️ [Login] Pre-fetching feed failed: $e');
+      }
+    }());
+
+    await Future.wait(warmUpTasks).timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => <dynamic>[],
+    );
+
+    if (!mounted) return;
+    setState(() => _isPreloadingFeed = false);
     _goHome(context);
   }
 
@@ -238,13 +282,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: AppSpacing.xl),
 
-                      // ── Login button — rebuilds only when isBusy flips
+                      // ── Login button — rebuilds when busy or preloading
                       Selector<AuthProvider, bool>(
                         selector: (_, AuthProvider p) => p.isBusy,
                         builder: (_, bool busy, _) => AppGradientButton(
                           text: l10n.authLogIn,
-                          isLoading: busy,
-                          onPressed: busy ? () {} : _submit,
+                          isLoading: busy || _isPreloadingFeed,
+                          onPressed: (busy || _isPreloadingFeed) ? () {} : _submit,
                         ),
                       ),
 

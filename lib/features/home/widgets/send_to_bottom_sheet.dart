@@ -351,12 +351,23 @@ class _ContactListTile extends StatelessWidget {
         child: Row(
           children: <Widget>[
             ClipOval(
-              child: Image.asset(
-                avatarAsset,
-                width: 40,
-                height: 40,
-                fit: BoxFit.cover,
-              ),
+              child: avatarAsset.startsWith('http')
+                  ? Image.network(
+                      avatarAsset,
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          const Icon(Icons.person, size: 40),
+                    )
+                  : Image.asset(
+                      avatarAsset.isNotEmpty ? avatarAsset : AppImages.user1,
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          const Icon(Icons.person, size: 40),
+                    ),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(

@@ -53,12 +53,11 @@ class _Step4ChooseCommunitiesScreenState
   Future<void> _handleContinue() async {
     final ProfileSetupProvider provider =
         context.read<ProfileSetupProvider>();
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    if (provider.joinedCount == 0) {
+    if (provider.joinedCount < 1) {
       AppSnackBar.showError(
         context,
         title: 'Community Required',
-        subtitle: l10n.profileSelectCommunityRequired,
+        subtitle: 'At least 1 community must remain selected.',
       );
       return;
     }
@@ -104,6 +103,9 @@ class _Step4ChooseCommunitiesScreenState
 
               Expanded(
                 child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -134,26 +136,61 @@ class _Step4ChooseCommunitiesScreenState
                       const SizedBox(height: AppSpacing.lg),
 
                       // ── Community Tiles ───────────────────────────────────────
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: communities.length > 7
-                            ? 7
-                            : communities.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: AppSpacing.md),
-                        itemBuilder: (context, index) {
-                          final CommunityModel item = communities[index];
-                          final bool isJoined =
-                              provider.joinedCommunityIds.contains(item.id);
+                      if (provider.isLoadingCommunities && communities.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 48),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.gradientPink,
+                              strokeWidth: 2.5,
+                            ),
+                          ),
+                        )
+                      else if (communities.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 32),
+                          child: Center(
+                            child: Text(
+                              'No communities found',
+                              style: TextStyle(
+                                color: context.themeTextSecondary,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: communities.length > 7
+                              ? 7
+                              : communities.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: AppSpacing.md),
+                          itemBuilder: (context, index) {
+                            final CommunityModel item = communities[index];
+                            final bool isJoined =
+                                provider.joinedCommunityIds.contains(item.id);
 
-                          return CommunityCardTile(
-                            community: item,
-                            isSelected: isJoined,
-                            onTap: () => provider.toggleCommunity(item.id),
-                          );
-                        },
-                      ),
+                            return CommunityCardTile(
+                              community: item,
+                              isSelected: isJoined,
+                              onTap: () {
+                                final bool toggled =
+                                    provider.toggleCommunity(item.id);
+                                if (!toggled) {
+                                  AppSnackBar.showError(
+                                    context,
+                                    title: 'Action Not Allowed',
+                                    subtitle:
+                                        'At least 1 community must remain selected.',
+                                  );
+                                }
+                              },
+                            );
+                          },
+                        ),
 
                       const SizedBox(height: AppSpacing.lg),
 

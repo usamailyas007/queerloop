@@ -6,9 +6,12 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../auth/auth_provider.dart';
 import '../../auth/widgets/auth_back_button.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../models/community_model.dart';
 import '../provider/profile_setup_provider.dart';
 import '../widgets/community_card_tile.dart';
@@ -22,13 +25,29 @@ class AllCommunitiesScreen extends StatefulWidget {
 
 class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
   final TextEditingController _searchController = TextEditingController();
+  bool _isJoining = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final ProfileProvider profile = context.read<ProfileProvider>();
+      final ProfileSetupProvider setupProvider =
+          context.read<ProfileSetupProvider>();
+      final AuthProvider auth = context.read<AuthProvider>();
+
+      setupProvider.fetchCommunities();
+
+      final String? uid = auth.userId ?? auth.user?.id;
+      if (profile.userCommunities.isEmpty && uid != null && uid.isNotEmpty) {
+        await profile.fetchUserCommunities(uid);
+      }
       if (mounted) {
-        context.read<ProfileSetupProvider>().fetchCommunities();
+        setupProvider.syncJoinedCommunities(
+          profile.userCommunities,
+          force: true,
+        );
       }
     });
   }
@@ -37,6 +56,46 @@ class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleJoin() async {
+    final ProfileSetupProvider provider =
+        context.read<ProfileSetupProvider>();
+    if (provider.joinedCount < 1) {
+      AppSnackBar.showError(
+        context,
+        title: 'Community Required',
+        subtitle: 'At least 1 community must remain selected.',
+      );
+      return;
+    }
+    final AuthProvider auth = context.read<AuthProvider>();
+    final ProfileProvider profileProvider = context.read<ProfileProvider>();
+    final NavigatorState navigator = Navigator.of(context);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+
+    setState(() => _isJoining = true);
+    final bool ok = await provider.saveStep4();
+    if (!mounted) return;
+    setState(() => _isJoining = false);
+    if (ok) {
+      final String? uid = auth.userId ?? auth.user?.id;
+      if (uid != null && uid.isNotEmpty) {
+        try {
+          await profileProvider.fetchUserCommunities(uid, forceRefresh: true);
+        } catch (_) {}
+      }
+      provider.setStep(4);
+      navigator.pop();
+    } else {
+      final String? err = provider.error;
+      AppSnackBar.showError(
+        context,
+        title: 'Join Failed',
+        subtitle: err ?? 'Failed to join communities.',
+        messenger: messenger,
+      );
+    }
   }
 
   @override
@@ -74,10 +133,12 @@ class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
 
               Expanded(
                 child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      // ── Search Field using AppTextField with searchSvg ────────
                       AppTextField(
                         controller: _searchController,
                         hintText: l10n.profileSearchCommunities,
@@ -87,25 +148,59 @@ class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
 
                       const SizedBox(height: AppSpacing.lg),
 
-                      // ── Full Community Tiles List ─────────────────────────────
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: communities.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: AppSpacing.md),
-                        itemBuilder: (context, index) {
-                          final CommunityModel item = communities[index];
-                          final bool isJoined =
-                              provider.joinedCommunityIds.contains(item.id);
+                      if (provider.isLoadingCommunities && communities.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 48),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.gradientPink,
+                              strokeWidth: 2.5,
+                            ),
+                          ),
+                        )
+                      else if (communities.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 32),
+                          child: Center(
+                            child: Text(
+                              'No communities found',
+                              style: TextStyle(
+                                color: context.themeTextSecondary,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: communities.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: AppSpacing.md),
+                          itemBuilder: (context, index) {
+                            final CommunityModel item = communities[index];
+                            final bool isJoined =
+                                provider.joinedCommunityIds.contains(item.id);
 
-                          return CommunityCardTile(
-                            community: item,
-                            isSelected: isJoined,
-                            onTap: () => provider.toggleCommunity(item.id),
-                          );
-                        },
-                      ),
+                            return CommunityCardTile(
+                              community: item,
+                              isSelected: isJoined,
+                              onTap: () {
+                                final bool toggled =
+                                    provider.toggleCommunity(item.id);
+                                if (!toggled) {
+                                  AppSnackBar.showError(
+                                    context,
+                                    title: 'Action Not Allowed',
+                                    subtitle:
+                                        'At least 1 community must remain selected.',
+                                  );
+                                }
+                              },
+                            );
+                          },
+                        ),
 
                       const SizedBox(height: AppSpacing.lg),
                     ],
@@ -113,7 +208,6 @@ class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
                 ),
               ),
 
-              // ── Fixed Bottom Button ────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.only(
                   top: AppSpacing.md,
@@ -121,12 +215,11 @@ class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
                 ),
                 child: AppGradientButton(
                   text: joinedCount > 0
-                      ? '${l10n.profileContinueBtn} · $joinedCount joined'
-                      : l10n.profileContinueBtn,
-                  onPressed: () {
-                    provider.setStep(4);
-                    Navigator.pop(context);
-                  },
+                      ? 'Save $joinedCount ${joinedCount == 1 ? 'Community' : 'Communities'}'
+                      : 'Select at least 1 community',
+                  isLoading: _isJoining,
+                  isEnabled: joinedCount >= 1 && !_isJoining,
+                  onPressed: _handleJoin,
                 ),
               ),
             ],

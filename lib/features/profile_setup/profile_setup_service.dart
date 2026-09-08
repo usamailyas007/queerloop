@@ -149,41 +149,95 @@ class ProfileSetupService {
     debugPrint('🚀 [ProfileSetup] Fetching communities (GET /communities)');
     final dynamic data = await _client.get(ApiEndpoints.communities);
     debugPrint('📥 [ProfileSetup] Communities received: $data');
+    List<dynamic> rawList = <dynamic>[];
     if (data is List) {
-      return data
-          .map((dynamic item) =>
-              CommunityModel.fromJson(item as Map<String, dynamic>))
-          .toList();
+      rawList = data;
+    } else if (data is Map<String, dynamic>) {
+      if (data['data'] is List) {
+        rawList = data['data'] as List<dynamic>;
+      } else if (data['communities'] is List) {
+        rawList = data['communities'] as List<dynamic>;
+      } else if (data['items'] is List) {
+        rawList = data['items'] as List<dynamic>;
+      }
     }
-    return <CommunityModel>[];
+    return rawList
+        .map((dynamic item) =>
+            CommunityModel.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   // ── Step 4 — Join a community ─────────────────────────────────────────────
-  // POST /communities/:communityId/join
-  // Returns: 201 (no body needed)
+  // POST /communities/join (Fallback: POST /communities/:id/join)
 
   Future<void> joinCommunity(String communityId) async {
     if (AppConfig.useMockApi) {
       return;
     }
     debugPrint(
-        '🚀 [ProfileSetup] Joining Community: $communityId (POST /communities/$communityId/join)');
-    await _client.post(ApiEndpoints.joinCommunity(communityId));
+        '🚀 [ProfileSetup] Joining Community: $communityId (POST ${ApiEndpoints.joinCommunities})');
+    try {
+      await _client.post(
+        ApiEndpoints.joinCommunities,
+        body: <String, dynamic>{
+          'communityIds': <String>[communityId],
+        },
+      );
+    } catch (_) {
+      await _client.post(ApiEndpoints.joinCommunity(communityId));
+    }
   }
 
   // ── Step 4 — Join multiple communities (batch) ────────────────────────────
+  // POST /communities/join
+  // Body: { "communityIds": [ "id1", "id2", ... ] }
 
   Future<void> joinCommunities(Iterable<String> communityIds) async {
     if (AppConfig.useMockApi || communityIds.isEmpty) {
       return;
     }
-    debugPrint('🚀 [ProfileSetup] Joining ${communityIds.length} Communities...');
-    // Fire all joins concurrently; collect failures but don't block on them.
-    final List<Future<void>> futures = communityIds
-        .map((String id) => joinCommunity(id))
-        .toList();
-    await Future.wait(futures, eagerError: false);
-    debugPrint('📥 [ProfileSetup] Finished joining communities');
+    final List<String> idList = communityIds.toList();
+    debugPrint(
+        '🚀 [ProfileSetup] Joining ${idList.length} Communities (POST ${ApiEndpoints.joinCommunities})...');
+    final dynamic response = await _client.post(
+      ApiEndpoints.joinCommunities,
+      body: <String, dynamic>{
+        'communityIds': idList,
+      },
+    );
+    debugPrint('📥 [ProfileSetup] Finished joining communities response: $response');
+  }
+
+  // ── Step 4 — Leave a community ────────────────────────────────────────────
+  // DELETE /communities/:id/leave
+
+  Future<void> leaveCommunity(String communityId) async {
+    if (AppConfig.useMockApi || communityId.isEmpty) {
+      return;
+    }
+    debugPrint(
+        '🚀 [ProfileSetup] Leaving Community: $communityId (DELETE ${ApiEndpoints.leaveCommunity(communityId)})');
+    try {
+      await _client.delete(ApiEndpoints.leaveCommunity(communityId));
+    } catch (e) {
+      debugPrint('⚠️ [ProfileSetup] Failed to leave community $communityId: $e');
+    }
+  }
+
+  // ── Step 4 — Leave multiple communities (batch) ───────────────────────────
+
+  Future<void> leaveCommunities(Iterable<String> communityIds) async {
+    if (AppConfig.useMockApi || communityIds.isEmpty) {
+      return;
+    }
+    final List<String> idList = communityIds.toList();
+    debugPrint(
+        '🚀 [ProfileSetup] Leaving ${idList.length} Communities...');
+    await Future.wait(
+      idList.map((String id) => leaveCommunity(id)),
+      eagerError: false,
+    );
+    debugPrint('📥 [ProfileSetup] Finished leaving communities');
   }
 
   // ── Step 5 — Privacy settings ─────────────────────────────────────────────

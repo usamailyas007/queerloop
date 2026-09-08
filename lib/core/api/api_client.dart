@@ -61,6 +61,11 @@ class ApiClient {
               req.path.contains('/auth/refresh');
 
           if (statusCode == 401 && !isAuthPath) {
+            final int retryCount = req.extra['retry_count'] as int? ?? 0;
+            if (retryCount >= 1) {
+              return handler.next(error);
+            }
+
             // 1. Check if token was already refreshed by another concurrent request
             final String currentHeader =
                 req.headers['Authorization'] as String? ?? '';
@@ -75,6 +80,7 @@ class ApiClient {
               debugPrint(
                   '🔄 [ApiClient] Token was already refreshed by another request. Retrying ${req.method} ${req.path} with current token...');
               try {
+                req.extra['retry_count'] = 1;
                 final Options options = Options(
                   method: req.method,
                   headers: Map<String, dynamic>.from(req.headers)
@@ -112,6 +118,7 @@ class ApiClient {
                   authToken = newToken;
                   debugPrint(
                       '🔄 [ApiClient] Retrying original request ${req.method} ${req.path} with refreshed token...');
+                  req.extra['retry_count'] = 1;
                   final Options options = Options(
                     method: req.method,
                     headers: Map<String, dynamic>.from(req.headers)
@@ -140,15 +147,9 @@ class ApiClient {
               } catch (retryError) {
                 debugPrint('❌ [ApiClient] Retry request failed: $retryError');
                 if (retryError is DioException) {
-                  if (retryError.response?.statusCode == 401) {
-                    onUnauthorized?.call();
-                  }
                   return handler.next(retryError);
                 }
               }
-              onUnauthorized?.call();
-            } else {
-              onUnauthorized?.call();
             }
           }
 

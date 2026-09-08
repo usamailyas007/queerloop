@@ -11,14 +11,17 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/api/api_exception.dart';
-import '../../../core/theme/app_images.dart';
+import '../../../core/cache/cache_manager.dart';
+import '../../../core/config/api_endpoints.dart';
 import '../models/community_model.dart';
 import '../models/profile_models.dart';
 import '../profile_setup_service.dart';
 
 class ProfileSetupProvider extends ChangeNotifier {
   ProfileSetupProvider({required ProfileSetupService service})
-      : _service = service;
+      : _service = service {
+    _loadCachedCommunities();
+  }
 
   final ProfileSetupService _service;
 
@@ -55,6 +58,7 @@ class ProfileSetupProvider extends ChangeNotifier {
 
   // ── Step 4 local state ────────────────────────────────────────────────────
   final Set<String> _joinedCommunityIds = <String>{};
+  final Set<String> _initialJoinedCommunityIds = <String>{};
   String _communitySearchQuery = '';
 
   final List<String> _secretTags = <String>[];
@@ -74,23 +78,38 @@ class ProfileSetupProvider extends ChangeNotifier {
   UserProfile? _savedProfile;
 
   // ── Available communities ─────────────────────────────────────────────────
-  List<CommunityModel> _allCommunities = const <CommunityModel>[
-    CommunityModel(id: 'lesbian', name: 'Lesbian', avatarAsset: AppImages.lesbian),
-    CommunityModel(id: 'gay', name: 'Gay', avatarAsset: AppImages.gay),
-    CommunityModel(id: 'bisexual', name: 'Bisexual', avatarAsset: AppImages.bisexual),
-    CommunityModel(id: 'transgender', name: 'Transgender', avatarAsset: AppImages.transgender),
-    CommunityModel(id: 'non_binary', name: 'Non-binary', avatarAsset: AppImages.nonBinary),
-    CommunityModel(id: 'queer', name: 'Queer', avatarAsset: AppImages.queer),
-    CommunityModel(id: 'pansexual', name: 'Pansexual', avatarAsset: AppImages.pansexual),
-    CommunityModel(id: 'asexual', name: 'Asexual / Ace', avatarAsset: AppImages.asexual),
-    CommunityModel(id: 'aromantic', name: 'Aromantic / Aro', avatarAsset: AppImages.aromantic),
-    CommunityModel(id: 'intersex', name: 'Intersex', avatarAsset: AppImages.intersex),
-    CommunityModel(id: 'genderfluid', name: 'Genderfluid', avatarAsset: AppImages.genderfluid),
-    CommunityModel(id: 'transmasc', name: 'Transmasc', avatarAsset: AppImages.transmasc),
-    CommunityModel(id: 'transfemme', name: 'Transfemme', avatarAsset: AppImages.transfemme),
-    CommunityModel(id: 'allies', name: 'LGBTQ+ Allies', avatarAsset: AppImages.allies),
-  ];
+  List<CommunityModel> _allCommunities = const <CommunityModel>[];
   bool _isLoadingCommunities = false;
+
+  void _loadCachedCommunities() {
+    try {
+      final dynamic cached = CacheManager.instance.get(ApiEndpoints.communities);
+      if (cached != null) {
+        List<dynamic> rawList = <dynamic>[];
+        if (cached is List) {
+          rawList = cached;
+        } else if (cached is Map<String, dynamic>) {
+          if (cached['data'] is List) {
+            rawList = cached['data'] as List<dynamic>;
+          } else if (cached['communities'] is List) {
+            rawList = cached['communities'] as List<dynamic>;
+          } else if (cached['items'] is List) {
+            rawList = cached['items'] as List<dynamic>;
+          }
+        }
+        if (rawList.isNotEmpty) {
+          _allCommunities = rawList
+              .map((dynamic item) =>
+                  CommunityModel.fromJson(item as Map<String, dynamic>))
+              .where((CommunityModel c) => c.name.isNotEmpty)
+              .toList();
+          _remapJoinedCommunityIdsToRemote();
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [ProfileSetup] Error reading cached communities: $e');
+    }
+  }
 
   // ── Public getters ────────────────────────────────────────────────────────
   bool get isLoadingCommunities => _isLoadingCommunities;
@@ -363,14 +382,130 @@ class ProfileSetupProvider extends ChangeNotifier {
   }
 
   // ── Step 4 local setters ──────────────────────────────────────────────────
+  List<CommunityModel>? _syncUserCommunities;
 
-  void toggleCommunity(String communityId) {
+  /// Synchronize joined communities from user profile.
+  /// If [force] is true, overrides any current local selections.
+  void syncJoinedCommunities(List<CommunityModel> userCommunities, {bool force = false}) {
+    _syncUserCommunities = List<CommunityModel>.from(userCommunities);
+    if (force || _joinedCommunityIds.isEmpty) {
+      _resolveJoinedCommunities();
+      _initialJoinedCommunityIds.clear();
+      _initialJoinedCommunityIds.addAll(_joinedCommunityIds);
+    }
+  }
+
+  void _resolveJoinedCommunities() {
+    if (_syncUserCommunities == null || _syncUserCommunities!.isEmpty) return;
+
+    final Set<String> matchedIds = <String>{};
+    for (final CommunityModel userComm in _syncUserCommunities!) {
+      // 1. Direct ID match in _allCommunities
+      final CommunityModel? matchById = _allCommunities
+          .cast<CommunityModel?>()
+          .firstWhere((c) => c != null && c.id.isNotEmpty && c.id == userComm.id, orElse: () => null);
+      if (matchById != null && matchById.id.isNotEmpty) {
+        matchedIds.add(matchById.id);
+        continue;
+      }
+
+      // 2. Name match in _allCommunities (case-insensitive)
+      final CommunityModel? matchByName = _allCommunities
+          .cast<CommunityModel?>()
+          .firstWhere(
+            (c) => c != null && c.name.trim().toLowerCase() == userComm.name.trim().toLowerCase(),
+            orElse: () => null,
+          );
+      if (matchByName != null && matchByName.id.isNotEmpty) {
+        matchedIds.add(matchByName.id);
+        continue;
+      }
+
+      // 3. Fallback: preserve userComm.id
+      if (userComm.id.isNotEmpty) {
+        matchedIds.add(userComm.id);
+      }
+    }
+
+    if (matchedIds.isNotEmpty) {
+      _joinedCommunityIds.clear();
+      _joinedCommunityIds.addAll(matchedIds);
+      notifyListeners();
+    }
+  }
+
+  void _remapJoinedCommunityIdsToRemote() {
+    if (_allCommunities.isEmpty) return;
+
+    if (_joinedCommunityIds.isEmpty && _syncUserCommunities != null && _syncUserCommunities!.isNotEmpty) {
+      _resolveJoinedCommunities();
+      _initialJoinedCommunityIds.clear();
+      _initialJoinedCommunityIds.addAll(_joinedCommunityIds);
+      return;
+    }
+
+    final Set<String> updated = <String>{};
+    for (final String id in _joinedCommunityIds) {
+      final bool directMatch = _allCommunities.any((c) => c.id == id);
+      if (directMatch) {
+        updated.add(id);
+        continue;
+      }
+
+      final CommunityModel? match = _allCommunities.cast<CommunityModel?>().firstWhere(
+        (c) =>
+            c != null &&
+            (c.name.trim().toLowerCase() == id.trim().toLowerCase() ||
+                (c.slug != null && c.slug!.trim().toLowerCase() == id.trim().toLowerCase())),
+        orElse: () => null,
+      );
+      if (match != null && match.id.isNotEmpty) {
+        updated.add(match.id);
+      } else {
+        updated.add(id);
+      }
+    }
+    _joinedCommunityIds.clear();
+    _joinedCommunityIds.addAll(updated);
+
+    final Set<String> updatedInitial = <String>{};
+    for (final String id in _initialJoinedCommunityIds) {
+      final bool directMatch = _allCommunities.any((c) => c.id == id);
+      if (directMatch) {
+        updatedInitial.add(id);
+        continue;
+      }
+
+      final CommunityModel? match = _allCommunities.cast<CommunityModel?>().firstWhere(
+        (c) =>
+            c != null &&
+            (c.name.trim().toLowerCase() == id.trim().toLowerCase() ||
+                (c.slug != null && c.slug!.trim().toLowerCase() == id.trim().toLowerCase())),
+        orElse: () => null,
+      );
+      if (match != null && match.id.isNotEmpty) {
+        updatedInitial.add(match.id);
+      } else {
+        updatedInitial.add(id);
+      }
+    }
+    _initialJoinedCommunityIds.clear();
+    _initialJoinedCommunityIds.addAll(updatedInitial);
+  }
+
+  /// Toggles community selection.
+  /// Returns `false` if unselecting is blocked because at least 1 community must remain joined.
+  bool toggleCommunity(String communityId) {
     if (_joinedCommunityIds.contains(communityId)) {
+      if (_joinedCommunityIds.length <= 1) {
+        return false;
+      }
       _joinedCommunityIds.remove(communityId);
     } else {
       _joinedCommunityIds.add(communityId);
     }
     notifyListeners();
+    return true;
   }
 
   void setSearchQuery(String query) {
@@ -412,6 +547,7 @@ class ProfileSetupProvider extends ChangeNotifier {
       debugPrint('⚠️ [ProfileSetup] Failed to fetch communities: $e');
     } finally {
       _isLoadingCommunities = false;
+      _remapJoinedCommunityIdsToRemote();
       notifyListeners();
     }
   }
@@ -423,11 +559,29 @@ class ProfileSetupProvider extends ChangeNotifier {
     _setBusy(true);
 
     try {
-      if (_joinedCommunityIds.isNotEmpty) {
+      final Set<String> toJoin =
+          _joinedCommunityIds.difference(_initialJoinedCommunityIds);
+      final Set<String> toLeave =
+          _initialJoinedCommunityIds.difference(_joinedCommunityIds);
+
+      final Set<String> finalJoin =
+          _initialJoinedCommunityIds.isEmpty ? _joinedCommunityIds : toJoin;
+
+      if (toLeave.isNotEmpty) {
         debugPrint(
-            '🚀 [ProfileSetup] Step 4: Joining ${_joinedCommunityIds.length} communities: $_joinedCommunityIds');
-        await _service.joinCommunities(_joinedCommunityIds);
+            '🚀 [ProfileSetup] Leaving ${toLeave.length} communities: $toLeave');
+        await _service.leaveCommunities(toLeave);
       }
+
+      if (finalJoin.isNotEmpty) {
+        debugPrint(
+            '🚀 [ProfileSetup] Joining ${finalJoin.length} communities: $finalJoin');
+        await _service.joinCommunities(finalJoin);
+      }
+
+      _initialJoinedCommunityIds.clear();
+      _initialJoinedCommunityIds.addAll(_joinedCommunityIds);
+
       _error = null;
       notifyListeners();
       return true;
@@ -436,7 +590,7 @@ class ProfileSetupProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _error = 'Failed to join communities.';
+      _error = 'Failed to update communities.';
       notifyListeners();
       return false;
     } finally {

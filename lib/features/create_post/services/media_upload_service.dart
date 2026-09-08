@@ -187,7 +187,7 @@ class MediaUploadService {
   Future<MediaUploadResult> pollUntilReady(
     String mediaId, {
     Duration interval = const Duration(seconds: 2),
-    Duration timeout = const Duration(minutes: 5),
+    Duration timeout = const Duration(seconds: 25),
     void Function(String status)? onStatusChange,
     bool Function()? isCancelled,
   }) async {
@@ -232,7 +232,11 @@ class MediaUploadService {
         debugPrint('📡 [MediaUpload] Status poll for $cleanId: $statusLower');
         onStatusChange?.call(current.status);
 
-        if (statusLower == 'ready') {
+        if (statusLower == 'ready' ||
+            statusLower == 'uploaded' ||
+            statusLower == 'completed' ||
+            statusLower == 'done' ||
+            statusLower == 'active') {
           return current;
         }
 

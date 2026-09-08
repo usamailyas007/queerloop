@@ -131,12 +131,25 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                 child: Row(
                   children: <Widget>[
                     ClipOval(
-                      child: Image.asset(
-                        widget.avatarAsset,
-                        width: 32,
-                        height: 32,
-                        fit: BoxFit.cover,
-                      ),
+                      child: widget.avatarAsset.startsWith('http')
+                          ? Image.network(
+                              widget.avatarAsset,
+                              width: 32,
+                              height: 32,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) =>
+                                  const Icon(Icons.person, size: 32),
+                            )
+                          : Image.asset(
+                              widget.avatarAsset.isNotEmpty
+                                  ? widget.avatarAsset
+                                  : AppImages.user1,
+                              width: 32,
+                              height: 32,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) =>
+                                  const Icon(Icons.person, size: 32),
+                            ),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(

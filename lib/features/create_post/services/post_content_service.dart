@@ -52,10 +52,11 @@ class PostContentService {
       'visibility': visibility,
     };
 
-    // Only send communityId if provided and valid UUID
+    // Only send communityId if provided and valid UUID or Mongo ObjectId
     if (communityId != null &&
-        RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
-            .hasMatch(communityId.trim())) {
+        (RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+                .hasMatch(communityId.trim()) ||
+            RegExp(r'^[0-9a-fA-F]{24}$').hasMatch(communityId.trim()))) {
       requestBody['communityId'] = communityId.trim();
     }
 

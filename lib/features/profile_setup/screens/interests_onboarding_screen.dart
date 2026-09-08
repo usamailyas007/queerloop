@@ -8,6 +8,7 @@ import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../auth/auth_provider.dart';
 import '../../home/provider/home_feed_provider.dart';
+import '../../home/services/reel_video_preloader.dart';
 import '../../profile/provider/profile_provider.dart';
 
 class InterestsOnboardingScreen extends StatefulWidget {
@@ -96,7 +97,43 @@ class _InterestsOnboardingScreenState extends State<InterestsOnboardingScreen> {
     }
 
     if (!mounted) return;
-    context.read<HomeFeedProvider>().resetToHome();
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    homeFeed.resetToHome();
+
+    // 🚀 Wait and prefetch feed + buffer initial reel video + own profile so they appear instantly!
+    final List<Future<dynamic>> warmUpTasks = <Future<dynamic>>[];
+    if (userId != null && userId.isNotEmpty) {
+      warmUpTasks.add(
+        context.read<ProfileProvider>().fetchProfile(userId).catchError((_) {}),
+      );
+    }
+    warmUpTasks.add(() async {
+      try {
+        await homeFeed.loadFeed();
+        if (homeFeed.reels.isNotEmpty) {
+          final firstReel = homeFeed.reels.first;
+          final controller =
+              await ReelVideoPreloader.instance.getOrCreate(firstReel);
+          if (controller != null && !controller.value.isInitialized) {
+            await controller.initialize().timeout(
+                  const Duration(seconds: 4),
+                  onTimeout: () => controller,
+                );
+          }
+          ReelVideoPreloader.instance.preloadSurrounding(homeFeed.reels, 0);
+        }
+      } catch (e) {
+        debugPrint('⚠️ [InterestsOnboarding] Pre-fetching feed failed: $e');
+      }
+    }());
+
+    await Future.wait(warmUpTasks).timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => <dynamic>[],
+    );
+
+    if (!mounted) return;
+    setState(() => _isSaving = false);
     Navigator.pushNamedAndRemoveUntil(
       context,
       AppRoutes.home,
@@ -104,8 +141,46 @@ class _InterestsOnboardingScreenState extends State<InterestsOnboardingScreen> {
     );
   }
 
-  void _handleSkip() {
-    context.read<HomeFeedProvider>().resetToHome();
+  Future<void> _handleSkip() async {
+    setState(() => _isSaving = true);
+    final String? userId = context.read<AuthProvider>().userId;
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    homeFeed.resetToHome();
+
+    // 🚀 Wait and prefetch feed + buffer initial reel video + own profile so they appear instantly!
+    final List<Future<dynamic>> warmUpTasks = <Future<dynamic>>[];
+    if (userId != null && userId.isNotEmpty) {
+      warmUpTasks.add(
+        context.read<ProfileProvider>().fetchProfile(userId).catchError((_) {}),
+      );
+    }
+    warmUpTasks.add(() async {
+      try {
+        await homeFeed.loadFeed();
+        if (homeFeed.reels.isNotEmpty) {
+          final firstReel = homeFeed.reels.first;
+          final controller =
+              await ReelVideoPreloader.instance.getOrCreate(firstReel);
+          if (controller != null && !controller.value.isInitialized) {
+            await controller.initialize().timeout(
+                  const Duration(seconds: 4),
+                  onTimeout: () => controller,
+                );
+          }
+          ReelVideoPreloader.instance.preloadSurrounding(homeFeed.reels, 0);
+        }
+      } catch (e) {
+        debugPrint('⚠️ [InterestsOnboarding] Pre-fetching feed failed: $e');
+      }
+    }());
+
+    await Future.wait(warmUpTasks).timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => <dynamic>[],
+    );
+
+    if (!mounted) return;
+    setState(() => _isSaving = false);
     Navigator.pushNamedAndRemoveUntil(
       context,
       AppRoutes.home,

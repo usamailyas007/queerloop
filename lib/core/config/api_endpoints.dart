@@ -63,9 +63,22 @@ abstract final class ApiEndpoints {
   /// List / create communities. GET / POST /communities
   static const String communities = '/communities';
 
+  /// Batch join communities. POST /communities/join
+  static const String joinCommunities = '/communities/join';
+
   /// Replace :id at call site: ApiEndpoints.joinCommunity('comm-id')
   static String joinCommunity(String communityId) =>
       '/communities/$communityId/join';
+
+  /// Leave a community. DELETE /communities/:id/leave
+  static String leaveCommunity(String communityId) =>
+      '/communities/$communityId/leave';
+
+  /// User joined communities. GET /users/:id/communities
+  static String userCommunities(String userId) => '/users/$userId/communities';
+
+  /// Alternative singular route fallback. GET /user/:id/communities
+  static String userCommunitiesAlt(String userId) => '/user/$userId/communities';
 
   // ── Media Service ──────────────────────────────────────────────────────────
   /// Request pre-signed S3 upload URL. POST /media/upload-url

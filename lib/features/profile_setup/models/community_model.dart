@@ -1,3 +1,5 @@
+import '../../../core/theme/app_images.dart';
+
 class CommunityModel {
   const CommunityModel({
     required this.id,
@@ -14,9 +16,17 @@ class CommunityModel {
   });
 
   factory CommunityModel.fromJson(Map<String, dynamic> json) {
+    final String name = json['name'] as String? ?? '';
+    final String? avatarFromJson = json['avatarAsset'] as String?;
+    final String avatarAsset =
+        (avatarFromJson != null && avatarFromJson.isNotEmpty)
+            ? avatarFromJson
+            : _matchAvatarAsset(name);
+
     return CommunityModel(
-      id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? '',
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      name: name,
+      avatarAsset: avatarAsset,
       slug: json['slug'] as String?,
       description: json['description'] as String?,
       imageUrl: json['imageUrl'] as String?,
@@ -25,6 +35,37 @@ class CommunityModel {
       createdAt: json['createdAt'] as String?,
       updatedAt: json['updatedAt'] as String?,
     );
+  }
+
+  static String _matchAvatarAsset(String name) {
+    final String lower = name.toLowerCase().trim();
+    if (lower.contains('lesbian')) return AppImages.lesbian;
+    if (lower.contains('gay')) return AppImages.gay;
+    if (lower.contains('bi')) return AppImages.bisexual;
+    if (lower.contains('transgender') || lower == 'trans') {
+      return AppImages.transgender;
+    }
+    if (lower.contains('non-binary') || lower.contains('nonbinary')) {
+      return AppImages.nonBinary;
+    }
+    if (lower.contains('queer')) return AppImages.queer;
+    if (lower.contains('pansexual') || lower.contains('pan')) {
+      return AppImages.pansexual;
+    }
+    if (lower.contains('asexual') || lower.contains('ace')) {
+      return AppImages.asexual;
+    }
+    if (lower.contains('aromantic') || lower.contains('aro')) {
+      return AppImages.aromantic;
+    }
+    if (lower.contains('intersex')) return AppImages.intersex;
+    if (lower.contains('genderfluid')) return AppImages.genderfluid;
+    if (lower.contains('transmasc')) return AppImages.transmasc;
+    if (lower.contains('transfemme')) return AppImages.transfemme;
+    if (lower.contains('allies') || lower.contains('ally')) {
+      return AppImages.allies;
+    }
+    return '';
   }
 
   final String id;

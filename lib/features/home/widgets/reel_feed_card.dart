@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:video_player/video_player.dart';
@@ -15,6 +13,7 @@ import '../../auth/auth_provider.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../models/reel_item_model.dart';
 import '../screens/profile_tab_screen.dart';
+import '../services/reel_video_preloader.dart';
 
 class ReelFeedCard extends StatefulWidget {
   const ReelFeedCard({
@@ -78,41 +77,62 @@ class _ReelFeedCardState extends State<ReelFeedCard>
       CurvedAnimation(parent: _animController, curve: Curves.elasticOut),
     );
 
-    // Video
-    _initVideo();
+    // Synchronous instant attach if preloader already has initialized controller
+    final VideoPlayerController? existing =
+        ReelVideoPreloader.instance.getExisting(widget.reel.id);
+    if (existing != null && existing.value.isInitialized) {
+      _videoController = existing;
+      _videoInitialized = true;
+      if (widget.isActive && !_isPaused) {
+        existing.play();
+      }
+    } else {
+      _initVideo();
+    }
   }
 
   Future<void> _initVideo() async {
-    try {
-      final String? filePath = widget.reel.videoFilePath;
-      final String? videoUrl = widget.reel.videoUrl;
-      final VideoPlayerController controller;
-      if (filePath != null && filePath.isNotEmpty) {
-        controller = VideoPlayerController.file(File(filePath));
-      } else if (videoUrl != null && videoUrl.isNotEmpty) {
-        controller = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
-      } else if (widget.reel.videoAsset.isNotEmpty) {
-        controller = VideoPlayerController.asset(widget.reel.videoAsset);
-      } else {
-        return;
-      }
-      _videoController = controller;
-      await controller.initialize();
-      if (_isDisposed || !mounted) {
-        controller.pause();
-        controller.dispose();
-        if (_videoController == controller) {
-          _videoController = null;
-        }
-        return;
-      }
-      controller.setLooping(true);
-      controller.setVolume(1.0);
+    final VideoPlayerController? existing =
+        ReelVideoPreloader.instance.getExisting(widget.reel.id);
+    if (existing != null && existing.value.isInitialized) {
+      if (_isDisposed || !mounted) return;
+      _videoController = existing;
       setState(() => _videoInitialized = true);
       if (widget.isActive && !_isPaused) {
-        controller.play();
+        existing.play();
       } else {
-        controller.pause();
+        existing.pause();
+      }
+      return;
+    }
+
+    try {
+      final VideoPlayerController? controller =
+          await ReelVideoPreloader.instance.getOrCreate(widget.reel);
+      if (_isDisposed || !mounted) return;
+      if (controller == null) return;
+
+      _videoController = controller;
+      if (controller.value.isInitialized) {
+        if (mounted) {
+          setState(() => _videoInitialized = true);
+        }
+        if (widget.isActive && !_isPaused) {
+          controller.play();
+        } else {
+          controller.pause();
+        }
+      } else {
+        void onReady() {
+          if (!_isDisposed && mounted && controller.value.isInitialized) {
+            controller.removeListener(onReady);
+            setState(() => _videoInitialized = true);
+            if (widget.isActive && !_isPaused) {
+              controller.play();
+            }
+          }
+        }
+        controller.addListener(onReady);
       }
     } catch (e) {
       debugPrint('Error initializing reel video: $e');
@@ -135,9 +155,6 @@ class _ReelFeedCardState extends State<ReelFeedCard>
 
   @override
   void deactivate() {
-    // Schedule pause after current build/layout/deactivation phase completes
-    // to prevent VideoProgressIndicator or other listeners from triggering
-    // setState() during the build cycle.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isDisposed && mounted) {
         _videoController?.pause();
@@ -149,21 +166,16 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   @override
   void didUpdateWidget(ReelFeedCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_videoInitialized || _videoController == null) return;
     if (widget.isActive && !oldWidget.isActive) {
-      if (!_isPaused) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!_isDisposed && mounted) {
-            _videoController?.play();
-          }
-        });
+      if (_videoInitialized && _videoController != null) {
+        if (!_isPaused) {
+          _videoController?.play();
+        }
+      } else {
+        _initVideo();
       }
     } else if (!widget.isActive && oldWidget.isActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!_isDisposed && mounted) {
-          _videoController?.pause();
-        }
-      });
+      _videoController?.pause();
     }
   }
 
@@ -171,11 +183,14 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   void dispose() {
     _isDisposed = true;
     WidgetsBinding.instance.removeObserver(this);
+    // Pause controller when swiping away without disposing instance managed by ReelVideoPreloader
     try {
-      _videoController?.dispose();
+      if (_videoController?.value.isPlaying == true) {
+        _videoController?.pause();
+      }
       _videoController = null;
     } catch (e) {
-      debugPrint('Error disposing reel video: $e');
+      debugPrint('Error pausing reel video: $e');
     }
     _animController.dispose();
     super.dispose();
@@ -217,6 +232,11 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   @override
   Widget build(BuildContext context) {
     final ReelItemModel item = widget.reel;
+    final String? currentUserId = context.watch<AuthProvider>().userId;
+    final bool isOwnReel = (item.authorId != null &&
+            currentUserId != null &&
+            item.authorId!.trim().toLowerCase() == currentUserId.trim().toLowerCase()) ||
+        item.username == '@you';
     final double viewPaddingBottom = MediaQuery.of(context).viewPadding.bottom;
     final double paddingBottom = MediaQuery.of(context).padding.bottom;
     final double systemBottomInset =
@@ -253,24 +273,15 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                 )
               : Container(
                   color: Colors.black,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: <Widget>[
-                      if (widget.reel.thumbnailUrl != null &&
-                          widget.reel.thumbnailUrl!.isNotEmpty)
-                        Image.network(
+                  child: widget.reel.thumbnailUrl != null &&
+                          widget.reel.thumbnailUrl!.isNotEmpty
+                      ? Image.network(
                           widget.reel.thumbnailUrl!,
                           fit: BoxFit.cover,
+                          gaplessPlayback: true,
                           errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                        ),
-                      const Center(
-                        child: CircularProgressIndicator(
-                          color: Colors.white30,
-                          strokeWidth: 2,
-                        ),
-                      ),
-                    ],
-                  ),
+                        )
+                      : const SizedBox.shrink(),
                 ),
 
           // ── 2. Top & Bottom Dark Gradient Overlay ─────────────────────────
@@ -658,6 +669,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                         ],
                       ),
                     ),
+                  if (!isOwnReel) ...<Widget>[
                     const SizedBox(width: 12),
                     AppFollowButton(
                       isFollowing: item.isFollowing,
@@ -665,7 +677,8 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                       onTap: widget.onFollowToggle,
                     ),
                   ],
-                ),
+                ],
+              ),
 
                 const SizedBox(height: 6),
 

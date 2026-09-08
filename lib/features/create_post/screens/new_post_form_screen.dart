@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
@@ -15,6 +14,9 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../home/provider/home_feed_provider.dart';
+import '../../profile/provider/profile_provider.dart';
+import '../../profile_setup/models/community_model.dart';
+import '../../profile_setup/provider/profile_setup_provider.dart';
 import '../models/create_post_models.dart';
 import '../provider/create_post_provider.dart';
 import '../widgets/add_tag_bottom_sheet.dart';
@@ -81,10 +83,27 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
 
     // Auto-start upload if media is selected and in idle status
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted &&
-          provider.selectedMedia != null &&
+      if (!mounted) return;
+      if (provider.selectedMedia != null &&
           provider.uploadStatus == MediaUploadStatus.idle) {
         provider.startMediaUpload();
+      }
+
+      final ProfileSetupProvider setupProvider =
+          context.read<ProfileSetupProvider>();
+      if (setupProvider.allCommunities.isEmpty) {
+        setupProvider.fetchCommunities();
+      }
+
+      if (provider.selectedCommunityId == null) {
+        final ProfileProvider profile = context.read<ProfileProvider>();
+        if (profile.userCommunities.isNotEmpty) {
+          final CommunityModel first = profile.userCommunities.first;
+          provider.setSelectedCommunity(first.name, id: first.id);
+        } else if (setupProvider.allCommunities.isNotEmpty) {
+          final CommunityModel first = setupProvider.allCommunities.first;
+          provider.setSelectedCommunity(first.name, id: first.id);
+        }
       }
     });
   }
@@ -162,6 +181,9 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
               '0:${provider.selectedDurationSeconds.toString().padLeft(2, '0')}',
         );
         homeProvider.addNewReel(newReel);
+        try {
+          context.read<ProfileProvider>().addUserReel(newReel);
+        } catch (_) {}
       } else {
         final PostItemModel newPost = PostItemModel(
           id: postResult?.id ?? 'post_${DateTime.now().millisecondsSinceEpoch}',
@@ -178,6 +200,9 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
           postType: item != null ? 'PHOTO' : 'TEXT',
         );
         homeProvider.addNewPost(newPost);
+        try {
+          context.read<ProfileProvider>().addUserPost(newPost);
+        } catch (_) {}
       }
 
       // Refresh live feed in background
@@ -337,49 +362,46 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
 
                       // Caption Box using AppTextField widget directly
                       Expanded(
-                        child: SizedBox(
-                          height: 106,
-                          child: AppTextField(
-                            controller: _captionController,
-                            hintText: 'Write a caption...',
-                            maxLines: 4,
-                            maxLength: CreatePostProvider.maxCaptionLength,
-                            onChanged: (String val) =>
-                                provider.updateCaption(val),
-                            suffixIcon: provider.tags.isNotEmpty
-                                ? Padding(
-                                    padding: const EdgeInsets.only(
-                                      right: 10,
-                                      top: 10,
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: provider.tags
-                                          .take(3)
-                                          .map(
-                                            (String tag) => Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 2,
-                                              ),
-                                              child: Text(
-                                                tag,
-                                                style: AppTextStyles.bodySmall
-                                                    .copyWith(
-                                                  color:
-                                                      AppColors.gradientCyan,
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 12,
-                                                ),
+                        child: AppTextField(
+                          controller: _captionController,
+                          hintText: 'Write a caption...',
+                          maxLines: 4,
+                          maxLength: CreatePostProvider.maxCaptionLength,
+                          onChanged: (String val) =>
+                              provider.updateCaption(val),
+                          suffixIcon: provider.tags.isNotEmpty
+                              ? Padding(
+                                  padding: const EdgeInsets.only(
+                                    right: 10,
+                                    top: 10,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.end,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: provider.tags
+                                        .take(3)
+                                        .map(
+                                          (String tag) => Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 2,
+                                            ),
+                                            child: Text(
+                                              tag,
+                                              style: AppTextStyles.bodySmall
+                                                  .copyWith(
+                                                color:
+                                                    AppColors.gradientCyan,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 12,
                                               ),
                                             ),
-                                          )
-                                          .toList(),
-                                    ),
-                                  )
-                                : null,
-                          ),
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                                )
+                              : null,
                         ),
                       ),
                     ],
@@ -411,13 +433,17 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                   // ── Form Option 1: Community ─────────────────────────────
                   GestureDetector(
                     onTap: () async {
-                      final String? selected =
+                      final CommunityModel? selected =
                           await SelectCommunityBottomSheet.show(
                         context,
                         currentCommunity: provider.selectedCommunity,
+                        currentCommunityId: provider.selectedCommunityId,
                       );
                       if (selected != null) {
-                        provider.setSelectedCommunity(selected);
+                        provider.setSelectedCommunity(
+                          selected.name,
+                          id: selected.id,
+                        );
                       }
                     },
                     child: Container(
@@ -748,7 +774,14 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: AppGradientButton(
-                      text: provider.isPublishing ? 'Publishing...' : 'Publish',
+                      text: provider.isPublishing
+                          ? 'Publishing...'
+                          : (provider.uploadStatus == MediaUploadStatus.transcoding
+                              ? 'Transcoding...'
+                              : (provider.uploadStatus == MediaUploadStatus.uploading ||
+                                      provider.uploadStatus == MediaUploadStatus.requestingUrl
+                                  ? 'Uploading...'
+                                  : 'Publish')),
                       isEnabled: provider.canPublish,
                       isLoading: provider.isPublishing,
                       onPressed: () => _publishPost(context, provider),
@@ -759,92 +792,6 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
             ),
           ],
         ),
-
-        // ── Full-Screen Processing Overlay ───────────────────────
-        if (provider.uploadStatus == MediaUploadStatus.requestingUrl ||
-            provider.uploadStatus == MediaUploadStatus.uploading ||
-            provider.uploadStatus == MediaUploadStatus.transcoding ||
-            provider.uploadStatus == MediaUploadStatus.completing)
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.65),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                child: Center(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xxl,
-                    ),
-                    padding: const EdgeInsets.all(AppSpacing.xl),
-                    decoration: BoxDecoration(
-                      color: context.themeCardBackground,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: context.themeBorder,
-                        width: 1.2,
-                      ),
-                      boxShadow: <BoxShadow>[
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.35),
-                          blurRadius: 24,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Container(
-                          width: 64,
-                          height: 64,
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(
-                              colors: <Color>[
-                                AppColors.gradientPink.withValues(alpha: 0.2),
-                                Colors.transparent,
-                              ],
-                            ),
-                          ),
-                          child: const Center(
-                            child: SizedBox(
-                              width: 44,
-                              height: 44,
-                              child: CircularProgressIndicator(
-                                color: AppColors.gradientPink,
-                                strokeWidth: 3.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        Text(
-                          provider.selectedMedia?.isVideo == true
-                              ? 'Processing this video...'
-                              : 'Processing this image...',
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.titleMedium.copyWith(
-                            color: context.themeTextPrimary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 17,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          'Please wait a moment...',
-                          style: AppTextStyles.caption.copyWith(
-                            color: context.themeTextMuted,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
       ],
     ),
   ),

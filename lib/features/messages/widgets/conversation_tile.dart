@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
+import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../profile/screens/user_profile_screen.dart';
@@ -59,12 +60,25 @@ class ConversationTile extends StatelessWidget {
                   ),
                   padding: EdgeInsets.all(conversation.hasStoryRing ? 2.0 : 0),
                   child: ClipOval(
-                    child: Image.asset(
-                      conversation.avatarAsset,
-                      width: 44,
-                      height: 44,
-                      fit: BoxFit.cover,
-                    ),
+                    child: conversation.avatarAsset.startsWith('http')
+                        ? Image.network(
+                            conversation.avatarAsset,
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) =>
+                                const Icon(Icons.person, size: 44),
+                          )
+                        : Image.asset(
+                            conversation.avatarAsset.isNotEmpty
+                                ? conversation.avatarAsset
+                                : AppImages.user1,
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) =>
+                                const Icon(Icons.person, size: 44),
+                          ),
                   ),
                 ),
               ),

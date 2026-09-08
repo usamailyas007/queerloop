@@ -16,11 +16,13 @@ class ProfileMediaGridWidget extends StatelessWidget {
       'assets/videos/video3.mp4',
       'assets/videos/video1.mp4',
     ],
+    this.customReels,
     this.showPlayCounts = true,
     super.key,
   });
 
   final List<String> videos;
+  final List<ReelItemModel>? customReels;
   final bool showPlayCounts;
 
   List<ReelItemModel> _buildProfileReels() {
@@ -51,9 +53,8 @@ class ProfileMediaGridWidget extends StatelessWidget {
     });
   }
 
-  void _openReelPlayer(BuildContext context, int initialIndex) {
-    final List<ReelItemModel> profileReels = _buildProfileReels();
-
+  void _openReelPlayer(
+      BuildContext context, int initialIndex, List<ReelItemModel> reelsList) {
     Navigator.push<void>(
       context,
       MaterialPageRoute<void>(
@@ -64,7 +65,7 @@ class ProfileMediaGridWidget extends StatelessWidget {
               // Fullscreen interactive video reel player
               ReelsFeedView(
                 initialPage: initialIndex,
-                customReels: profileReels,
+                customReels: reelsList,
                 hasBottomBar: false,
               ),
 
@@ -103,8 +104,152 @@ class ProfileMediaGridWidget extends StatelessWidget {
     );
   }
 
+  static String _formatCount(int count) {
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
+    return '$count';
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (customReels != null) {
+      final List<ReelItemModel> reelList = customReels!;
+
+      if (reelList.isEmpty) {
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Icon(
+                Icons.video_collection_outlined,
+                size: 44,
+                color: Colors.white30,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No reels yet',
+                style: AppTextStyles.titleMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Videos you create will be showcased here.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.caption.copyWith(
+                  color: Colors.white54,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          childAspectRatio: 0.75,
+        ),
+        itemCount: reelList.length,
+        itemBuilder: (BuildContext context, int index) {
+          final ReelItemModel item = reelList[index];
+
+          return GestureDetector(
+            onTap: () => _openReelPlayer(context, index, reelList),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  if (item.thumbnailUrl != null &&
+                      item.thumbnailUrl!.isNotEmpty)
+                    Image.network(
+                      item.thumbnailUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        color: const Color(0xFF1E1B26),
+                        child: const Center(
+                          child: Icon(
+                            Icons.play_circle_outline_rounded,
+                            color: Colors.white38,
+                            size: 32,
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (item.videoAsset.isNotEmpty)
+                    _VideoAssetThumbnailWidget(
+                      key: ValueKey<String>(
+                          'thumb_${index}_${item.videoAsset}'),
+                      videoAsset: item.videoAsset,
+                    )
+                  else
+                    Container(
+                      color: const Color(0xFF1E1B26),
+                      child: const Center(
+                        child: Icon(
+                          Icons.play_circle_outline_rounded,
+                          color: Colors.white38,
+                          size: 32,
+                        ),
+                      ),
+                    ),
+
+                  // Dark gradient bottom overlay
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: <Color>[
+                          Colors.transparent,
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.65),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  if (showPlayCounts)
+                    Positioned(
+                      bottom: 6,
+                      left: 6,
+                      child: Row(
+                        children: <Widget>[
+                          const Icon(
+                            Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            _formatCount(item.likesCount > 0 ? item.likesCount : 0),
+                            style: AppTextStyles.caption.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    final List<ReelItemModel> defaultReels = _buildProfileReels();
+
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -119,7 +264,7 @@ class ProfileMediaGridWidget extends StatelessWidget {
         final String videoPath = videos[index % videos.length];
 
         return GestureDetector(
-          onTap: () => _openReelPlayer(context, index),
+          onTap: () => _openReelPlayer(context, index, defaultReels),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Stack(

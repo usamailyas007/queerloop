@@ -493,12 +493,25 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
                                     ClipOval(
-                                      child: Image.asset(
-                                        item.avatarAsset,
-                                        width: 36,
-                                        height: 36,
-                                        fit: BoxFit.cover,
-                                      ),
+                                      child: item.avatarAsset.startsWith('http')
+                                          ? Image.network(
+                                              item.avatarAsset,
+                                              width: 36,
+                                              height: 36,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, _, _) =>
+                                                  const Icon(Icons.person, size: 36),
+                                            )
+                                          : Image.asset(
+                                              item.avatarAsset.isNotEmpty
+                                                  ? item.avatarAsset
+                                                  : AppImages.user1,
+                                              width: 36,
+                                              height: 36,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, _, _) =>
+                                                  const Icon(Icons.person, size: 36),
+                                            ),
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(

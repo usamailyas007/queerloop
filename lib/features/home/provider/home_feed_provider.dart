@@ -7,6 +7,7 @@ import '../../create_post/services/media_upload_service.dart';
 import '../../create_post/services/post_content_service.dart';
 import '../models/post_item_model.dart';
 import '../models/reel_item_model.dart';
+import '../services/reel_video_preloader.dart';
 
 enum TopTab { following, forYou, communities }
 enum SubMode { reels, posts }
@@ -145,8 +146,11 @@ class HomeFeedProvider extends ChangeNotifier {
       return;
     }
 
-    _isLoadingFeed = true;
-    notifyListeners();
+    final bool hadData = _reels.isNotEmpty || _posts.isNotEmpty;
+    if (!hadData) {
+      _isLoadingFeed = true;
+      notifyListeners();
+    }
 
     try {
       // 1. Fetch Trending Reels (VIDEO only)
@@ -340,6 +344,10 @@ class HomeFeedProvider extends ChangeNotifier {
       _posts
         ..clear()
         ..addAll(livePosts);
+
+      if (_reels.isNotEmpty) {
+        ReelVideoPreloader.instance.preloadSurrounding(_reels, 0);
+      }
     } catch (e) {
       debugPrint('❌ [HomeFeedProvider] Failed to load live feed: $e');
     } finally {

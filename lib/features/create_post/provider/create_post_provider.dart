@@ -278,14 +278,26 @@ class CreatePostProvider extends ChangeNotifier {
 
       if (isCancelled()) return;
 
-      // Step 3: Complete upload for images or mock
-      if (!isVideo) {
-        _uploadStatus = MediaUploadStatus.completing;
-        notifyListeners();
-        await _uploadService!.completeUpload(uploadInfo.id);
-        if (isCancelled()) return;
-        _uploadedMediaId = uploadInfo.id;
-        _uploadResult = uploadInfo;
+      // Step 3: Complete upload notification to backend
+      _uploadStatus = MediaUploadStatus.completing;
+      notifyListeners();
+      MediaUploadResult completedInfo = uploadInfo;
+      try {
+        completedInfo = await _uploadService!.completeUpload(uploadInfo.id);
+      } catch (e) {
+        debugPrint('⚠️ completeUpload notice: $e');
+      }
+      if (isCancelled()) return;
+
+      final String statusLower = completedInfo.status.toLowerCase();
+      if (!isVideo ||
+          statusLower == 'ready' ||
+          statusLower == 'uploaded' ||
+          statusLower == 'completed' ||
+          statusLower == 'done' ||
+          statusLower == 'active') {
+        _uploadedMediaId = completedInfo.id.isNotEmpty ? completedInfo.id : uploadInfo.id;
+        _uploadResult = completedInfo;
         _uploadStatus = MediaUploadStatus.ready;
         notifyListeners();
         return;
@@ -295,19 +307,25 @@ class CreatePostProvider extends ChangeNotifier {
       _uploadStatus = MediaUploadStatus.transcoding;
       notifyListeners();
 
-      final MediaUploadResult readyMedia = await _uploadService!.pollUntilReady(
-        uploadInfo.id,
-        isCancelled: isCancelled,
-        onStatusChange: (String status) {
-          if (!isCancelled()) {
-            debugPrint('🎬 Video transcoding status: $status');
-          }
-        },
-      );
+      MediaUploadResult readyMedia = completedInfo;
+      try {
+        readyMedia = await _uploadService!.pollUntilReady(
+          uploadInfo.id,
+          isCancelled: isCancelled,
+          onStatusChange: (String status) {
+            if (!isCancelled()) {
+              debugPrint('🎬 Video transcoding status: $status');
+            }
+          },
+        );
+      } catch (e) {
+        debugPrint('⚠️ pollUntilReady notice (falling back to uploaded media): $e');
+        readyMedia = completedInfo;
+      }
 
       if (isCancelled()) return;
 
-      _uploadedMediaId = readyMedia.id;
+      _uploadedMediaId = readyMedia.id.isNotEmpty ? readyMedia.id : uploadInfo.id;
       _uploadResult = readyMedia;
       _uploadStatus = MediaUploadStatus.ready;
       notifyListeners();

@@ -46,31 +46,25 @@ class PostsFeedView extends StatelessWidget {
     final double bottomPadding = 90 + systemBottomInset;
 
     if (posts.isEmpty) {
-      if (provider.isLoadingFeed) {
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const CircularProgressIndicator(
-                color: AppColors.gradientPink,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Loading posts...',
-                style: TextStyle(
-                  color: context.themeTextMuted,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+      return RefreshIndicator(
+        color: AppColors.gradientPink,
+        onRefresh: () => provider.loadFeed(),
+        edgeOffset: topPadding,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: constraints.maxHeight,
+                child: HomeEmptyStateView(
+                  onOpenExplore: () {
+                    provider.setTopTab(TopTab.forYou);
+                  },
                 ),
               ),
-            ],
-          ),
-        );
-      }
-      return HomeEmptyStateView(
-        onOpenExplore: () {
-          provider.setTopTab(TopTab.forYou);
-        },
+            );
+          },
+        ),
       );
     }
 
