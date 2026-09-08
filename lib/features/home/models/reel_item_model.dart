@@ -17,6 +17,7 @@ class ReelItemModel {
     this.isFollowing = false,
     this.tags = const <String>[],
     this.durationText = '',
+    this.communityId,
   });
 
   final String id;
@@ -36,6 +37,7 @@ class ReelItemModel {
   final bool isFollowing;
   final List<String> tags;
   final String durationText;
+  final String? communityId;
 
   ReelItemModel copyWith({
     String? authorId,

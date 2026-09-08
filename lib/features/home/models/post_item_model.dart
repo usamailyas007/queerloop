@@ -11,6 +11,7 @@ class PostItemModel {
     this.postImageAsset,
     this.postImageUrl,
     this.postType = 'TEXT',
+    this.communityId,
     this.isLiked = false,
     this.isSaved = false,
   });
@@ -26,6 +27,7 @@ class PostItemModel {
   final String? postImageAsset;
   final String? postImageUrl;
   final String postType;
+  final String? communityId;
   final bool isLiked;
   final bool isSaved;
 
@@ -37,6 +39,7 @@ class PostItemModel {
     int? commentsCount,
     String? postImageUrl,
     String? postType,
+    String? communityId,
   }) {
     return PostItemModel(
       id: id,
@@ -50,6 +53,7 @@ class PostItemModel {
       postImageAsset: postImageAsset,
       postImageUrl: postImageUrl ?? this.postImageUrl,
       postType: postType ?? this.postType,
+      communityId: communityId ?? this.communityId,
       isLiked: isLiked ?? this.isLiked,
       isSaved: isSaved ?? this.isSaved,
     );

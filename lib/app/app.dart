@@ -17,6 +17,8 @@ import '../features/messages/provider/messages_provider.dart';
 import '../features/profile/provider/profile_provider.dart';
 import '../features/profile_setup/profile_setup_service.dart';
 import '../features/profile_setup/provider/profile_setup_provider.dart';
+import '../features/reports/provider/report_provider.dart';
+import '../features/reports/services/report_service.dart';
 import '../features/splash_welcome/provider/splash_provider.dart';
 import '../l10n/app_localizations.dart';
 import 'router.dart';
@@ -75,6 +77,15 @@ class App extends StatelessWidget {
         ),
         ChangeNotifierProvider<MessagesProvider>(
             create: (_) => MessagesProvider()),
+        Provider<ReportService>(
+          create: (BuildContext ctx) =>
+              ReportService(ctx.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<ReportProvider>(
+          create: (BuildContext ctx) => ReportProvider(
+            service: ctx.read<ReportService>(),
+          ),
+        ),
       ],
       child: Consumer<ThemeProvider>(
         builder: (BuildContext context, ThemeProvider themeProvider, _) {

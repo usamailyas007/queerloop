@@ -111,4 +111,8 @@ abstract final class ApiEndpoints {
 
   /// Comments for a post. GET / POST /posts/:id/comments
   static String postComments(String id) => '/posts/$id/comments';
+
+  // ── Reports ────────────────────────────────────────────────────────────────
+  /// File a user report. POST /reports
+  static const String reports = '/reports';
 }

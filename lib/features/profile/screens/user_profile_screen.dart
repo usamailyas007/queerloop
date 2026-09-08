@@ -229,6 +229,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       UserProfileOptionsBottomSheet.show(
                         context,
                         username: currentUsername,
+                        userId: widget.userId,
                       );
                     },
                     child: Container(

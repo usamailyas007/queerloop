@@ -116,7 +116,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     );
   }
 
-  void _showShareSheet(BuildContext context) {
+  void _showShareSheet(BuildContext context, ReelItemModel reel) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -129,7 +129,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
           },
           onOpenReportSafety: () {
             Navigator.pop(context);
-            _showSafetySheet(context);
+            _showSafetySheet(context, reel);
           },
         );
       },
@@ -147,13 +147,18 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     );
   }
 
-  void _showSafetySheet(BuildContext context) {
+  void _showSafetySheet(BuildContext context, ReelItemModel reel) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return const SafetyBottomSheet();
+        return SafetyBottomSheet(
+          username: reel.username,
+          postId: reel.id,
+          authorId: reel.authorId ?? reel.username,
+          communityId: reel.communityId,
+        );
       },
     );
   }
@@ -251,10 +256,10 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
               if (provider.isGuest) {
                 widget.onGuestActionTriggered?.call();
               } else {
-                _showShareSheet(context);
+                _showShareSheet(context, item);
               }
             },
-            onOpenSafety: () => _showSafetySheet(context),
+            onOpenSafety: () => _showSafetySheet(context, item),
             onOpenFilterCommunities: () =>
                 _showFilterCommunitiesSheet(context, provider),
           );

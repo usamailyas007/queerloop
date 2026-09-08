@@ -53,6 +53,7 @@ class CommentsBottomSheet extends StatefulWidget {
   const CommentsBottomSheet({
     required this.totalComments,
     this.postId,
+    this.communityId,
     this.isAnswers = false,
     this.onCommentAdded,
     super.key,
@@ -60,6 +61,7 @@ class CommentsBottomSheet extends StatefulWidget {
 
   final int totalComments;
   final String? postId;
+  final String? communityId;
   final bool isAnswers;
   final VoidCallback? onCommentAdded;
 
@@ -319,9 +321,12 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                     Navigator.pop(ctx);
                     ReportCommentBottomSheet.show(
                       context,
+                      commentId: comment.id,
                       username: comment.username,
                       commentText: comment.content,
                       avatarAsset: comment.avatarAsset,
+                      authorId: comment.authorId ?? comment.username,
+                      communityId: widget.communityId,
                     );
                   },
                 ),
@@ -763,6 +768,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                 replyLabel: l10n.commentReply,
                                 reportLabel: l10n.commentReport,
                                 authorLabel: l10n.commentAuthor,
+                                communityId: widget.communityId,
                               ),
                               const SizedBox(height: AppSpacing.lg),
                             ],
@@ -920,6 +926,7 @@ class _CommentItemTile extends StatelessWidget {
     required this.replyLabel,
     required this.reportLabel,
     required this.authorLabel,
+    this.communityId,
   });
 
   final CommentItemModel comment;
@@ -928,6 +935,7 @@ class _CommentItemTile extends StatelessWidget {
   final String replyLabel;
   final String reportLabel;
   final String authorLabel;
+  final String? communityId;
 
   void _openProfile(BuildContext context) {
     final AuthProvider auth = context.read<AuthProvider>();
@@ -1047,9 +1055,12 @@ class _CommentItemTile extends StatelessWidget {
                           onTap: () {
                             ReportCommentBottomSheet.show(
                               context,
+                              commentId: comment.id,
                               username: comment.username,
                               commentText: comment.content,
                               avatarAsset: comment.avatarAsset,
+                              authorId: comment.authorId ?? comment.username,
+                              communityId: communityId,
                             );
                           },
                           child: Text(

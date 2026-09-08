@@ -256,7 +256,12 @@ class PostFeedCard extends StatelessWidget {
                     isScrollControlled: true,
                     backgroundColor: Colors.transparent,
                     builder: (BuildContext context) {
-                      return SafetyBottomSheet(username: post.username);
+                      return SafetyBottomSheet(
+                        username: post.username,
+                        postId: post.id,
+                        authorId: post.authorId ?? post.username,
+                        communityId: post.communityId,
+                      );
                     },
                   );
                 },

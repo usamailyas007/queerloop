@@ -208,6 +208,7 @@ class HomeFeedProvider extends ChangeNotifier {
             commentsCount: post.commentsCount,
             isLiked: isLiked,
             tags: post.tags,
+            communityId: post.communityId,
             durationText: (post.duration != null && post.duration!.isNotEmpty)
                 ? post.duration!
                 : '0:30',
@@ -277,6 +278,7 @@ class HomeFeedProvider extends ChangeNotifier {
                 commentsCount: post.commentsCount,
                 isLiked: isLiked,
                 tags: post.tags,
+                communityId: post.communityId,
                 durationText: (post.duration != null && post.duration!.isNotEmpty)
                     ? post.duration!
                     : '0:30',
@@ -332,6 +334,7 @@ class HomeFeedProvider extends ChangeNotifier {
             commentsCount: post.commentsCount,
             postImageUrl: imageUrl,
             postType: post.type,
+            communityId: post.communityId,
             isLiked: isLiked,
           ),
         );
