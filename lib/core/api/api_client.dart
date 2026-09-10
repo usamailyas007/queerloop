@@ -18,12 +18,12 @@ class ApiClient {
 
     _dio.options
       ..baseUrl = url
-      ..connectTimeout = const Duration(seconds: 15)
-      ..receiveTimeout = const Duration(seconds: 20)
+      ..connectTimeout = const Duration(minutes: 2)
+      ..receiveTimeout = const Duration(minutes: 2)
       // `sendTimeout` on the web adapter throws for body-less requests
       // ("cannot be used without a request body to send on Web"), so keep it
       // off the web build — bodyless GET/DELETE are the common case there.
-      ..sendTimeout = kIsWeb ? null : const Duration(seconds: 20)
+      ..sendTimeout = kIsWeb ? null : const Duration(minutes: 2)
       ..headers = <String, String>{'Accept': 'application/json'};
 
     // A second, interceptor-free client used only for the token-refresh call.
@@ -63,35 +63,106 @@ class ApiClient {
           debugPrint('❌ [API Error] ${error.requestOptions.method} ${error.requestOptions.path} [Status ${error.response?.statusCode}]');
           debugPrint('⚠️ Error Response Body:\n${_prettyJson(error.response?.data)}');
           debugPrint('└──────────────────────────────────────────────────────────');
-          if (error.response?.statusCode == 401 &&
-              !error.requestOptions.path.contains('/auth/login')) {
-            // Opt-in (admin only): one silent token refresh + retry before
-            // giving up. `onRefresh` is null everywhere else, so this whole
-            // block is skipped and the behaviour is unchanged.
-            final RequestOptions req = error.requestOptions;
-            if (onRefresh != null &&
-                !req.path.contains('/auth/refresh') &&
-                req.extra['__retried'] != true) {
-              String? newToken;
+
+          final RequestOptions req = error.requestOptions;
+          final int? statusCode = error.response?.statusCode;
+          final bool isAuthPath = req.path.contains('/auth/login') ||
+              req.path.contains('/auth/register') ||
+              req.path.contains('/auth/refresh');
+
+          if (statusCode == 401 && !isAuthPath) {
+            final int retryCount = req.extra['retry_count'] as int? ?? 0;
+            if (retryCount >= 1) {
+              return handler.next(error);
+            }
+
+            // 1. Check if token was already refreshed by another concurrent request
+            final String currentHeader =
+                req.headers['Authorization'] as String? ?? '';
+            final String currentBearer =
+                (authToken != null && authToken!.isNotEmpty)
+                    ? 'Bearer $authToken'
+                    : '';
+
+            if (currentBearer.isNotEmpty &&
+                currentHeader.isNotEmpty &&
+                currentHeader != currentBearer) {
+              debugPrint(
+                  '🔄 [ApiClient] Token was already refreshed by another request. Retrying ${req.method} ${req.path} with current token...');
               try {
-                newToken = await _refreshOnce();
+                req.extra['retry_count'] = 1;
+                final Options options = Options(
+                  method: req.method,
+                  headers: Map<String, dynamic>.from(req.headers)
+                    ..['Authorization'] = currentBearer,
+                  responseType: req.responseType,
+                  contentType: req.contentType,
+                  validateStatus: req.validateStatus,
+                  receiveTimeout: req.receiveTimeout,
+                  sendTimeout: req.sendTimeout,
+                  extra: req.extra,
+                );
+
+                final dynamic retryData = req.data is FormData
+                    ? (req.data as FormData).clone()
+                    : req.data;
+                final Response<dynamic> retryResponse =
+                    await _dio.request<dynamic>(
+                  req.path,
+                  data: retryData,
+                  queryParameters: req.queryParameters,
+                  options: options,
+                );
+
+                return handler.resolve(retryResponse);
               } catch (_) {
-                newToken = null;
+                // If retry with existing token still fails, fall through to refresh
               }
-              if (newToken != null && newToken.isNotEmpty) {
-                req.extra['__retried'] = true;
-                req.headers['Authorization'] = 'Bearer $newToken';
-                try {
-                  handler.resolve(await _dio.fetch<dynamic>(req));
-                  return;
-                } on DioException catch (retryError) {
-                  handler.next(retryError);
-                  return;
+            }
+
+            // 2. Perform token refresh
+            if (onTokenRefresh != null) {
+              try {
+                final String? newToken = await _refreshTokenLock();
+                if (newToken != null && newToken.isNotEmpty) {
+                  authToken = newToken;
+                  debugPrint(
+                      '🔄 [ApiClient] Retrying original request ${req.method} ${req.path} with refreshed token...');
+                  req.extra['retry_count'] = 1;
+                  final Options options = Options(
+                    method: req.method,
+                    headers: Map<String, dynamic>.from(req.headers)
+                      ..['Authorization'] = 'Bearer $newToken',
+                    responseType: req.responseType,
+                    contentType: req.contentType,
+                    validateStatus: req.validateStatus,
+                    receiveTimeout: req.receiveTimeout,
+                    sendTimeout: req.sendTimeout,
+                    extra: req.extra,
+                  );
+
+                  final dynamic retryData = req.data is FormData
+                      ? (req.data as FormData).clone()
+                      : req.data;
+                  final Response<dynamic> retryResponse =
+                      await _dio.request<dynamic>(
+                    req.path,
+                    data: retryData,
+                    queryParameters: req.queryParameters,
+                    options: options,
+                  );
+
+                  return handler.resolve(retryResponse);
+                }
+              } catch (retryError) {
+                debugPrint('❌ [ApiClient] Retry request failed: $retryError');
+                if (retryError is DioException) {
+                  return handler.next(retryError);
                 }
               }
             }
-            onUnauthorized?.call();
           }
+
           handler.next(error);
         },
       ),
@@ -110,33 +181,36 @@ class ApiClient {
     }
   }
 
+  String get baseUrl => _dio.options.baseUrl;
   final Dio _dio;
   late final Dio _bareDio;
 
   String? authToken;
 
   void Function()? onUnauthorized;
+  Future<String?> Function()? onTokenRefresh;
 
-  /// Called once when a request fails with 401 and no refresh is already in
-  /// flight. Should hit the refresh endpoint and return the new access token,
-  /// or null if the session cannot be renewed (the client then calls
-  /// [onUnauthorized]). Wired by the admin auth provider; left null elsewhere,
-  /// which keeps the plain "401 → sign out" behaviour.
-  Future<String?> Function()? onRefresh;
+  Future<String?>? _activeRefreshFuture;
 
-  Future<String?>? _refreshInFlight;
-
-  /// De-dupes concurrent 401s so a burst of requests triggers exactly one
-  /// refresh call; every caller awaits the same result.
-  Future<String?> _refreshOnce() {
-    final Future<String?>? inFlight = _refreshInFlight;
-    if (inFlight != null) {
-      return inFlight;
+  Future<String?> _refreshTokenLock() {
+    if (_activeRefreshFuture != null) {
+      debugPrint('⏳ [ApiClient] Refresh already in flight, awaiting existing future...');
+      return _activeRefreshFuture!;
     }
-    final Future<String?> pending =
-        onRefresh!().whenComplete(() => _refreshInFlight = null);
-    _refreshInFlight = pending;
-    return pending;
+
+    _activeRefreshFuture = () async {
+      try {
+        final String? token = await onTokenRefresh?.call();
+        if (token != null && token.isNotEmpty) {
+          authToken = token;
+        }
+        return token;
+      } finally {
+        _activeRefreshFuture = null;
+      }
+    }();
+
+    return _activeRefreshFuture!;
   }
 
   Future<dynamic> get(
@@ -168,22 +242,46 @@ class ApiClient {
     }
   }
 
-  Future<dynamic> post(String path, {Object? body}) =>
-      _send(() => _dio.post<dynamic>(path, data: body));
+  Future<dynamic> post(String path, {Object? body, Duration? timeout}) =>
+      _send(() => _dio.post<dynamic>(
+            path,
+            data: body,
+            options: timeout != null
+                ? Options(sendTimeout: timeout, receiveTimeout: timeout)
+                : null,
+          ));
 
   /// POST with no auth header and no interceptors — used only for `/auth/refresh`
-  /// so it can run safely from inside the 401 interceptor.
+  /// so it can run safely from inside the 401 interceptor (admin token refresh).
   Future<dynamic> postNoAuth(String path, {Object? body}) =>
       _send(() => _bareDio.post<dynamic>(path, data: body));
 
-  Future<dynamic> patch(String path, {Object? body}) =>
-      _send(() => _dio.patch<dynamic>(path, data: body));
+  Future<dynamic> patch(String path, {Object? body, Duration? timeout}) =>
+      _send(() => _dio.patch<dynamic>(
+            path,
+            data: body,
+            options: timeout != null
+                ? Options(sendTimeout: timeout, receiveTimeout: timeout)
+                : null,
+          ));
 
-  Future<dynamic> put(String path, {Object? body}) =>
-      _send(() => _dio.put<dynamic>(path, data: body));
+  Future<dynamic> put(String path, {Object? body, Duration? timeout}) =>
+      _send(() => _dio.put<dynamic>(
+            path,
+            data: body,
+            options: timeout != null
+                ? Options(sendTimeout: timeout, receiveTimeout: timeout)
+                : null,
+          ));
 
-  Future<dynamic> delete(String path, {Object? body}) =>
-      _send(() => _dio.delete<dynamic>(path, data: body));
+  Future<dynamic> delete(String path, {Object? body, Duration? timeout}) =>
+      _send(() => _dio.delete<dynamic>(
+            path,
+            data: body,
+            options: timeout != null
+                ? Options(sendTimeout: timeout, receiveTimeout: timeout)
+                : null,
+          ));
 
   String _toCacheKey(String path, Map<String, dynamic>? query) {
     if (query == null || query.isEmpty) {
@@ -219,10 +317,25 @@ class ApiClient {
       _ => ApiErrorKind.unknown,
     };
 
+    final dynamic body = error.response?.data;
+    String? code;
+    int? retryAfterSeconds;
+    if (body is Map) {
+      if (body['code'] is String) {
+        code = body['code'] as String;
+      }
+      if (body['retryAfterSeconds'] is num) {
+        retryAfterSeconds = (body['retryAfterSeconds'] as num).toInt();
+      }
+    }
+
     return ApiException(
-      _messageFor(kind, error.response?.data),
+      _messageFor(kind, body),
       statusCode: status,
       kind: kind,
+      code: code,
+      retryAfterSeconds: retryAfterSeconds,
+      data: body,
     );
   }
 

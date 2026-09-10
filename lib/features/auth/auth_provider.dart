@@ -2,6 +2,7 @@
 // Uses selective notifyListeners() so only relevant widgets rebuild.
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_exception.dart';
@@ -14,11 +15,42 @@ class AuthProvider extends ChangeNotifier {
   AuthProvider({required ApiClient client, AuthService? service})
       : _client = client,
         _service = service ?? AuthService(client) {
-    _client.onUnauthorized = _clearSession;
+    _client.onUnauthorized = _handleUnauthorized;
+    _client.onTokenRefresh = _handleTokenRefresh;
   }
 
   final ApiClient _client;
   final AuthService _service;
+
+  Future<String?> _handleTokenRefresh() async {
+    final String? candidate =
+        (_refreshToken != null && _refreshToken!.trim().isNotEmpty)
+            ? _refreshToken
+            : await _service.getRefreshToken();
+    final RefreshTokenResult result =
+        await _service.refreshTokenDetailed(candidate);
+
+    if (result.isSuccess) {
+      if (result.refreshToken != null && result.refreshToken!.isNotEmpty) {
+        _refreshToken = result.refreshToken;
+      }
+      return result.accessToken;
+    }
+
+    if (result.isInvalidToken) {
+      debugPrint(
+          '⛔ [AuthProvider] Refresh token is permanently invalid/expired (${result.errorMessage}). Evicting session.');
+      _clearSession();
+    } else {
+      debugPrint(
+          '⚠️ [AuthProvider] Transient error refreshing token (${result.errorMessage}). Retaining user session.');
+    }
+    return null;
+  }
+
+  void _handleUnauthorized() {
+    _clearSession();
+  }
 
   // ── Private state ─────────────────────────────────────────────────────────
 
@@ -26,6 +58,8 @@ class AuthProvider extends ChangeNotifier {
   User? _user;
   String? _refreshToken;
   String? _error;
+  String? _errorCode;
+  int? _retryAfterSeconds;
   bool _isBusy = false;
 
   // ── Public getters ────────────────────────────────────────────────────────
@@ -34,6 +68,8 @@ class AuthProvider extends ChangeNotifier {
   User? get user => _user;
   String? get userId => _user?.id;
   String? get error => _error;
+  String? get errorCode => _errorCode;
+  int? get retryAfterSeconds => _retryAfterSeconds;
   bool get isBusy => _isBusy;
   bool get isSignedIn => _status == AuthStatus.signedIn;
 
@@ -70,6 +106,8 @@ class AuthProvider extends ChangeNotifier {
     }
     if (!isValidEmail(email) || password.isEmpty) {
       _error = 'Enter a valid email and password.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
       notifyListeners();
       return false;
     }
@@ -77,18 +115,103 @@ class AuthProvider extends ChangeNotifier {
     _setBusy(true);
 
     try {
-      final AuthSession session = await _service.register(
+      await _service.register(
         email: email.trim(),
         password: password,
+      );
+      _error = null;
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      _errorCode = failure.code;
+      _retryAfterSeconds = failure.retryAfterSeconds;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Unable to complete sign up. Please try again.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return false;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  // ── Verify Email OTP ──────────────────────────────────────────────────────
+
+  Future<bool> verifyEmailOtp({
+    required String email,
+    required String otp,
+    bool staySignedIn = false,
+  }) async {
+    if (_isBusy) return false;
+    if (otp.trim().length < 6) {
+      _error = 'Please enter a 6-digit verification code.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return false;
+    }
+
+    _setBusy(true);
+    try {
+      final AuthSession session = await _service.verifyEmail(
+        email: email.trim(),
+        otp: otp.trim(),
+        staySignedIn: staySignedIn,
       );
       _applySession(session);
       return true;
     } on ApiException catch (failure) {
       _error = failure.message;
+      _errorCode = failure.code;
+      _retryAfterSeconds = failure.retryAfterSeconds;
       notifyListeners();
       return false;
     } catch (e) {
-      _error = 'Unable to complete sign up. Please try again.';
+      _error = 'Invalid or expired verification code. Please try again.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return false;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  // ── Resend Email OTP ──────────────────────────────────────────────────────
+
+  Future<bool> resendEmailOtp(String email) async {
+    if (_isBusy) return false;
+    if (!isValidEmail(email)) {
+      _error = 'Enter a valid email address.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return false;
+    }
+
+    _setBusy(true);
+    try {
+      await _service.resendEmailOtp(email.trim());
+      _error = null;
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      _errorCode = failure.code;
+      _retryAfterSeconds = failure.retryAfterSeconds;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Failed to resend code. Please try again.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
       notifyListeners();
       return false;
     } finally {
@@ -107,6 +230,8 @@ class AuthProvider extends ChangeNotifier {
     }
     if (!isValidEmail(email) || password.isEmpty) {
       _error = 'Enter a valid email and password.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
       notifyListeners();
       return false;
     }
@@ -122,10 +247,14 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (failure) {
       _error = failure.message;
+      _errorCode = failure.code;
+      _retryAfterSeconds = failure.retryAfterSeconds;
       notifyListeners();
       return false;
     } catch (e) {
       _error = 'Unable to log in. Please check your credentials and try again.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
       notifyListeners();
       return false;
     } finally {
@@ -243,10 +372,12 @@ class AuthProvider extends ChangeNotifier {
   // ── Error management ──────────────────────────────────────────────────────
 
   void clearError() {
-    if (_error == null) {
+    if (_error == null && _errorCode == null) {
       return;
     }
     _error = null;
+    _errorCode = null;
+    _retryAfterSeconds = null;
     notifyListeners();
   }
 
@@ -259,6 +390,9 @@ class AuthProvider extends ChangeNotifier {
     _refreshToken = session.refreshToken;
     _status = AuthStatus.signedIn;
     _error = null;
+    SharedPreferences.getInstance().then((SharedPreferences prefs) {
+      prefs.setBool('onboarding_seen', true);
+    }).catchError((_) {});
     notifyListeners();
   }
 
@@ -269,6 +403,7 @@ class AuthProvider extends ChangeNotifier {
     _refreshToken = null;
     _status = AuthStatus.signedOut;
     _error = null;
+    _service.clearAllLocalData();
     notifyListeners();
   }
 

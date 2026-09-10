@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
@@ -7,6 +8,8 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../create_post/widgets/custom_gradient_switch.dart';
+import '../../reports/models/report_models.dart';
+import '../../reports/provider/report_provider.dart';
 import 'report_sent_modal_dialog.dart';
 
 class ReportConversationBottomSheet extends StatefulWidget {
@@ -14,6 +17,10 @@ class ReportConversationBottomSheet extends StatefulWidget {
     required this.username,
     required this.onReportSubmitted,
     this.targetTitle,
+    this.targetType = ReportTargetType.post,
+    this.targetId,
+    this.targetOwnerId,
+    this.communityId,
     this.thumbnailAsset = AppImages.forYouImg,
     super.key,
   });
@@ -21,6 +28,10 @@ class ReportConversationBottomSheet extends StatefulWidget {
   final String username;
   final VoidCallback onReportSubmitted;
   final String? targetTitle;
+  final ReportTargetType targetType;
+  final String? targetId;
+  final String? targetOwnerId;
+  final String? communityId;
   final String thumbnailAsset;
 
   static Future<void> show(
@@ -28,6 +39,10 @@ class ReportConversationBottomSheet extends StatefulWidget {
     required String username,
     required VoidCallback onReportSubmitted,
     String? targetTitle,
+    ReportTargetType targetType = ReportTargetType.post,
+    String? targetId,
+    String? targetOwnerId,
+    String? communityId,
   }) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -37,6 +52,10 @@ class ReportConversationBottomSheet extends StatefulWidget {
         username: username,
         onReportSubmitted: onReportSubmitted,
         targetTitle: targetTitle,
+        targetType: targetType,
+        targetId: targetId,
+        targetOwnerId: targetOwnerId,
+        communityId: communityId,
       ),
     );
   }
@@ -48,16 +67,19 @@ class ReportConversationBottomSheet extends StatefulWidget {
 
 class _ReportConversationBottomSheetState
     extends State<ReportConversationBottomSheet> {
-  int _selectedIndex = 1; // Default: Harassment or bullying
+  int _selectedIndex = 2; // Default: Harassment or bullying
   bool _alsoBlock = false;
 
-  static const List<String> _reasons = <String>[
-    'Hate speech or slurs',
-    'Harassment or bullying',
-    'Outing someone without consent',
-    'Sexual content or nudity',
-    'Violence or threats',
-    'Spam or a fake account',
+  // Ordered list of reasons exposed in this sheet (all 8 server reasons).
+  static const List<ReportReason> _reasons = <ReportReason>[
+    ReportReason.threats,
+    ReportReason.selfHarm,
+    ReportReason.harassment,
+    ReportReason.hateSpeech,
+    ReportReason.spam,
+    ReportReason.outing,
+    ReportReason.sexualContent,
+    ReportReason.other,
   ];
 
   @override
@@ -187,7 +209,7 @@ class _ReportConversationBottomSheetState
 
               // Radio Option Cards List
               ...List<Widget>.generate(_reasons.length, (int index) {
-                final String reason = _reasons[index];
+                final ReportReason reason = _reasons[index];
                 final bool isSelected = _selectedIndex == index;
 
                 return GestureDetector(
@@ -212,7 +234,7 @@ class _ReportConversationBottomSheetState
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: <Widget>[
                         Text(
-                          reason,
+                          reason.label,
                           style: AppTextStyles.bodyMedium.copyWith(
                             color: context.themeTextPrimary,
                             fontWeight:
@@ -272,30 +294,54 @@ class _ReportConversationBottomSheetState
               const SizedBox(height: AppSpacing.xl),
 
               // Send report button
-              AppGradientButton(
-                text: 'Send report',
-                onPressed: () {
-                  final ScaffoldMessengerState messenger =
-                      ScaffoldMessenger.of(context);
-                  Navigator.pop(context);
-                  widget.onReportSubmitted();
+              Consumer<ReportProvider>(
+                builder: (BuildContext ctx, ReportProvider reportProvider, _) {
+                  return AppGradientButton(
+                    text: reportProvider.isSubmitting ? 'Sending...' : 'Send report',
+                    isLoading: reportProvider.isSubmitting,
+                    isEnabled: !reportProvider.isSubmitting,
+                    onPressed: () async {
+                            final ScaffoldMessengerState messenger =
+                                ScaffoldMessenger.of(context);
 
-                  // Open ReportSentModalDialog matching Image 2
-                  ReportSentModalDialog.show(
-                    context,
-                    username: widget.username,
-                    reportId: 'QL-84219',
+                            final String effectiveTargetId =
+                                widget.targetId ?? widget.username;
+                            final String effectiveOwnerId =
+                                widget.targetOwnerId ?? widget.username;
+
+                            final String? displayId =
+                                await reportProvider.submitReport(
+                              CreateReportRequest(
+                                targetType: widget.targetType,
+                                targetId: effectiveTargetId,
+                                targetOwnerId: effectiveOwnerId,
+                                reason: _reasons[_selectedIndex],
+                                communityId: widget.communityId,
+                              ),
+                            );
+
+                            if (!context.mounted) return;
+                            Navigator.pop(context);
+                            widget.onReportSubmitted();
+
+                            ReportSentModalDialog.show(
+                              context,
+                              username: widget.username,
+                              reportId: displayId ?? 'QL-00000',
+                            );
+
+                            if (_alsoBlock) {
+                              AppSnackBar.show(
+                                context,
+                                messenger: messenger,
+                                title: '$cleanUsername blocked',
+                                subtitle:
+                                    'Their posts and comments are gone from your app',
+                                actionLabel: 'Undo',
+                              );
+                            }
+                          },
                   );
-
-                  if (_alsoBlock) {
-                    AppSnackBar.show(
-                      context,
-                      messenger: messenger,
-                      title: '$cleanUsername blocked',
-                      subtitle: 'Their posts and comments are gone from your app',
-                      actionLabel: 'Undo',
-                    );
-                  }
                 },
               ),
 

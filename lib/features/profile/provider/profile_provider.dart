@@ -4,8 +4,15 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/cache/cache_manager.dart';
 import '../../../core/config/api_endpoints.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/theme/app_images.dart';
+import '../../create_post/models/create_post_models.dart';
+import '../../create_post/services/post_content_service.dart';
+import '../../home/models/post_item_model.dart';
+import '../../home/models/reel_item_model.dart';
+import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/models/profile_models.dart';
 
 class ProfileProvider extends ChangeNotifier {
@@ -16,10 +23,22 @@ class ProfileProvider extends ChangeNotifier {
   UserProfile? _profile;
   bool _isBusy = false;
   String? _error;
+  String? _cachedUserId;
+
+  List<PostItemModel> _userPosts = <PostItemModel>[];
+  List<ReelItemModel> _userReels = <ReelItemModel>[];
+  List<CommunityModel> _userCommunities = <CommunityModel>[];
+  bool _isLoadingContent = false;
 
   UserProfile? get profile => _profile;
   bool get isBusy => _isBusy;
   String? get error => _error;
+  bool get hasProfile => _profile != null;
+
+  List<PostItemModel> get userPosts => _userPosts;
+  List<ReelItemModel> get userReels => _userReels;
+  List<CommunityModel> get userCommunities => _userCommunities;
+  bool get isLoadingContent => _isLoadingContent;
 
   String get displayName => _profile?.displayName ?? 'Ash Mercado';
   String get username => _profile?.username ?? 'ashinorbit';
@@ -32,12 +51,19 @@ class ProfileProvider extends ChangeNotifier {
   List<String> get pronouns =>
       _profile?.pronouns ?? const <String>['she/her', 'they/them'];
 
-  String get postsCount =>
-      _profile?.postsCount != null ? '${_profile!.postsCount}' : '128';
+  String get postsCount {
+    final int total = _userPosts.length + _userReels.length;
+    if (total > 0) return '$total';
+    if (_profile?.postsCount != null && (_profile!.postsCount ?? 0) > 0) {
+      return '${_profile!.postsCount}';
+    }
+    return '0';
+  }
+
   String get followersCount =>
-      _profile?.followersCount != null ? '${_profile!.followersCount}' : '4,290';
+      _profile?.followersCount != null ? '${_profile!.followersCount}' : '0';
   String get followingCount =>
-      _profile?.followingCount != null ? '${_profile!.followingCount}' : '311';
+      _profile?.followingCount != null ? '${_profile!.followingCount}' : '0';
 
   List<String> get interests => _profile?.interests ?? const <String>[];
   bool get isPrivate => _profile?.isPrivate ?? false;
@@ -69,19 +95,11 @@ class ProfileProvider extends ChangeNotifier {
   static String formatPrivacyLabel(String? val) {
     if (val == null || val.isEmpty) return 'Everyone';
     final String lower = val.toLowerCase().trim();
-    if (lower == 'everyone') return 'Everyone';
-    if (lower == 'followers' ||
-        lower == 'people_you_follow' ||
-        lower == 'people you follow') {
-      return 'People you follow';
-    }
-    if (lower == 'mutuals' ||
-        lower == 'mutual_follows' ||
-        lower == 'mutual follows') {
-      return 'Mutual follows';
-    }
-    if (lower == 'nobody') return 'Nobody';
-    return val;
+    if (lower.contains('everyone')) return 'Everyone';
+    if (lower.contains('nobody')) return 'Nobody';
+    if (lower.contains('mutual')) return 'Mutual follows';
+    if (lower.contains('follow')) return 'People you follow';
+    return 'Everyone';
   }
 
   // ── GET /users/:id ─────────────────────────────────────────────────────────
@@ -89,10 +107,40 @@ class ProfileProvider extends ChangeNotifier {
   Future<void> fetchProfile(String userId) async {
     if (userId.isEmpty) return;
 
-    _isBusy = true;
-    _error = null;
-    notifyListeners();
+    final bool userChanged = _cachedUserId != userId;
+    if (userChanged) {
+      _cachedUserId = userId;
+      // Try restoring from CacheManager immediately so UI renders in 0 microseconds
+      final dynamic cachedProfile =
+          CacheManager.instance.get('profile_details_$userId');
+      if (cachedProfile is Map<String, dynamic>) {
+        try {
+          _profile = UserProfile.fromJson(cachedProfile);
+        } catch (_) {}
+      } else {
+        _profile = null;
+        _userPosts.clear();
+        _userReels.clear();
+        _userCommunities.clear();
+      }
+    }
 
+    // Only mark as busy if there's no profile data yet
+    if (_profile == null) {
+      _isBusy = true;
+      notifyListeners();
+    }
+    _error = null;
+
+    // Batch call: fetch profile details, communities, and user posts concurrently
+    await Future.wait(<Future<void>>[
+      _fetchProfileDetails(userId),
+      fetchUserCommunities(userId),
+      fetchUserContent(userId),
+    ]);
+  }
+
+  Future<void> _fetchProfileDetails(String userId) async {
     try {
       if (AppConfig.useMockApi) {
         _profile = UserProfile(
@@ -105,10 +153,18 @@ class ProfileProvider extends ChangeNotifier {
           pronounsPrivate: false,
         );
       } else {
-        debugPrint('🚀 [ProfileProvider] Fetching profile for user: $userId (GET /users/$userId)');
+        debugPrint(
+            '🚀 [ProfileProvider] Fetching profile for user: $userId (GET /users/$userId)');
         final dynamic data = await _client.get(ApiEndpoints.user(userId));
         debugPrint('📥 [ProfileProvider] Profile data received: $data');
-        _profile = UserProfile.fromJson(data as Map<String, dynamic>);
+        if (data is Map<String, dynamic>) {
+          CacheManager.instance.put(
+            'profile_details_$userId',
+            data,
+            ttl: const Duration(days: 7),
+          );
+          _profile = UserProfile.fromJson(data);
+        }
       }
       _error = null;
     } on ApiException catch (e) {
@@ -121,6 +177,192 @@ class ProfileProvider extends ChangeNotifier {
       _isBusy = false;
       notifyListeners();
     }
+  }
+
+  Future<void> fetchUserCommunities(String userId,
+      {bool forceRefresh = false}) async {
+    if (userId.isEmpty) return;
+
+    if (forceRefresh) {
+      CacheManager.instance.remove(ApiEndpoints.userCommunities(userId));
+      CacheManager.instance.remove(ApiEndpoints.userCommunitiesAlt(userId));
+    }
+
+    try {
+      debugPrint(
+          '🚀 [ProfileProvider] Fetching user communities (GET ${ApiEndpoints.userCommunities(userId)}, forceRefresh: $forceRefresh)');
+      dynamic data;
+      try {
+        data = await _client.get(
+          ApiEndpoints.userCommunities(userId),
+          useCache: !forceRefresh,
+        );
+      } catch (e) {
+        debugPrint(
+            '⚠️ [ProfileProvider] Failed primary endpoint, trying alt: $e');
+        data = await _client.get(
+          ApiEndpoints.userCommunitiesAlt(userId),
+          useCache: !forceRefresh,
+        );
+      }
+      debugPrint('📥 [ProfileProvider] User communities response: $data');
+
+      List<dynamic> rawList = <dynamic>[];
+      if (data is List) {
+        rawList = data;
+      } else if (data is Map<String, dynamic>) {
+        if (data['data'] is List) {
+          rawList = data['data'] as List<dynamic>;
+        } else if (data['communities'] is List) {
+          rawList = data['communities'] as List<dynamic>;
+        } else if (data['items'] is List) {
+          rawList = data['items'] as List<dynamic>;
+        }
+      }
+
+      final List<CommunityModel> communities = <CommunityModel>[];
+      for (final dynamic item in rawList) {
+        if (item is Map<String, dynamic>) {
+          final Map<String, dynamic> commMap =
+              (item['community'] is Map<String, dynamic>)
+                  ? item['community'] as Map<String, dynamic>
+                  : item;
+          communities.add(
+              CommunityModel.fromJson(commMap).copyWith(isJoined: true));
+        } else if (item is String) {
+          communities
+              .add(CommunityModel(id: item, name: item, isJoined: true));
+        }
+      }
+
+      _userCommunities = communities;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Could not fetch user communities: $e');
+    }
+  }
+
+  Future<void> fetchUserContent(String userId) async {
+    if (userId.isEmpty) return;
+
+    _isLoadingContent = true;
+    notifyListeners();
+
+    try {
+      final PostContentService service = PostContentService(_client);
+      final List<PostResponseModel> posts =
+          await service.getPostsByAuthor(userId);
+
+      final List<PostItemModel> userPostsList = <PostItemModel>[];
+      final List<ReelItemModel> userReelsList = <ReelItemModel>[];
+
+      for (final PostResponseModel post in posts) {
+        String? mediaUrl;
+        String? thumbnailUrl;
+
+        if (post.mediaRefs.isNotEmpty) {
+          final String mediaId = post.mediaRefs.first;
+          try {
+            final dynamic mediaData =
+                await _client.get(ApiEndpoints.mediaStatus(mediaId));
+            if (mediaData is Map<String, dynamic>) {
+              mediaUrl = mediaData['url'] as String? ??
+                  mediaData['downloadUrl'] as String?;
+              thumbnailUrl = mediaData['thumbnailUrl'] as String?;
+            }
+          } catch (e) {
+            debugPrint('⚠️ [ProfileProvider] Could not resolve media $mediaId: $e');
+          }
+        }
+
+        final String type = post.type.toUpperCase().trim();
+        final String authorUsername = _profile?.username ?? 'you';
+        final String formattedUsername = authorUsername.startsWith('@')
+            ? authorUsername
+            : '@$authorUsername';
+        final String avatar =
+            (_profile?.avatarUrl != null && _profile!.avatarUrl!.isNotEmpty)
+                ? _profile!.avatarUrl!
+                : AppImages.user1;
+
+        if (type == 'VIDEO') {
+          userReelsList.add(
+            ReelItemModel(
+              id: post.id,
+              authorId: post.authorId ?? userId,
+              username: formattedUsername,
+              pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
+                  ? _formatTime(post.createdAt)
+                  : 'just now',
+              avatarAsset: avatar,
+              videoAsset: '',
+              videoUrl: mediaUrl,
+              thumbnailUrl: thumbnailUrl,
+              caption: post.body.isNotEmpty ? post.body : post.caption,
+              likesCount: post.likesCount,
+              commentsCount: post.commentsCount,
+              isLiked: post.isLiked,
+              tags: post.tags,
+              durationText:
+                  (post.duration != null && post.duration!.isNotEmpty)
+                      ? post.duration!
+                      : '0:30',
+            ),
+          );
+        } else {
+          // PHOTO or TEXT
+          userPostsList.add(
+            PostItemModel(
+              id: post.id,
+              authorId: post.authorId ?? userId,
+              username: formattedUsername,
+              pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
+                  ? _formatTime(post.createdAt)
+                  : 'just now',
+              avatarAsset: avatar,
+              content: post.body.isNotEmpty ? post.body : post.caption,
+              likesCount: post.likesCount,
+              commentsCount: post.commentsCount,
+              isLiked: post.isLiked,
+              postImageUrl: mediaUrl,
+              postType: type,
+            ),
+          );
+        }
+      }
+
+      _userPosts = userPostsList;
+      _userReels = userReelsList;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Error fetching user content: $e');
+    } finally {
+      _isLoadingContent = false;
+      notifyListeners();
+    }
+  }
+
+  static String _formatTime(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return 'just now';
+    try {
+      final DateTime dt = DateTime.parse(dateStr);
+      final Duration diff = DateTime.now().difference(dt);
+      if (diff.inDays > 0) return '${diff.inDays}d';
+      if (diff.inHours > 0) return '${diff.inHours}h';
+      if (diff.inMinutes > 0) return '${diff.inMinutes}m';
+      return 'just now';
+    } catch (_) {
+      return 'just now';
+    }
+  }
+
+  void addUserPost(PostItemModel post) {
+    _userPosts.insert(0, post);
+    notifyListeners();
+  }
+
+  void addUserReel(ReelItemModel reel) {
+    _userReels.insert(0, reel);
+    notifyListeners();
   }
 
   // ── PATCH /users/:id ───────────────────────────────────────────────────────
@@ -275,8 +517,8 @@ class ProfileProvider extends ChangeNotifier {
     val = val.toLowerCase().trim();
     if (val.contains('everyone')) return 'everyone';
     if (val.contains('nobody')) return 'nobody';
-    if (val.contains('mutual')) return 'mutuals';
-    if (val.contains('follow')) return 'followers';
+    if (val.contains('mutual')) return 'mutual';
+    if (val.contains('follow')) return 'following';
     return val;
   }
 

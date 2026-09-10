@@ -7,9 +7,11 @@ import '../widgets/guest_action_modal_dialog.dart';
 import '../widgets/guest_join_overlay_card.dart';
 import '../widgets/home_bottom_nav_bar.dart';
 import '../widgets/home_top_header_tabs.dart';
+import '../../auth/auth_provider.dart';
 import '../../create_post/widgets/create_post_type_bottom_sheet.dart';
 import '../../discover/screens/discover_screen.dart';
 import '../../messages/screens/messages_screen.dart';
+import '../../profile/provider/profile_provider.dart';
 import 'discover_tab_screen.dart';
 import 'guest_profile_tab_screen.dart';
 import 'posts_feed_view.dart';
@@ -48,7 +50,17 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        context.read<HomeFeedProvider>().setGuestMode(widget.isGuest);
+        final HomeFeedProvider feed = context.read<HomeFeedProvider>();
+        feed.setGuestMode(widget.isGuest);
+        if (feed.reels.isEmpty && feed.posts.isEmpty && !feed.isLoadingFeed) {
+          feed.loadFeed();
+        }
+        if (!widget.isGuest) {
+          final String? uid = context.read<AuthProvider>().userId;
+          if (uid != null && uid.isNotEmpty) {
+            context.read<ProfileProvider>().fetchProfile(uid).catchError((_) {});
+          }
+        }
       }
     });
   }

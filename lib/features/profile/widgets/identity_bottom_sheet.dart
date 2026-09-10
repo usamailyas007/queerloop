@@ -61,9 +61,6 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
   void initState() {
     super.initState();
     _selected = List<String>.from(widget.selectedIdentities);
-    if (_selected.isEmpty) {
-      _selected = <String>['Lesbian', 'Bisexual', 'Non-binary'];
-    }
   }
 
   @override
@@ -75,6 +72,16 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
   void _toggle(String item) {
     setState(() {
       if (_selected.contains(item)) {
+        if (_selected.length <= 1) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('At least 1 community/identity must remain selected.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
         _selected.remove(item);
       } else {
         _selected.add(item);
@@ -154,6 +161,16 @@ class _IdentityBottomSheetState extends State<IdentityBottomSheet> {
                   ),
                   GestureDetector(
                     onTap: () {
+                      if (_selected.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                                'At least 1 community/identity must remain selected.'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                        return;
+                      }
                       widget.onSave(_selected);
                       Navigator.pop(context);
                     },

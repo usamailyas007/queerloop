@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../features/auth/auth_provider.dart';
 import '../features/auth/screens/login_screen.dart';
-import '../features/home/home_screen.dart';
+import '../features/home/screens/home_screen.dart';
 import '../features/splash_welcome/provider/splash_provider.dart';
 import '../features/splash_welcome/screens/splash_screen.dart';
 import '../features/splash_welcome/screens/welcome_screen.dart';

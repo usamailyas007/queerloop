@@ -7,6 +7,9 @@ import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/auth_provider.dart';
+import '../../home/provider/home_feed_provider.dart';
+import '../../profile/provider/profile_provider.dart';
+import '../../profile_setup/provider/profile_setup_provider.dart';
 import '../provider/splash_provider.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -22,7 +25,16 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final AuthProvider authProvider = context.read<AuthProvider>();
-      context.read<SplashProvider>().initialize(authProvider);
+      final ProfileProvider profileProvider = context.read<ProfileProvider>();
+      final HomeFeedProvider homeFeedProvider = context.read<HomeFeedProvider>();
+      final ProfileSetupProvider profileSetupProvider =
+          context.read<ProfileSetupProvider>();
+      context.read<SplashProvider>().initialize(
+            authProvider,
+            profileProvider,
+            homeFeedProvider,
+            profileSetupProvider,
+          );
     });
   }
 

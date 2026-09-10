@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../profile_setup/models/community_model.dart';
 
 class ProfileHeaderStatsWidget extends StatelessWidget {
   const ProfileHeaderStatsWidget({
@@ -16,8 +17,9 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
     required this.onFollowingTap,
     this.pronounsPill = '',
     this.pronounsList = const <String>[],
-    this.identityList = const <String>['Lesbian', 'Bisexual', 'Non-binary'],
+    this.identityList = const <String>[],
     this.interestsList = const <String>[],
+    this.communitiesList = const <CommunityModel>[],
     this.interestsText =
         'Music • Gaming • Fashion • Fitness • Travel • Art • Movies',
     this.actionButtons,
@@ -36,6 +38,7 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
   final List<String> pronounsList;
   final List<String> identityList;
   final List<String> interestsList;
+  final List<CommunityModel> communitiesList;
   final String interestsText;
   final Widget? actionButtons;
 
@@ -75,13 +78,14 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
     String text,
     Color borderColor,
     Color textColor,
-    Color backgroundColor,
-  ) {
+    Color backgroundColor, {
+    String? imageUrl,
+  }) {
     return Container(
-      margin: const EdgeInsets.only(right: 8),
+      margin: const EdgeInsets.only(right: 6),
       padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 5,
+        horizontal: 10,
+        vertical: 4,
       ),
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -91,13 +95,34 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
           width: 1.1,
         ),
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: textColor,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (imageUrl != null && imageUrl.isNotEmpty) ...<Widget>[
+            ClipOval(
+              child: Image.network(
+                imageUrl,
+                width: 14,
+                height: 14,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Icon(
+                  Icons.group_rounded,
+                  size: 13,
+                  color: textColor,
+                ),
+              ),
+            ),
+            const SizedBox(width: 5),
+          ],
+          Text(
+            text,
+            style: TextStyle(
+              color: textColor,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -298,39 +323,55 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
           ),
         ],
 
-        // IDENTITY Row
-        if (identityList.isNotEmpty) ...<Widget>[
+        // COMMUNITIES Row (Displays joined communities)
+        if (communitiesList.isNotEmpty || identityList.isNotEmpty) ...<Widget>[
           const SizedBox(height: AppSpacing.sm),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               SizedBox(
-                width: 80,
-                child: Text(
-                  'IDENTITY',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: context.themeTextMuted,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.0,
+                width: 85,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'COMMUNITIES',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: context.themeTextMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.0,
+                    ),
                   ),
                 ),
               ),
               Expanded(
                 child: Wrap(
                   spacing: 4,
-                  runSpacing: 4,
-                  children: identityList
-                      .map(
-                        (String item) => _buildPillBadge(
-                          context,
-                          item,
-                          AppColors.gradientCyan,
-                          AppColors.gradientCyan,
-                          cyanPillBg,
-                        ),
-                      )
-                      .toList(),
+                  runSpacing: 6,
+                  children: communitiesList.isNotEmpty
+                      ? communitiesList
+                          .map(
+                            (CommunityModel comm) => _buildPillBadge(
+                              context,
+                              comm.name,
+                              AppColors.gradientCyan,
+                              AppColors.gradientCyan,
+                              cyanPillBg,
+                              imageUrl: comm.imageUrl,
+                            ),
+                          )
+                          .toList()
+                      : identityList
+                          .map(
+                            (String item) => _buildPillBadge(
+                              context,
+                              item,
+                              AppColors.gradientCyan,
+                              AppColors.gradientCyan,
+                              cyanPillBg,
+                            ),
+                          )
+                          .toList(),
                 ),
               ),
             ],

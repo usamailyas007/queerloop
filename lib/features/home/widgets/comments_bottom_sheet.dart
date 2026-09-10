@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
@@ -9,12 +11,16 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../auth/auth_provider.dart';
+import '../../create_post/services/post_content_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
+import '../screens/profile_tab_screen.dart';
 import 'report_comment_bottom_sheet.dart';
 
 class CommentItemModel {
   CommentItemModel({
     required this.id,
+    this.authorId,
     required this.avatarAsset,
     required this.username,
     required this.timeAgo,
@@ -29,6 +35,7 @@ class CommentItemModel {
   });
 
   final String id;
+  final String? authorId;
   final String avatarAsset;
   final String username;
   final String timeAgo;
@@ -45,12 +52,18 @@ class CommentItemModel {
 class CommentsBottomSheet extends StatefulWidget {
   const CommentsBottomSheet({
     required this.totalComments,
+    this.postId,
+    this.communityId,
     this.isAnswers = false,
+    this.onCommentAdded,
     super.key,
   });
 
   final int totalComments;
+  final String? postId;
+  final String? communityId;
   final bool isAnswers;
+  final VoidCallback? onCommentAdded;
 
   @override
   State<CommentsBottomSheet> createState() => _CommentsBottomSheetState();
@@ -60,67 +73,111 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
   final TextEditingController _commentInputController =
       TextEditingController();
 
-  late final List<CommentItemModel> _comments;
+  bool _isLoadingComments = false;
+  bool _isSubmittingComment = false;
+  List<CommentItemModel> _comments = <CommentItemModel>[];
   final List<CommentItemModel> _hiddenComments = <CommentItemModel>[];
 
   @override
   void initState() {
     super.initState();
-    _comments = <CommentItemModel>[
-      CommentItemModel(
-        id: 'c1',
-        avatarAsset: AppImages.user1,
-        username: 'jules.does',
-        timeAgo: '2h',
-        content:
-            'Six months looks so good on you. The scar care tips in your last video actually saved me.',
-        likesCount: 214,
-        isAuthorReply: true,
-        authorReplyText: "that's the whole reason I post them 🤍",
-        authorReplyUser: 'rowankeeps',
-        authorReplyAvatar: AppImages.user2,
-      ),
-      CommentItemModel(
-        id: 'c2',
-        avatarAsset: AppImages.user2,
-        username: 'moss.and.oat',
-        timeAgo: '1h',
-        content:
-            "Sending this to my sister, she's four weeks post-op today.",
-        likesCount: 214,
-      ),
-      CommentItemModel(
-        id: 'c3',
-        avatarAsset: AppImages.user3,
-        username: 'moss.and.oat',
-        timeAgo: '1h',
-        content:
-            "Sending this to my sister, she's four weeks post-op today.",
-        likesCount: 214,
-      ),
-      CommentItemModel(
-        id: 'c4',
-        avatarAsset: AppImages.user4,
-        username: 'moss.and.oat',
-        timeAgo: '1h',
-        content:
-            "Sending this to my sister, she's four weeks post-op today.",
-        likesCount: 214,
-      ),
-    ];
+    if (widget.postId != null && widget.postId!.contains('-')) {
+      _isLoadingComments = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _fetchLiveComments();
+      });
+    } else {
+      _comments = <CommentItemModel>[
+        CommentItemModel(
+          id: 'c1',
+          avatarAsset: AppImages.user1,
+          username: 'jules.does',
+          timeAgo: '2h',
+          content:
+              'Six months looks so good on you. The scar care tips in your last video actually saved me.',
+          likesCount: 214,
+          isAuthorReply: true,
+          authorReplyText: "that's the whole reason I post them 🤍",
+          authorReplyUser: 'rowankeeps',
+          authorReplyAvatar: AppImages.user2,
+        ),
+        CommentItemModel(
+          id: 'c2',
+          avatarAsset: AppImages.user2,
+          username: 'moss.and.oat',
+          timeAgo: '1h',
+          content:
+              "Sending this to my sister, she's four weeks post-op today.",
+          likesCount: 214,
+        ),
+      ];
+    }
+  }
 
-    _hiddenComments.add(
-      CommentItemModel(
-        id: 'hidden_1',
-        avatarAsset: AppImages.user1,
-        username: 'anonymous_user',
-        timeAgo: '3h',
-        content:
-            'This comment contains sensitive language and was automatically filtered.',
-        likesCount: 3,
-        moderationReason: 'Flagged by community guidelines filter',
-      ),
-    );
+  Future<void> _fetchLiveComments() async {
+    if (widget.postId == null) return;
+    try {
+      final PostContentService service =
+          PostContentService(context.read<ApiClient>());
+      final List<dynamic> raw = await service.getComments(widget.postId!);
+      final List<CommentItemModel> parsed = <CommentItemModel>[];
+      for (final dynamic item in raw) {
+        if (item is Map<String, dynamic>) {
+          final dynamic author = item['author'];
+          final String? authorId = (item['authorId'] ??
+                  item['userId'] ??
+                  (author is Map ? author['id'] : null))
+              ?.toString();
+          final String username = author is Map
+              ? (author['username'] ?? author['name'] ?? '@user').toString()
+              : (item['username'] ?? '@user').toString();
+          final String avatar = author is Map
+              ? (author['avatar'] ?? AppImages.user4).toString()
+              : (item['avatar'] ?? AppImages.user4).toString();
+          final String text =
+              (item['content'] ?? item['body'] ?? item['text'] ?? '').toString();
+          final String timeAgo = _formatCommentTime(item['createdAt']?.toString());
+
+          parsed.add(
+            CommentItemModel(
+              id: (item['id'] ?? item['_id'] ?? '').toString(),
+              authorId: authorId,
+              avatarAsset: avatar,
+              username: username,
+              timeAgo: timeAgo,
+              content: text,
+              likesCount: (item['likesCount'] ?? item['likes'] ?? 0) as int? ?? 0,
+              isLiked: (item['isLiked'] ?? false) as bool? ?? false,
+            ),
+          );
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _comments = parsed;
+          _isLoadingComments = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching comments for ${widget.postId}: $e');
+      if (mounted) {
+        setState(() => _isLoadingComments = false);
+      }
+    }
+  }
+
+  String _formatCommentTime(String? createdAt) {
+    if (createdAt == null || createdAt.isEmpty) return 'Just now';
+    try {
+      final DateTime dt = DateTime.parse(createdAt);
+      final Duration diff = DateTime.now().difference(dt);
+      if (diff.inDays > 0) return '${diff.inDays}d';
+      if (diff.inHours > 0) return '${diff.inHours}h';
+      if (diff.inMinutes > 0) return '${diff.inMinutes}m';
+      return 'Just now';
+    } catch (_) {
+      return 'Recently';
+    }
   }
 
   @override
@@ -264,9 +321,12 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                     Navigator.pop(ctx);
                     ReportCommentBottomSheet.show(
                       context,
+                      commentId: comment.id,
                       username: comment.username,
                       commentText: comment.content,
                       avatarAsset: comment.avatarAsset,
+                      authorId: comment.authorId ?? comment.username,
+                      communityId: widget.communityId,
                     );
                   },
                 ),
@@ -438,12 +498,25 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
                                     ClipOval(
-                                      child: Image.asset(
-                                        item.avatarAsset,
-                                        width: 36,
-                                        height: 36,
-                                        fit: BoxFit.cover,
-                                      ),
+                                      child: item.avatarAsset.startsWith('http')
+                                          ? Image.network(
+                                              item.avatarAsset,
+                                              width: 36,
+                                              height: 36,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, _, _) =>
+                                                  const Icon(Icons.person, size: 36),
+                                            )
+                                          : Image.asset(
+                                              item.avatarAsset.isNotEmpty
+                                                  ? item.avatarAsset
+                                                  : AppImages.user1,
+                                              width: 36,
+                                              height: 36,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, _, _) =>
+                                                  const Icon(Icons.person, size: 36),
+                                            ),
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
@@ -553,23 +626,45 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     );
   }
 
-  void _addNewComment() {
+  Future<void> _addNewComment() async {
     final String text = _commentInputController.text.trim();
-    if (text.isNotEmpty) {
-      setState(() {
-        _comments.insert(
-          0,
-          CommentItemModel(
-            id: 'c_${DateTime.now().millisecondsSinceEpoch}',
-            avatarAsset: AppImages.user4,
-            username: 'you',
-            timeAgo: 'Just now',
-            content: text,
-            likesCount: 0,
-          ),
+    if (text.isEmpty || _isSubmittingComment) return;
+
+    final String tempId = 'c_${DateTime.now().millisecondsSinceEpoch}';
+    final CommentItemModel optimistic = CommentItemModel(
+      id: tempId,
+      avatarAsset: AppImages.user4,
+      username: 'you',
+      timeAgo: 'Just now',
+      content: text,
+      likesCount: 0,
+    );
+
+    setState(() {
+      _comments.insert(0, optimistic);
+      _commentInputController.clear();
+      _isSubmittingComment = true;
+    });
+
+    widget.onCommentAdded?.call();
+
+    if (widget.postId != null && widget.postId!.contains('-')) {
+      try {
+        final PostContentService service =
+            PostContentService(context.read<ApiClient>());
+        await service.createComment(
+          postId: widget.postId!,
+          content: text,
         );
-        _commentInputController.clear();
-      });
+      } catch (e) {
+        debugPrint('Error posting comment: $e');
+      } finally {
+        if (mounted) {
+          setState(() => _isSubmittingComment = false);
+        }
+      }
+    } else {
+      setState(() => _isSubmittingComment = false);
     }
   }
 
@@ -643,94 +738,116 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
             // ── Scrollable Comments / Answers List ──────────────────────────
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                children: <Widget>[
-                  for (final CommentItemModel item in _comments) ...<Widget>[
-                    _CommentItemTile(
-                      comment: item,
-                      onLikeToggle: () => _toggleLikeComment(item),
-                      onLongPress: () => _showCommentOptionsModal(item),
-                      replyLabel: l10n.commentReply,
-                      reportLabel: l10n.commentReport,
-                      authorLabel: l10n.commentAuthor,
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                  ],
-
-                  if (_hiddenComments.isNotEmpty) ...<Widget>[
-                    // Hidden Comment / Answer Warning Card -> Clickable to open Hidden Sheet
-                    GestureDetector(
-                      onTap: _openHiddenCommentsSheet,
-                      child: Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: context.isDarkMode
-                              ? const Color(0xFF1E1B26)
-                              : const Color(0xFFE8FAF9),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: context.isDarkMode
-                                ? Colors.white.withValues(alpha: 0.12)
-                                : AppColors.gradientCyan.withValues(alpha: 0.45),
-                            width: context.isDarkMode ? 1.0 : 1.2,
+              child: _isLoadingComments
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.gradientPink,
+                      ),
+                    )
+                  : _comments.isEmpty
+                      ? Center(
+                          child: Text(
+                            widget.isAnswers
+                                ? 'No answers yet. Be the first to answer!'
+                                : 'No comments yet. Be the first to comment!',
+                            style: TextStyle(
+                              color: context.themeTextMuted,
+                              fontSize: 14,
+                            ),
                           ),
-                        ),
-                        child: Row(
+                        )
+                      : ListView(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.lg),
                           children: <Widget>[
-                            Icon(
-                              Icons.visibility_off_outlined,
-                              color: context.isDarkMode
-                                  ? Colors.white54
-                                  : AppColors.gradientCyan,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text(
-                                    widget.isAnswers
-                                        ? '${_hiddenComments.length} ${_hiddenComments.length > 1 ? 'Answers' : 'Answer'} hidden'
-                                        : '${_hiddenComments.length} ${_hiddenComments.length > 1 ? 'comments' : 'comment'} hidden',
-                                    style: TextStyle(
+                            for (final CommentItemModel item in _comments) ...<Widget>[
+                              _CommentItemTile(
+                                comment: item,
+                                onLikeToggle: () => _toggleLikeComment(item),
+                                onLongPress: () => _showCommentOptionsModal(item),
+                                replyLabel: l10n.commentReply,
+                                reportLabel: l10n.commentReport,
+                                authorLabel: l10n.commentAuthor,
+                                communityId: widget.communityId,
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                            ],
+
+                            if (_hiddenComments.isNotEmpty) ...<Widget>[
+                              // Hidden Comment / Answer Warning Card -> Clickable to open Hidden Sheet
+                              GestureDetector(
+                                onTap: _openHiddenCommentsSheet,
+                                child: Container(
+                                  padding: const EdgeInsets.all(AppSpacing.md),
+                                  decoration: BoxDecoration(
+                                    color: context.isDarkMode
+                                        ? const Color(0xFF1E1B26)
+                                        : const Color(0xFFE8FAF9),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
                                       color: context.isDarkMode
-                                          ? Colors.white
-                                          : const Color(0xFFE5A8BA),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
+                                          ? Colors.white.withValues(alpha: 0.12)
+                                          : AppColors.gradientCyan
+                                              .withValues(alpha: 0.45),
+                                      width: context.isDarkMode ? 1.0 : 1.2,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    widget.isAnswers
-                                        ? 'This answer was flagged for moderation.'
-                                        : l10n.commentHiddenSub,
-                                    style: TextStyle(
-                                      color: context.isDarkMode
-                                          ? Colors.white54
-                                          : const Color(0xFF7E7989),
-                                      fontSize: 12,
-                                    ),
+                                  child: Row(
+                                    children: <Widget>[
+                                      Icon(
+                                        Icons.visibility_off_outlined,
+                                        color: context.isDarkMode
+                                            ? Colors.white54
+                                            : AppColors.gradientCyan,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: <Widget>[
+                                            Text(
+                                              widget.isAnswers
+                                                  ? '${_hiddenComments.length} ${_hiddenComments.length > 1 ? 'Answers' : 'Answer'} hidden'
+                                                  : '${_hiddenComments.length} ${_hiddenComments.length > 1 ? 'comments' : 'comment'} hidden',
+                                              style: TextStyle(
+                                                color: context.isDarkMode
+                                                    ? Colors.white
+                                                    : const Color(0xFFE5A8BA),
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              widget.isAnswers
+                                                  ? 'This answer was flagged for moderation.'
+                                                  : l10n.commentHiddenSub,
+                                              style: TextStyle(
+                                                color: context.isDarkMode
+                                                    ? Colors.white54
+                                                    : const Color(0xFF7E7989),
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (context.isDarkMode)
+                                        const Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: Colors.white54,
+                                          size: 20,
+                                        ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
-                            if (context.isDarkMode)
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                color: Colors.white54,
-                                size: 20,
-                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                            ],
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                  ],
-                ],
-              ),
             ),
 
             // ── Bottom Fixed Input Bar ────────────────────────────────
@@ -770,15 +887,24 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                         gradient: AppColors.secondaryGradientButton,
                       ),
                       child: Center(
-                        child: SvgPicture.asset(
-                          AppIcons.send,
-                          width: 18,
-                          height: 18,
-                          colorFilter: const ColorFilter.mode(
-                            Colors.white,
-                            BlendMode.srcIn,
-                          ),
-                        ),
+                        child: _isSubmittingComment
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : SvgPicture.asset(
+                                AppIcons.send,
+                                width: 18,
+                                height: 18,
+                                colorFilter: const ColorFilter.mode(
+                                  Colors.white,
+                                  BlendMode.srcIn,
+                                ),
+                              ),
                       ),
                     ),
                   ),
@@ -800,6 +926,7 @@ class _CommentItemTile extends StatelessWidget {
     required this.replyLabel,
     required this.reportLabel,
     required this.authorLabel,
+    this.communityId,
   });
 
   final CommentItemModel comment;
@@ -808,6 +935,38 @@ class _CommentItemTile extends StatelessWidget {
   final String replyLabel;
   final String reportLabel;
   final String authorLabel;
+  final String? communityId;
+
+  void _openProfile(BuildContext context) {
+    final AuthProvider auth = context.read<AuthProvider>();
+    final String? currentUserId = auth.userId;
+    final String? authorId = comment.authorId;
+
+    final bool isCurrentUser = authorId != null &&
+        currentUserId != null &&
+        authorId.trim().toLowerCase() == currentUserId.trim().toLowerCase();
+
+    if (isCurrentUser) {
+      Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => const ProfileTabScreen(),
+        ),
+      );
+    } else {
+      Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => UserProfileScreen(
+            userId: authorId,
+            username: comment.username.replaceAll('@', ''),
+            name: comment.username.replaceAll('@', '').split('.').first,
+            avatarAsset: comment.avatarAsset,
+          ),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -821,28 +980,23 @@ class _CommentItemTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               GestureDetector(
-                onTap: () {
-                  Navigator.push<void>(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => UserProfileScreen(
-                        username: comment.username.replaceAll('@', ''),
-                        name: comment.username
-                            .replaceAll('@', '')
-                            .split('.')
-                            .first,
-                        avatarAsset: comment.avatarAsset,
-                      ),
-                    ),
-                  );
-                },
+                onTap: () => _openProfile(context),
                 child: ClipOval(
-                  child: Image.asset(
-                    comment.avatarAsset,
-                    width: 36,
-                    height: 36,
-                    fit: BoxFit.cover,
-                  ),
+                  child: comment.avatarAsset.startsWith('http')
+                      ? Image.network(
+                          comment.avatarAsset,
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              const Icon(Icons.person, size: 36),
+                        )
+                      : Image.asset(
+                          comment.avatarAsset,
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                        ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -853,22 +1007,7 @@ class _CommentItemTile extends StatelessWidget {
                     Row(
                       children: <Widget>[
                         GestureDetector(
-                          onTap: () {
-                            Navigator.push<void>(
-                              context,
-                              MaterialPageRoute<void>(
-                                builder: (_) => UserProfileScreen(
-                                  username:
-                                      comment.username.replaceAll('@', ''),
-                                  name: comment.username
-                                      .replaceAll('@', '')
-                                      .split('.')
-                                      .first,
-                                  avatarAsset: comment.avatarAsset,
-                                ),
-                              ),
-                            );
-                          },
+                          onTap: () => _openProfile(context),
                           child: Text(
                             comment.username,
                             style: TextStyle(
@@ -916,9 +1055,12 @@ class _CommentItemTile extends StatelessWidget {
                           onTap: () {
                             ReportCommentBottomSheet.show(
                               context,
+                              commentId: comment.id,
                               username: comment.username,
                               commentText: comment.content,
                               avatarAsset: comment.avatarAsset,
+                              authorId: comment.authorId ?? comment.username,
+                              communityId: communityId,
                             );
                           },
                           child: Text(

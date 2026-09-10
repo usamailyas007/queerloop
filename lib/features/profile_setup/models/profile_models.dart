@@ -36,14 +36,35 @@ class UserProfile {
     this.postsCount,
   });
 
-  factory UserProfile.fromJson(Map<String, dynamic> json) {
+  factory UserProfile.fromJson(Map<String, dynamic> rawJson) {
+    final Map<String, dynamic> json =
+        (rawJson['data'] is Map<String, dynamic>)
+            ? rawJson['data'] as Map<String, dynamic>
+            : ((rawJson['user'] is Map<String, dynamic>)
+                ? rawJson['user'] as Map<String, dynamic>
+                : ((rawJson['profile'] is Map<String, dynamic>)
+                    ? rawJson['profile'] as Map<String, dynamic>
+                    : rawJson));
+
+    final dynamic rawFollowers = json['followersCount'] ??
+        json['followerCount'] ??
+        (json['_count'] is Map ? json['_count']['followers'] : null) ??
+        json['followers'];
+    final dynamic rawFollowing = json['followingCount'] ??
+        (json['_count'] is Map ? json['_count']['following'] : null) ??
+        json['following'];
+    final dynamic rawPosts = json['postsCount'] ??
+        json['postCount'] ??
+        (json['_count'] is Map ? json['_count']['posts'] : null) ??
+        json['posts'];
+
     return UserProfile(
-      id: json['userId'] as String? ?? json['id'] as String? ?? '',
+      id: (json['userId'] ?? json['id'] ?? json['_id'] ?? '').toString(),
       email: json['email'] as String?,
-      displayName: json['displayName'] as String?,
-      username: json['username'] as String?,
-      bio: json['bio'] as String?,
-      avatarUrl: json['avatarUrl'] as String?,
+      displayName: (json['displayName'] ?? json['name'] ?? json['fullName']) as String?,
+      username: (json['username'] ?? json['handle']) as String?,
+      bio: (json['bio'] ?? json['description'] ?? json['about']) as String?,
+      avatarUrl: (json['avatarUrl'] ?? json['avatar'] ?? json['profilePic'] ?? json['image']) as String?,
       pronouns: (json['pronouns'] as List<dynamic>?)
           ?.map((dynamic e) => e as String)
           .toList(),
@@ -51,7 +72,7 @@ class UserProfile {
       interests: (json['interests'] as List<dynamic>?)
           ?.map((dynamic e) => e as String)
           .toList(),
-      isPrivate: json['isPrivate'] as bool?,
+      isPrivate: json['isPrivate'] as bool? ?? false,
       showInDiscover: json['showInDiscover'] as bool?,
       allowMessagesFrom: json['allowMessagesFrom'] as String?,
       allowCommentsFrom: json['allowCommentsFrom'] as String?,
@@ -75,11 +96,21 @@ class UserProfile {
       updatedAt: json['updatedAt'] != null
           ? DateTime.tryParse(json['updatedAt'] as String)
           : null,
-      followersCount: json['followersCount'] as int? ??
-          json['followerCount'] as int?,
-      followingCount: json['followingCount'] as int?,
-      postsCount:
-          json['postsCount'] as int? ?? json['postCount'] as int?,
+      followersCount: rawFollowers is num
+          ? rawFollowers.toInt()
+          : (rawFollowers is List
+              ? rawFollowers.length
+              : int.tryParse(rawFollowers?.toString() ?? '0')),
+      followingCount: rawFollowing is num
+          ? rawFollowing.toInt()
+          : (rawFollowing is List
+              ? rawFollowing.length
+              : int.tryParse(rawFollowing?.toString() ?? '0')),
+      postsCount: rawPosts is num
+          ? rawPosts.toInt()
+          : (rawPosts is List
+              ? rawPosts.length
+              : int.tryParse(rawPosts?.toString() ?? '0')),
     );
   }
 

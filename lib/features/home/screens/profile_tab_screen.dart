@@ -5,7 +5,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
-import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_outline_button.dart';
@@ -18,6 +17,8 @@ import '../../profile/screens/settings_screen.dart';
 import '../../profile/widgets/profile_feed_tabs_widget.dart';
 import '../../profile/widgets/profile_header_stats_widget.dart';
 import '../../profile/widgets/profile_media_grid_widget.dart';
+import '../provider/home_feed_provider.dart';
+import '../widgets/post_feed_card.dart';
 
 class ProfileTabScreen extends StatefulWidget {
   const ProfileTabScreen({super.key});
@@ -65,6 +66,33 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
               ),
               child: Row(
                 children: <Widget>[
+                  if (Navigator.canPop(context)) ...<Widget>[
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        margin: const EdgeInsets.only(right: AppSpacing.sm),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.transparent,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : context.themeBorder,
+                            width: 1.1,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.chevron_left_rounded,
+                          color: context.themeIcon,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ],
                   Text(
                     displayUsername,
                     style: AppTextStyles.titleLarge.copyWith(
@@ -184,6 +212,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       pronounsPill: profileProvider.pronounsFormatted,
                       pronounsList: profileProvider.pronouns,
                       interestsList: profileProvider.interests,
+                      communitiesList: profileProvider.userCommunities,
                       postsCount: profileProvider.postsCount,
                       followersCount: profileProvider.followersCount,
                       followingCount: profileProvider.followingCount,
@@ -256,81 +285,68 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     },
                   ),
 
-                  // Tab 0: Posts
+                  // Tab 0: Posts (Photo & Text)
                   if (_selectedTabIndex == 0) ...<Widget>[
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                      decoration: BoxDecoration(
-                        color: context.themeCardBackground,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: context.themeBorder,
+                    if (profileProvider.userPosts.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 40,
+                          horizontal: 24,
+                        ),
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.article_outlined,
+                              size: 44,
+                              color: isDark ? Colors.white30 : Colors.black26,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No posts yet',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: context.themeTextPrimary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Photos and text updates you share will appear here.',
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.themeTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ...profileProvider.userPosts.map(
+                        (post) => PostFeedCard(
+                          post: post,
+                          onLikeToggle: () {
+                            context
+                                .read<HomeFeedProvider>()
+                                .toggleLikePost(post.id);
+                          },
+                          onSaveToggle: () {
+                            context
+                                .read<HomeFeedProvider>()
+                                .toggleSavePost(post.id);
+                          },
+                          onOpenComments: () {},
                         ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              ClipOval(
-                                child: Image.asset(
-                                  AppImages.user2,
-                                  width: 32,
-                                  height: 32,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text(
-                                    '@ashinorbit',
-                                    style: AppTextStyles.titleSmall.copyWith(
-                                      color: context.themeTextPrimary,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  Text(
-                                    'she/they • 2h',
-                                    style: AppTextStyles.caption.copyWith(
-                                      color: context.themeTextMuted,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          Text(
-                            'Golden hour film photography practice in the park today 🌻✨',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: context.themeTextPrimary,
-                              fontSize: 13,
-                              height: 1.35,
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Image.asset(
-                              AppImages.searchResult1,
-                              width: double.infinity,
-                              height: 180,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
 
-                  // Tab 1: Reels Grid
+                  // Tab 1: Reels Grid (Video posts)
                   if (_selectedTabIndex == 1)
-                    const ProfileMediaGridWidget(showPlayCounts: true),
+                    ProfileMediaGridWidget(
+                      customReels: profileProvider.userReels,
+                      showPlayCounts: true,
+                    ),
 
                   // Tab 2: Saved Grid
                   if (_selectedTabIndex == 2)

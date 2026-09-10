@@ -13,17 +13,25 @@ import 'mute_duration_bottom_sheet.dart';
 import 'report_conversation_bottom_sheet.dart';
 import 'restrict_user_modal_dialog.dart';
 
+import '../../reports/models/report_models.dart';
+
 class ChatOptionsBottomSheet extends StatelessWidget {
   const ChatOptionsBottomSheet({
     required this.username,
+    this.conversationId,
+    this.userId,
     super.key,
   });
 
   final String username;
+  final String? conversationId;
+  final String? userId;
 
   static Future<void> show(
     BuildContext context, {
     required String username,
+    String? conversationId,
+    String? userId,
   }) async {
     final MessagesProvider provider = context.read<MessagesProvider>();
     await showModalBottomSheet<void>(
@@ -32,7 +40,11 @@ class ChatOptionsBottomSheet extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (_) => ChangeNotifierProvider<MessagesProvider>.value(
         value: provider,
-        child: ChatOptionsBottomSheet(username: username),
+        child: ChatOptionsBottomSheet(
+          username: username,
+          conversationId: conversationId,
+          userId: userId,
+        ),
       ),
     );
   }
@@ -276,6 +288,9 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                   ReportConversationBottomSheet.show(
                     context,
                     username: username,
+                    targetType: ReportTargetType.conversation,
+                    targetId: conversationId ?? username,
+                    targetOwnerId: userId ?? username,
                     onReportSubmitted: () => provider.toggleBlock(username),
                   );
                 },

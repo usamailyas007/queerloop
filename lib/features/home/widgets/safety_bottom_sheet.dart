@@ -7,14 +7,21 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../messages/widgets/block_user_modal_dialog.dart';
 import '../../messages/widgets/report_conversation_bottom_sheet.dart';
+import '../../reports/models/report_models.dart';
 
 class SafetyBottomSheet extends StatelessWidget {
   const SafetyBottomSheet({
     this.username = '@rowankeeps',
+    this.postId,
+    this.authorId,
+    this.communityId,
     super.key,
   });
 
   final String username;
+  final String? postId;
+  final String? authorId;
+  final String? communityId;
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +117,10 @@ class SafetyBottomSheet extends StatelessWidget {
                   context,
                   username: username,
                   targetTitle: 'Reporting $cleanUsername\'s post',
+                  targetType: ReportTargetType.post,
+                  targetId: postId,
+                  targetOwnerId: authorId,
+                  communityId: communityId,
                   onReportSubmitted: () {},
                 );
               },

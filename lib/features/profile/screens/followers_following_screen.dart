@@ -359,12 +359,25 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                                 child: Row(
                                   children: <Widget>[
                                     ClipOval(
-                                      child: Image.asset(
-                                        req['avatar']!,
-                                        width: 40,
-                                        height: 40,
-                                        fit: BoxFit.cover,
-                                      ),
+                                      child: (req['avatar'] ?? '').startsWith('http')
+                                          ? Image.network(
+                                              req['avatar']!,
+                                              width: 40,
+                                              height: 40,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, _, _) =>
+                                                  const Icon(Icons.person, size: 40),
+                                            )
+                                          : Image.asset(
+                                              (req['avatar'] != null && req['avatar']!.isNotEmpty)
+                                                  ? req['avatar']!
+                                                  : AppImages.user1,
+                                              width: 40,
+                                              height: 40,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, _, _) =>
+                                                  const Icon(Icons.person, size: 40),
+                                            ),
                                     ),
                                     const SizedBox(width: AppSpacing.md),
                                     Expanded(
@@ -472,12 +485,26 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: <Widget>[
                                       ClipOval(
-                                        child: Image.asset(
-                                          _requests.first['avatar']!,
-                                          width: 38,
-                                          height: 38,
-                                          fit: BoxFit.cover,
-                                        ),
+                                        child: (_requests.first['avatar'] ?? '').startsWith('http')
+                                            ? Image.network(
+                                                _requests.first['avatar']!,
+                                                width: 38,
+                                                height: 38,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, _, _) =>
+                                                    const Icon(Icons.person, size: 38),
+                                              )
+                                            : Image.asset(
+                                                (_requests.first['avatar'] != null &&
+                                                        _requests.first['avatar']!.isNotEmpty)
+                                                    ? _requests.first['avatar']!
+                                                    : AppImages.user1,
+                                                width: 38,
+                                                height: 38,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, _, _) =>
+                                                    const Icon(Icons.person, size: 38),
+                                              ),
                                       ),
                                     ],
                                   ),
@@ -575,12 +602,26 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: <Widget>[
                                       ClipOval(
-                                        child: Image.asset(
-                                          user['avatar']!,
-                                          width: 44,
-                                          height: 44,
-                                          fit: BoxFit.cover,
-                                        ),
+                                        child: (user['avatar'] ?? '').startsWith('http')
+                                            ? Image.network(
+                                                user['avatar']!,
+                                                width: 44,
+                                                height: 44,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, _, _) =>
+                                                    const Icon(Icons.person, size: 44),
+                                              )
+                                            : Image.asset(
+                                                (user['avatar'] != null &&
+                                                        user['avatar']!.isNotEmpty)
+                                                    ? user['avatar']!
+                                                    : AppImages.user1,
+                                                width: 44,
+                                                height: 44,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, _, _) =>
+                                                    const Icon(Icons.person, size: 44),
+                                              ),
                                       ),
                                     ],
                                   ),

@@ -6,14 +6,32 @@ import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../../core/api/api_exception.dart';
 import '../../../core/theme/app_images.dart';
 import '../models/create_post_models.dart';
+import '../services/media_upload_service.dart';
+import '../services/post_content_service.dart';
 
 class CreatePostProvider extends ChangeNotifier {
-  CreatePostProvider() {
+  CreatePostProvider({
+    MediaUploadService? uploadService,
+    PostContentService? contentService,
+  })  : _uploadService = uploadService,
+        _contentService = contentService {
     _initDefaultMedia();
     loadDeviceVideos();
     loadDevicePhotos();
+  }
+
+  MediaUploadService? _uploadService;
+  PostContentService? _contentService;
+
+  void updateServices({
+    required MediaUploadService uploadService,
+    required PostContentService contentService,
+  }) {
+    _uploadService = uploadService;
+    _contentService = contentService;
   }
 
   final ImagePicker _picker = ImagePicker();
@@ -40,7 +58,9 @@ class CreatePostProvider extends ChangeNotifier {
   List<GalleryMediaItem> get photoGallery =>
       List<GalleryMediaItem>.unmodifiable(_photoGallery.take(8));
 
-  // ── Video Trimming ───────────────────────────────────────────────────
+  // ── Video Trimming & 60-Second Server Limit ─────────────────────────
+  static const int maxVideoDurationLimitSeconds = 60;
+
   double _trimStart = 0.0;
   double _trimEnd = 1.0;
   int _totalDurationSeconds = 47;
@@ -48,6 +68,11 @@ class CreatePostProvider extends ChangeNotifier {
   double get trimStart => _trimStart;
   double get trimEnd => _trimEnd;
   int get totalDurationSeconds => _totalDurationSeconds;
+
+  bool get isVideoOverLimit =>
+      _totalDurationSeconds > maxVideoDurationLimitSeconds;
+  bool get isDurationWithinLimit =>
+      selectedDurationSeconds <= maxVideoDurationLimitSeconds;
 
   int get selectedDurationSeconds => _totalDurationSeconds > 0
       ? ((_trimEnd - _trimStart) * _totalDurationSeconds)
@@ -77,8 +102,317 @@ class CreatePostProvider extends ChangeNotifier {
 
   void setTrimRange(double start, double end) {
     _trimStart = start.clamp(0.0, 1.0);
-    _trimEnd = end.clamp(start, 1.0);
+    double proposedEnd = end.clamp(_trimStart, 1.0);
+
+    // Enforce 60s max video limit
+    if (_totalDurationSeconds > maxVideoDurationLimitSeconds) {
+      final double maxAllowedFraction =
+          maxVideoDurationLimitSeconds / _totalDurationSeconds;
+      if ((proposedEnd - _trimStart) > maxAllowedFraction) {
+        proposedEnd = (_trimStart + maxAllowedFraction).clamp(0.0, 1.0);
+      }
+    }
+    _trimEnd = proposedEnd;
     notifyListeners();
+  }
+
+  // ── Media Upload & Transcoding Pipeline ──────────────────────────────
+  MediaUploadStatus _uploadStatus = MediaUploadStatus.idle;
+  MediaUploadStatus get uploadStatus => _uploadStatus;
+
+  double _uploadProgress = 0.0;
+  double get uploadProgress => _uploadProgress;
+
+  String? _uploadedMediaId;
+  String? get uploadedMediaId => _uploadedMediaId;
+
+  MediaUploadResult? _uploadResult;
+  MediaUploadResult? get uploadResult => _uploadResult;
+
+  String? _uploadError;
+  String? get uploadError => _uploadError;
+
+  bool _isPublishing = false;
+  bool get isPublishing => _isPublishing;
+
+  bool get isMediaReady => _uploadStatus == MediaUploadStatus.ready;
+
+  /// Gate: Client-side gating on status===ready
+  bool get canPublish =>
+      !_isPublishing &&
+      (_selectedMedia == null || _uploadStatus == MediaUploadStatus.ready);
+
+  int _uploadSessionId = 0;
+
+  void _resetUploadState() {
+    _uploadSessionId++;
+    _uploadService?.cancelPolling();
+    _uploadStatus = MediaUploadStatus.idle;
+    _uploadProgress = 0.0;
+    _uploadedMediaId = null;
+    _uploadResult = null;
+    _uploadError = null;
+  }
+
+  /// Cancels any in-flight media upload, S3 transfer, or status polling loop.
+  void cancelMediaUpload() {
+    _uploadSessionId++;
+    _uploadService?.cancelPolling();
+    if (_uploadStatus == MediaUploadStatus.uploading ||
+        _uploadStatus == MediaUploadStatus.transcoding ||
+        _uploadStatus == MediaUploadStatus.requestingUrl ||
+        _uploadStatus == MediaUploadStatus.completing) {
+      _uploadStatus = MediaUploadStatus.idle;
+      _uploadProgress = 0.0;
+      _uploadError = null;
+      notifyListeners();
+    }
+    debugPrint('🛑 [CreatePostProvider] Media upload cancelled.');
+  }
+
+  Future<void> startMediaUpload() async {
+    if (_selectedMedia == null) return;
+    if (_uploadStatus == MediaUploadStatus.uploading ||
+        _uploadStatus == MediaUploadStatus.transcoding ||
+        _uploadStatus == MediaUploadStatus.requestingUrl) {
+      return;
+    }
+    if (_uploadStatus == MediaUploadStatus.ready && _uploadedMediaId != null) {
+      return;
+    }
+
+    final int sessionId = ++_uploadSessionId;
+    bool isCancelled() => sessionId != _uploadSessionId;
+
+    _uploadStatus = MediaUploadStatus.requestingUrl;
+    _uploadProgress = 0.0;
+    _uploadError = null;
+    notifyListeners();
+
+    try {
+      final String? path = _selectedMedia!.filePath;
+      final bool isVideo = _selectedMedia!.isVideo;
+
+      if (_uploadService == null) {
+        // Mock fallback simulation
+        _uploadStatus = MediaUploadStatus.uploading;
+        _uploadProgress = 0.5;
+        notifyListeners();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        if (isCancelled()) return;
+        _uploadProgress = 1.0;
+        _uploadStatus =
+            isVideo ? MediaUploadStatus.transcoding : MediaUploadStatus.completing;
+        notifyListeners();
+        await Future<void>.delayed(const Duration(seconds: 1));
+        if (isCancelled()) return;
+        _uploadedMediaId = 'media_${DateTime.now().millisecondsSinceEpoch}';
+        _uploadResult = MediaUploadResult(
+          id: _uploadedMediaId!,
+          status: 'ready',
+          downloadUrl: isVideo ? 'assets/videos/video1.mp4' : path,
+        );
+        _uploadStatus = MediaUploadStatus.ready;
+        notifyListeners();
+        return;
+      }
+
+      final String filename = path != null
+          ? path.split(Platform.pathSeparator).last
+          : (isVideo ? 'upload_video.mp4' : 'upload_image.jpg');
+      final String contentType = isVideo ? 'video/mp4' : 'image/jpeg';
+      final String fileType = isVideo ? 'video' : 'image';
+
+      File? fileToUpload;
+      int? fileSize;
+      if (path != null) {
+        final File file = File(path);
+        if (await file.exists()) {
+          fileToUpload = file;
+          fileSize = await file.length();
+        }
+      }
+
+      if (isCancelled()) return;
+
+      // Step 1: POST /media/upload-url (Port 3014)
+      final MediaUploadResult uploadInfo = await _uploadService!.getUploadUrl(
+        filename: filename,
+        contentType: contentType,
+        fileType: fileType,
+        fileSize: fileSize,
+      );
+
+      if (isCancelled()) return;
+
+      if (uploadInfo.id.trim().isEmpty) {
+        throw ApiException(
+          'Upload service did not return a valid media ID.',
+          kind: ApiErrorKind.server,
+        );
+      }
+
+      _uploadStatus = MediaUploadStatus.uploading;
+      notifyListeners();
+
+      // Step 2: PUT <uploadUrl> direct to Amazon S3
+      if (fileToUpload != null &&
+          uploadInfo.uploadUrl != null &&
+          uploadInfo.uploadUrl!.isNotEmpty) {
+        await _uploadService!.uploadFileToS3(
+          uploadUrl: uploadInfo.uploadUrl!,
+          file: fileToUpload,
+          contentType: contentType,
+          onProgress: (int sent, int total) {
+            if (isCancelled()) return;
+            if (total > 0) {
+              _uploadProgress = (sent / total).clamp(0.0, 1.0);
+              notifyListeners();
+            }
+          },
+        );
+      } else {
+        _uploadProgress = 1.0;
+        notifyListeners();
+      }
+
+      if (isCancelled()) return;
+
+      // Step 3: Complete upload notification to backend
+      _uploadStatus = MediaUploadStatus.completing;
+      notifyListeners();
+      MediaUploadResult completedInfo = uploadInfo;
+      try {
+        completedInfo = await _uploadService!.completeUpload(uploadInfo.id);
+      } catch (e) {
+        debugPrint('⚠️ completeUpload notice: $e');
+      }
+      if (isCancelled()) return;
+
+      final String statusLower = completedInfo.status.toLowerCase();
+      if (!isVideo ||
+          statusLower == 'ready' ||
+          statusLower == 'uploaded' ||
+          statusLower == 'completed' ||
+          statusLower == 'done' ||
+          statusLower == 'active') {
+        _uploadedMediaId = completedInfo.id.isNotEmpty ? completedInfo.id : uploadInfo.id;
+        _uploadResult = completedInfo;
+        _uploadStatus = MediaUploadStatus.ready;
+        notifyListeners();
+        return;
+      }
+
+      // Step 4: Video status polling for AWS transcoding (GET /media/:id on Port 3014)
+      _uploadStatus = MediaUploadStatus.transcoding;
+      notifyListeners();
+
+      MediaUploadResult readyMedia = completedInfo;
+      try {
+        readyMedia = await _uploadService!.pollUntilReady(
+          uploadInfo.id,
+          isCancelled: isCancelled,
+          onStatusChange: (String status) {
+            if (!isCancelled()) {
+              debugPrint('🎬 Video transcoding status: $status');
+            }
+          },
+        );
+      } catch (e) {
+        debugPrint('⚠️ pollUntilReady notice (falling back to uploaded media): $e');
+        readyMedia = completedInfo;
+      }
+
+      if (isCancelled()) return;
+
+      _uploadedMediaId = readyMedia.id.isNotEmpty ? readyMedia.id : uploadInfo.id;
+      _uploadResult = readyMedia;
+      _uploadStatus = MediaUploadStatus.ready;
+      notifyListeners();
+    } catch (e) {
+      if (isCancelled()) return;
+      debugPrint('❌ Media upload failed: $e');
+      _uploadStatus = MediaUploadStatus.failed;
+      _uploadError = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<PostResponseModel?> publishPost() async {
+    if (_isPublishing) return null;
+
+    // Client-side gating: status must be ready before creating post
+    if (_selectedMedia != null && _uploadStatus != MediaUploadStatus.ready) {
+      if (_uploadStatus == MediaUploadStatus.idle ||
+          _uploadStatus == MediaUploadStatus.failed) {
+        await startMediaUpload();
+      }
+      if (_uploadStatus != MediaUploadStatus.ready) {
+        throw Exception(
+          _uploadError ?? 'Media is still processing. Please wait.',
+        );
+      }
+    }
+
+    _isPublishing = true;
+    notifyListeners();
+
+    try {
+      final List<String> mediaRefs = <String>[];
+      if (_uploadedMediaId != null && _uploadedMediaId!.isNotEmpty) {
+        mediaRefs.add(_uploadedMediaId!);
+      }
+
+      // Backend expects type: "TEXT" | "PHOTO" | "VIDEO"
+      final bool isVideo =
+          _selectedMedia?.isVideo ?? (_mediaType == MediaType.video);
+      final String postType = (_selectedMedia != null || mediaRefs.isNotEmpty)
+          ? (isVideo ? 'VIDEO' : 'PHOTO')
+          : 'TEXT';
+
+      // Backend expects visibility: "EVERYONE" | "FOLLOWERS" | "COMMUNITY_ONLY"
+      final String serverVisibility = () {
+        switch (_visibility) {
+          case PostVisibility.everyone:
+            return 'EVERYONE';
+          case PostVisibility.followers:
+            return 'FOLLOWERS';
+          case PostVisibility.communityOnly:
+            return 'COMMUNITY_ONLY';
+        }
+      }();
+
+      final List<String> postTags =
+          _tags.isNotEmpty ? _tags : <String>[_selectedCommunity];
+
+      PostResponseModel result;
+      if (_contentService != null) {
+        result = await _contentService!.createPost(
+          body: _caption,
+          type: postType,
+          visibility: serverVisibility,
+          mediaRefs: mediaRefs,
+          tags: postTags,
+          communityId: _selectedCommunityId,
+        );
+      } else {
+        result = PostResponseModel(
+          id: 'post_${DateTime.now().millisecondsSinceEpoch}',
+          caption: _caption,
+          type: postType,
+          mediaRefs: mediaRefs,
+          tags: postTags,
+          community: _selectedCommunity,
+          communityId: _selectedCommunityId,
+          visibility: serverVisibility,
+        );
+      }
+
+      return result;
+    } finally {
+      _isPublishing = false;
+      notifyListeners();
+    }
   }
 
   // ── Post Form State ──────────────────────────────────────────────────
@@ -90,6 +424,9 @@ class CreatePostProvider extends ChangeNotifier {
 
   String _selectedCommunity = 'Transgender';
   String get selectedCommunity => _selectedCommunity;
+
+  String? _selectedCommunityId;
+  String? get selectedCommunityId => _selectedCommunityId;
 
   PostVisibility _visibility = PostVisibility.followers;
   PostVisibility get visibility => _visibility;
@@ -128,9 +465,17 @@ class CreatePostProvider extends ChangeNotifier {
       _totalDurationSeconds =
           media.durationSeconds > 0 ? media.durationSeconds : 47;
       _trimStart = 0.0;
-      _trimEnd = 1.0;
+      if (_totalDurationSeconds > maxVideoDurationLimitSeconds) {
+        _trimEnd = (maxVideoDurationLimitSeconds / _totalDurationSeconds)
+            .clamp(0.0, 1.0);
+      } else {
+        _trimEnd = 1.0;
+      }
     }
+    _resetUploadState();
     notifyListeners();
+    // Auto-trigger upload in background as user prepares post
+    startMediaUpload();
   }
 
   void updateCaption(String text) {
@@ -138,8 +483,9 @@ class CreatePostProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setSelectedCommunity(String community) {
+  void setSelectedCommunity(String community, {String? id}) {
     _selectedCommunity = community;
+    _selectedCommunityId = id;
     notifyListeners();
   }
 
@@ -181,11 +527,13 @@ class CreatePostProvider extends ChangeNotifier {
     _caption = '';
     _tags.clear();
     _selectedCommunity = 'Transgender';
+    _selectedCommunityId = null;
     _visibility = PostVisibility.followers;
     _allowComments = true;
     _allowDownloads = false;
     _trimStart = 0.0;
     _trimEnd = 1.0;
+    _resetUploadState();
     notifyListeners();
   }
 

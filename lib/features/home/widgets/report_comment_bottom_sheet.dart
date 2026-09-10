@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
@@ -8,23 +9,34 @@ import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../create_post/widgets/custom_gradient_switch.dart';
 import '../../messages/widgets/report_sent_modal_dialog.dart';
+import '../../reports/models/report_models.dart';
+import '../../reports/provider/report_provider.dart';
 
 class ReportCommentBottomSheet extends StatefulWidget {
   const ReportCommentBottomSheet({
     required this.username,
     required this.commentText,
+    this.commentId,
+    this.authorId,
+    this.communityId,
     this.avatarAsset = AppImages.user1,
     super.key,
   });
 
   final String username;
   final String commentText;
+  final String? commentId;
+  final String? authorId;
+  final String? communityId;
   final String avatarAsset;
 
   static Future<void> show(
     BuildContext context, {
     required String username,
     required String commentText,
+    String? commentId,
+    String? authorId,
+    String? communityId,
     String avatarAsset = AppImages.user1,
   }) async {
     await showModalBottomSheet<void>(
@@ -34,6 +46,9 @@ class ReportCommentBottomSheet extends StatefulWidget {
       builder: (_) => ReportCommentBottomSheet(
         username: username,
         commentText: commentText,
+        commentId: commentId,
+        authorId: authorId,
+        communityId: communityId,
         avatarAsset: avatarAsset,
       ),
     );
@@ -45,15 +60,19 @@ class ReportCommentBottomSheet extends StatefulWidget {
 }
 
 class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
-  int _selectedReasonIndex = 0; // Default: Harassment or bullying
+  int _selectedReasonIndex = 2; // Default: Harassment or bullying
   bool _alsoBlock = false;
 
-  static const List<String> _reasons = <String>[
-    'Harassment or bullying',
-    'Hate speech or slurs',
-    'Outing someone without consent',
-    'Spam or a fake account',
-    'Something else',
+  // All 8 server-supported reasons.
+  static const List<ReportReason> _reasons = <ReportReason>[
+    ReportReason.threats,
+    ReportReason.selfHarm,
+    ReportReason.harassment,
+    ReportReason.hateSpeech,
+    ReportReason.spam,
+    ReportReason.outing,
+    ReportReason.sexualContent,
+    ReportReason.other,
   ];
 
   @override
@@ -131,12 +150,25 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                 child: Row(
                   children: <Widget>[
                     ClipOval(
-                      child: Image.asset(
-                        widget.avatarAsset,
-                        width: 32,
-                        height: 32,
-                        fit: BoxFit.cover,
-                      ),
+                      child: widget.avatarAsset.startsWith('http')
+                          ? Image.network(
+                              widget.avatarAsset,
+                              width: 32,
+                              height: 32,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) =>
+                                  const Icon(Icons.person, size: 32),
+                            )
+                          : Image.asset(
+                              widget.avatarAsset.isNotEmpty
+                                  ? widget.avatarAsset
+                                  : AppImages.user1,
+                              width: 32,
+                              height: 32,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) =>
+                                  const Icon(Icons.person, size: 32),
+                            ),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
@@ -172,7 +204,7 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
 
               // Reason Option Tiles List
               ...List<Widget>.generate(_reasons.length, (int index) {
-                final String reason = _reasons[index];
+                final ReportReason reason = _reasons[index];
                 final bool isSelected = _selectedReasonIndex == index;
 
                 return GestureDetector(
@@ -197,7 +229,7 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: <Widget>[
                         Text(
-                          reason,
+                          reason.label,
                           style: AppTextStyles.bodyMedium.copyWith(
                             color: context.themeTextPrimary,
                             fontWeight:
@@ -257,25 +289,53 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
               const SizedBox(height: AppSpacing.xl),
 
               // Send report button
-              AppGradientButton(
-                text: 'Send report',
-                onPressed: () {
-                  Navigator.pop(context);
+              Consumer<ReportProvider>(
+                builder: (BuildContext ctx, ReportProvider reportProvider, _) {
+                  return AppGradientButton(
+                    text: reportProvider.isSubmitting ? 'Sending...' : 'Send report',
+                    isLoading: reportProvider.isSubmitting,
+                    isEnabled: !reportProvider.isSubmitting,
+                    onPressed: () async {
+                            final ScaffoldMessengerState messenger =
+                                ScaffoldMessenger.of(context);
 
-                  ReportSentModalDialog.show(
-                    context,
-                    username: widget.username,
-                    reportId: 'QL-84219',
+                            final String effectiveTargetId =
+                                widget.commentId ?? widget.username;
+                            final String effectiveOwnerId =
+                                widget.authorId ?? widget.username;
+
+                            final String? displayId =
+                                await reportProvider.submitReport(
+                              CreateReportRequest(
+                                targetType: ReportTargetType.comment,
+                                targetId: effectiveTargetId,
+                                targetOwnerId: effectiveOwnerId,
+                                reason: _reasons[_selectedReasonIndex],
+                                communityId: widget.communityId,
+                              ),
+                            );
+
+                            if (!context.mounted) return;
+                            Navigator.pop(context);
+
+                            ReportSentModalDialog.show(
+                              context,
+                              username: widget.username,
+                              reportId: displayId ?? 'QL-00000',
+                            );
+
+                            if (_alsoBlock) {
+                              AppSnackBar.show(
+                                context,
+                                messenger: messenger,
+                                title: '${widget.username} blocked',
+                                subtitle:
+                                    'Their posts and comments are gone from your app',
+                                actionLabel: 'Undo',
+                              );
+                            }
+                          },
                   );
-
-                  if (_alsoBlock) {
-                    AppSnackBar.show(
-                      context,
-                      title: '${widget.username} blocked',
-                      subtitle: 'Their posts and comments are gone from your app',
-                      actionLabel: 'Undo',
-                    );
-                  }
                 },
               ),
 

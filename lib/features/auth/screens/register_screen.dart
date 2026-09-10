@@ -72,7 +72,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     if (!mounted) return;
-    Navigator.pushNamed(context, AppRoutes.accountCreatedSuccess);
+    Navigator.pushNamed(
+      context,
+      AppRoutes.verifyEmailOtp,
+      arguments: _emailController.text.trim(),
+    );
   }
 
   @override

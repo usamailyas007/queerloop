@@ -11,8 +11,12 @@ import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../home/provider/home_feed_provider.dart';
+import '../../profile/provider/profile_provider.dart';
+import '../../profile_setup/models/community_model.dart';
+import '../../profile_setup/provider/profile_setup_provider.dart';
 import '../models/create_post_models.dart';
 import '../provider/create_post_provider.dart';
 import '../widgets/add_tag_bottom_sheet.dart';
@@ -21,7 +25,6 @@ import '../widgets/media_thumbnail_widget.dart';
 import '../widgets/select_community_bottom_sheet.dart';
 import 'post_success_screen.dart';
 
-/// Controller that highlights hashtags (#word) in cyan color like Image 5.
 class _HashtagTextEditingController extends TextEditingController {
   _HashtagTextEditingController({super.text});
 
@@ -77,6 +80,32 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
     final CreatePostProvider provider = context.read<CreatePostProvider>();
     _captionController =
         _HashtagTextEditingController(text: provider.caption);
+
+    // Auto-start upload if media is selected and in idle status
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (provider.selectedMedia != null &&
+          provider.uploadStatus == MediaUploadStatus.idle) {
+        provider.startMediaUpload();
+      }
+
+      final ProfileSetupProvider setupProvider =
+          context.read<ProfileSetupProvider>();
+      if (setupProvider.allCommunities.isEmpty) {
+        setupProvider.fetchCommunities();
+      }
+
+      if (provider.selectedCommunityId == null) {
+        final ProfileProvider profile = context.read<ProfileProvider>();
+        if (profile.userCommunities.isNotEmpty) {
+          final CommunityModel first = profile.userCommunities.first;
+          provider.setSelectedCommunity(first.name, id: first.id);
+        } else if (setupProvider.allCommunities.isNotEmpty) {
+          final CommunityModel first = setupProvider.allCommunities.first;
+          provider.setSelectedCommunity(first.name, id: first.id);
+        }
+      }
+    });
   }
 
   @override
@@ -85,39 +114,116 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
     super.dispose();
   }
 
-  void _publishPost(BuildContext context, CreatePostProvider provider) {
-    final HomeFeedProvider homeProvider = context.read<HomeFeedProvider>();
-    final GalleryMediaItem? item = provider.selectedMedia;
-
-    if (item != null && item.isVideo) {
-      final ReelItemModel newReel = ReelItemModel(
-        id: 'reel_${DateTime.now().millisecondsSinceEpoch}',
-        username: '@you',
-        pronounsTime: 'they/them · just now',
-        avatarAsset: AppImages.user1,
-        videoAsset:
-            item.videoAsset ?? (item.filePath ?? 'assets/videos/video1.mp4'),
-        videoFilePath: item.filePath,
-        caption: provider.caption,
-        likesCount: 0,
-        commentsCount: 0,
-        tags: provider.tags.isNotEmpty
-            ? provider.tags
-            : <String>[provider.selectedCommunity],
-        durationText:
-            '0:${provider.selectedDurationSeconds.toString().padLeft(2, '0')}',
+  Future<void> _publishPost(
+      BuildContext context, CreatePostProvider provider) async {
+    // 1. Client-side gating: ensure media is ready
+    if (provider.selectedMedia != null && !provider.isMediaReady) {
+      if (provider.uploadStatus == MediaUploadStatus.failed) {
+        AppSnackBar.showError(
+          context,
+          title: 'Upload Failed',
+          subtitle:
+              provider.uploadError ?? 'Please retry uploading your media.',
+        );
+        return;
+      }
+      AppSnackBar.showInfo(
+        context,
+        title: 'Processing Media',
+        subtitle: provider.uploadStatus == MediaUploadStatus.transcoding
+            ? 'AWS is transcoding your video. Ready in a few seconds.'
+            : 'Media is uploading, please wait...',
       );
-      homeProvider.addNewReel(newReel);
+      return;
     }
 
-    provider.resetPostForm();
+    // 2. Video 60-second limit check
+    if (provider.selectedMedia != null &&
+        provider.selectedMedia!.isVideo &&
+        !provider.isDurationWithinLimit) {
+      AppSnackBar.showError(
+        context,
+        title: 'Video Too Long',
+        subtitle:
+            'Video limit is 60 seconds for testing. Please adjust trimming.',
+      );
+      return;
+    }
 
-    Navigator.push<void>(
-      context,
-      MaterialPageRoute<void>(
-        builder: (_) => const PostSuccessScreen(),
-      ),
-    );
+    try {
+      final PostResponseModel? postResult = await provider.publishPost();
+
+      if (!context.mounted) return;
+
+      final HomeFeedProvider homeProvider = context.read<HomeFeedProvider>();
+      final GalleryMediaItem? item = provider.selectedMedia;
+      final bool isVideo = (item != null && item.isVideo) ||
+          (provider.mediaType == MediaType.video);
+
+      if (isVideo) {
+        final ReelItemModel newReel = ReelItemModel(
+          id: postResult?.id ?? 'reel_${DateTime.now().millisecondsSinceEpoch}',
+          username: '@you',
+          pronounsTime: 'they/them · just now',
+          avatarAsset: AppImages.user1,
+          videoAsset:
+              item?.videoAsset ?? (item?.filePath ?? 'assets/videos/video1.mp4'),
+          videoFilePath: item?.filePath,
+          videoUrl: provider.uploadResult?.downloadUrl ?? provider.uploadResult?.url,
+          thumbnailUrl: provider.uploadResult?.thumbnailUrl,
+          caption: provider.caption,
+          likesCount: 0,
+          commentsCount: 0,
+          tags: provider.tags.isNotEmpty
+              ? provider.tags
+              : <String>[provider.selectedCommunity],
+          durationText:
+              '0:${provider.selectedDurationSeconds.toString().padLeft(2, '0')}',
+        );
+        homeProvider.addNewReel(newReel);
+        try {
+          context.read<ProfileProvider>().addUserReel(newReel);
+        } catch (_) {}
+      } else {
+        final PostItemModel newPost = PostItemModel(
+          id: postResult?.id ?? 'post_${DateTime.now().millisecondsSinceEpoch}',
+          username: '@you',
+          pronounsTime: 'they/them · just now',
+          avatarAsset: AppImages.user4,
+          content: provider.caption,
+          likesCount: 0,
+          commentsCount: 0,
+          postImageAsset: (item != null && item.assetPath.isNotEmpty)
+              ? item.assetPath
+              : null,
+          postImageUrl: provider.uploadResult?.downloadUrl ?? provider.uploadResult?.url,
+          postType: item != null ? 'PHOTO' : 'TEXT',
+        );
+        homeProvider.addNewPost(newPost);
+        try {
+          context.read<ProfileProvider>().addUserPost(newPost);
+        } catch (_) {}
+      }
+
+      // Refresh live feed in background
+      homeProvider.loadFeed();
+
+      provider.resetPostForm();
+
+      Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => const PostSuccessScreen(),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      AppSnackBar.showError(
+        context,
+        title: 'Publish Failed',
+        subtitle: e.toString().replaceAll('Exception:', '').trim(),
+      );
+    }
   }
 
   @override
@@ -128,9 +234,11 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
     return Scaffold(
       backgroundColor: context.themeBackground,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: <Widget>[
-            // ── Top Navigation Bar (Back, Title "New post") ────────────────
+            Column(
+              children: <Widget>[
+                // ── Top Navigation Bar (Back, Title "New post") ────────────────
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.lg,
@@ -254,49 +362,46 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
 
                       // Caption Box using AppTextField widget directly
                       Expanded(
-                        child: SizedBox(
-                          height: 106,
-                          child: AppTextField(
-                            controller: _captionController,
-                            hintText: 'Write a caption...',
-                            maxLines: 4,
-                            maxLength: CreatePostProvider.maxCaptionLength,
-                            onChanged: (String val) =>
-                                provider.updateCaption(val),
-                            suffixIcon: provider.tags.isNotEmpty
-                                ? Padding(
-                                    padding: const EdgeInsets.only(
-                                      right: 10,
-                                      top: 10,
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: provider.tags
-                                          .take(3)
-                                          .map(
-                                            (String tag) => Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 2,
-                                              ),
-                                              child: Text(
-                                                tag,
-                                                style: AppTextStyles.bodySmall
-                                                    .copyWith(
-                                                  color:
-                                                      AppColors.gradientCyan,
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 12,
-                                                ),
+                        child: AppTextField(
+                          controller: _captionController,
+                          hintText: 'Write a caption...',
+                          maxLines: 4,
+                          maxLength: CreatePostProvider.maxCaptionLength,
+                          onChanged: (String val) =>
+                              provider.updateCaption(val),
+                          suffixIcon: provider.tags.isNotEmpty
+                              ? Padding(
+                                  padding: const EdgeInsets.only(
+                                    right: 10,
+                                    top: 10,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.end,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: provider.tags
+                                        .take(3)
+                                        .map(
+                                          (String tag) => Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 2,
+                                            ),
+                                            child: Text(
+                                              tag,
+                                              style: AppTextStyles.bodySmall
+                                                  .copyWith(
+                                                color:
+                                                    AppColors.gradientCyan,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 12,
                                               ),
                                             ),
-                                          )
-                                          .toList(),
-                                    ),
-                                  )
-                                : null,
-                          ),
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                                )
+                              : null,
                         ),
                       ),
                     ],
@@ -323,18 +428,22 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: AppSpacing.xl),
+                   const SizedBox(height: AppSpacing.lg),
 
                   // ── Form Option 1: Community ─────────────────────────────
                   GestureDetector(
                     onTap: () async {
-                      final String? selected =
+                      final CommunityModel? selected =
                           await SelectCommunityBottomSheet.show(
                         context,
                         currentCommunity: provider.selectedCommunity,
+                        currentCommunityId: provider.selectedCommunityId,
                       );
                       if (selected != null) {
-                        provider.setSelectedCommunity(selected);
+                        provider.setSelectedCommunity(
+                          selected.name,
+                          id: selected.id,
+                        );
                       }
                     },
                     child: Container(
@@ -665,7 +774,16 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: AppGradientButton(
-                      text: 'Publish',
+                      text: provider.isPublishing
+                          ? 'Publishing...'
+                          : (provider.uploadStatus == MediaUploadStatus.transcoding
+                              ? 'Transcoding...'
+                              : (provider.uploadStatus == MediaUploadStatus.uploading ||
+                                      provider.uploadStatus == MediaUploadStatus.requestingUrl
+                                  ? 'Uploading...'
+                                  : 'Publish')),
+                      isEnabled: provider.canPublish,
+                      isLoading: provider.isPublishing,
                       onPressed: () => _publishPost(context, provider),
                     ),
                   ),
@@ -674,8 +792,10 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
             ),
           ],
         ),
-      ),
-    );
+      ],
+    ),
+  ),
+);
   }
 }
 
@@ -720,3 +840,4 @@ class _VisibilityOptionChip extends StatelessWidget {
     );
   }
 }
+

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
@@ -38,12 +39,25 @@ class FollowUserTile extends StatelessWidget {
               child: Row(
                 children: <Widget>[
                   ClipOval(
-                    child: Image.asset(
-                      avatarAsset,
-                      width: 44,
-                      height: 44,
-                      fit: BoxFit.cover,
-                    ),
+                    child: avatarAsset.startsWith('http')
+                        ? Image.network(
+                            avatarAsset,
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) =>
+                                const Icon(Icons.person, size: 44),
+                          )
+                        : Image.asset(
+                            avatarAsset.isNotEmpty
+                                ? avatarAsset
+                                : AppImages.user1,
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) =>
+                                const Icon(Icons.person, size: 44),
+                          ),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(

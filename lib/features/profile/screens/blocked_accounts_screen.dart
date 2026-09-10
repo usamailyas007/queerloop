@@ -180,12 +180,25 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                           children: <Widget>[
                             // User Avatar
                             ClipOval(
-                              child: Image.asset(
-                                user.avatarAsset,
-                                width: 44,
-                                height: 44,
-                                fit: BoxFit.cover,
-                              ),
+                              child: user.avatarAsset.startsWith('http')
+                                  ? Image.network(
+                                      user.avatarAsset,
+                                      width: 44,
+                                      height: 44,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) =>
+                                          const Icon(Icons.person, size: 44),
+                                    )
+                                  : Image.asset(
+                                      user.avatarAsset.isNotEmpty
+                                          ? user.avatarAsset
+                                          : AppImages.user1,
+                                      width: 44,
+                                      height: 44,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) =>
+                                          const Icon(Icons.person, size: 44),
+                                    ),
                             ),
                             const SizedBox(width: AppSpacing.md),
 

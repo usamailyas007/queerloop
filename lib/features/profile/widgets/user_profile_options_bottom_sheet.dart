@@ -11,21 +11,31 @@ import '../../messages/widgets/block_user_modal_dialog.dart';
 import '../../messages/widgets/mute_duration_bottom_sheet.dart';
 import '../../messages/widgets/report_conversation_bottom_sheet.dart';
 import '../../messages/widgets/restrict_user_modal_dialog.dart';
+import '../../reports/models/report_models.dart';
 
 class UserProfileOptionsBottomSheet extends StatelessWidget {
   const UserProfileOptionsBottomSheet({
     required this.username,
+    this.userId,
     super.key,
   });
 
   final String username;
+  final String? userId;
 
-  static void show(BuildContext context, {required String username}) {
+  static void show(
+    BuildContext context, {
+    required String username,
+    String? userId,
+  }) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => UserProfileOptionsBottomSheet(username: username),
+      builder: (_) => UserProfileOptionsBottomSheet(
+        username: username,
+        userId: userId,
+      ),
     );
   }
 
@@ -300,9 +310,13 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
               titleColor: AppColors.gradientCyan,
               onTap: () {
                 Navigator.pop(context);
+                final String effectiveUserId = userId ?? username;
                 ReportConversationBottomSheet.show(
                   context,
                   username: username,
+                  targetType: ReportTargetType.user,
+                  targetId: effectiveUserId,
+                  targetOwnerId: effectiveUserId,
                   onReportSubmitted: () {},
                 );
               },

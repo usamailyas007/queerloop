@@ -11,17 +11,23 @@ class User {
     required this.dobVerified,
     this.displayName,
     this.avatarUrl,
+    this.emailVerified,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] as String,
-      email: json['email'] as String,
-      role: json['role'] as String? ?? 'user',
-      accountStatus: _parseStatus(json['accountStatus'] as String?),
-      dobVerified: json['dobVerified'] as bool? ?? false,
-      displayName: json['displayName'] as String?,
-      avatarUrl: json['avatarUrl'] as String?,
+      id: (json['id'] ?? json['_id'] ?? json['userId'] ?? '').toString(),
+      email: (json['email'] ?? '').toString(),
+      role: (json['role'] ?? 'user').toString(),
+      accountStatus: _parseStatus(json['accountStatus']?.toString()),
+      dobVerified: json['dobVerified'] as bool? ??
+          json['emailVerified'] as bool? ??
+          false,
+      displayName:
+          (json['displayName'] ?? json['name'] ?? json['username']) as String?,
+      avatarUrl: (json['avatarUrl'] ?? json['avatar'] ?? json['profilePic'])
+          as String?,
+      emailVerified: json['emailVerified'] as bool?,
     );
   }
 
@@ -32,6 +38,7 @@ class User {
   final bool dobVerified;
   final String? displayName;
   final String? avatarUrl;
+  final bool? emailVerified;
 
   static AccountStatus _parseStatus(String? raw) {
     return switch (raw) {
@@ -51,10 +58,34 @@ class AuthSession {
   });
 
   factory AuthSession.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic> payload = (json['data'] is Map<String, dynamic>)
+        ? json['data'] as Map<String, dynamic>
+        : json;
+
+    final Map<String, dynamic> userMap =
+        (payload['user'] is Map<String, dynamic>)
+            ? payload['user'] as Map<String, dynamic>
+            : (payload['profile'] is Map<String, dynamic>
+                ? payload['profile'] as Map<String, dynamic>
+                : payload);
+
+    final String accessToken = (payload['accessToken'] ??
+            payload['access_token'] ??
+            payload['token'] ??
+            payload['jwt'] ??
+            '')
+        .toString();
+
+    final String refreshToken = (payload['refreshToken'] ??
+            payload['refresh_token'] ??
+            (payload['tokens'] is Map ? payload['tokens']['refreshToken'] : null) ??
+            '')
+        .toString();
+
     return AuthSession(
-      user: User.fromJson(json['user'] as Map<String, dynamic>),
-      accessToken: json['accessToken'] as String,
-      refreshToken: json['refreshToken'] as String,
+      user: User.fromJson(userMap),
+      accessToken: accessToken,
+      refreshToken: refreshToken,
     );
   }
 

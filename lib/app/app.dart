@@ -10,11 +10,15 @@ import '../core/theme/theme_provider.dart';
 import '../core/widgets/offline_banner.dart';
 import '../features/auth/auth_provider.dart';
 import '../features/create_post/provider/create_post_provider.dart';
+import '../features/create_post/services/media_upload_service.dart';
+import '../features/create_post/services/post_content_service.dart';
 import '../features/home/provider/home_feed_provider.dart';
 import '../features/messages/provider/messages_provider.dart';
 import '../features/profile/provider/profile_provider.dart';
 import '../features/profile_setup/profile_setup_service.dart';
 import '../features/profile_setup/provider/profile_setup_provider.dart';
+import '../features/reports/provider/report_provider.dart';
+import '../features/reports/services/report_service.dart';
 import '../features/splash_welcome/provider/splash_provider.dart';
 import '../l10n/app_localizations.dart';
 import 'router.dart';
@@ -50,12 +54,38 @@ class App extends StatelessWidget {
             client: ctx.read<ApiClient>(),
           ),
         ),
-        ChangeNotifierProvider<HomeFeedProvider>(
-            create: (_) => HomeFeedProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, HomeFeedProvider>(
+          create: (BuildContext ctx) => HomeFeedProvider(
+            contentService: PostContentService(ctx.read<ApiClient>()),
+            mediaService: MediaUploadService(ctx.read<ApiClient>()),
+          ),
+          update: (BuildContext ctx, AuthProvider auth, HomeFeedProvider? feed) {
+            final HomeFeedProvider provider = feed ??
+                HomeFeedProvider(
+                  contentService: PostContentService(ctx.read<ApiClient>()),
+                  mediaService: MediaUploadService(ctx.read<ApiClient>()),
+                );
+            provider.updateUser(auth.userId);
+            return provider;
+          },
+        ),
         ChangeNotifierProvider<CreatePostProvider>(
-            create: (_) => CreatePostProvider()),
+          create: (BuildContext ctx) => CreatePostProvider(
+            uploadService: MediaUploadService(ctx.read<ApiClient>()),
+            contentService: PostContentService(ctx.read<ApiClient>()),
+          ),
+        ),
         ChangeNotifierProvider<MessagesProvider>(
             create: (_) => MessagesProvider()),
+        Provider<ReportService>(
+          create: (BuildContext ctx) =>
+              ReportService(ctx.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<ReportProvider>(
+          create: (BuildContext ctx) => ReportProvider(
+            service: ctx.read<ReportService>(),
+          ),
+        ),
       ],
       child: Consumer<ThemeProvider>(
         builder: (BuildContext context, ThemeProvider themeProvider, _) {

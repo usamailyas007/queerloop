@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/routes.dart';
+import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -14,6 +15,9 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../auth/auth_provider.dart';
+import '../../profile_setup/models/community_model.dart';
+import '../../profile_setup/profile_setup_service.dart';
+import '../../profile_setup/provider/profile_setup_provider.dart';
 import '../provider/profile_provider.dart';
 import '../widgets/identity_bottom_sheet.dart';
 import '../widgets/interests_bottom_sheet.dart';
@@ -32,9 +36,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _bioController;
 
   List<String> _pronouns = <String>['she / her', 'they / them'];
-  List<String> _identity = <String>['Lesbian', 'Bisexual', 'Non-binary'];
+  List<String> _identity = <String>[];
   List<String> _interests = <String>[];
-  final String _dateOfBirth = '14 June 1998';
   String? _profilePhotoPath;
   final ImagePicker _picker = ImagePicker();
   bool _isSaving = false;
@@ -54,6 +57,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _pronouns = List<String>.from(provider.pronouns);
     }
     _interests = List<String>.from(provider.interests);
+    if (provider.userCommunities.isNotEmpty) {
+      _identity = provider.userCommunities.map((c) => c.name).toList();
+    } else {
+      _identity = <String>[];
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<ProfileSetupProvider>().fetchCommunities();
+      }
+    });
   }
 
   @override
@@ -251,6 +264,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
     final ProfileProvider profileProvider = context.read<ProfileProvider>();
+    final ApiClient apiClient = context.read<ApiClient>();
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     final NavigatorState navigator = Navigator.of(context);
 
@@ -286,12 +300,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
     }
 
+    final List<String> currentCommunityNames =
+        profileProvider.userCommunities.map((c) => c.name).toList();
+    final bool communitiesChanged =
+        !_areListsEqual(_identity, currentCommunityNames);
+
     final bool hasChanges = updateDisplayName != null ||
         updateUsername != null ||
         updateBio != null ||
         updatePronouns != null ||
         updateInterests != null ||
-        updateAvatarBase64 != null;
+        updateAvatarBase64 != null ||
+        communitiesChanged;
 
     if (!hasChanges) {
       navigator.pop();
@@ -299,15 +319,63 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
 
     setState(() => _isSaving = true);
-    final bool ok = await profileProvider.updateProfile(
-      userId,
-      displayName: updateDisplayName,
-      username: updateUsername,
-      bio: updateBio,
-      pronouns: updatePronouns,
-      interests: updateInterests,
-      avatarBase64: updateAvatarBase64,
-    );
+    bool ok = true;
+    if (updateDisplayName != null ||
+        updateUsername != null ||
+        updateBio != null ||
+        updatePronouns != null ||
+        updateInterests != null ||
+        updateAvatarBase64 != null) {
+      ok = await profileProvider.updateProfile(
+        userId,
+        displayName: updateDisplayName,
+        username: updateUsername,
+        bio: updateBio,
+        pronouns: updatePronouns,
+        interests: updateInterests,
+        avatarBase64: updateAvatarBase64,
+      );
+    }
+
+    if (communitiesChanged) {
+      try {
+        final ProfileSetupService setupService =
+            ProfileSetupService(apiClient);
+        final List<CommunityModel> allComms =
+            await setupService.getCommunities();
+        final Set<String> targetIds = <String>{};
+        for (final String idName in _identity) {
+          final CommunityModel match = allComms.firstWhere(
+            (c) => c.name.trim().toLowerCase() == idName.trim().toLowerCase(),
+            orElse: () => const CommunityModel(id: '', name: '', description: ''),
+          );
+          if (match.id.isNotEmpty) {
+            targetIds.add(match.id);
+          }
+        }
+        final Set<String> currentIds = profileProvider.userCommunities
+            .map((c) => c.id)
+            .where((id) => id.isNotEmpty)
+            .toSet();
+
+        final Set<String> toJoin = targetIds.difference(currentIds);
+        final Set<String> toLeave = currentIds.difference(targetIds);
+
+        if (toLeave.isNotEmpty) {
+          debugPrint('🚀 [EditProfile] Leaving ${toLeave.length} communities: $toLeave');
+          await setupService.leaveCommunities(toLeave);
+        }
+
+        if (toJoin.isNotEmpty) {
+          debugPrint('🚀 [EditProfile] Joining ${toJoin.length} communities: $toJoin');
+          await setupService.joinCommunities(toJoin);
+        }
+        await profileProvider.fetchUserCommunities(userId, forceRefresh: true);
+      } catch (e) {
+        debugPrint('⚠️ [EditProfile] Failed to update communities: $e');
+      }
+    }
+
     if (!mounted) return;
     setState(() => _isSaving = false);
     if (ok) {
@@ -331,10 +399,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ProfileProvider profileProvider = context.watch<ProfileProvider>();
     final String pronounsDisplay = _pronouns.join(', ');
     final String identityDisplay = _identity.join(', ');
     final String interestsDisplay =
         _interests.isEmpty ? 'None' : '${_interests.length} selected';
+    final int joinedCount = profileProvider.userCommunities.length;
+    final String communitiesDisplay =
+        joinedCount == 0 ? 'None' : '$joinedCount joined';
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -590,33 +662,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   // 7. COMMUNITIES
                   _buildSelectableBox(
                     label: 'COMMUNITIES',
-                    valueText: '3 joined',
-                    onTap: () {
-                      Navigator.pushNamed(context, AppRoutes.allCommunities);
-                    },
-                  ),
+                    valueText: communitiesDisplay,
+                    onTap: () async {
+                      final AuthProvider authProvider =
+                          context.read<AuthProvider>();
+                      final ProfileProvider profileProv =
+                          context.read<ProfileProvider>();
+                      final ProfileSetupProvider setupProv =
+                          context.read<ProfileSetupProvider>();
+                      final NavigatorState navigator = Navigator.of(context);
 
-                  // 8. DATE OF BIRTH (Locked)
-                  _buildFieldBox(
-                    label: 'DATE OF BIRTH',
-                    child: Row(
-                      children: <Widget>[
-                        const Icon(
-                          Icons.lock_outline_rounded,
-                          color: AppColors.gradientCyan,
-                          size: 16,
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Text(
-                          _dateOfBirth,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: context.themeTextPrimary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
+                      final String? uid = authProvider.userId;
+                      if (uid != null &&
+                          uid.isNotEmpty &&
+                          profileProv.userCommunities.isEmpty) {
+                        await profileProv.fetchUserCommunities(uid);
+                      }
+
+                      setupProv.syncJoinedCommunities(
+                        profileProv.userCommunities,
+                        force: true,
+                      );
+
+                      await navigator.pushNamed(
+                        AppRoutes.allCommunities,
+                      );
+
+                      if (uid != null && uid.isNotEmpty) {
+                        await profileProv.fetchUserCommunities(uid, forceRefresh: true);
+                        if (mounted) {
+                          setState(() {
+                            _identity = profileProv.userCommunities
+                                .map((c) => c.name)
+                                .toList();
+                          });
+                        }
+                      }
+                    },
                   ),
 
                   const SizedBox(height: AppSpacing.xl),

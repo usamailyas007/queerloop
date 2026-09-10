@@ -11,6 +11,8 @@ abstract final class ApiEndpoints {
   static const String me = '/auth/me';
   static const String sessions = '/auth/sessions';
   static const String verifyAge = '/auth/verify-age';
+  static const String verifyEmail = '/auth/verify-email';
+  static const String verifyEmailResend = '/auth/verify-email/resend';
 
   // ── Auth › Password Reset ─────────────────────────────────────────────────
   static const String passwordResetRequest = '/auth/password-reset/request';
@@ -90,9 +92,6 @@ abstract final class ApiEndpoints {
   /// Trending posts. GET /posts/trending
   static const String postsTrending = '/posts/trending';
 
-  /// A single post with author + media refs. GET /posts/:id
-  static String post(String id) => '/posts/$id';
-
   /// Resolve a media reference to its URLs. GET /media/:id
   static String media(String id) => '/media/$id';
 
@@ -100,7 +99,56 @@ abstract final class ApiEndpoints {
   /// List / create communities. GET / POST /communities
   static const String communities = '/communities';
 
+  /// Batch join communities. POST /communities/join
+  static const String joinCommunities = '/communities/join';
+
   /// Replace :id at call site: ApiEndpoints.joinCommunity('comm-id')
   static String joinCommunity(String communityId) =>
       '/communities/$communityId/join';
+
+  /// Leave a community. DELETE /communities/:id/leave
+  static String leaveCommunity(String communityId) =>
+      '/communities/$communityId/leave';
+
+  /// User joined communities. GET /users/:id/communities
+  static String userCommunities(String userId) => '/users/$userId/communities';
+
+  /// Alternative singular route fallback. GET /user/:id/communities
+  static String userCommunitiesAlt(String userId) => '/user/$userId/communities';
+
+  // ── Media Service ──────────────────────────────────────────────────────────
+  /// Request pre-signed S3 upload URL. POST /media/upload-url
+  static const String mediaUploadUrl = '/media/upload-url';
+
+  /// Complete upload (image-only / mock-mode). POST /media/:id/complete
+  static String mediaComplete(String id) => '/media/$id/complete';
+
+  /// Poll media status (e.g. ready / transcoding / failed). GET /media/:id
+  static String mediaStatus(String id) => '/media/$id';
+
+  // ── Content Service ────────────────────────────────────────────────────────
+  /// Create / list posts. POST / GET /posts
+  static const String posts = '/posts';
+
+  /// Read one post. GET /posts/:id
+  static String post(String id) => '/posts/$id';
+
+  /// List posts by author. GET /posts?authorId=:authorId
+  static String postsByAuthor(String authorId) => '/posts?authorId=$authorId';
+
+  /// Trending posts (video-only). GET /posts/trending
+  static const String trendingPosts = '/posts/trending';
+
+  /// Record a view on a post. POST /posts/:id/view
+  static String postView(String id) => '/posts/$id/view';
+
+  /// Like a post. POST /posts/:id/like · Unlike: DELETE /posts/:id/like
+  static String postLike(String id) => '/posts/$id/like';
+
+  /// Comments for a post. GET / POST /posts/:id/comments
+  static String postComments(String id) => '/posts/$id/comments';
+
+  // ── Reports ────────────────────────────────────────────────────────────────
+  /// File a user report. POST /reports
+  static const String reports = '/reports';
 }
