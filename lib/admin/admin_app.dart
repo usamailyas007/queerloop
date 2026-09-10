@@ -11,11 +11,15 @@ import '../l10n/app_localizations.dart';
 import 'auth/provider/admin_auth_provider.dart';
 import 'auth/screens/admin_login_screen.dart';
 import 'admin_view/admin_shell.dart';
+import 'admin_view/analytics/provider/analytics_provider.dart';
 import 'admin_view/announcements/provider/announcements_provider.dart';
 import 'admin_view/communities/provider/communities_provider.dart';
+import 'admin_view/community_spotlight/provider/spotlights_provider.dart';
+import 'admin_view/content/provider/content_provider.dart';
 import 'admin_view/conversation_of_the_day/provider/cotd_provider.dart';
 import 'admin_view/moderators/provider/moderators_provider.dart';
 import 'admin_view/users/provider/admin_users_provider.dart';
+import 'moderator_view/reports/provider/mod_reports_provider.dart';
 import 'moderator_view/moderator_shell.dart';
 
 class AdminApp extends StatelessWidget {
@@ -49,6 +53,22 @@ class AdminApp extends StatelessWidget {
         ChangeNotifierProvider<CotdProvider>(
           create: (BuildContext context) =>
               CotdProvider(client: context.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<SpotlightsProvider>(
+          create: (BuildContext context) =>
+              SpotlightsProvider(client: context.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<ContentProvider>(
+          create: (BuildContext context) =>
+              ContentProvider(client: context.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<AnalyticsProvider>(
+          create: (BuildContext context) =>
+              AnalyticsProvider(client: context.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<ModReportsProvider>(
+          create: (BuildContext context) =>
+              ModReportsProvider(client: context.read<ApiClient>()),
         ),
       ],
       child: MaterialApp(

@@ -1,7 +1,6 @@
 // Admin console entry point.
 
 import 'package:flutter/material.dart';
-
 import 'admin/admin_app.dart';
 import 'core/cache/cache_manager.dart';
 import 'core/config/app_config.dart';

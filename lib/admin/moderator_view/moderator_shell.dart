@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../widgets/admin_logout_dialog.dart';
 import 'action_log/screens/moderator_action_log_screen.dart';
 import 'dashboard/screens/moderator_dashboard_screen.dart';
+import 'reports/provider/mod_reports_provider.dart';
 import 'reports_queue/screens/moderator_reports_queue_screen.dart';
 
 class ModeratorShell extends StatefulWidget {
@@ -113,11 +115,18 @@ class _ModeratorSidebar extends StatelessWidget {
             icon: Icons.bar_chart_rounded,
             label: 'Dashboard',
           ),
-          _buildSidebarItem(
-            index: 1,
-            icon: Icons.flag_outlined,
-            label: 'Reports queue',
-            badgeText: '28',
+          Builder(
+            builder: (BuildContext context) {
+              final int inQueue = context.select<ModReportsProvider, int>(
+                (ModReportsProvider p) => p.dashboard.inQueue,
+              );
+              return _buildSidebarItem(
+                index: 1,
+                icon: Icons.flag_outlined,
+                label: 'Reports queue',
+                badgeText: inQueue > 0 ? '$inQueue' : null,
+              );
+            },
           ),
           _buildSidebarItem(
             index: 2,

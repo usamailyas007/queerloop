@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_colors.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../admin_icons.dart';
+import '../../analytics/models/analytics_dashboard.dart';
+import '../../analytics/models/analytics_overview.dart';
+import '../../analytics/provider/analytics_provider.dart';
 import '../../widgets/admin_stat_card.dart';
 
 class _Bar {
@@ -15,18 +19,6 @@ class _Bar {
 
 enum _BarStyle { muted, pink, purple }
 
-class _CommunitySize {
-  const _CommunitySize({
-    required this.label,
-    required this.members,
-    required this.fraction,
-  });
-
-  final String label;
-  final String members;
-  final double fraction;
-}
-
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
@@ -35,7 +27,7 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  int _rangeIndex = 2; // 0: Today, 1: 7 days, 2: 30 days
+  static const List<String> _rangeKeys = <String>['1d', '7d', '30d'];
 
   static const List<_Bar> _dailyActiveBars = <_Bar>[
     _Bar(height: 53.19, style: _BarStyle.muted),
@@ -56,21 +48,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     _Bar(height: 140, style: _BarStyle.purple),
   ];
 
-  static const List<_CommunitySize> _communitySizes = <_CommunitySize>[
-    _CommunitySize(label: 'Gay', members: '312K', fraction: 1.0),
-    _CommunitySize(label: 'Queer', members: '227K', fraction: 0.7276),
-    _CommunitySize(label: 'Bisexual', members: '201K', fraction: 0.644),
-    _CommunitySize(label: 'Lesbian', members: '184K', fraction: 0.590),
-    _CommunitySize(label: 'Transgender', members: '156K', fraction: 0.5),
-    _CommunitySize(label: 'Non-binary', members: '98K', fraction: 0.314),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AnalyticsProvider>().loadInitial();
+      }
+    });
+  }
+
+  int _getRangeIndex(String key) {
+    final int idx = _rangeKeys.indexOf(key);
+    return idx >= 0 ? idx : 2;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final AnalyticsProvider provider = context.watch<AnalyticsProvider>();
+    final AnalyticsDashboard? dash = provider.dashboard;
+    final AnalyticsOverview? overview = provider.overview;
+
+    final int maxMembers = (overview?.communitySizes.isNotEmpty == true)
+        ? overview!.communitySizes
+            .map((CommunitySizeItem e) => e.memberCount)
+            .reduce((int a, int b) => a > b ? a : b)
+        : 1;
+
     return Scaffold(
       backgroundColor: AppColors.adminBackground,
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -94,18 +102,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         ),
                         const SizedBox(height: 4),
                         RichText(
-                          text: const TextSpan(
-                            style: TextStyle(
+                          text: TextSpan(
+                            style: const TextStyle(
                               color: AppColors.adminTextSecondary,
                               fontSize: 13,
                             ),
                             children: <TextSpan>[
+                              const TextSpan(text: 'Range: '),
                               TextSpan(
-                                text: 'Sunday, 2 August · last updated ',
-                              ),
-                              TextSpan(
-                                text: '2 minutes ago',
-                                style: TextStyle(
+                                text: provider.range,
+                                style: const TextStyle(
                                   color: AppColors.adminTextPrimary,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -127,9 +133,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   const SizedBox(width: AppSpacing.md),
                   _RangePills(
-                    selectedIndex: _rangeIndex,
+                    selectedIndex: _getRangeIndex(provider.range),
                     onChanged: (int index) =>
-                        setState(() => _rangeIndex = index),
+                        provider.setRange(_rangeKeys[index]),
                   ),
                 ],
               ),
@@ -137,45 +143,49 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               const SizedBox(height: AppSpacing.xl),
 
               // ── Stat Cards ────────────────────────────────────────────
-              const Row(
+              Row(
                 children: <Widget>[
                   Expanded(
                     child: AdminStatCard(
                       label: 'Daily active',
-                      value: '86,412',
-                      delta: '+7.4% vs last week',
+                      value: dash?.dailyActive != null
+                          ? '${dash!.dailyActive}'
+                          : 'N/A',
+                      delta: provider.range,
+                      deltaColor: AppColors.adminTextMuted,
                       iconPath: AdminIcons.users,
                       iconColor: AppColors.adminPurple,
                     ),
                   ),
-                  SizedBox(width: AppSpacing.md),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: AdminStatCard(
                       label: 'New sign-ups',
-                      value: '3,208',
-                      delta: '+12.1%',
+                      value: '${dash?.newSignups ?? 0}',
+                      delta: provider.range,
+                      deltaColor: AppColors.adminTextMuted,
                       iconPath: AdminIcons.userSingle,
                       iconColor: AppColors.adminTeal,
                     ),
                   ),
-                  SizedBox(width: AppSpacing.md),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: AdminStatCard(
-                      label: 'Posts today',
-                      value: '21,749',
-                      delta: '64% video',
+                      label: 'Posts in range',
+                      value: '${dash?.postsInRange ?? 0}',
+                      delta: '${(dash?.videoSharePct ?? 0.0).toStringAsFixed(0)}% video',
                       deltaColor: AppColors.adminTextSecondary,
                       iconPath: AdminIcons.image,
                       iconColor: AppColors.adminBlue,
                     ),
                   ),
-                  SizedBox(width: AppSpacing.md),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: AdminStatCard(
                       label: 'Open reports',
-                      value: '28',
+                      value: '${dash?.openReports ?? 0}',
                       valueColor: AppColors.adminOrange,
-                      delta: 'Avg response 4.2h',
+                      delta: 'Avg response ${(dash?.avgResponseHours ?? 0.0).toStringAsFixed(1)}h',
                       deltaColor: AppColors.adminOrange,
                       iconPath: AdminIcons.shield,
                       iconColor: AppColors.adminOrange,
@@ -196,42 +206,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       flex: 3,
                       child: _ChartCard(
                         title: 'Daily active people',
-                        subtitle: '30 days',
-                        trailing: const Text(
-                          'Peak 91.2K on 28 Jul',
-                          style: TextStyle(
+                        subtitle: provider.range,
+                        trailing: Text(
+                          dash?.dailyActive != null
+                              ? '${dash!.dailyActive} active'
+                              : 'Live analytics',
+                          style: const TextStyle(
                             color: AppColors.adminTeal,
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        footer: const Padding(
-                          padding: EdgeInsets.only(top: AppSpacing.sm),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: <Widget>[
-                              Text(
-                                '3 Jul',
-                                style: TextStyle(
-                                  color: AppColors.adminTextMuted,
-                                  fontSize: 11,
-                                ),
-                              ),
-                              Text(
-                                '18 Jul',
-                                style: TextStyle(
-                                  color: AppColors.adminTextMuted,
-                                  fontSize: 11,
-                                ),
-                              ),
-                              Text(
-                                '2 Aug',
-                                style: TextStyle(
-                                  color: AppColors.adminTextMuted,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
                           ),
                         ),
                         child: Padding(
@@ -258,22 +241,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                               : LinearGradient(
                                                   begin: Alignment.topCenter,
                                                   end: Alignment.bottomCenter,
-                                                  colors:
-                                                      bar.style ==
+                                                  colors: bar.style ==
                                                           _BarStyle.pink
                                                       ? const <Color>[
                                                           AppColors.adminPink,
-                                                          AppColors.adminPinkFaded,
+                                                          AppColors
+                                                              .adminPinkFaded,
                                                         ]
                                                       : const <Color>[
                                                           AppColors.adminPurple,
-                                                          AppColors.adminPurpleFaded,
+                                                          AppColors
+                                                              .adminPurpleFaded,
                                                         ],
                                                 ),
                                           borderRadius:
                                               const BorderRadius.vertical(
-                                                top: Radius.circular(3),
-                                              ),
+                                            top: Radius.circular(3),
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -292,59 +276,76 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         subtitle: 'Members per group',
                         child: Padding(
                           padding: const EdgeInsets.only(top: AppSpacing.md),
-                          child: Column(
-                            children: <Widget>[
-                              for (final _CommunitySize item in _communitySizes)
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: AppSpacing.md,
-                                  ),
+                          child: (overview != null &&
+                                  overview.communitySizes.isNotEmpty)
+                              ? SingleChildScrollView(
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
                                     children: <Widget>[
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: <Widget>[
-                                          Text(
-                                            item.label,
-                                            style: const TextStyle(
-                                              color: AppColors.adminTextPrimary,
-                                              fontSize: 12.5,
-                                              fontWeight: FontWeight.w600,
-                                            ),
+                                      for (final CommunitySizeItem item
+                                          in overview.communitySizes)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: AppSpacing.md,
                                           ),
-                                          Text(
-                                            item.members,
-                                            style: const TextStyle(
-                                              color: AppColors.adminTextSecondary,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w700,
-                                            ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: <Widget>[
+                                              Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.spaceBetween,
+                                                children: <Widget>[
+                                                  Text(
+                                                    item.name,
+                                                    style: const TextStyle(
+                                                      color: AppColors.adminTextPrimary,
+                                                      fontSize: 12.5,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    '${item.memberCount} members',
+                                                    style: const TextStyle(
+                                                      color: AppColors.adminTextSecondary,
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 6),
+                                              ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(5),
+                                                child: LinearProgressIndicator(
+                                                  value: maxMembers > 0
+                                                      ? item.memberCount / maxMembers
+                                                      : 0.0,
+                                                  minHeight: 8,
+                                                  backgroundColor: const Color(
+                                                    0xFF1C1824,
+                                                  ),
+                                                  valueColor:
+                                                      const AlwaysStoppedAnimation<
+                                                        Color
+                                                      >(AppColors.adminPurple),
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(5),
-                                        child: LinearProgressIndicator(
-                                          value: item.fraction,
-                                          minHeight: 8,
-                                          backgroundColor: const Color(
-                                            0xFF1C1824,
-                                          ),
-                                          valueColor:
-                                              const AlwaysStoppedAnimation<
-                                                Color
-                                              >(AppColors.adminPurple),
                                         ),
-                                      ),
                                     ],
                                   ),
+                                )
+                              : const Center(
+                                  child: Text(
+                                    'No community size data available',
+                                    style: TextStyle(
+                                      color: AppColors.adminTextMuted,
+                                      fontSize: 12,
+                                    ),
+                                  ),
                                 ),
-                            ],
-                          ),
                         ),
                       ),
                     ),
@@ -418,14 +419,12 @@ class _ChartCard extends StatelessWidget {
     required this.child,
     this.subtitle,
     this.trailing,
-    this.footer,
   });
 
   final String title;
   final String? subtitle;
   final Widget? trailing;
   final Widget child;
-  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -471,7 +470,6 @@ class _ChartCard extends StatelessWidget {
             ],
           ),
           Expanded(child: child),
-          ?footer,
         ],
       ),
     );

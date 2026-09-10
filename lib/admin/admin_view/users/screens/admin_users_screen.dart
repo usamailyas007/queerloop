@@ -159,7 +159,7 @@ class _Header extends StatelessWidget {
                   final String text = loading && total == 0
                       ? 'Loading accounts…'
                       : '$total user${total == 1 ? '' : 's'} · '
-                          '$suspended suspended';
+                            '$suspended suspended';
                   return Text(
                     text,
                     style: const TextStyle(
@@ -228,11 +228,11 @@ class _Header extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(width: AppSpacing.md),
-        SizedBox(
-          width: 100,
-          child: AppOutlineButton(text: 'Export', height: 40, onPressed: () {}),
-        ),
+        // const SizedBox(width: AppSpacing.md),
+        // SizedBox(
+        //   width: 100,
+        //   child: AppOutlineButton(text: 'Export', height: 40, onPressed: () {}),
+        // ),
       ],
     );
   }
@@ -314,6 +314,7 @@ class _UsersTableBody extends StatelessWidget {
               suspendOptions: suspendOptions,
               onSuspend: (int days) => provider.suspendUser(user.id, days),
               onReactivate: () => provider.reactivateUser(user.id),
+              onBan: () => provider.banUser(user.id),
             );
           },
         ),
@@ -344,13 +345,8 @@ class _PaginationBar extends StatelessWidget {
     if (count <= 7) {
       return <int?>[for (int i = 1; i <= count; i++) i];
     }
-    final Set<int> keep = <int>{
-      1,
-      count,
-      current - 1,
-      current,
-      current + 1,
-    }..removeWhere((int p) => p < 1 || p > count);
+    final Set<int> keep = <int>{1, count, current - 1, current, current + 1}
+      ..removeWhere((int p) => p < 1 || p > count);
     final List<int> sorted = keep.toList()..sort();
 
     final List<int?> out = <int?>[];
@@ -412,8 +408,10 @@ class _PaginationBar extends StatelessWidget {
                 if (p == null)
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: Text('…',
-                        style: TextStyle(color: AppColors.adminTextMuted)),
+                    child: Text(
+                      '…',
+                      style: TextStyle(color: AppColors.adminTextMuted),
+                    ),
                   )
                 else
                   Padding(
@@ -508,8 +506,11 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          const Icon(Icons.cloud_off_rounded,
-              color: AppColors.adminTextMuted, size: 32),
+          const Icon(
+            Icons.cloud_off_rounded,
+            color: AppColors.adminTextMuted,
+            size: 32,
+          ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             message,
@@ -543,15 +544,15 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(Icons.person_search_rounded,
-              color: AppColors.adminTextMuted, size: 32),
+          Icon(
+            Icons.person_search_rounded,
+            color: AppColors.adminTextMuted,
+            size: 32,
+          ),
           SizedBox(height: AppSpacing.sm),
           Text(
             'No accounts match your filters',
-            style: TextStyle(
-              color: AppColors.adminTextSecondary,
-              fontSize: 13,
-            ),
+            style: TextStyle(color: AppColors.adminTextSecondary, fontSize: 13),
           ),
         ],
       ),
@@ -586,6 +587,7 @@ class _UserRow extends StatelessWidget {
     required this.busy,
     required this.onSuspend,
     required this.onReactivate,
+    required this.onBan,
     required this.suspendOptions,
   });
 
@@ -593,6 +595,7 @@ class _UserRow extends StatelessWidget {
   final bool busy;
   final ValueChanged<int> onSuspend;
   final VoidCallback onReactivate;
+  final VoidCallback onBan;
   final Map<String, int> suspendOptions;
 
   static final DateFormat _joinedFormat = DateFormat('d MMM yyyy');
@@ -601,7 +604,10 @@ class _UserRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final (String label, Color color) = switch (user.status) {
       AdminAccountStatus.active => ('Active', AppColors.adminTeal),
-      AdminAccountStatus.suspended => (_suspendedLabel(), AppColors.adminOrange),
+      AdminAccountStatus.suspended => (
+        _suspendedLabel(),
+        AppColors.adminOrange,
+      ),
       AdminAccountStatus.banned => ('Banned', AppColors.adminPink),
     };
 
@@ -674,8 +680,9 @@ class _UserRow extends StatelessWidget {
                 color: user.reportsAgainst > 5
                     ? AppColors.adminPink
                     : AppColors.adminTextSecondary,
-                fontWeight:
-                    user.reportsAgainst > 5 ? FontWeight.w700 : FontWeight.w400,
+                fontWeight: user.reportsAgainst > 5
+                    ? FontWeight.w700
+                    : FontWeight.w400,
                 fontSize: 13,
               ),
             ),
@@ -685,8 +692,10 @@ class _UserRow extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
@@ -710,9 +719,11 @@ class _UserRow extends StatelessWidget {
               child: _RowAction(
                 status: user.status,
                 busy: busy,
+                handle: user.handle,
                 suspendOptions: suspendOptions,
                 onSuspend: onSuspend,
                 onReactivate: onReactivate,
+                onBan: onBan,
               ),
             ),
           ),
@@ -737,16 +748,72 @@ class _RowAction extends StatelessWidget {
   const _RowAction({
     required this.status,
     required this.busy,
+    required this.handle,
     required this.suspendOptions,
     required this.onSuspend,
     required this.onReactivate,
+    required this.onBan,
   });
 
   final AdminAccountStatus status;
   final bool busy;
+  final String handle;
   final Map<String, int> suspendOptions;
   final ValueChanged<int> onSuspend;
   final VoidCallback onReactivate;
+  final VoidCallback onBan;
+
+  Future<void> _confirmBan(BuildContext context) async {
+    final bool ok =
+        await showDialog<bool>(
+          context: context,
+          barrierColor: Colors.black.withValues(alpha: 0.6),
+          builder: (BuildContext ctx) => AlertDialog(
+            backgroundColor: AppColors.adminSurfaceAlt,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(color: AppColors.adminCardBorderStrong),
+            ),
+            title: const Text(
+              'Ban permanently?',
+              style: TextStyle(
+                color: AppColors.adminTextPrimary,
+                fontWeight: FontWeight.w800,
+                fontSize: 17,
+              ),
+            ),
+            content: Text(
+              '$handle will be permanently banned and blocked from signing in. '
+              'You can still reactivate the account later.',
+              style: const TextStyle(
+                color: AppColors.adminTextSecondary,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text(
+                  'Ban permanently',
+                  style: TextStyle(
+                    color: AppColors.adminPink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (ok) {
+      onBan();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -777,12 +844,7 @@ class _RowAction extends StatelessWidget {
       ),
       onSelected: (String option) {
         if (option == _banValue) {
-          // Ban gets its own endpoint later — surface intent, do nothing yet.
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(
-              const SnackBar(content: Text('Ban is not wired up yet.')),
-            );
+          _confirmBan(context);
           return;
         }
         onSuspend(suspendOptions[option]!);
@@ -885,8 +947,9 @@ class _InitialsAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String clean = seed.replaceAll('@', '').trim();
-    final String initials =
-        clean.isEmpty ? '?' : clean.characters.first.toUpperCase();
+    final String initials = clean.isEmpty
+        ? '?'
+        : clean.characters.first.toUpperCase();
     final Color bg = _palette[clean.hashCode.abs() % _palette.length];
 
     return Container(

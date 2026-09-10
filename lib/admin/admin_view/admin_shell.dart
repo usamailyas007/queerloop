@@ -14,6 +14,8 @@ import 'dashboard/screens/admin_dashboard_screen.dart';
 import 'moderators/screens/admin_moderators_screen.dart';
 import 'community_spotlight/screens/admin_spotlight_screen.dart';
 import 'users/screens/admin_users_screen.dart';
+import '../moderator_view/reports/models/mod_report.dart';
+import '../moderator_view/reports_queue/screens/moderator_reports_queue_screen.dart';
 
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
@@ -37,6 +39,11 @@ class _AdminShellState extends State<AdminShell> {
       const AdminDashboardScreen(),
       const AdminUsersScreen(),
       const AdminModeratorsScreen(),
+      const ModeratorReportsQueueScreen(
+        title: 'Escalated reports',
+        subtitle: 'Cases a moderator escalated — take the final decision.',
+        initialStatus: ReportStatus.escalated,
+      ),
       const AdminContentScreen(),
       const AdminCommunitiesScreen(),
       const AdminAnalyticsScreen(),
@@ -72,6 +79,7 @@ class _AdminSidebar extends StatelessWidget {
         _NavItem(iconPath: AdminIcons.chart, label: 'Dashboard'),
         _NavItem(iconPath: AdminIcons.users, label: 'Users'),
         _NavItem(iconPath: AdminIcons.shield, label: 'Moderators'),
+        _NavItem(iconPath: AdminIcons.shield, label: 'Reports'),
         _NavItem(iconPath: AdminIcons.image, label: 'Content'),
         _NavItem(iconPath: AdminIcons.globe, label: 'Communities'),
         _NavItem(iconPath: AdminIcons.chart, label: 'Analytics'),

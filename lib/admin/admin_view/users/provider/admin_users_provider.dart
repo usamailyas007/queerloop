@@ -115,6 +115,9 @@ class AdminUsersProvider extends ChangeNotifier {
   Future<bool> reactivateUser(String userId) =>
       _mutate(userId, AdminAccountStatus.active);
 
+  Future<bool> banUser(String userId) =>
+      _mutate(userId, AdminAccountStatus.banned);
+
   Future<bool> _mutate(
     String userId,
     AdminAccountStatus status, {

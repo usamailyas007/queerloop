@@ -3,15 +3,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:provider/single_child_widget.dart' show SingleChildWidget;
 import 'package:queerloop/admin/auth/provider/admin_auth_provider.dart';
 import 'package:queerloop/admin/moderator_view/moderator_shell.dart';
+import 'package:queerloop/admin/moderator_view/reports/provider/mod_reports_provider.dart';
 import 'package:queerloop/core/api/api_client.dart';
 import 'package:queerloop/l10n/app_localizations.dart';
 
 Widget wrap(Locale locale) {
-  return ChangeNotifierProvider<AdminAuthProvider>(
-    create: (BuildContext context) =>
-        AdminAuthProvider(client: ApiClient(baseUrl: 'http://localhost')),
+  final ApiClient client = ApiClient(baseUrl: 'http://localhost');
+  return MultiProvider(
+    providers: <SingleChildWidget>[
+      ChangeNotifierProvider<AdminAuthProvider>(
+        create: (_) => AdminAuthProvider(client: client),
+      ),
+      ChangeNotifierProvider<ModReportsProvider>(
+        create: (_) => ModReportsProvider(client: client),
+      ),
+    ],
     child: MaterialApp(
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,

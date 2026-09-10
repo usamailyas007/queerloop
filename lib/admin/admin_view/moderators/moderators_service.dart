@@ -41,4 +41,17 @@ class ModeratorsService {
     debugPrint('🚀 [ModeratorsService] POST ${ApiEndpoints.adminModerators} ($email)');
     await _client.post(ApiEndpoints.adminModerators, body: body);
   }
+
+  /// POST /admin/moderators/:id/resend-invite — re-sends fresh credentials.
+  /// Returns the server's confirmation message when it provides one.
+  Future<String?> resendInvite(String moderatorId) async {
+    debugPrint('🚀 [ModeratorsService] POST ${ApiEndpoints.adminModeratorResendInvite(moderatorId)}');
+    final dynamic data = await _client.post(
+      ApiEndpoints.adminModeratorResendInvite(moderatorId),
+    );
+    if (data is Map<String, dynamic>) {
+      return data['message'] as String?;
+    }
+    return null;
+  }
 }

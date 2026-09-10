@@ -1,84 +1,35 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import '../../../../core/theme/app_colors.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_gradient_button.dart';
 import '../../../../core/widgets/app_outline_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../admin_icons.dart';
-import 'admin_spotlight_screen.dart';
+import '../models/spotlight.dart';
+import '../provider/spotlights_provider.dart';
+import 'spotlight_image.dart';
 
-class AdminSpotlightOverviewScreen extends StatefulWidget {
+class AdminSpotlightOverviewScreen extends StatelessWidget {
   const AdminSpotlightOverviewScreen({
-    required this.picks,
     required this.onOpenPast,
-    required this.onPublish,
+    required this.onNew,
+    required this.onEditLive,
     super.key,
   });
 
-  final List<SpotlightPick> picks;
   final VoidCallback onOpenPast;
-  final void Function({
-    required String headline,
-    required String description,
-    ImageProvider? coverImage,
-  })
-  onPublish;
-
-  @override
-  State<AdminSpotlightOverviewScreen> createState() =>
-      _AdminSpotlightOverviewScreenState();
-}
-
-class _AdminSpotlightOverviewScreenState
-    extends State<AdminSpotlightOverviewScreen> {
-  final ImagePicker _picker = ImagePicker();
-  Uint8List? _pickedImageBytes;
-
-  SpotlightPick get _livePick => widget.picks.firstWhere(
-    (SpotlightPick p) => p.isLive,
-    orElse: () => widget.picks.first,
-  );
-
-  late final TextEditingController _headlineController =
-      TextEditingController(text: _livePick.headline);
-  late final TextEditingController _descriptionController =
-      TextEditingController(text: _livePick.description);
-
-  @override
-  void dispose() {
-    _headlineController.dispose();
-    _descriptionController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      final Uint8List bytes = await image.readAsBytes();
-      setState(() => _pickedImageBytes = bytes);
-    }
-  }
-
-  void _publish() {
-    widget.onPublish(
-      headline: _headlineController.text,
-      description: _descriptionController.text,
-      coverImage: _pickedImageBytes != null
-          ? MemoryImage(_pickedImageBytes!)
-          : null,
-    );
-  }
+  final VoidCallback onNew;
+  final ValueChanged<Spotlight> onEditLive;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.adminBackground,
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -115,16 +66,18 @@ class _AdminSpotlightOverviewScreenState
                       hintText: 'Search past spotlights',
                       prefixIconPath: AdminIcons.search,
                       fillColor: AppColors.adminSurface,
+                      onChanged: (String v) =>
+                          context.read<SpotlightsProvider>().setSearch(v),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   SizedBox(
-                    width: 120,
+                    width: 130,
                     child: AppOutlineButton(
-                      text: 'Past Spotlight',
+                      text: 'Past spotlights',
                       height: 44,
                       backgroundColor: AppColors.adminSurfaceAlt,
-                      onPressed: widget.onOpenPast,
+                      onPressed: onOpenPast,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -138,125 +91,199 @@ class _AdminSpotlightOverviewScreenState
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
                       ),
-                      onPressed: () {},
+                      onPressed: onNew,
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: AppSpacing.xl),
-
-              Container(
-                width: 480,
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: AppColors.adminSurface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppColors.adminBorder,
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    const Text(
-                      "This week's pick",
-                      style: TextStyle(
-                        color: AppColors.adminTextPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-
-                    const Text(
-                      'Cover image',
-                      style: TextStyle(
-                        color: AppColors.adminTextSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    GestureDetector(
-                      onTap: _pickImage,
-                      child: Container(
-                        width: double.infinity,
-                        height: 220,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: AppColors.adminBorder,
+              Consumer<SpotlightsProvider>(
+                builder: (_, SpotlightsProvider provider, _) {
+                  if (provider.isLoading && provider.spotlights.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.only(top: 80),
+                      child: Center(
+                        child: SizedBox(
+                          width: 26,
+                          height: 26,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: AppColors.adminPink,
                           ),
                         ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Image(
-                          image: _pickedImageBytes != null
-                              ? MemoryImage(_pickedImageBytes!)
-                              : _livePick.coverImage,
-                          fit: BoxFit.cover,
-                        ),
                       ),
-                    ),
+                    );
+                  }
+                  if (provider.error != null && provider.spotlights.isEmpty) {
+                    return _Notice(
+                      message: provider.error!,
+                      onRetry: provider.refresh,
+                    );
+                  }
 
-                    const SizedBox(height: AppSpacing.lg),
-
-                    const Text(
-                      'Headline',
-                      style: TextStyle(
-                        color: AppColors.adminTextSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    AppTextField(
-                      controller: _headlineController,
-                      fillColor: AppColors.adminSurfaceAlt,
-                    ),
-
-                    const SizedBox(height: AppSpacing.lg),
-
-                    const Text(
-                      'Description',
-                      style: TextStyle(
-                        color: AppColors.adminTextSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    AppTextField(
-                      controller: _descriptionController,
-                      fillColor: AppColors.adminSurfaceAlt,
-                      maxLines: 3,
-                    ),
-
-                    const SizedBox(height: AppSpacing.xl),
-
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: SizedBox(
-                        width: 190,
-                        height: 44,
-                        child: AppGradientButton(
-                          text: 'Publish spotlight',
-                          textStyle: const TextStyle(
-                            color: AppColors.textInverse,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 13,
-                          ),
-                          onPressed: _publish,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  final Spotlight? live = provider.liveSpotlight;
+                  if (live == null) {
+                    return const _Notice(
+                      message: 'No spotlight is live — publish one to feature '
+                          'a community this week.',
+                    );
+                  }
+                  return _LivePickCard(spotlight: live, onEdit: () => onEditLive(live));
+                },
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LivePickCard extends StatelessWidget {
+  const _LivePickCard({required this.spotlight, required this.onEdit});
+
+  final Spotlight spotlight;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 480,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.adminSurface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.adminBorder),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Expanded(
+                child: Text(
+                  "This week's pick",
+                  style: TextStyle(
+                    color: AppColors.adminTextPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.adminTeal.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.adminTeal.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: const Text(
+                  'Live now',
+                  style: TextStyle(
+                    color: AppColors.adminTeal,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          SpotlightImage(
+            url: spotlight.imageUrl,
+            height: 220,
+            borderRadius: 14,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            spotlight.title,
+            style: const TextStyle(
+              color: AppColors.adminTextPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            spotlight.body,
+            style: const TextStyle(
+              color: AppColors.adminTextSecondary,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Published ${DateFormat('d MMM yyyy').format(spotlight.createdAt)} · '
+            '${NumberFormat.compact().format(spotlight.views)} views · '
+            '${NumberFormat.compact().format(spotlight.taps)} taps',
+            style: const TextStyle(
+              color: AppColors.adminTextMuted,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              width: 150,
+              height: 42,
+              child: AppOutlineButton(
+                text: 'Edit spotlight',
+                backgroundColor: AppColors.adminSurfaceAlt,
+                onPressed: onEdit,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Notice extends StatelessWidget {
+  const _Notice({required this.message, this.onRetry});
+
+  final String message;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 480,
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: AppColors.adminSurface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.adminBorder),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.adminTextSecondary,
+              fontSize: 13,
+            ),
+          ),
+          if (onRetry != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: 120,
+              child: AppOutlineButton(
+                text: 'Retry',
+                height: 38,
+                onPressed: onRetry!,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

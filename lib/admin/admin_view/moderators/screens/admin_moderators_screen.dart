@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_gradient_button.dart';
@@ -28,7 +27,6 @@ class _AdminModeratorsScreenState extends State<AdminModeratorsScreen> {
       }
     });
   }
-
   @override
   Widget build(BuildContext context) {
     if (_isInviting) {
@@ -165,16 +163,45 @@ class _ModeratorsBody extends StatelessWidget {
         itemCount: items.length,
         separatorBuilder: (_, _) =>
             Divider(height: 1, color: AppColors.adminRowDivider),
-        itemBuilder: (_, int index) => _ModeratorRowTile(mod: items[index]),
+        itemBuilder: (BuildContext context, int index) {
+          final Moderator mod = items[index];
+          return _ModeratorRowTile(
+            mod: mod,
+            resending: provider.isResending(mod.id),
+            onResend: () => _resend(context, mod),
+          );
+        },
       ),
     );
+  }
+
+  Future<void> _resend(BuildContext context, Moderator mod) async {
+    final ModeratorsProvider p = context.read<ModeratorsProvider>();
+    final String? message = await p.resendInvite(mod.id);
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(message ?? p.error ?? 'Could not re-send the invite.'),
+      ));
+    if (message == null) {
+      p.clearError();
+    }
   }
 }
 
 class _ModeratorRowTile extends StatelessWidget {
-  const _ModeratorRowTile({required this.mod});
+  const _ModeratorRowTile({
+    required this.mod,
+    required this.resending,
+    required this.onResend,
+  });
 
   final Moderator mod;
+  final bool resending;
+  final VoidCallback onResend;
 
   @override
   Widget build(BuildContext context) {
@@ -266,39 +293,85 @@ class _ModeratorRowTile extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 96,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: (mod.pending
-                          ? AppColors.adminOrange
-                          : AppColors.adminTeal)
-                      .withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
+            width: 168,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
                     color: (mod.pending
                             ? AppColors.adminOrange
                             : AppColors.adminTeal)
-                        .withValues(alpha: 0.4),
+                        .withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: (mod.pending
+                              ? AppColors.adminOrange
+                              : AppColors.adminTeal)
+                          .withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Text(
+                    mod.pending ? 'Pending' : 'Active',
+                    style: TextStyle(
+                      color: mod.pending
+                          ? AppColors.adminOrange
+                          : AppColors.adminTeal,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
                   ),
                 ),
-                child: Text(
-                  mod.pending ? 'Pending' : 'Active',
-                  style: TextStyle(
-                    color: mod.pending
-                        ? AppColors.adminOrange
-                        : AppColors.adminTeal,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
+                if (mod.pending) ...<Widget>[
+                  const SizedBox(width: 6),
+                  _ResendButton(busy: resending, onTap: onResend),
+                ],
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ResendButton extends StatelessWidget {
+  const _ResendButton({required this.busy, required this.onTap});
+
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: busy ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.adminSurfaceAlt,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.adminButtonBorder),
+        ),
+        child: busy
+            ? const SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.adminPink,
+                ),
+              )
+            : const Text(
+                'Resend',
+                style: TextStyle(
+                  color: AppColors.adminTextPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+              ),
       ),
     );
   }
@@ -324,7 +397,7 @@ class _TableHeaderRow extends StatelessWidget {
           Expanded(flex: 2, child: _Header('RESOLVED · 30D')),
           Expanded(flex: 2, child: _Header('AVG RESPONSE')),
           Expanded(flex: 1, child: _Header('REVERSED')),
-          SizedBox(width: 96),
+          SizedBox(width: 168, child: _Header('STATUS')),
         ],
       ),
     );

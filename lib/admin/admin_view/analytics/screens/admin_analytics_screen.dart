@@ -1,22 +1,14 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_colors.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/app_outline_button.dart';
 import '../../../../core/widgets/app_tag_chip.dart';
 import '../../admin_icons.dart';
 import '../../widgets/admin_stat_card.dart';
-
-class _PostShare {
-  const _PostShare({
-    required this.label,
-    required this.percent,
-    required this.color,
-  });
-
-  final String label;
-  final int percent;
-  final Color color;
-}
+import '../models/analytics_overview.dart';
+import '../provider/analytics_provider.dart';
 
 class AdminAnalyticsScreen extends StatefulWidget {
   const AdminAnalyticsScreen({super.key});
@@ -26,34 +18,53 @@ class AdminAnalyticsScreen extends StatefulWidget {
 }
 
 class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
-  int _rangeIndex = 2;
-
-  static const List<_PostShare> _postShares = <_PostShare>[
-    _PostShare(label: 'Short video', percent: 64, color: AppColors.moderatorPink),
-    _PostShare(label: 'Text posts', percent: 24, color: AppColors.adminPurple),
-    _PostShare(label: 'Image posts', percent: 12, color: AppColors.gradientCyan),
-  ];
-
-  static const List<String> _hashtags = <String>[
-    '#chosenfamily',
-    '#pridprep2026',
-    '#binderfitcheck',
-    '#queerbooktok',
-    '#transjoy',
-  ];
-
-  static const List<(String, String, Color?)> _safetyOutcomes =
-      <(String, String, Color?)>[
-    ('Reports received', '1,284', null),
-    ('Content hidden', '402', null),
-    ('Accounts warned', '318', null),
-    ('Accounts suspended', '96', null),
-    ('Accounts banned', '31', null),
-    ('Appeals upheld', '22 of 74', AppColors.adminGreen),
+  static const List<(String, String)> _ranges = <(String, String)>[
+    ('Today', '1d'),
+    ('7 days', '7d'),
+    ('30 days', '30d'),
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AnalyticsProvider>().loadInitial();
+      }
+    });
+  }
+
+  Color _contentMixColor(String type) {
+    switch (type.toUpperCase()) {
+      case 'VIDEO':
+        return AppColors.moderatorPink;
+      case 'PHOTO':
+        return AppColors.gradientCyan;
+      case 'TEXT':
+      default:
+        return AppColors.adminPurple;
+    }
+  }
+
+  String _contentMixLabel(String type) {
+    switch (type.toUpperCase()) {
+      case 'VIDEO':
+        return 'Short video';
+      case 'PHOTO':
+        return 'Image posts';
+      case 'TEXT':
+        return 'Text posts';
+      default:
+        return type;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final AnalyticsProvider provider = context.watch<AnalyticsProvider>();
+    final AnalyticsOverview? overview = provider.overview;
+    final bool loading = provider.isLoadingOverview && overview == null;
+
     return Scaffold(
       backgroundColor: AppColors.adminBackground,
       body: SafeArea(
@@ -62,13 +73,14 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              // ── Header Row ──────────────────────────────────────────────
               Row(
                 children: <Widget>[
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(
+                        const Text(
                           'Analytics',
                           style: TextStyle(
                             color: AppColors.adminTextPrimary,
@@ -76,10 +88,13 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                             fontSize: 24,
                           ),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          '1 July - 2 August 2026',
-                          style: TextStyle(color: AppColors.adminTextSecondary, fontSize: 13),
+                          'Overview metrics for range: ${provider.range}',
+                          style: const TextStyle(
+                            color: AppColors.adminTextSecondary,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -89,34 +104,28 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.adminSurface,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppColors.adminBorder),
+                      border: Border.all(color: AppColors.adminBorder),
                     ),
                     child: Row(
                       children: <Widget>[
-                        for (final (int i, String label) in const <(
-                          int,
-                          String
-                        )>[
-                          (0, 'Today'),
-                          (1, '7 days'),
-                          (2, '30 days'),
-                        ])
+                        for (int i = 0; i < _ranges.length; i++)
                           GestureDetector(
-                            onTap: () => setState(() => _rangeIndex = i),
+                            onTap: () => provider.setRange(_ranges[i].$2),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 7),
+                                horizontal: 14,
+                                vertical: 7,
+                              ),
                               decoration: BoxDecoration(
-                                color: _rangeIndex == i
+                                color: provider.range == _ranges[i].$2
                                     ? AppColors.moderatorChipSelected
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(9),
                               ),
                               child: Text(
-                                label,
+                                _ranges[i].$1,
                                 style: TextStyle(
-                                  color: _rangeIndex == i
+                                  color: provider.range == _ranges[i].$2
                                       ? AppColors.adminTextPrimary
                                       : AppColors.adminTextSecondary,
                                   fontWeight: FontWeight.w600,
@@ -133,201 +142,358 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
 
               const SizedBox(height: AppSpacing.xl),
 
-              const Row(
-                children: <Widget>[
-                  Expanded(
-                    child: AdminStatCard(
-                      label: 'Retention',
-                      value: '48%',
-                      delta: '+3 pts',
-                      iconPath: AdminIcons.chart,
-                      iconColor: AppColors.adminGreen,
+              // ── Content State ──────────────────────────────────────────
+              if (loading)
+                const Expanded(
+                  child: Center(
+                    child: SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: AppColors.adminPink,
+                      ),
                     ),
                   ),
-                  SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: AdminStatCard(
-                      label: 'Avg session',
-                      value: '18m 40s',
-                      delta: '+52s',
-                      iconPath: AdminIcons.globe,
-                      iconColor: AppColors.gradientCyan,
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: AdminStatCard(
-                      label: 'Posts per person',
-                      value: '2.4',
-                      delta: 'Weekly average',
-                      deltaColor: AppColors.adminTextMuted,
-                      iconPath: AdminIcons.image,
-                      iconColor: AppColors.adminPurpleSoft,
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: AdminStatCard(
-                      label: 'Reports per 1k posts',
-                      value: '14.3',
-                      delta: '-1.8 vs June',
-                      deltaColor: AppColors.adminOrange,
-                      iconPath: AdminIcons.shield,
-                      iconColor: AppColors.adminOrange,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: AppSpacing.md),
-
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        decoration: BoxDecoration(
-                          color: AppColors.adminSurface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: AppColors.adminBorder),
+                )
+              else if (provider.overviewError != null && overview == null)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          provider.overviewError!,
+                          style: const TextStyle(
+                            color: AppColors.adminTextSecondary,
+                            fontSize: 13,
+                          ),
                         ),
-                        child: Column(
+                        const SizedBox(height: AppSpacing.md),
+                        SizedBox(
+                          width: 120,
+                          child: AppOutlineButton(
+                            text: 'Retry',
+                            height: 38,
+                            onPressed: provider.fetchOverview,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: Column(
+                    children: <Widget>[
+                      // ── Stat Cards ───────────────────────────────────────
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: AdminStatCard(
+                              label: 'Retention',
+                              value: overview?.retention != null
+                                  ? '${overview!.retention!.toStringAsFixed(0)}%'
+                                  : 'N/A',
+                              delta: provider.range,
+                              deltaColor: AppColors.adminTextMuted,
+                              iconPath: AdminIcons.chart,
+                              iconColor: AppColors.adminGreen,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: AdminStatCard(
+                              label: 'Avg session',
+                              value: overview?.avgSessionDuration != null
+                                  ? '${overview!.avgSessionDuration!.toStringAsFixed(0)}s'
+                                  : 'N/A',
+                              delta: provider.range,
+                              deltaColor: AppColors.adminTextMuted,
+                              iconPath: AdminIcons.globe,
+                              iconColor: AppColors.gradientCyan,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: AdminStatCard(
+                              label: 'Posts per person',
+                              value: (overview?.postsPerPerson ?? 0.0)
+                                  .toStringAsFixed(1),
+                              delta: 'Average',
+                              deltaColor: AppColors.adminTextMuted,
+                              iconPath: AdminIcons.image,
+                              iconColor: AppColors.adminPurpleSoft,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: AdminStatCard(
+                              label: 'Reports per 1k posts',
+                              value: (overview?.reportsPer1kPosts ?? 0.0)
+                                  .toStringAsFixed(0),
+                              delta: provider.range,
+                              deltaColor: AppColors.adminOrange,
+                              iconPath: AdminIcons.shield,
+                              iconColor: AppColors.adminOrange,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: AppSpacing.md),
+
+                      // ── Breakdown Cards ──────────────────────────────────
+                      Expanded(
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            const Text(
-                              'What people post',
-                              style: TextStyle(
-                                  color: AppColors.adminTextPrimary,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14),
-                            ),
-                            const SizedBox(height: AppSpacing.lg),
-                            for (final _PostShare share in _postShares)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                    bottom: AppSpacing.md),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: <Widget>[
-                                        Text(share.label,
-                                            style: const TextStyle(
-                                                color: AppColors.adminTextSecondary,
-                                                fontSize: 13)),
-                                        Text('${share.percent}%',
-                                            style: const TextStyle(
-                                                color: AppColors.adminTextPrimary,
-                                                fontSize: 12,
-                                                fontWeight:
-                                                    FontWeight.w700)),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(4),
-                                      child: LinearProgressIndicator(
-                                        value: share.percent / 100,
-                                        minHeight: 6,
-                                        backgroundColor: const Color(
-                                          0xFF1C1824,
-                                        ),
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                                share.color),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            const SizedBox(height: AppSpacing.sm),
-                            const Text(
-                              'Top hashtags',
-                              style: TextStyle(
-                                  color: AppColors.adminTextPrimary,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14),
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: <Widget>[
-                                for (final String tag in _hashtags)
-                                  AppTagChip(
-                                    label: tag,
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 6),
-                                    textStyle: const TextStyle(
-                                        color: AppColors.adminTextSecondary, fontSize: 12),
+                            // What people post & Top hashtags
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(AppSpacing.lg),
+                                decoration: BoxDecoration(
+                                  color: AppColors.adminSurface,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: AppColors.adminBorder,
                                   ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        decoration: BoxDecoration(
-                          color: AppColors.adminSurface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: AppColors.adminBorder),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            const Text(
-                              'Safety outcomes · 30 days',
-                              style: TextStyle(
-                                  color: AppColors.adminTextPrimary,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14),
-                            ),
-                            const SizedBox(height: AppSpacing.lg),
-                            for (final (String label, String value, Color? color)
-                                in _safetyOutcomes)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                    bottom: AppSpacing.md),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: <Widget>[
-                                    Text(label,
-                                        style: const TextStyle(
-                                            color: AppColors.adminTextSecondary,
-                                            fontSize: 13)),
-                                    Text(
-                                      value,
-                                      style: TextStyle(
-                                        color: color ?? AppColors.adminTextPrimary,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 13,
+                                ),
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      const Text(
+                                        'What people post',
+                                        style: TextStyle(
+                                          color: AppColors.adminTextPrimary,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(height: AppSpacing.lg),
+                                      if (overview != null &&
+                                          overview.contentMix.isNotEmpty) ...<Widget>[
+                                        for (final ContentMixItem item
+                                            in overview.contentMix)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: AppSpacing.md,
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: <Widget>[
+                                                Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.spaceBetween,
+                                                  children: <Widget>[
+                                                    Text(
+                                                      _contentMixLabel(item.type),
+                                                      style: const TextStyle(
+                                                        color: AppColors.adminTextSecondary,
+                                                        fontSize: 13,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      '${item.count} (${overview.totalContentCount > 0 ? (item.count / overview.totalContentCount * 100).toStringAsFixed(0) : 0}%)',
+                                                      style: const TextStyle(
+                                                        color: AppColors.adminTextPrimary,
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 6),
+                                                ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(4),
+                                                  child: LinearProgressIndicator(
+                                                    value: overview.totalContentCount > 0
+                                                        ? item.count / overview.totalContentCount
+                                                        : 0.0,
+                                                    minHeight: 6,
+                                                    backgroundColor: const Color(
+                                                      0xFF1C1824,
+                                                    ),
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<Color>(
+                                                      _contentMixColor(item.type),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                      ] else
+                                        const Text(
+                                          'No content mix data',
+                                          style: TextStyle(
+                                            color: AppColors.adminTextMuted,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      const SizedBox(height: AppSpacing.sm),
+                                      const Text(
+                                        'Top hashtags',
+                                        style: TextStyle(
+                                          color: AppColors.adminTextPrimary,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: AppSpacing.sm),
+                                      if (overview != null &&
+                                          overview.topHashtags.isNotEmpty)
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: <Widget>[
+                                            for (final TopHashtagItem item
+                                                in overview.topHashtags)
+                                              AppTagChip(
+                                                label: '${item.tag} (${item.count})',
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 6,
+                                                ),
+                                                textStyle: const TextStyle(
+                                                  color: AppColors.adminTextSecondary,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                          ],
+                                        )
+                                      else
+                                        const Text(
+                                          'No top hashtags yet',
+                                          style: TextStyle(
+                                            color: AppColors.adminTextMuted,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            // Safety outcomes
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(AppSpacing.lg),
+                                decoration: BoxDecoration(
+                                  color: AppColors.adminSurface,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: AppColors.adminBorder,
+                                  ),
+                                ),
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        'Safety outcomes · ${provider.range}',
+                                        style: const TextStyle(
+                                          color: AppColors.adminTextPrimary,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: AppSpacing.lg),
+                                      if (overview != null) ...<Widget>[
+                                        _SafetyRow(
+                                          label: 'Reports received',
+                                          value: '${overview.safetyOutcomes.received}',
+                                        ),
+                                        _SafetyRow(
+                                          label: 'Content hidden',
+                                          value: '${overview.safetyOutcomes.hidden}',
+                                        ),
+                                        _SafetyRow(
+                                          label: 'Accounts warned',
+                                          value: '${overview.safetyOutcomes.warned}',
+                                        ),
+                                        _SafetyRow(
+                                          label: 'Accounts suspended',
+                                          value: '${overview.safetyOutcomes.suspended}',
+                                        ),
+                                        _SafetyRow(
+                                          label: 'Accounts banned',
+                                          value: '${overview.safetyOutcomes.banned}',
+                                        ),
+                                        _SafetyRow(
+                                          label: 'In queue',
+                                          value: '${overview.safetyOutcomes.inQueue}',
+                                        ),
+                                        _SafetyRow(
+                                          label: 'Avg response time',
+                                          value: '${overview.safetyOutcomes.avgResponseHours.toStringAsFixed(1)}h',
+                                        ),
+                                        _SafetyRow(
+                                          label: 'Appeals reversed',
+                                          value: '${overview.safetyOutcomes.appealsReversed} of ${overview.safetyOutcomes.appealsTotal}',
+                                          color: AppColors.adminGreen,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SafetyRow extends StatelessWidget {
+  const _SafetyRow({
+    required this.label,
+    required this.value,
+    this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.adminTextSecondary,
+              fontSize: 13,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: color ?? AppColors.adminTextPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ],
       ),
     );
   }

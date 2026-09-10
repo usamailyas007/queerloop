@@ -20,12 +20,14 @@ class ModeratorsProvider extends ChangeNotifier {
   bool _isInviting = false;
   String? _error;
   bool _hasLoadedOnce = false;
+  final Set<String> _resendingIds = <String>{};
 
   List<Moderator> get moderators => List<Moderator>.unmodifiable(_moderators);
   bool get isLoading => _isLoading;
   bool get isInviting => _isInviting;
   String? get error => _error;
   bool get isEmpty => _hasLoadedOnce && !_isLoading && _moderators.isEmpty;
+  bool isResending(String id) => _resendingIds.contains(id);
 
   int get activeCount =>
       _moderators.where((Moderator m) => !m.pending).length;
@@ -86,6 +88,30 @@ class ModeratorsProvider extends ChangeNotifier {
       return false;
     } finally {
       _isInviting = false;
+      notifyListeners();
+    }
+  }
+
+  /// Re-sends the invite for a pending moderator. Returns the server's
+  /// confirmation message on success, null on failure (`error` is set).
+  Future<String?> resendInvite(String moderatorId) async {
+    if (_resendingIds.contains(moderatorId)) {
+      return null;
+    }
+    _resendingIds.add(moderatorId);
+    _error = null;
+    notifyListeners();
+    try {
+      final String? message = await _service.resendInvite(moderatorId);
+      return message ?? 'Invite re-sent.';
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      return null;
+    } catch (_) {
+      _error = 'Could not re-send the invite. Please try again.';
+      return null;
+    } finally {
+      _resendingIds.remove(moderatorId);
       notifyListeners();
     }
   }
