@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_gradient_button.dart';
 import '../../../../core/widgets/app_outline_button.dart';
+import '../../widgets/admin_remote_avatar.dart';
 import '../models/community.dart';
 import '../provider/communities_provider.dart';
 import 'admin_add_community_screen.dart';
@@ -184,7 +185,7 @@ class _CommunitiesBody extends StatelessWidget {
                   flex: 3,
                   child: Row(
                     children: <Widget>[
-                      _CommunityAvatar(imageUrl: c.imageUrl, name: c.name),
+                      AdminRemoteAvatar(seed: c.name, imageUrl: c.imageUrl),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: Column(
@@ -317,52 +318,6 @@ class _TableHeaderRow extends StatelessWidget {
           Expanded(flex: 2, child: _Header('MODERATORS')),
           Expanded(flex: 2, child: _Header('VISIBILITY')),
         ],
-      ),
-    );
-  }
-}
-
-class _CommunityAvatar extends StatelessWidget {
-  const _CommunityAvatar({required this.imageUrl, required this.name});
-
-  final String? imageUrl;
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    const double size = 34;
-    if (imageUrl != null && imageUrl!.isNotEmpty) {
-      return ClipOval(
-        child: Image.network(
-          imageUrl!,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => _fallback(),
-        ),
-      );
-    }
-    return _fallback();
-  }
-
-  Widget _fallback() {
-    final String initial = name.isEmpty ? '?' : name.characters.first.toUpperCase();
-    return Container(
-      width: 34,
-      height: 34,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.adminPink.withValues(alpha: 0.22),
-        shape: BoxShape.circle,
-        border: Border.all(color: AppColors.adminPink.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        initial,
-        style: const TextStyle(
-          color: AppColors.adminPink,
-          fontWeight: FontWeight.w700,
-          fontSize: 14,
-        ),
       ),
     );
   }

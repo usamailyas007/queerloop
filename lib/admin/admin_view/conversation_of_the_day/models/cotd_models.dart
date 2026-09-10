@@ -56,18 +56,26 @@ class CotdAnswer {
     required this.createdAt,
     required this.featured,
     required this.hidden,
+    this.username,
+    this.displayName,
+    this.avatarUrl,
   });
 
   factory CotdAnswer.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic> author =
+        (json['author'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
     return CotdAnswer(
       id: json['id'] as String,
       questionId: json['questionId'] as String? ?? '',
-      userId: json['userId'] as String? ?? '',
+      userId: json['userId'] as String? ?? author['userId'] as String? ?? '',
       body: json['body'] as String? ?? '',
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       featured: json['featured'] as bool? ?? false,
       hidden: json['hidden'] as bool? ?? false,
+      username: author['username'] as String?,
+      displayName: author['displayName'] as String?,
+      avatarUrl: author['avatarUrl'] as String?,
     );
   }
 
@@ -76,11 +84,23 @@ class CotdAnswer {
   final String userId;
   final String body;
   final DateTime createdAt;
+  final String? username;
+  final String? displayName;
+  final String? avatarUrl;
 
   // Mutable so a feature/hide result can be applied in place.
   bool featured;
   bool hidden;
 
-  /// A short, stable handle from the user id (the API returns no username).
-  String get handle => '@${userId.split('-').first}';
+  /// `@username` when the API supplies one, otherwise a short id-derived handle.
+  String get handle => username != null && username!.isNotEmpty
+      ? '@$username'
+      : '@${userId.split('-').first}';
+
+  /// Best available human name for the row.
+  String get name {
+    if (displayName != null && displayName!.isNotEmpty) return displayName!;
+    if (username != null && username!.isNotEmpty) return username!;
+    return handle;
+  }
 }

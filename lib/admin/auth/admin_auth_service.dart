@@ -75,6 +75,43 @@ class AdminAuthService {
     return ok;
   }
 
+  // ── Refresh ───────────────────────────────────────────────────────────────
+
+  /// POST /auth/refresh — exchanges the stored refresh token for a fresh pair
+  /// (the server rotates both). Persists the new tokens and returns them, or
+  /// null when the refresh token is missing / rejected (caller signs out).
+  Future<({String accessToken, String refreshToken})?> refreshSession() async {
+    if (AppConfig.useMockApi) {
+      return null;
+    }
+
+    final String? refresh = await _storage.read(key: _StorageKey.refreshToken);
+    if (refresh == null || refresh.isEmpty) {
+      return null;
+    }
+
+    try {
+      debugPrint('🔄 [AdminAuthService] POST ${ApiEndpoints.refresh}');
+      final dynamic data = await _client.postNoAuth(
+        ApiEndpoints.refresh,
+        body: <String, dynamic>{'refreshToken': refresh},
+      );
+      final Map<String, dynamic> map = data as Map<String, dynamic>;
+      final String access = map['accessToken'] as String;
+      final String newRefresh = map['refreshToken'] as String? ?? refresh;
+
+      await Future.wait(<Future<void>>[
+        _storage.write(key: _StorageKey.accessToken, value: access),
+        _storage.write(key: _StorageKey.refreshToken, value: newRefresh),
+      ]);
+
+      return (accessToken: access, refreshToken: newRefresh);
+    } catch (e) {
+      debugPrint('⚠️ [AdminAuthService] Refresh failed: $e');
+      return null;
+    }
+  }
+
   // ── Restore from secure storage ───────────────────────────────────────────
   // Called once at startup; returns null if no token is stored.
 
@@ -92,17 +129,21 @@ class AdminAuthService {
 
     _client.authToken = accessToken;
 
-    // Verify the stored token is still valid by calling /auth/me.
+    // Verify the stored token is still valid by calling /auth/me. If the access
+    // token has expired, the ApiClient transparently refreshes it mid-call and
+    // rotates both tokens in storage — so re-read them afterwards.
     final dynamic data = await _client.get(ApiEndpoints.me, useCache: false);
     final AdminUser user = AdminUser.fromJson(data as Map<String, dynamic>);
 
+    final String currentAccess =
+        await _storage.read(key: _StorageKey.accessToken) ?? accessToken;
     final String? refreshToken = await _storage.read(
       key: _StorageKey.refreshToken,
     );
 
     return AdminSession(
       user: user,
-      accessToken: accessToken,
+      accessToken: currentAccess,
       refreshToken: refreshToken ?? '',
     );
   }

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../admin_view/content/models/content_post.dart';
+import '../../../admin_view/content/provider/content_provider.dart';
+import '../../../admin_view/content/screens/admin_post_detail_dialog.dart';
 import '../../../auth/provider/admin_auth_provider.dart';
 import '../../reports/models/mod_report.dart';
 import '../../reports/provider/mod_reports_provider.dart';
@@ -302,21 +304,35 @@ class _ReportedContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool canViewPost = report.targetType.toLowerCase() == 'post' &&
+        report.targetId != null &&
+        report.targetId!.isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _sectionTitle('Report'),
         const SizedBox(height: AppSpacing.md),
+        if (canViewPost) ...<Widget>[
+          _ViewReportedPostButton(postId: report.targetId!),
+          const SizedBox(height: AppSpacing.md),
+        ],
         _kv('Case', report.displayId),
         _kv('Reason', report.reasonLabel),
         _kv('Status', report.status.label),
         _kv('Priority', _priorityLabel(report.priority)),
         _kv('Target type', report.targetType),
+        if (report.communityName != null && report.communityName!.isNotEmpty)
+          _kv('Community', report.communityName!),
+        if (report.assignedToLabel != null)
+          _kv('Assigned to', report.assignedToLabel!),
         if (report.isAppeal) _kv('Appeal', 'Yes'),
         _kv('Created', DateFormat('d MMM yyyy · h:mm a').format(report.createdAt)),
         if (report.resolvedAt != null)
           _kv('Resolved',
               DateFormat('d MMM yyyy · h:mm a').format(report.resolvedAt!)),
+        if (report.resolvedByLabel != null)
+          _kv('Resolved by', report.resolvedByLabel!),
         const SizedBox(height: AppSpacing.xl),
         _sectionTitle('IDs'),
         const SizedBox(height: AppSpacing.md),
@@ -396,6 +412,84 @@ class _ReportedContent extends StatelessWidget {
           ],
         ),
       );
+}
+
+/// Loads the reported post via [ContentProvider] and opens it in the shared
+/// post-detail dialog, so the reviewer can see the actual content before
+/// choosing a decision.
+class _ViewReportedPostButton extends StatefulWidget {
+  const _ViewReportedPostButton({required this.postId});
+
+  final String postId;
+
+  @override
+  State<_ViewReportedPostButton> createState() =>
+      _ViewReportedPostButtonState();
+}
+
+class _ViewReportedPostButtonState extends State<_ViewReportedPostButton> {
+  bool _loading = false;
+
+  Future<void> _open() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    final ContentPost? post =
+        await context.read<ContentProvider>().loadPostById(widget.postId);
+    if (!mounted) return;
+    setState(() => _loading = false);
+    if (post == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          content: Text('That post could not be loaded (it may be deleted).'),
+        ));
+      return;
+    }
+    await showPostDetailDialog(context, post);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _open,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: <Color>[AppColors.gradientPink, AppColors.gradientPurple],
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            if (_loading)
+              const SizedBox(
+                width: 15,
+                height: 15,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            else
+              const Icon(Icons.visibility_outlined,
+                  size: 16, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(
+              _loading ? 'Loading post…' : 'View reported post',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ── Right column: history + decision ───────────────────────────────────────

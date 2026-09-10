@@ -7,8 +7,10 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_outline_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../admin_icons.dart';
+import '../../widgets/admin_remote_avatar.dart';
 import '../models/admin_user_account.dart';
 import '../provider/admin_users_provider.dart';
+import 'admin_user_detail_dialog.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
@@ -620,36 +622,45 @@ class _UserRow extends StatelessWidget {
         children: <Widget>[
           Expanded(
             flex: 3,
-            child: Row(
-              children: <Widget>[
-                _InitialsAvatar(seed: user.handle, size: 34),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        user.handle,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.adminTextPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                      Text(
-                        user.secondaryLine,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.adminTextMuted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => showAdminUserDetailDialog(context, user),
+              child: Row(
+                children: <Widget>[
+                  AdminRemoteAvatar(
+                    seed: user.handle,
+                    imageUrl: user.avatarUrl,
+                    size: 34,
                   ),
-                ),
-              ],
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          user.handle,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.adminTextPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        if (user.secondaryLine.isNotEmpty)
+                          Text(
+                            user.secondaryLine,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.adminTextMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           Expanded(
@@ -927,48 +938,6 @@ class _ActionPill extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: pill,
-    );
-  }
-}
-
-class _InitialsAvatar extends StatelessWidget {
-  const _InitialsAvatar({required this.seed, required this.size});
-
-  final String seed;
-  final double size;
-
-  static const List<Color> _palette = <Color>[
-    AppColors.adminPink,
-    AppColors.adminPurple,
-    AppColors.adminTeal,
-    AppColors.adminOrange,
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final String clean = seed.replaceAll('@', '').trim();
-    final String initials = clean.isEmpty
-        ? '?'
-        : clean.characters.first.toUpperCase();
-    final Color bg = _palette[clean.hashCode.abs() % _palette.length];
-
-    return Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: bg.withValues(alpha: 0.22),
-        shape: BoxShape.circle,
-        border: Border.all(color: bg.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        initials,
-        style: TextStyle(
-          color: bg,
-          fontWeight: FontWeight.w700,
-          fontSize: size * 0.4,
-        ),
-      ),
     );
   }
 }

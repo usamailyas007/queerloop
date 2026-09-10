@@ -26,6 +26,16 @@ class ApiClient {
       ..sendTimeout = kIsWeb ? null : const Duration(seconds: 20)
       ..headers = <String, String>{'Accept': 'application/json'};
 
+    // A second, interceptor-free client used only for the token-refresh call.
+    // Making that request through `_dio` would re-enter the 401 interceptor
+    // that triggered it (and can deadlock), so it gets its own plain Dio.
+    _bareDio = Dio()
+      ..options.baseUrl = url
+      ..options.connectTimeout = const Duration(seconds: 15)
+      ..options.receiveTimeout = const Duration(seconds: 20)
+      ..options.sendTimeout = kIsWeb ? null : const Duration(seconds: 20)
+      ..options.headers = <String, String>{'Accept': 'application/json'};
+
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
@@ -48,13 +58,38 @@ class ApiClient {
           debugPrint('└──────────────────────────────────────────────────────────');
           handler.next(response);
         },
-        onError: (DioException error, ErrorInterceptorHandler handler) {
+        onError: (DioException error, ErrorInterceptorHandler handler) async {
           debugPrint('┌──────────────────────────────────────────────────────────');
           debugPrint('❌ [API Error] ${error.requestOptions.method} ${error.requestOptions.path} [Status ${error.response?.statusCode}]');
           debugPrint('⚠️ Error Response Body:\n${_prettyJson(error.response?.data)}');
           debugPrint('└──────────────────────────────────────────────────────────');
           if (error.response?.statusCode == 401 &&
               !error.requestOptions.path.contains('/auth/login')) {
+            // Opt-in (admin only): one silent token refresh + retry before
+            // giving up. `onRefresh` is null everywhere else, so this whole
+            // block is skipped and the behaviour is unchanged.
+            final RequestOptions req = error.requestOptions;
+            if (onRefresh != null &&
+                !req.path.contains('/auth/refresh') &&
+                req.extra['__retried'] != true) {
+              String? newToken;
+              try {
+                newToken = await _refreshOnce();
+              } catch (_) {
+                newToken = null;
+              }
+              if (newToken != null && newToken.isNotEmpty) {
+                req.extra['__retried'] = true;
+                req.headers['Authorization'] = 'Bearer $newToken';
+                try {
+                  handler.resolve(await _dio.fetch<dynamic>(req));
+                  return;
+                } on DioException catch (retryError) {
+                  handler.next(retryError);
+                  return;
+                }
+              }
+            }
             onUnauthorized?.call();
           }
           handler.next(error);
@@ -76,10 +111,33 @@ class ApiClient {
   }
 
   final Dio _dio;
+  late final Dio _bareDio;
 
   String? authToken;
 
   void Function()? onUnauthorized;
+
+  /// Called once when a request fails with 401 and no refresh is already in
+  /// flight. Should hit the refresh endpoint and return the new access token,
+  /// or null if the session cannot be renewed (the client then calls
+  /// [onUnauthorized]). Wired by the admin auth provider; left null elsewhere,
+  /// which keeps the plain "401 → sign out" behaviour.
+  Future<String?> Function()? onRefresh;
+
+  Future<String?>? _refreshInFlight;
+
+  /// De-dupes concurrent 401s so a burst of requests triggers exactly one
+  /// refresh call; every caller awaits the same result.
+  Future<String?> _refreshOnce() {
+    final Future<String?>? inFlight = _refreshInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final Future<String?> pending =
+        onRefresh!().whenComplete(() => _refreshInFlight = null);
+    _refreshInFlight = pending;
+    return pending;
+  }
 
   Future<dynamic> get(
     String path, {
@@ -112,6 +170,11 @@ class ApiClient {
 
   Future<dynamic> post(String path, {Object? body}) =>
       _send(() => _dio.post<dynamic>(path, data: body));
+
+  /// POST with no auth header and no interceptors — used only for `/auth/refresh`
+  /// so it can run safely from inside the 401 interceptor.
+  Future<dynamic> postNoAuth(String path, {Object? body}) =>
+      _send(() => _bareDio.post<dynamic>(path, data: body));
 
   Future<dynamic> patch(String path, {Object? body}) =>
       _send(() => _dio.patch<dynamic>(path, data: body));

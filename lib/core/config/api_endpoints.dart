@@ -90,6 +90,9 @@ abstract final class ApiEndpoints {
   /// Trending posts. GET /posts/trending
   static const String postsTrending = '/posts/trending';
 
+  /// A single post with author + media refs. GET /posts/:id
+  static String post(String id) => '/posts/$id';
+
   /// Resolve a media reference to its URLs. GET /media/:id
   static String media(String id) => '/media/$id';
 

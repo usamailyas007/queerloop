@@ -26,6 +26,7 @@ class AdminUserAccount {
     this.statusExpiresAt,
     this.username,
     this.displayName,
+    this.avatarUrl,
   });
 
   factory AdminUserAccount.fromJson(Map<String, dynamic> json) {
@@ -39,6 +40,7 @@ class AdminUserAccount {
       role: json['role'] as String? ?? 'user',
       username: json['username'] as String?,
       displayName: json['displayName'] as String?,
+      avatarUrl: json['avatarUrl'] as String?,
       postCount: (json['postCount'] as num?)?.toInt() ?? 0,
       reportsAgainst: (json['reportsAgainst'] as num?)?.toInt() ?? 0,
     );
@@ -58,12 +60,16 @@ class AdminUserAccount {
   AdminAccountStatus status;
   DateTime? statusExpiresAt;
 
+  // From the /admin/users list item; null when the account has no avatar.
+  String? avatarUrl;
+
   /// `@handle` when a username exists, otherwise the email local-part.
   String get handle =>
       username != null && username!.isNotEmpty ? '@$username' : email.split('@').first;
 
-  String get secondaryLine =>
-      displayName != null && displayName!.isNotEmpty ? displayName! : email;
+  /// Always the email — never falls back to the display name. Empty when the
+  /// account has no email on file (the row then shows nothing there).
+  String get secondaryLine => email;
 
   static AdminAccountStatus _parseStatus(String? raw) {
     return switch (raw) {
@@ -72,6 +78,46 @@ class AdminUserAccount {
       _ => AdminAccountStatus.active,
     };
   }
+}
+
+/// The extra profile fields from GET /users/:id, shown in the user-detail
+/// dialog on top of the row data the list already provides.
+class UserProfileExtra {
+  const UserProfileExtra({
+    this.bio,
+    this.pronouns = const <String>[],
+    this.interests = const <String>[],
+    this.isPrivate = false,
+    this.isHiddenProfile = false,
+  });
+
+  factory UserProfileExtra.fromJson(Map<String, dynamic> json) {
+    List<String> list(Object? v) => (v as List<dynamic>? ?? <dynamic>[])
+        .map((dynamic e) => e.toString())
+        .where((String s) => s.isNotEmpty)
+        .toList();
+    return UserProfileExtra(
+      bio: json['bio'] as String?,
+      pronouns: list(json['pronouns']),
+      interests: list(json['interests']),
+      isPrivate: json['isPrivate'] as bool? ?? false,
+    );
+  }
+
+  /// The profile exists but the account hides it from everyone (403).
+  static const UserProfileExtra hidden =
+      UserProfileExtra(isHiddenProfile: true);
+
+  final String? bio;
+  final List<String> pronouns;
+  final List<String> interests;
+  final bool isPrivate;
+  final bool isHiddenProfile;
+
+  bool get hasAny =>
+      (bio != null && bio!.isNotEmpty) ||
+      pronouns.isNotEmpty ||
+      interests.isNotEmpty;
 }
 
 class AdminUsersPage {

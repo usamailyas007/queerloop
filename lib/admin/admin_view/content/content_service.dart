@@ -44,6 +44,21 @@ class ContentService {
         .toList();
   }
 
+  /// GET /posts/:id — a single post (author + media refs). Used to preview the
+  /// content behind a report. Returns null if it can't be loaded (e.g. hard
+  /// deleted).
+  Future<ContentPost?> fetchPostById(String id) async {
+    try {
+      debugPrint('🚀 [ContentService] GET ${ApiEndpoints.post(id)}');
+      final dynamic data =
+          await _client.get(ApiEndpoints.post(id), useCache: false);
+      return ContentPost.fromJson(data as Map<String, dynamic>);
+    } catch (e) {
+      debugPrint('⚠️ [ContentService] post $id failed: $e');
+      return null;
+    }
+  }
+
   /// GET /media/:id — resolve a media ref to real URLs (image url, or video
   /// stream + poster). Returns null if it can't be resolved.
   Future<MediaAsset?> fetchMedia(String id) async {

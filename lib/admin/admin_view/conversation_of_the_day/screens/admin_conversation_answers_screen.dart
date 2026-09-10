@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_gradient_button.dart';
 import '../../../../core/widgets/app_outline_button.dart';
+import '../../widgets/admin_remote_avatar.dart';
 import '../models/cotd_models.dart';
 import '../provider/cotd_provider.dart';
 
@@ -230,17 +231,35 @@ class _AnswerRow extends StatelessWidget {
               flex: 2,
               child: Row(
                 children: <Widget>[
-                  _InitialsAvatar(seed: answer.handle),
+                  AdminRemoteAvatar(
+                    seed: answer.name,
+                    imageUrl: answer.avatarUrl,
+                    size: 26,
+                  ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
-                    child: Text(
-                      answer.handle,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.adminTextPrimary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          answer.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.adminTextPrimary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        Text(
+                          answer.handle,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.adminTextMuted,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -412,37 +431,6 @@ class _AnswersHeaderRow extends StatelessWidget {
           Expanded(flex: 1, child: _Header('POSTED')),
           SizedBox(width: 150),
         ],
-      ),
-    );
-  }
-}
-
-class _InitialsAvatar extends StatelessWidget {
-  const _InitialsAvatar({required this.seed});
-
-  final String seed;
-
-  @override
-  Widget build(BuildContext context) {
-    final String clean = seed.replaceAll('@', '');
-    final String initial =
-        clean.isEmpty ? '?' : clean.characters.first.toUpperCase();
-    return Container(
-      width: 26,
-      height: 26,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.adminPurple.withValues(alpha: 0.22),
-        shape: BoxShape.circle,
-        border: Border.all(color: AppColors.adminPurple.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        initial,
-        style: const TextStyle(
-          color: AppColors.adminPurple,
-          fontWeight: FontWeight.w700,
-          fontSize: 11,
-        ),
       ),
     );
   }

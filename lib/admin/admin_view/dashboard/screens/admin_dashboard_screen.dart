@@ -11,9 +11,9 @@ import '../../analytics/provider/analytics_provider.dart';
 import '../../widgets/admin_stat_card.dart';
 
 class _Bar {
-  const _Bar({required this.height, required this.style});
+  const _Bar({required this.heightFactor, required this.style});
 
-  final double height;
+  final double heightFactor; // 0..1
   final _BarStyle style;
 }
 
@@ -27,26 +27,36 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  static const List<String> _rangeKeys = <String>['1d', '7d', '30d'];
+  // API-recognised range values — anything else falls back to the 30d default.
+  static const List<String> _rangeKeys = <String>['today', '7d', '30d'];
 
-  static const List<_Bar> _dailyActiveBars = <_Bar>[
-    _Bar(height: 53.19, style: _BarStyle.muted),
-    _Bar(height: 61.59, style: _BarStyle.muted),
-    _Bar(height: 57.39, style: _BarStyle.muted),
-    _Bar(height: 72.8, style: _BarStyle.muted),
-    _Bar(height: 68.59, style: _BarStyle.muted),
-    _Bar(height: 81.19, style: _BarStyle.muted),
-    _Bar(height: 88.19, style: _BarStyle.muted),
-    _Bar(height: 79.8, style: _BarStyle.muted),
-    _Bar(height: 92.39, style: _BarStyle.pink),
-    _Bar(height: 103.59, style: _BarStyle.pink),
-    _Bar(height: 96.59, style: _BarStyle.pink),
-    _Bar(height: 114.8, style: _BarStyle.pink),
-    _Bar(height: 109.19, style: _BarStyle.purple),
-    _Bar(height: 127.39, style: _BarStyle.purple),
-    _Bar(height: 120.39, style: _BarStyle.purple),
-    _Bar(height: 140, style: _BarStyle.purple),
+  // The API exposes no day-by-day series, only the scalar `dailyActive` for the
+  // window. These 16 factors give the chart its rising shape; the bars are then
+  // scaled so the peak tracks the real number and rescales with the range.
+  static const List<double> _shape = <double>[
+    0.38, 0.44, 0.41, 0.52, 0.49, 0.58, 0.63, 0.57,
+    0.66, 0.74, 0.69, 0.82, 0.78, 0.91, 0.86, 1.0,
   ];
+
+  List<_Bar> _activityBars(AnalyticsDashboard? d) {
+    final int peak = d == null
+        ? 0
+        : (d.dailyActive ??
+            (d.newSignups > d.postsInRange ? d.newSignups : d.postsInRange));
+    final double niceMax = peak <= 10 ? 10 : ((peak / 10).ceil() * 10).toDouble();
+
+    return <_Bar>[
+      for (int i = 0; i < _shape.length; i++)
+        _Bar(
+          heightFactor: peak == 0
+              ? 0.03
+              : (peak * _shape[i] / niceMax).clamp(0.03, 1.0),
+          style: i < 8
+              ? _BarStyle.muted
+              : (i < 12 ? _BarStyle.pink : _BarStyle.purple),
+        ),
+    ];
+  }
 
   @override
   void initState() {
@@ -122,16 +132,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ],
                     ),
                   ),
-                  SizedBox(
-                    width: 240,
-                    height: 38,
-                    child: AppTextField(
-                      hintText: 'Search users, cases, communities…',
-                      prefixIconPath: AdminIcons.search,
-                      fillColor: AppColors.adminSurface,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
+                  // SizedBox(
+                  //   width: 240,
+                  //   height: 38,
+                  //   child: AppTextField(
+                  //     hintText: 'Search users, cases, communities…',
+                  //     prefixIconPath: AdminIcons.search,
+                  //     fillColor: AppColors.adminSurface,
+                  //   ),
+                  // ),
+                  // const SizedBox(width: AppSpacing.md),
                   _RangePills(
                     selectedIndex: _getRangeIndex(provider.range),
                     onChanged: (int index) =>
@@ -219,52 +229,69 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         ),
                         child: Padding(
                           padding: const EdgeInsets.only(top: AppSpacing.lg),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: <Widget>[
-                              for (final _Bar bar in _dailyActiveBars)
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 3,
+                          child: (dash == null && provider.isLoadingDashboard)
+                              ? const Center(
+                                  child: SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: AppColors.adminPink,
                                     ),
-                                    child: FractionallySizedBox(
-                                      heightFactor: bar.height / 140,
-                                      alignment: Alignment.bottomCenter,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: bar.style == _BarStyle.muted
-                                              ? AppColors.adminSurfaceAlt
-                                              : null,
-                                          gradient: bar.style == _BarStyle.muted
-                                              ? null
-                                              : LinearGradient(
-                                                  begin: Alignment.topCenter,
-                                                  end: Alignment.bottomCenter,
-                                                  colors: bar.style ==
-                                                          _BarStyle.pink
-                                                      ? const <Color>[
-                                                          AppColors.adminPink,
-                                                          AppColors
-                                                              .adminPinkFaded,
-                                                        ]
-                                                      : const <Color>[
-                                                          AppColors.adminPurple,
-                                                          AppColors
-                                                              .adminPurpleFaded,
-                                                        ],
+                                  ),
+                                )
+                              : Row(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: <Widget>[
+                                    for (final _Bar bar in _activityBars(dash))
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 3,
+                                          ),
+                                          child: FractionallySizedBox(
+                                            heightFactor: bar.heightFactor,
+                                            alignment: Alignment.bottomCenter,
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: bar.style ==
+                                                        _BarStyle.muted
+                                                    ? AppColors.adminSurfaceAlt
+                                                    : null,
+                                                gradient: bar.style ==
+                                                        _BarStyle.muted
+                                                    ? null
+                                                    : LinearGradient(
+                                                        begin:
+                                                            Alignment.topCenter,
+                                                        end: Alignment
+                                                            .bottomCenter,
+                                                        colors: bar.style ==
+                                                                _BarStyle.pink
+                                                            ? const <Color>[
+                                                                AppColors
+                                                                    .adminPink,
+                                                                AppColors
+                                                                    .adminPinkFaded,
+                                                              ]
+                                                            : const <Color>[
+                                                                AppColors
+                                                                    .adminPurple,
+                                                                AppColors
+                                                                    .adminPurpleFaded,
+                                                              ],
+                                                      ),
+                                                borderRadius:
+                                                    const BorderRadius.vertical(
+                                                  top: Radius.circular(3),
                                                 ),
-                                          borderRadius:
-                                              const BorderRadius.vertical(
-                                            top: Radius.circular(3),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ),
+                                  ],
                                 ),
-                            ],
-                          ),
                         ),
                       ),
                     ),

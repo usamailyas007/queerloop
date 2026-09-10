@@ -5,6 +5,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../widgets/admin_remote_avatar.dart';
 import '../models/content_post.dart';
 import '../provider/content_provider.dart';
 
@@ -158,7 +159,10 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Row(
         children: <Widget>[
-          _Avatar(url: post.author.avatarUrl, name: post.author.name),
+          AdminRemoteAvatar(
+            seed: post.author.name,
+            imageUrl: post.author.avatarUrl,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
@@ -264,6 +268,7 @@ class _MediaAreaState extends State<_MediaArea> {
       Image.network(
         url,
         fit: BoxFit.contain,
+        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
         errorBuilder: (_, _, _) => const Center(
           child: Text("Couldn't load image",
               style: TextStyle(color: AppColors.adminTextMuted, fontSize: 12)),
@@ -353,6 +358,7 @@ class _VideoPlayerBoxState extends State<_VideoPlayerBox> {
         if (widget.asset.posterUrl != null)
           Image.network(widget.asset.posterUrl!,
               fit: BoxFit.cover, width: double.infinity, height: double.infinity,
+              webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
               errorBuilder: (_, _, _) => const SizedBox.shrink()),
         Container(color: Colors.black.withValues(alpha: 0.35)),
         Column(
@@ -456,53 +462,6 @@ class _StatsRow extends StatelessWidget {
                 color: AppColors.adminTextMuted, fontSize: 11),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.url, required this.name});
-
-  final String? url;
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    const double size = 34;
-    if (url != null && url!.isNotEmpty) {
-      return ClipOval(
-        child: Image.network(
-          url!,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => _fallback(),
-        ),
-      );
-    }
-    return _fallback();
-  }
-
-  Widget _fallback() {
-    final String initial =
-        name.isEmpty ? '?' : name.characters.first.toUpperCase();
-    return Container(
-      width: 34,
-      height: 34,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.adminPurple.withValues(alpha: 0.22),
-        shape: BoxShape.circle,
-        border: Border.all(color: AppColors.adminPurple.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        initial,
-        style: const TextStyle(
-          color: AppColors.adminPurple,
-          fontWeight: FontWeight.w700,
-          fontSize: 13,
-        ),
       ),
     );
   }

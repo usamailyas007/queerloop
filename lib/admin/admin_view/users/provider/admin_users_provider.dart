@@ -160,6 +160,10 @@ class AdminUsersProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// One-off fetch for the user-detail dialog (bio / pronouns / interests).
+  Future<UserProfileExtra?> loadProfile(String userId) =>
+      _service.fetchProfile(userId);
+
   // ── Internals ─────────────────────────────────────────────────────────────
 
   Future<void> _loadPage(int page) async {

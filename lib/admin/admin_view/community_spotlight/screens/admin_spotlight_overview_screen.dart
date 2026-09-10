@@ -60,16 +60,16 @@ class AdminSpotlightOverviewScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  SizedBox(
-                    width: 220,
-                    child: AppTextField(
-                      hintText: 'Search past spotlights',
-                      prefixIconPath: AdminIcons.search,
-                      fillColor: AppColors.adminSurface,
-                      onChanged: (String v) =>
-                          context.read<SpotlightsProvider>().setSearch(v),
-                    ),
-                  ),
+                  // SizedBox(
+                  //   width: 220,
+                  //   child: AppTextField(
+                  //     hintText: 'Search past spotlights',
+                  //     prefixIconPath: AdminIcons.search,
+                  //     fillColor: AppColors.adminSurface,
+                  //     onChanged: (String v) =>
+                  //         context.read<SpotlightsProvider>().setSearch(v),
+                  //   ),
+                  // ),
                   const SizedBox(width: AppSpacing.md),
                   SizedBox(
                     width: 130,
@@ -124,11 +124,15 @@ class AdminSpotlightOverviewScreen extends StatelessWidget {
                   final Spotlight? live = provider.liveSpotlight;
                   if (live == null) {
                     return const _Notice(
-                      message: 'No spotlight is live — publish one to feature '
+                      message:
+                          'No spotlight is live — publish one to feature '
                           'a community this week.',
                     );
                   }
-                  return _LivePickCard(spotlight: live, onEdit: () => onEditLive(live));
+                  return _LivePickCard(
+                    spotlight: live,
+                    onEdit: () => onEditLive(live),
+                  );
                 },
               ),
             ],
@@ -172,8 +176,10 @@ class _LivePickCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.adminTeal.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),

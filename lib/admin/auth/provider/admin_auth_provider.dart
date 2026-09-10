@@ -12,6 +12,7 @@ class AdminAuthProvider extends ChangeNotifier {
       : _client = client,
         _service = service ?? AdminAuthService(client) {
     _client.onUnauthorized = _clearSession;
+    _client.onRefresh = _refreshAccessToken;
   }
 
   final ApiClient _client;
@@ -122,6 +123,20 @@ class AdminAuthProvider extends ChangeNotifier {
     _status = AdminAuthStatus.signedIn;
     _error = null;
     notifyListeners();
+  }
+
+  /// Called by [ApiClient] on a 401. Silently rotates the token pair so the
+  /// admin isn't kicked out when the 15-minute access token expires. Returns
+  /// the new access token, or null (→ [ApiClient] then triggers sign-out).
+  Future<String?> _refreshAccessToken() async {
+    final ({String accessToken, String refreshToken})? tokens =
+        await _service.refreshSession();
+    if (tokens == null) {
+      return null;
+    }
+    _client.authToken = tokens.accessToken;
+    _refreshToken = tokens.refreshToken;
+    return tokens.accessToken;
   }
 
   /// Clear all session state and notify listeners once.

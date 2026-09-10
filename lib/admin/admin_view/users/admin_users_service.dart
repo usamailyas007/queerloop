@@ -4,6 +4,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/api/api_exception.dart';
 import '../../../core/config/api_endpoints.dart';
 import 'models/admin_user_account.dart';
 
@@ -33,6 +34,25 @@ class AdminUsersService {
       useCache: false,
     );
     return AdminUsersPage.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// GET /users/:id — the public profile projection (bio / pronouns /
+  /// interests). Returns [UserProfileExtra.private] when the account hides its
+  /// profile (403), or null on any other failure.
+  Future<UserProfileExtra?> fetchProfile(String userId) async {
+    try {
+      debugPrint('🚀 [AdminUsersService] GET ${ApiEndpoints.user(userId)}');
+      final dynamic data =
+          await _client.get(ApiEndpoints.user(userId), useCache: false);
+      return UserProfileExtra.fromJson(data as Map<String, dynamic>);
+    } on ApiException catch (e) {
+      if (e.statusCode == 403) {
+        return UserProfileExtra.hidden;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// GET /admin/users/stats — aggregate counts for the header.

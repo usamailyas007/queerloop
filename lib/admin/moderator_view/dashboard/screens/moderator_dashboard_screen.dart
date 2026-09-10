@@ -80,6 +80,9 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
                       message: provider.dashboardError!,
                       onRetry: provider.refreshDashboard,
                     ),
+                  ] else if (blank) ...<Widget>[
+                    const SizedBox(height: AppSpacing.md),
+                    const _AllClearBanner(),
                   ],
                   const SizedBox(height: AppSpacing.xl),
                   _metricRow(d),
@@ -281,12 +284,9 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           if (d.reportsByReason.isEmpty)
-            const Text(
-              'No reports in this window.',
-              style: TextStyle(
-                color: AppColors.moderatorTextFaint,
-                fontSize: 12,
-              ),
+            const _EmptyHint(
+              icon: Icons.inbox_outlined,
+              text: 'No reports were filed in the last 7 days.',
             )
           else
             for (final ReasonCount r in d.reportsByReason)
@@ -360,12 +360,10 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           if (d.needsYouFirst.isEmpty)
-            const Text(
-              "You're all caught up.",
-              style: TextStyle(
-                color: AppColors.moderatorTextFaint,
-                fontSize: 12,
-              ),
+            const _EmptyHint(
+              icon: Icons.check_circle_outline_rounded,
+              text: "You're all caught up — nothing is assigned to you or "
+                  'waiting to be picked up.',
             )
           else
             for (final ModReport r in d.needsYouFirst)
@@ -490,13 +488,11 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
           const Divider(height: 1, color: AppColors.moderatorDividerLine),
           if (d.nextUp.isEmpty)
             const Padding(
-              padding: EdgeInsets.all(AppSpacing.xl),
-              child: Text(
-                'Nothing waiting.',
-                style: TextStyle(
-                  color: AppColors.moderatorTextFaint,
-                  fontSize: 13,
-                ),
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+              child: _EmptyHint(
+                icon: Icons.done_all_rounded,
+                text: 'The queue is clear. Nothing is waiting for review '
+                    'right now.',
               ),
             )
           else
@@ -601,6 +597,85 @@ class _ModeratorDashboardScreenState extends State<ModeratorDashboardScreen> {
         border: Border.all(color: AppColors.moderatorBorder),
       ),
       child: child,
+    );
+  }
+}
+
+/// Small, friendly placeholder for an empty section of the dashboard.
+class _EmptyHint extends StatelessWidget {
+  const _EmptyHint({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(icon, color: AppColors.moderatorIconMuted, size: 24),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            text,
+            style: const TextStyle(
+              color: AppColors.moderatorTextMuted,
+              fontSize: 12.5,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown at the top of the dashboard when there is genuinely nothing to do.
+class _AllClearBanner extends StatelessWidget {
+  const _AllClearBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.moderatorSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.moderatorBorder),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.verified_outlined,
+              color: AppColors.gradientCyan, size: 22),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'All clear',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: AppColors.moderatorTextPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Nothing needs your attention right now. New reports will '
+                  'show up here as they come in.',
+                  style: TextStyle(
+                    color: AppColors.moderatorTextMuted,
+                    fontSize: 12.5,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

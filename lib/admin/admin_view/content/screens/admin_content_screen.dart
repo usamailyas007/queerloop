@@ -80,9 +80,9 @@ class _AdminContentScreenState extends State<AdminContentScreen> {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      if (provider.total > 0)
+                      if (provider.posts.isNotEmpty)
                         Text(
-                          '${provider.total} posts',
+                          '${provider.posts.length} posts',
                           style: const TextStyle(
                             color: AppColors.adminTextSecondary,
                             fontSize: 13,
@@ -362,6 +362,7 @@ class _Thumb extends StatelessWidget {
     return Image.network(
       url,
       fit: BoxFit.cover,
+      webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
       errorBuilder: (_, _, _) => placeholder,
     );
   }

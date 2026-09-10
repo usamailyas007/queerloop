@@ -135,21 +135,21 @@ class _Header extends StatelessWidget {
           ],
         ),
         const Spacer(),
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: AppColors.moderatorSurfaceAlt,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.moderatorBorder),
-          ),
-          child: Row(
-            children: <Widget>[
-              _tab('All moderators', !mineOnly, () => onToggle(false)),
-              _tab('Just me', mineOnly, () => onToggle(true)),
-            ],
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
+        // Container(
+        //   padding: const EdgeInsets.all(3),
+        //   decoration: BoxDecoration(
+        //     color: AppColors.moderatorSurfaceAlt,
+        //     borderRadius: BorderRadius.circular(12),
+        //     border: Border.all(color: AppColors.moderatorBorder),
+        //   ),
+        //   child: Row(
+        //     children: <Widget>[
+        //       _tab('All moderators', !mineOnly, () => onToggle(false)),
+        //       _tab('Just me', mineOnly, () => onToggle(true)),
+        //     ],
+        //   ),
+        // ),
+        // const SizedBox(width: AppSpacing.md),
         GestureDetector(
           onTap: onRefresh,
           child: Container(

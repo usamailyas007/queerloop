@@ -19,7 +19,7 @@ class AdminAnalyticsScreen extends StatefulWidget {
 
 class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
   static const List<(String, String)> _ranges = <(String, String)>[
-    ('Today', '1d'),
+    ('Today', 'today'),
     ('7 days', '7d'),
     ('30 days', '30d'),
   ];

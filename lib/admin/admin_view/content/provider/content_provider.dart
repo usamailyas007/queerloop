@@ -132,6 +132,22 @@ class ContentProvider extends ChangeNotifier {
     })).whenComplete(notifyListeners);
   }
 
+  /// Fetch one post by id and pre-resolve its media, so any screen (e.g. the
+  /// report detail) can hand it straight to [showPostDetailDialog]. Returns
+  /// null if the post can't be loaded.
+  Future<ContentPost?> loadPostById(String id) async {
+    final ContentPost? post = await _service.fetchPostById(id);
+    if (post == null) {
+      return null;
+    }
+    final String? ref = post.primaryMediaRef;
+    if (ref != null && _media[ref] == null) {
+      _media[ref] = await _service.fetchMedia(ref);
+      notifyListeners();
+    }
+    return post;
+  }
+
   /// Resolve an arbitrary media ref (used by the detail view). Idempotent.
   Future<MediaAsset?> ensureMedia(String ref) async {
     if (_media.containsKey(ref) && _media[ref] != null) {

@@ -137,13 +137,30 @@ class ModReport {
     this.targetId,
     this.targetOwnerId,
     this.communityId,
+    this.communityName,
     this.assignedTo,
+    this.assignedToName,
+    this.resolvedById,
+    this.resolvedByName,
     this.decision,
     this.moderatorNote,
     this.resolvedAt,
   });
 
   factory ModReport.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic>? assignee =
+        json['assignee'] as Map<String, dynamic>?;
+    final Map<String, dynamic>? resolvedBy =
+        json['resolvedBy'] as Map<String, dynamic>?;
+    String? nameOf(Map<String, dynamic>? m) {
+      if (m == null) return null;
+      final Object? d = m['displayName'];
+      final Object? u = m['username'];
+      if (d is String && d.isNotEmpty) return d;
+      if (u is String && u.isNotEmpty) return u;
+      return null;
+    }
+
     return ModReport(
       id: json['id'] as String,
       displayId: json['displayId'] as String? ?? '',
@@ -152,10 +169,17 @@ class ModReport {
       targetId: json['targetId'] as String?,
       targetOwnerId: json['targetOwnerId'] as String?,
       communityId: json['communityId'] as String?,
+      communityName:
+          (json['community'] as Map<String, dynamic>?)?['name'] as String?,
       reason: json['reason'] as String? ?? '',
       status: ReportStatusX.parse(json['status'] as String?),
       priority: (json['priority'] as num?)?.toInt() ?? 3,
-      assignedTo: json['assignedTo'] as String?,
+      assignedTo:
+          json['assignedTo'] as String? ?? assignee?['userId'] as String?,
+      assignedToName: nameOf(assignee),
+      resolvedById:
+          json['resolvedBy'] is String ? json['resolvedBy'] as String : resolvedBy?['userId'] as String?,
+      resolvedByName: nameOf(resolvedBy),
       decision: ModDecisionX.parse(json['decision'] as String?),
       moderatorNote: json['moderatorNote'] as String?,
       isAppeal: json['isAppeal'] as bool? ?? false,
@@ -173,10 +197,14 @@ class ModReport {
   final String? targetId;
   final String? targetOwnerId;
   final String? communityId;
+  final String? communityName;
   final String reason;
   final ReportStatus status;
   final int priority; // 1 urgent, 2 high, 3 normal
   final String? assignedTo;
+  final String? assignedToName;
+  final String? resolvedById;
+  final String? resolvedByName;
   final ModDecision? decision;
   final String? moderatorNote;
   final bool isAppeal;
@@ -193,6 +221,25 @@ class ModReport {
 
   bool get isResolved => status == ReportStatus.resolved;
   bool get isAssigned => assignedTo != null;
+
+  static String _shortId(String id) =>
+      id.contains('-') ? '#${id.split('-').first}' : '#$id';
+
+  /// Moderator the case is assigned to — name if known, else a short id.
+  String? get assignedToLabel {
+    if (assignedToName != null && assignedToName!.isNotEmpty) {
+      return assignedToName;
+    }
+    return assignedTo == null ? null : _shortId(assignedTo!);
+  }
+
+  /// Moderator who resolved the case — name if known, else a short id.
+  String? get resolvedByLabel {
+    if (resolvedByName != null && resolvedByName!.isNotEmpty) {
+      return resolvedByName;
+    }
+    return resolvedById == null ? null : _shortId(resolvedById!);
+  }
 }
 
 class ModReportsPage {
