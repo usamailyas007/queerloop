@@ -44,10 +44,21 @@ class App extends StatelessWidget {
         ),
         ChangeNotifierProvider<SplashProvider>(
             create: (_) => SplashProvider()),
-        ChangeNotifierProvider<ProfileSetupProvider>(
+        ChangeNotifierProxyProvider<AuthProvider, ProfileSetupProvider>(
           create: (BuildContext ctx) => ProfileSetupProvider(
             service: ProfileSetupService(ctx.read<ApiClient>()),
           ),
+          update: (BuildContext ctx, AuthProvider auth, ProfileSetupProvider? existing) {
+            final ProfileSetupProvider provider = existing ??
+                ProfileSetupProvider(
+                  service: ProfileSetupService(ctx.read<ApiClient>()),
+                );
+            // Jab bhi user sign out kare, wizard ko Step 1 pe reset karo
+            if (auth.status == AuthStatus.signedOut) {
+              provider.reset();
+            }
+            return provider;
+          },
         ),
         ChangeNotifierProvider<ProfileProvider>(
           create: (BuildContext ctx) => ProfileProvider(

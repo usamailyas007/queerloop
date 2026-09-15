@@ -666,6 +666,37 @@ class ProfileSetupProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Full reset (call on logout / new sign-up) ─────────────────────────────
+
+  /// Resets all wizard state so the next sign-up starts from Step 1.
+  void reset() {
+    _currentStep = 0;
+    _displayName = '';
+    _username = '';
+    _bio = '';
+    _isUsernameAvailable = null;
+    _checkingUsername = false;
+    _profilePhotoPath = null;
+    _avatarUrl = null;
+    _selectedPronouns.clear();
+    _isPronounsPrivate = false;
+    _joinedCommunityIds.clear();
+    _initialJoinedCommunityIds.clear();
+    _communitySearchQuery = '';
+    _secretTags.clear();
+    _syncUserCommunities = null;
+    _isPrivateAccount = true;
+    _showInDiscover = false;
+    _hideMyLikes = true;
+    _allowMessagesFrom = 'People you follow';
+    _profileVisibility = 'People you follow';
+    _isBusy = false;
+    _error = null;
+    _savedProfile = null;
+    _usernameDebounceTimer?.cancel();
+    notifyListeners();
+  }
+
   // ── Private helpers ───────────────────────────────────────────────────────
 
   /// Only notifies when value actually changes — prevents redundant rebuilds.
