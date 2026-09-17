@@ -1,4 +1,3 @@
-// Analytics Overview model — GET /admin/analytics/overview
 
 class ContentMixItem {
   const ContentMixItem({

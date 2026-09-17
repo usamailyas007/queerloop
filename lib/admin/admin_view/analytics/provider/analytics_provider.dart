@@ -1,4 +1,3 @@
-// Analytics Provider — state management for Analytics Overview and Dashboard.
 
 import 'package:flutter/foundation.dart';
 

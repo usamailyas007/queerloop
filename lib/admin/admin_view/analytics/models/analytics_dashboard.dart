@@ -1,4 +1,3 @@
-// Analytics Dashboard model — GET /admin/analytics/dashboard
 
 class AnalyticsDashboard {
   const AnalyticsDashboard({

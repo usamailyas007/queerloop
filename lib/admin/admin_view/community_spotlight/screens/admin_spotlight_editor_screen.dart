@@ -10,8 +10,10 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_gradient_button.dart';
 import '../../../../core/widgets/app_outline_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../widgets/admin_field_label.dart';
 import '../models/spotlight.dart';
 import '../provider/spotlights_provider.dart';
+import '../widgets/spotlight_cover_picker.dart';
 
 /// Create (target == null) or edit an existing spotlight.
 class AdminSpotlightEditorScreen extends StatefulWidget {
@@ -61,9 +63,7 @@ class _AdminSpotlightEditorScreenState
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       final Uint8List bytes = await image.readAsBytes();
-      setState(() {
-        _pickedBytes = bytes;
-      });
+      setState(() => _pickedBytes = bytes);
     }
   }
 
@@ -76,19 +76,18 @@ class _AdminSpotlightEditorScreenState
 
   Future<void> _save() async {
     final SpotlightsProvider provider = context.read<SpotlightsProvider>();
-    String? finalImageUrl;
 
-    if (_pickedBytes != null) {
-      finalImageUrl = 'data:image/jpeg;base64,${base64Encode(_pickedBytes!)}';
-    } else {
-      finalImageUrl = _currentImageUrl;
-    }
+    // The API takes a raw base64 payload (no `data:` URI prefix) and uploads
+    // it itself — sending only when a *new* image was picked leaves an
+    // existing cover untouched.
+    final String? imageBase64 =
+        _pickedBytes == null ? null : base64Encode(_pickedBytes!);
 
     final Spotlight? saved = await provider.saveSpotlight(
       targetId: widget.target?.id,
       title: _titleController.text,
       body: _bodyController.text,
-      imageUrl: finalImageUrl,
+      imageBase64: imageBase64,
     );
 
     if (!mounted) {
@@ -108,10 +107,6 @@ class _AdminSpotlightEditorScreenState
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
   }
-
-  bool get _hasImage =>
-      _pickedBytes != null ||
-      (_currentImageUrl != null && _currentImageUrl!.trim().isNotEmpty);
 
   @override
   Widget build(BuildContext context) {
@@ -168,51 +163,15 @@ class _AdminSpotlightEditorScreenState
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    const _Label('Cover image'),
-                    GestureDetector(
-                      onTap: saving ? null : _pickImage,
-                      child: Container(
-                        width: double.infinity,
-                        height: 180,
-                        decoration: BoxDecoration(
-                          color: AppColors.adminSurfaceAlt,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: AppColors.adminDropzoneBorder,
-                          ),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        alignment: Alignment.center,
-                        child: _buildImagePreview(),
-                      ),
+                    const AdminFieldLabel('Cover image'),
+                    SpotlightCoverPicker(
+                      pickedBytes: _pickedBytes,
+                      currentImageUrl: _currentImageUrl,
+                      saving: saving,
+                      onPick: _pickImage,
+                      onRemove: _removeImage,
                     ),
-                    if (_hasImage) ...<Widget>[
-                      const SizedBox(height: AppSpacing.xs),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: <Widget>[
-                          TextButton(
-                            onPressed: saving ? null : _pickImage,
-                            child: const Text(
-                              'Change image',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: saving ? null : _removeImage,
-                            child: const Text(
-                              'Remove',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.adminOrange,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ] else
-                      const SizedBox(height: AppSpacing.lg),
-                    const _Label('Headline'),
+                    const AdminFieldLabel('Headline'),
                     AppTextField(
                       controller: _titleController,
                       enabled: !saving,
@@ -220,7 +179,7 @@ class _AdminSpotlightEditorScreenState
                       fillColor: AppColors.adminSurfaceAlt,
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    const _Label('Description'),
+                    const AdminFieldLabel('Description'),
                     AppTextField(
                       controller: _bodyController,
                       enabled: !saving,
@@ -251,87 +210,6 @@ class _AdminSpotlightEditorScreenState
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImagePreview() {
-    if (_pickedBytes != null) {
-      return Image.memory(
-        _pickedBytes!,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
-      );
-    }
-
-    if (_currentImageUrl != null && _currentImageUrl!.trim().isNotEmpty) {
-      return Image.network(
-        _currentImageUrl!,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
-        errorBuilder: (_, _, _) => const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Icon(
-              Icons.broken_image_outlined,
-              color: AppColors.adminTextMuted,
-              size: 28,
-            ),
-            SizedBox(height: 8),
-            Text(
-              "Can't load current image",
-              style: TextStyle(color: AppColors.adminTextMuted, fontSize: 12),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return const Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        Icon(
-          Icons.file_upload_outlined,
-          color: AppColors.adminTextSecondary,
-          size: 28,
-        ),
-        SizedBox(height: 8),
-        Text(
-          'Upload cover image (optional)',
-          style: TextStyle(
-            color: AppColors.adminTextSecondary,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          'PNG or JPG · Tap to choose from system',
-          style: TextStyle(color: AppColors.adminTextMuted, fontSize: 11),
-        ),
-      ],
-    );
-  }
-}
-
-class _Label extends StatelessWidget {
-  const _Label(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AppColors.adminTextSecondary,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
         ),
       ),
     );

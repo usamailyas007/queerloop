@@ -1,9 +1,4 @@
-// Owns the announcements feed + compose flow.
-// Mirrors features/auth/auth_provider.dart conventions (isBusy/error, selective
-// notifyListeners()).
-
 import 'package:flutter/foundation.dart';
-
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/api_exception.dart';
 import '../announcements_service.dart';
@@ -17,7 +12,6 @@ class AnnouncementsProvider extends ChangeNotifier {
 
   final AnnouncementsService _service;
 
-  /// Backend returns the whole feed, so paging is done here on the client.
   static const int pageSize = 7;
 
   List<Announcement> _announcements = <Announcement>[];
@@ -96,7 +90,6 @@ class AnnouncementsProvider extends ChangeNotifier {
     }
   }
 
-  /// Returns the published announcement on success, null on failure (`error` set).
   Future<Announcement?> createAnnouncement({
     required String title,
     required String body,
@@ -118,7 +111,7 @@ class AnnouncementsProvider extends ChangeNotifier {
         communityId: communityId,
       );
       _announcements = <Announcement>[created, ..._announcements];
-      _page = 1; // jump back so the new one is visible
+      _page = 1; 
       return created;
     } on ApiException catch (failure) {
       _error = failure.message;

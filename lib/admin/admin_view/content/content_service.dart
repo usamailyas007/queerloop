@@ -45,8 +45,13 @@ class ContentService {
   }
 
   /// GET /posts/:id — a single post (author + media refs). Used to preview the
-  /// content behind a report. Returns null if it can't be loaded (e.g. hard
-  /// deleted).
+  /// content behind a report.
+  ///
+  /// This endpoint 404s once a post is hidden or removed — exactly the case a
+  /// moderator/admin most needs to see — so a failure here falls back to
+  /// paging through GET /admin/posts (capped at a few hundred) looking for a
+  /// matching id, since there is no /admin/posts/:id. Returns null if the post
+  /// can't be found either way (e.g. hard deleted).
   Future<ContentPost?> fetchPostById(String id) async {
     try {
       debugPrint('🚀 [ContentService] GET ${ApiEndpoints.post(id)}');
@@ -54,9 +59,39 @@ class ContentService {
           await _client.get(ApiEndpoints.post(id), useCache: false);
       return ContentPost.fromJson(data as Map<String, dynamic>);
     } catch (e) {
-      debugPrint('⚠️ [ContentService] post $id failed: $e');
-      return null;
+      debugPrint('⚠️ [ContentService] GET ${ApiEndpoints.post(id)} failed '
+          '($e) — the post may be hidden/removed. Falling back to '
+          '${ApiEndpoints.adminPosts}.');
     }
+
+    const int pageSize = 100;
+    const int maxPages = 5; // up to 500 posts — a manual, on-demand lookup.
+    for (int page = 1; page <= maxPages; page++) {
+      try {
+        final dynamic data = await _client.get(
+          ApiEndpoints.adminPosts,
+          query: <String, dynamic>{'page': page, 'limit': pageSize},
+          useCache: false,
+        );
+        final Map<String, dynamic> map = data as Map<String, dynamic>;
+        final List<dynamic> items =
+            map['items'] as List<dynamic>? ?? <dynamic>[];
+        for (final dynamic item in items) {
+          final Map<String, dynamic> post = item as Map<String, dynamic>;
+          if (post['id'] == id) {
+            return ContentPost.fromJson(post);
+          }
+        }
+        if (items.length < pageSize) {
+          break; // last page
+        }
+      } catch (e) {
+        debugPrint('⚠️ [ContentService] ${ApiEndpoints.adminPosts} page '
+            '$page failed: $e');
+        break;
+      }
+    }
+    return null;
   }
 
   /// GET /media/:id — resolve a media ref to real URLs (image url, or video

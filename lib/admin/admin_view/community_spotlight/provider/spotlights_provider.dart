@@ -88,7 +88,7 @@ class SpotlightsProvider extends ChangeNotifier {
     String? targetId,
     required String title,
     required String body,
-    String? imageUrl,
+    String? imageBase64,
   }) async {
     if (_isSaving) {
       return null;
@@ -106,13 +106,13 @@ class SpotlightsProvider extends ChangeNotifier {
           ? await _service.createSpotlight(
               title: title.trim(),
               body: body.trim(),
-              imageUrl: imageUrl,
+              imageBase64: imageBase64,
             )
           : await _service.updateSpotlight(
               id: targetId,
               title: title.trim(),
               body: body.trim(),
-              imageUrl: imageUrl,
+              imageBase64: imageBase64,
             );
       _spotlights = await _service.fetchSpotlights(search: _search);
       return saved;

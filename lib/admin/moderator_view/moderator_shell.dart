@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../widgets/admin_logout_dialog.dart';
+import '../widgets/shell_tab_memory.dart';
 import 'action_log/screens/moderator_action_log_screen.dart';
 import 'dashboard/screens/moderator_dashboard_screen.dart';
 import 'reports/provider/mod_reports_provider.dart';
@@ -17,11 +18,26 @@ class ModeratorShell extends StatefulWidget {
 }
 
 class _ModeratorShellState extends State<ModeratorShell> {
+  static const int _tabCount = 3;
+  final ShellTabMemory _tabMemory =
+      ShellTabMemory('moderator.selectedTabIndex');
+
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabMemory.load(_tabCount).then((int? remembered) {
+      if (mounted && remembered != null && remembered != _selectedIndex) {
+        setState(() => _selectedIndex = remembered);
+      }
+    });
+  }
 
   void _select(int index) {
     if (_selectedIndex != index) {
       setState(() => _selectedIndex = index);
+      _tabMemory.save(index);
     }
   }
 
@@ -154,7 +170,7 @@ class _ModeratorSidebar extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: GestureDetector(
+      child: MouseRegion(cursor: SystemMouseCursors.click, child: GestureDetector(
         onTap: () => onSelected(index),
         child: Container(
           padding: const EdgeInsets.symmetric(
@@ -206,7 +222,7 @@ class _ModeratorSidebar extends StatelessWidget {
             ],
           ),
         ),
-      ),
+      )),
     );
   }
 }

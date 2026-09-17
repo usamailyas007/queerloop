@@ -40,15 +40,18 @@ class SpotlightsService {
   }
 
   /// POST /admin/spotlights — publish a new spotlight (supersedes the live one).
+  /// `imageBase64` is the raw base64 payload (no `data:` URI prefix) — the API
+  /// rejects `imageUrl` as an unknown property and uploads the image itself,
+  /// returning the hosted `imageUrl` in the response.
   Future<Spotlight> createSpotlight({
     required String title,
     required String body,
-    String? imageUrl,
+    String? imageBase64,
   }) async {
     debugPrint('🚀 [SpotlightsService] POST ${ApiEndpoints.adminSpotlights}');
     final dynamic data = await _client.post(
       ApiEndpoints.adminSpotlights,
-      body: _payload(title: title, body: body, imageUrl: imageUrl),
+      body: _payload(title: title, body: body, imageBase64: imageBase64),
     );
     return Spotlight.fromJson(data as Map<String, dynamic>);
   }
@@ -58,12 +61,12 @@ class SpotlightsService {
     required String id,
     required String title,
     required String body,
-    String? imageUrl,
+    String? imageBase64,
   }) async {
     debugPrint('🚀 [SpotlightsService] PATCH ${ApiEndpoints.adminSpotlight(id)}');
     final dynamic data = await _client.patch(
       ApiEndpoints.adminSpotlight(id),
-      body: _payload(title: title, body: body, imageUrl: imageUrl),
+      body: _payload(title: title, body: body, imageBase64: imageBase64),
     );
     return Spotlight.fromJson(data as Map<String, dynamic>);
   }
@@ -79,13 +82,13 @@ class SpotlightsService {
   Map<String, dynamic> _payload({
     required String title,
     required String body,
-    String? imageUrl,
+    String? imageBase64,
   }) {
     return <String, dynamic>{
       'title': title,
       'body': body,
-      if (imageUrl != null && imageUrl.trim().isNotEmpty)
-        'imageUrl': imageUrl.trim(),
+      if (imageBase64 != null && imageBase64.trim().isNotEmpty)
+        'imageBase64': imageBase64.trim(),
     };
   }
 }

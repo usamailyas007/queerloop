@@ -47,10 +47,17 @@ class ContentProvider extends ChangeNotifier {
   bool get isLoadingTrending => _isLoadingTrending;
 
   // ── Media cache ───────────────────────────────────────────────────────────
+  // Only successful lookups are cached. A failed fetch is *not* remembered as
+  // a permanent miss — without this, one transient `/media/:id` failure (e.g.
+  // a slow CDN edge, a hiccup right as a post is hidden) would mark the ref as
+  // "already tried" forever, and no later refetch/hide/restore/reload would
+  // ever retry it, leaving that thumbnail blank for the rest of the session.
 
-  final Map<String, MediaAsset?> _media = <String, MediaAsset?>{};
+  final Map<String, MediaAsset> _media = <String, MediaAsset>{};
+  final Set<String> _mediaInFlight = <String>{};
 
-  /// Resolved media for a ref (null while loading or if it failed).
+  /// Resolved media for a ref (null while loading, unresolved, or if the last
+  /// attempt failed — the next call to resolve it will retry).
   MediaAsset? media(String? ref) => ref == null ? null : _media[ref];
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -116,19 +123,25 @@ class ContentProvider extends ChangeNotifier {
   }
 
   /// Resolve the first media ref of each post, in parallel, into the cache.
+  /// Skips refs already resolved or currently being fetched — but, unlike a
+  /// plain `containsKey` check, a ref whose last attempt failed is retried.
   void _resolveMediaFor(List<ContentPost> posts) {
     final Set<String> refs = <String>{
       for (final ContentPost p in posts)
         if (p.primaryMediaRef != null) p.primaryMediaRef!,
-    }..removeWhere(_media.containsKey);
+    }
+      ..removeWhere(_media.containsKey)
+      ..removeWhere(_mediaInFlight.contains);
     if (refs.isEmpty) {
       return;
     }
-    for (final String ref in refs) {
-      _media[ref] = null; // mark as in-flight
-    }
+    _mediaInFlight.addAll(refs);
     Future.wait(refs.map((String ref) async {
-      _media[ref] = await _service.fetchMedia(ref);
+      final MediaAsset? asset = await _service.fetchMedia(ref);
+      if (asset != null) {
+        _media[ref] = asset;
+      }
+      _mediaInFlight.remove(ref);
     })).whenComplete(notifyListeners);
   }
 
@@ -141,20 +154,28 @@ class ContentProvider extends ChangeNotifier {
       return null;
     }
     final String? ref = post.primaryMediaRef;
-    if (ref != null && _media[ref] == null) {
-      _media[ref] = await _service.fetchMedia(ref);
-      notifyListeners();
+    if (ref != null && !_media.containsKey(ref)) {
+      await ensureMedia(ref);
     }
     return post;
   }
 
-  /// Resolve an arbitrary media ref (used by the detail view). Idempotent.
+  /// Resolve an arbitrary media ref (used by the detail view). Idempotent —
+  /// safe to call again after a previous failure, which retries it.
   Future<MediaAsset?> ensureMedia(String ref) async {
-    if (_media.containsKey(ref) && _media[ref] != null) {
-      return _media[ref];
+    final MediaAsset? cached = _media[ref];
+    if (cached != null) {
+      return cached;
     }
+    if (_mediaInFlight.contains(ref)) {
+      return null;
+    }
+    _mediaInFlight.add(ref);
     final MediaAsset? asset = await _service.fetchMedia(ref);
-    _media[ref] = asset;
+    _mediaInFlight.remove(ref);
+    if (asset != null) {
+      _media[ref] = asset;
+    }
     notifyListeners();
     return asset;
   }

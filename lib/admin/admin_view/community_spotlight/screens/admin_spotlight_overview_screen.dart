@@ -6,8 +6,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_gradient_button.dart';
 import '../../../../core/widgets/app_outline_button.dart';
-import '../../../../core/widgets/app_text_field.dart';
-import '../../admin_icons.dart';
 import '../models/spotlight.dart';
 import '../provider/spotlights_provider.dart';
 import 'spotlight_image.dart';

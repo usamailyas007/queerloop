@@ -1,4 +1,3 @@
-// Analytics Service — GET /admin/analytics/overview & GET /admin/analytics/dashboard.
 
 import 'package:flutter/foundation.dart';
 
@@ -12,7 +11,6 @@ class AnalyticsService {
 
   final ApiClient _client;
 
-  /// GET /admin/analytics/overview?range=30d
   Future<AnalyticsOverview> fetchOverview({String range = '30d'}) async {
     debugPrint('🚀 [AnalyticsService] GET ${ApiEndpoints.adminAnalyticsOverview}?range=$range');
     final dynamic data = await _client.get(
@@ -23,7 +21,6 @@ class AnalyticsService {
     return AnalyticsOverview.fromJson(data as Map<String, dynamic>);
   }
 
-  /// GET /admin/analytics/dashboard?range=30d
   Future<AnalyticsDashboard> fetchDashboard({String range = '30d'}) async {
     debugPrint('🚀 [AnalyticsService] GET ${ApiEndpoints.adminAnalyticsDashboard}?range=$range');
     final dynamic data = await _client.get(

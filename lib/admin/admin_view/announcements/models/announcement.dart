@@ -1,9 +1,7 @@
-// Model for announcements — GET /engagement/announcements and the create response.
 
 enum AnnouncementAudience { everyone, community, moderators }
 
 extension AnnouncementAudienceX on AnnouncementAudience {
-  /// Wire value the API expects / returns.
   String get query => name;
 
   String get label => switch (this) {

@@ -4,6 +4,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_images.dart';
 import '../../core/theme/app_spacing.dart';
 import '../widgets/admin_logout_dialog.dart';
+import '../widgets/shell_tab_memory.dart';
 import 'admin_icons.dart';
 import 'analytics/screens/admin_analytics_screen.dart';
 import 'announcements/screens/admin_announcements_screen.dart';
@@ -25,11 +26,25 @@ class AdminShell extends StatefulWidget {
 }
 
 class _AdminShellState extends State<AdminShell> {
+  static const int _tabCount = 10;
+  final ShellTabMemory _tabMemory = ShellTabMemory('admin.selectedTabIndex');
+
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabMemory.load(_tabCount).then((int? remembered) {
+      if (mounted && remembered != null && remembered != _selectedIndex) {
+        setState(() => _selectedIndex = remembered);
+      }
+    });
+  }
 
   void _select(int index) {
     if (_selectedIndex != index) {
       setState(() => _selectedIndex = index);
+      _tabMemory.save(index);
     }
   }
 
@@ -177,7 +192,7 @@ class _AdminSidebar extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: GestureDetector(
+      child: MouseRegion(cursor: SystemMouseCursors.click, child: GestureDetector(
         onTap: () => onSelected(index),
         child: Container(
           padding: const EdgeInsets.symmetric(
@@ -221,7 +236,7 @@ class _AdminSidebar extends StatelessWidget {
             ],
           ),
         ),
-      ),
+      )),
     );
   }
 }

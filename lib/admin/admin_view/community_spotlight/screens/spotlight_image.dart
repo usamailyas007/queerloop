@@ -71,6 +71,11 @@ class SpotlightImage extends StatelessWidget {
         fit: BoxFit.cover,
         width: double.infinity,
         height: height,
+        // The media CDN sends no CORS headers, so the default CanvasKit path
+        // (fetch bytes → rasterize) fails on a deployed web build. Render
+        // through a real <img> element instead — bypasses the same-origin
+        // check entirely. See AdminRemoteAvatar for the same fix elsewhere.
+        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
         errorBuilder: (_, _, _) => fallback,
       ),
     );

@@ -8,6 +8,7 @@ import '../../../../core/widgets/app_gradient_button.dart';
 import '../../../../core/widgets/app_outline_button.dart';
 import '../../../../core/widgets/app_tag_chip.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../widgets/admin_field_label.dart';
 import '../../communities/models/community.dart';
 import '../../communities/provider/communities_provider.dart';
 import '../provider/moderators_provider.dart';
@@ -157,7 +158,7 @@ class _AdminInviteModeratorScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    const _FieldLabel('Work email'),
+                    const AdminFieldLabel('Work email'),
                     AppTextField(
                       controller: _emailController,
                       enabled: !inviting,
@@ -168,7 +169,7 @@ class _AdminInviteModeratorScreenState
                           color: AppColors.adminTextMuted, size: 20),
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    const _FieldLabel('Password'),
+                    const AdminFieldLabel('Password'),
                     AppTextField(
                       controller: _passwordController,
                       enabled: !inviting,
@@ -179,7 +180,7 @@ class _AdminInviteModeratorScreenState
                           color: AppColors.adminTextMuted, size: 20),
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    const _FieldLabel('Assign communities'),
+                    const AdminFieldLabel('Assign communities'),
                     _CommunityPicker(
                       selectedIds: _selectedCommunityIds,
                       onToggle: _toggle,
@@ -256,27 +257,6 @@ class _CommunityPicker extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AppColors.adminTextSecondary,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
     );
   }
 }
