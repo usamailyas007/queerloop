@@ -92,7 +92,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                             Expanded(flex: 1, child: AdminTableColumnHeader('POSTS')),
                             Expanded(flex: 2, child: AdminTableColumnHeader('REPORTS AGAINST')),
                             Expanded(flex: 2, child: AdminTableColumnHeader('STATUS')),
-                            SizedBox(width: 128),
+                            SizedBox(width: 168),
                           ],
                         ),
                       ),

@@ -79,6 +79,12 @@ class SpotlightsService {
     return Spotlight.fromJson(data as Map<String, dynamic>);
   }
 
+  /// DELETE /admin/spotlights/:id
+  Future<void> deleteSpotlight(String id) async {
+    debugPrint('🚀 [SpotlightsService] DELETE ${ApiEndpoints.adminSpotlight(id)}');
+    await _client.delete(ApiEndpoints.adminSpotlight(id));
+  }
+
   Map<String, dynamic> _payload({
     required String title,
     required String body,

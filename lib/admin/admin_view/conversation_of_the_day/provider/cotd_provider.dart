@@ -23,6 +23,7 @@ class CotdProvider extends ChangeNotifier {
   bool _isPublishing = false;
   String? _historyError;
   bool _hasLoadedHistory = false;
+  final Set<String> _deletingQuestionIds = <String>{};
 
   List<CotdQuestion> get history => List<CotdQuestion>.unmodifiable(_history);
   bool get isLoadingHistory => _isLoadingHistory;
@@ -30,6 +31,7 @@ class CotdProvider extends ChangeNotifier {
   String? get historyError => _historyError;
   bool get isHistoryEmpty =>
       _hasLoadedHistory && !_isLoadingHistory && _history.isEmpty;
+  bool isQuestionDeleting(String id) => _deletingQuestionIds.contains(id);
 
   CotdQuestion? get liveQuestion {
     for (final CotdQuestion q in _history) {
@@ -88,6 +90,33 @@ class CotdProvider extends ChangeNotifier {
     }
   }
 
+  /// Returns true on success (`historyError` set on failure).
+  Future<bool> deleteQuestion(String id) async {
+    if (_deletingQuestionIds.contains(id)) {
+      return false;
+    }
+    _deletingQuestionIds.add(id);
+    notifyListeners();
+    try {
+      await _service.deleteQuestion(id);
+      _history = _history.where((CotdQuestion q) => q.id != id).toList();
+      if (_selected?.id == id) {
+        _selected = null;
+        _answers = <CotdAnswer>[];
+      }
+      return true;
+    } on ApiException catch (failure) {
+      _historyError = failure.message;
+      return false;
+    } catch (_) {
+      _historyError = 'Could not delete this question. Please try again.';
+      return false;
+    } finally {
+      _deletingQuestionIds.remove(id);
+      notifyListeners();
+    }
+  }
+
   // ── Answers (per selected question) ───────────────────────────────────────
 
   CotdQuestion? _selected;
@@ -138,6 +167,29 @@ class CotdProvider extends ChangeNotifier {
 
   Future<bool> hideAnswer(String answerId) =>
       _mutateAnswer(answerId, _service.hideAnswer);
+
+  /// Returns true on success (`answersError` set on failure).
+  Future<bool> deleteAnswer(String answerId) async {
+    if (_mutatingAnswerIds.contains(answerId)) {
+      return false;
+    }
+    _mutatingAnswerIds.add(answerId);
+    notifyListeners();
+    try {
+      await _service.deleteAnswer(answerId);
+      _answers = _answers.where((CotdAnswer a) => a.id != answerId).toList();
+      return true;
+    } on ApiException catch (failure) {
+      _answersError = failure.message;
+      return false;
+    } catch (_) {
+      _answersError = 'Could not delete this answer. Please try again.';
+      return false;
+    } finally {
+      _mutatingAnswerIds.remove(answerId);
+      notifyListeners();
+    }
+  }
 
   Future<bool> _mutateAnswer(
     String answerId,

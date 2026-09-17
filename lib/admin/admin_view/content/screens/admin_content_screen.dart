@@ -59,6 +59,18 @@ class _AdminContentScreenState extends State<AdminContentScreen> {
     }
   }
 
+  Future<void> _delete(ContentPost post) async {
+    final ContentProvider provider = context.read<ContentProvider>();
+    final bool ok = await provider.deletePost(post.id);
+    if (!mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Post deleted.')));
+      unawaited(context.read<AnalyticsProvider>().refresh());
+    }
+  }
+
   void _showDetail(ContentPost post) => showPostDetailDialog(context, post);
 
   @override
@@ -93,7 +105,7 @@ class _AdminContentScreenState extends State<AdminContentScreen> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  ContentPostGrid(provider: provider, onView: _showDetail, onToggle: _toggle),
+                  ContentPostGrid(provider: provider, onView: _showDetail, onToggle: _toggle, onDelete: _delete),
                   const SizedBox(height: AppSpacing.xl),
                   ContentTrendingSection(provider: provider, onView: _showDetail),
                 ],

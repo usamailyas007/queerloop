@@ -48,4 +48,10 @@ class CommunitiesService {
         await _client.post(ApiEndpoints.communities, body: body);
     return Community.fromJson(data as Map<String, dynamic>);
   }
+
+  /// DELETE /admin/communities/:id — hard-delete a community.
+  Future<void> deleteCommunity(String id) async {
+    debugPrint('🚀 [CommunitiesService] DELETE ${ApiEndpoints.adminCommunity(id)}');
+    await _client.delete(ApiEndpoints.adminCommunity(id));
+  }
 }

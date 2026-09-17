@@ -54,4 +54,10 @@ class ModeratorsService {
     }
     return null;
   }
+
+  /// DELETE /admin/moderators/:id
+  Future<void> deleteModerator(String moderatorId) async {
+    debugPrint('🚀 [ModeratorsService] DELETE ${ApiEndpoints.adminModerator(moderatorId)}');
+    await _client.delete(ApiEndpoints.adminModerator(moderatorId));
+  }
 }

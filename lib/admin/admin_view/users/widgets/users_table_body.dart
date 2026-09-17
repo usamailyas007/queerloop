@@ -56,6 +56,7 @@ class UsersTableBody extends StatelessWidget {
               onSuspend: (int days) => provider.suspendUser(user.id, days),
               onReactivate: () => provider.reactivateUser(user.id),
               onBan: () => provider.banUser(user.id),
+              onDelete: () => provider.deleteUser(user.id),
             );
           },
         ),

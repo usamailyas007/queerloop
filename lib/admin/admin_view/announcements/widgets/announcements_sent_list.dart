@@ -4,6 +4,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_outline_button.dart';
 import '../../widgets/admin_badge.dart';
+import '../../widgets/admin_confirm_dialog.dart';
+import '../../widgets/admin_delete_icon_button.dart';
 import '../models/announcement.dart';
 import '../provider/announcements_provider.dart';
 
@@ -57,7 +59,12 @@ class AnnouncementsSentList extends StatelessWidget {
               physics: const AlwaysScrollableScrollPhysics(),
               itemCount: items.length,
               separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-              itemBuilder: (_, int index) => _AnnouncementTile(announcement: items[index], dateFormat: _dateFormat),
+              itemBuilder: (_, int index) => _AnnouncementTile(
+                announcement: items[index],
+                dateFormat: _dateFormat,
+                busy: provider.isDeleting(items[index].id),
+                onDelete: () => provider.deleteAnnouncement(items[index].id),
+              ),
             ),
           ),
         ),
@@ -68,10 +75,17 @@ class AnnouncementsSentList extends StatelessWidget {
 }
 
 class _AnnouncementTile extends StatelessWidget {
-  const _AnnouncementTile({required this.announcement, required this.dateFormat});
+  const _AnnouncementTile({
+    required this.announcement,
+    required this.dateFormat,
+    required this.busy,
+    required this.onDelete,
+  });
 
   final Announcement announcement;
   final DateFormat dateFormat;
+  final bool busy;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -92,6 +106,18 @@ class _AnnouncementTile extends StatelessWidget {
                 ),
               ),
               const AdminBadge(text: 'Sent', color: AppColors.adminTeal),
+              const SizedBox(width: 6),
+              if (busy)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.adminPink),
+                )
+              else
+                AdminDeleteIconButton(
+                  tooltip: 'Delete announcement',
+                  onTap: () => _confirmDeleteAnnouncement(context, a.title, onDelete),
+                ),
             ],
           ),
           const SizedBox(height: 2),
@@ -111,6 +137,17 @@ class _AnnouncementTile extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+Future<void> _confirmDeleteAnnouncement(BuildContext context, String title, VoidCallback onDelete) async {
+  final bool ok = await showAdminConfirmDialog(
+    context,
+    title: 'Delete announcement permanently?',
+    message: '"$title" will be permanently deleted and removed from every user\'s notifications.',
+  );
+  if (ok) {
+    onDelete();
   }
 }
 

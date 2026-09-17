@@ -20,6 +20,7 @@ class CommunitiesProvider extends ChangeNotifier {
   bool _isCreating = false;
   String? _error;
   bool _hasLoadedOnce = false;
+  final Set<String> _deletingIds = <String>{};
 
   List<Community> get communities => List<Community>.unmodifiable(_communities);
   bool get isLoading => _isLoading;
@@ -27,6 +28,7 @@ class CommunitiesProvider extends ChangeNotifier {
   String? get error => _error;
   int get count => _communities.length;
   bool get isEmpty => _hasLoadedOnce && !_isLoading && _communities.isEmpty;
+  bool isDeleting(String id) => _deletingIds.contains(id);
 
   Future<void> loadInitial() async {
     if (_hasLoadedOnce || _isLoading) {
@@ -86,6 +88,29 @@ class CommunitiesProvider extends ChangeNotifier {
       return null;
     } finally {
       _isCreating = false;
+      notifyListeners();
+    }
+  }
+
+  /// Returns true on success (`error` set on failure).
+  Future<bool> deleteCommunity(String id) async {
+    if (_deletingIds.contains(id)) {
+      return false;
+    }
+    _deletingIds.add(id);
+    notifyListeners();
+    try {
+      await _service.deleteCommunity(id);
+      _communities = _communities.where((Community c) => c.id != id).toList();
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      return false;
+    } catch (_) {
+      _error = 'Could not delete this community. Please try again.';
+      return false;
+    } finally {
+      _deletingIds.remove(id);
       notifyListeners();
     }
   }

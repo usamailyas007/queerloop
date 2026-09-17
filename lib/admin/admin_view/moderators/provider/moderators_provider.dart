@@ -21,6 +21,7 @@ class ModeratorsProvider extends ChangeNotifier {
   String? _error;
   bool _hasLoadedOnce = false;
   final Set<String> _resendingIds = <String>{};
+  final Set<String> _deletingIds = <String>{};
 
   List<Moderator> get moderators => List<Moderator>.unmodifiable(_moderators);
   bool get isLoading => _isLoading;
@@ -28,6 +29,7 @@ class ModeratorsProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isEmpty => _hasLoadedOnce && !_isLoading && _moderators.isEmpty;
   bool isResending(String id) => _resendingIds.contains(id);
+  bool isDeleting(String id) => _deletingIds.contains(id);
 
   int get activeCount =>
       _moderators.where((Moderator m) => !m.pending).length;
@@ -112,6 +114,29 @@ class ModeratorsProvider extends ChangeNotifier {
       return null;
     } finally {
       _resendingIds.remove(moderatorId);
+      notifyListeners();
+    }
+  }
+
+  /// Returns true on success (`error` is set on failure).
+  Future<bool> deleteModerator(String moderatorId) async {
+    if (_deletingIds.contains(moderatorId)) {
+      return false;
+    }
+    _deletingIds.add(moderatorId);
+    notifyListeners();
+    try {
+      await _service.deleteModerator(moderatorId);
+      _moderators = _moderators.where((Moderator m) => m.id != moderatorId).toList();
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      return false;
+    } catch (_) {
+      _error = 'Could not delete this moderator. Please try again.';
+      return false;
+    } finally {
+      _deletingIds.remove(moderatorId);
       notifyListeners();
     }
   }

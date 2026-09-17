@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../widgets/admin_centered_message.dart';
+import '../../widgets/admin_confirm_dialog.dart';
+import '../../widgets/admin_delete_icon_button.dart';
 import '../../widgets/admin_table_column_header.dart';
 import '../models/cotd_models.dart';
 import '../provider/cotd_provider.dart';
@@ -102,18 +104,29 @@ class _HistoryBody extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: items.length,
         separatorBuilder: (_, _) => Divider(height: 1, color: AppColors.adminRowDivider),
-        itemBuilder: (_, int index) =>
-            _HistoryRow(question: items[index], onOpenAnswers: onOpenAnswers),
+        itemBuilder: (_, int index) => _HistoryRow(
+          question: items[index],
+          onOpenAnswers: onOpenAnswers,
+          busy: provider.isQuestionDeleting(items[index].id),
+          onDelete: () => provider.deleteQuestion(items[index].id),
+        ),
       ),
     );
   }
 }
 
 class _HistoryRow extends StatelessWidget {
-  const _HistoryRow({required this.question, required this.onOpenAnswers});
+  const _HistoryRow({
+    required this.question,
+    required this.onOpenAnswers,
+    required this.busy,
+    required this.onDelete,
+  });
 
   final CotdQuestion question;
   final ValueChanged<CotdQuestion> onOpenAnswers;
+  final bool busy;
+  final VoidCallback onDelete;
 
   static final DateFormat _date = DateFormat('d MMM yyyy');
 
@@ -183,34 +196,62 @@ class _HistoryRow extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 116,
+            width: 156,
             child: Align(
               alignment: Alignment.centerRight,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () => onOpenAnswers(q),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.adminSurfaceAlt,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  InkWell(
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.adminBorder),
-                  ),
-                  child: const Text(
-                    'View answers',
-                    style: TextStyle(
-                      color: AppColors.adminTextPrimary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
+                    onTap: () => onOpenAnswers(q),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.adminSurfaceAlt,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.adminBorder),
+                      ),
+                      child: const Text(
+                        'View answers',
+                        style: TextStyle(
+                          color: AppColors.adminTextPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 6),
+                  if (busy)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.adminPink),
+                    )
+                  else
+                    AdminDeleteIconButton(
+                      tooltip: 'Delete question',
+                      onTap: () => _confirmDeleteQuestion(context, onDelete),
+                    ),
+                ],
               ),
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+Future<void> _confirmDeleteQuestion(BuildContext context, VoidCallback onDelete) async {
+  final bool ok = await showAdminConfirmDialog(
+    context,
+    title: 'Delete question permanently?',
+    message: 'This question and all of its answers will be permanently deleted. This cannot be undone.',
+  );
+  if (ok) {
+    onDelete();
   }
 }
 
@@ -234,7 +275,7 @@ class _HistoryHeaderRow extends StatelessWidget {
           Expanded(flex: 2, child: AdminTableColumnHeader('ANSWERS', fontSize: 9.5)),
           Expanded(flex: 1, child: AdminTableColumnHeader('REPORTS', fontSize: 9.5)),
           Expanded(flex: 2, child: AdminTableColumnHeader('STATUS', fontSize: 9.5)),
-          SizedBox(width: 116),
+          SizedBox(width: 156),
         ],
       ),
     );

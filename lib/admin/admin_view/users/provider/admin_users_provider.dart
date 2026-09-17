@@ -152,6 +152,33 @@ class AdminUsersProvider extends ChangeNotifier {
     }
   }
 
+  // ── Delete ────────────────────────────────────────────────────────────────
+
+  Future<bool> deleteUser(String userId) async {
+    if (_mutatingIds.contains(userId)) {
+      return false;
+    }
+    _mutatingIds.add(userId);
+    notifyListeners();
+
+    try {
+      await _service.deleteUser(userId);
+      await Future.wait(<Future<void>>[_loadPage(_page), _loadStats()]);
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _error = 'Could not delete this account. Please try again.';
+      notifyListeners();
+      return false;
+    } finally {
+      _mutatingIds.remove(userId);
+      notifyListeners();
+    }
+  }
+
   void clearError() {
     if (_error == null) {
       return;

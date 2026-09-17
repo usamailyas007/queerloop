@@ -34,28 +34,49 @@ abstract final class ApiEndpoints {
   /// Suspend / reactivate an account. PATCH /admin/users/:id/status
   static String adminUserStatus(String id) => '/admin/users/$id/status';
 
+  /// Hard-delete an account. DELETE /admin/users/:id
+  static String adminUser(String id) => '/admin/users/$id';
+
   /// Moderator roster + invites. GET / POST /admin/moderators
   static const String adminModerators = '/admin/moderators';
   static String adminModeratorResendInvite(String id) =>
       '/admin/moderators/$id/resend-invite';
 
+  /// Hard-delete a moderator. DELETE /admin/moderators/:id
+  static String adminModerator(String id) => '/admin/moderators/$id';
+
   /// Publish an announcement. POST /admin/announcements
   static const String adminAnnouncements = '/admin/announcements';
 
+  /// Delete an announcement. DELETE /admin/announcements/:id
+  static String adminAnnouncement(String id) => '/admin/announcements/$id';
+
   /// Community roster with admin metrics. GET /admin/communities
   static const String adminCommunities = '/admin/communities';
+
+  /// Hard-delete a community. DELETE /admin/communities/:id
+  static String adminCommunity(String id) => '/admin/communities/$id';
 
   /// Conversation of the day. POST /admin/cotd · GET /admin/cotd/history
   static const String adminCotd = '/admin/cotd';
   static const String adminCotdHistory = '/admin/cotd/history';
 
-  /// Community spotlight. POST /admin/spotlights · PATCH/rerun by id.
+  /// Delete a question (cascades its answers). DELETE /admin/cotd/:id
+  static String adminCotdQuestion(String id) => '/admin/cotd/$id';
+
+  /// Delete a single answer. DELETE /admin/cotd/answers/:id
+  static String adminCotdAnswer(String answerId) =>
+      '/admin/cotd/answers/$answerId';
+
+  /// Community spotlight. POST /admin/spotlights · PATCH/rerun/delete by id.
   static const String adminSpotlights = '/admin/spotlights';
   static String adminSpotlight(String id) => '/admin/spotlights/$id';
   static String adminSpotlightRerun(String id) => '/admin/spotlights/$id/rerun';
 
   /// Content moderation. GET /admin/posts · PATCH /admin/posts/:id/{hide,restore}
+  /// · DELETE /admin/posts/:id (bypasses ownership check)
   static const String adminPosts = '/admin/posts';
+  static String adminPost(String id) => '/admin/posts/$id';
   static String adminPostHide(String id) => '/admin/posts/$id/hide';
   static String adminPostRestore(String id) => '/admin/posts/$id/restore';
   static String adminCotdAnswerFeature(String answerId) =>

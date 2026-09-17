@@ -118,4 +118,10 @@ class ContentService {
     debugPrint('🚀 [ContentService] PATCH ${ApiEndpoints.adminPostRestore(id)}');
     await _client.patch(ApiEndpoints.adminPostRestore(id));
   }
+
+  /// DELETE /admin/posts/:id — hard-delete a post (bypasses ownership check).
+  Future<void> deletePost(String id) async {
+    debugPrint('🚀 [ContentService] DELETE ${ApiEndpoints.adminPost(id)}');
+    await _client.delete(ApiEndpoints.adminPost(id));
+  }
 }

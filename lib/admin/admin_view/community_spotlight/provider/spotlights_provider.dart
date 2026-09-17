@@ -27,6 +27,7 @@ class SpotlightsProvider extends ChangeNotifier {
   String _search = '';
   Timer? _searchTimer;
   final Set<String> _rerunningIds = <String>{};
+  final Set<String> _deletingIds = <String>{};
 
   List<Spotlight> get spotlights => List<Spotlight>.unmodifiable(_spotlights);
   bool get isLoading => _isLoading;
@@ -36,6 +37,7 @@ class SpotlightsProvider extends ChangeNotifier {
   bool get isEmpty =>
       _hasLoadedOnce && !_isLoading && _spotlights.isEmpty;
   bool isRerunning(String id) => _rerunningIds.contains(id);
+  bool isDeleting(String id) => _deletingIds.contains(id);
 
   Spotlight? get liveSpotlight {
     for (final Spotlight s in _spotlights) {
@@ -147,6 +149,29 @@ class SpotlightsProvider extends ChangeNotifier {
       return false;
     } finally {
       _rerunningIds.remove(id);
+      notifyListeners();
+    }
+  }
+
+  /// Returns true on success (`error` set on failure).
+  Future<bool> deleteSpotlight(String id) async {
+    if (_deletingIds.contains(id)) {
+      return false;
+    }
+    _deletingIds.add(id);
+    notifyListeners();
+    try {
+      await _service.deleteSpotlight(id);
+      _spotlights = _spotlights.where((Spotlight s) => s.id != id).toList();
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      return false;
+    } catch (_) {
+      _error = 'Could not delete this spotlight. Please try again.';
+      return false;
+    } finally {
+      _deletingIds.remove(id);
       notifyListeners();
     }
   }

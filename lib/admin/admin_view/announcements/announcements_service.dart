@@ -46,4 +46,10 @@ class AnnouncementsService {
         await _client.post(ApiEndpoints.adminAnnouncements, body: payload);
     return Announcement.fromJson(data as Map<String, dynamic>);
   }
+
+  /// DELETE /admin/announcements/:id
+  Future<void> deleteAnnouncement(String id) async {
+    debugPrint('🚀 [AnnouncementsService] DELETE ${ApiEndpoints.adminAnnouncement(id)}');
+    await _client.delete(ApiEndpoints.adminAnnouncement(id));
+  }
 }

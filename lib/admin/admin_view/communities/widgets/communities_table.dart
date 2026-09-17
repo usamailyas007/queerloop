@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../widgets/admin_centered_message.dart';
+import '../../widgets/admin_confirm_dialog.dart';
+import '../../widgets/admin_delete_icon_button.dart';
 import '../../widgets/admin_remote_avatar.dart';
 import '../../widgets/admin_table_column_header.dart';
 import '../models/community.dart';
@@ -78,17 +80,29 @@ class _CommunitiesBody extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: items.length,
         separatorBuilder: (_, _) => Divider(height: 1, color: AppColors.adminRowDivider),
-        itemBuilder: (_, int index) => _CommunityRow(community: items[index], count: _count),
+        itemBuilder: (_, int index) => _CommunityRow(
+          community: items[index],
+          count: _count,
+          busy: provider.isDeleting(items[index].id),
+          onDelete: () => provider.deleteCommunity(items[index].id),
+        ),
       ),
     );
   }
 }
 
 class _CommunityRow extends StatelessWidget {
-  const _CommunityRow({required this.community, required this.count});
+  const _CommunityRow({
+    required this.community,
+    required this.count,
+    required this.busy,
+    required this.onDelete,
+  });
 
   final Community community;
   final NumberFormat count;
+  final bool busy;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -187,9 +201,36 @@ class _CommunityRow extends StatelessWidget {
               ),
             ),
           ),
+          SizedBox(
+            width: 44,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: busy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.adminPink),
+                    )
+                  : AdminDeleteIconButton(
+                      tooltip: 'Delete community',
+                      onTap: () => _confirmDeleteCommunity(context, community.name, onDelete),
+                    ),
+            ),
+          ),
         ],
       ),
     );
+  }
+}
+
+Future<void> _confirmDeleteCommunity(BuildContext context, String name, VoidCallback onDelete) async {
+  final bool ok = await showAdminConfirmDialog(
+    context,
+    title: 'Delete community permanently?',
+    message: '"$name" and all of its posts will be permanently deleted. This cannot be undone.',
+  );
+  if (ok) {
+    onDelete();
   }
 }
 
@@ -214,6 +255,7 @@ class _TableHeaderRow extends StatelessWidget {
           Expanded(flex: 1, child: AdminTableColumnHeader('REPORTS')),
           Expanded(flex: 2, child: AdminTableColumnHeader('MODERATORS')),
           Expanded(flex: 2, child: AdminTableColumnHeader('VISIBILITY')),
+          SizedBox(width: 44),
         ],
       ),
     );

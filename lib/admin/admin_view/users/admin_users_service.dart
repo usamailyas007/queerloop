@@ -80,4 +80,10 @@ class AdminUsersService {
     debugPrint('🚀 [AdminUsersService] PATCH ${ApiEndpoints.adminUserStatus(userId)} $body');
     await _client.patch(ApiEndpoints.adminUserStatus(userId), body: body);
   }
+
+  /// DELETE /admin/users/:id — hard-delete an account.
+  Future<void> deleteUser(String userId) async {
+    debugPrint('🚀 [AdminUsersService] DELETE ${ApiEndpoints.adminUser(userId)}');
+    await _client.delete(ApiEndpoints.adminUser(userId));
+  }
 }

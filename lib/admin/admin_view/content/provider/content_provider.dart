@@ -215,6 +215,33 @@ class ContentProvider extends ChangeNotifier {
     }
   }
 
+  // ── Delete ────────────────────────────────────────────────────────────────
+
+  Future<bool> deletePost(String id) async {
+    if (_mutatingIds.contains(id)) {
+      return false;
+    }
+    _mutatingIds.add(id);
+    notifyListeners();
+    try {
+      await _service.deletePost(id);
+      // Re-pull the current page so the grid reflects the server.
+      await _loadPage(_page);
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _error = 'Could not delete this post. Please try again.';
+      notifyListeners();
+      return false;
+    } finally {
+      _mutatingIds.remove(id);
+      notifyListeners();
+    }
+  }
+
   void clearError() {
     if (_error == null) return;
     _error = null;

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../widgets/admin_centered_message.dart';
+import '../../widgets/admin_confirm_dialog.dart';
 import '../../widgets/admin_remote_avatar.dart';
 import '../../widgets/admin_table_column_header.dart';
 import '../models/cotd_models.dart';
@@ -67,6 +68,7 @@ class _AnswersBody extends StatelessWidget {
             busy: provider.isAnswerMutating(a.id),
             onFeature: () => provider.featureAnswer(a.id),
             onHide: () => provider.hideAnswer(a.id),
+            onDelete: () => provider.deleteAnswer(a.id),
           );
         },
       ),
@@ -80,12 +82,14 @@ class _AnswerRow extends StatelessWidget {
     required this.busy,
     required this.onFeature,
     required this.onHide,
+    required this.onDelete,
   });
 
   final CotdAnswer answer;
   final bool busy;
   final VoidCallback onFeature;
   final VoidCallback onHide;
+  final VoidCallback onDelete;
 
   static final DateFormat _date = DateFormat('d MMM · h:mm a');
 
@@ -162,7 +166,7 @@ class _AnswerRow extends StatelessWidget {
               ),
             ),
             SizedBox(
-              width: 150,
+              width: 210,
               child: Align(
                 alignment: Alignment.centerRight,
                 child: busy
@@ -187,6 +191,13 @@ class _AnswerRow extends StatelessWidget {
                             enabled: !answer.hidden,
                             onTap: onHide,
                           ),
+                          const SizedBox(width: 6),
+                          _MiniButton(
+                            label: 'Delete',
+                            color: AppColors.adminPink,
+                            enabled: true,
+                            onTap: () => _confirmDeleteAnswer(context, onDelete),
+                          ),
                         ],
                       ),
               ),
@@ -195,6 +206,17 @@ class _AnswerRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+Future<void> _confirmDeleteAnswer(BuildContext context, VoidCallback onDelete) async {
+  final bool ok = await showAdminConfirmDialog(
+    context,
+    title: 'Delete answer permanently?',
+    message: 'This answer will be permanently deleted. This cannot be undone.',
+  );
+  if (ok) {
+    onDelete();
   }
 }
 
@@ -270,7 +292,7 @@ class _AnswersHeaderRow extends StatelessWidget {
           Expanded(flex: 2, child: AdminTableColumnHeader('PERSON')),
           Expanded(flex: 4, child: AdminTableColumnHeader('ANSWER')),
           Expanded(flex: 1, child: AdminTableColumnHeader('POSTED')),
-          SizedBox(width: 150),
+          SizedBox(width: 210),
         ],
       ),
     );

@@ -71,6 +71,9 @@ class _AdminSpotlightPastScreenState extends State<AdminSpotlightPastScreen> {
   void _view(Spotlight s) =>
       showSpotlightPreviewDialog(context, s, onEdit: widget.onEdit, onRerun: _rerun);
 
+  Future<void> _delete(Spotlight s) =>
+      context.read<SpotlightsProvider>().deleteSpotlight(s.id);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -149,6 +152,7 @@ class _AdminSpotlightPastScreenState extends State<AdminSpotlightPastScreen> {
                       onView: _view,
                       onEdit: widget.onEdit,
                       onRerun: _rerun,
+                      onDelete: _delete,
                     );
                   },
                 ),

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_outline_button.dart';
+import '../../widgets/admin_confirm_dialog.dart';
 import '../models/content_post.dart';
 import '../provider/content_provider.dart';
 import 'content_mini_button.dart';
@@ -11,11 +12,18 @@ import 'content_thumb.dart';
 
 /// The main content grid: loading / error / empty states, or the post cards.
 class ContentPostGrid extends StatelessWidget {
-  const ContentPostGrid({required this.provider, required this.onView, required this.onToggle, super.key});
+  const ContentPostGrid({
+    required this.provider,
+    required this.onView,
+    required this.onToggle,
+    required this.onDelete,
+    super.key,
+  });
 
   final ContentProvider provider;
   final ValueChanged<ContentPost> onView;
   final ValueChanged<ContentPost> onToggle;
+  final ValueChanged<ContentPost> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -75,6 +83,7 @@ class ContentPostGrid extends StatelessWidget {
           busy: provider.isMutating(post.id),
           onView: () => onView(post),
           onToggle: () => onToggle(post),
+          onDelete: () => onDelete(post),
         );
       },
     );
@@ -82,12 +91,19 @@ class ContentPostGrid extends StatelessWidget {
 }
 
 class _ContentCard extends StatelessWidget {
-  const _ContentCard({required this.post, required this.busy, required this.onView, required this.onToggle});
+  const _ContentCard({
+    required this.post,
+    required this.busy,
+    required this.onView,
+    required this.onToggle,
+    required this.onDelete,
+  });
 
   final ContentPost post;
   final bool busy;
   final VoidCallback onView;
   final VoidCallback onToggle;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -157,6 +173,14 @@ class _ContentCard extends StatelessWidget {
             ),
           ],
         ),
+        if (!busy) ...<Widget>[
+          const SizedBox(height: 4),
+          ContentMiniButton(
+            label: 'Delete',
+            danger: true,
+            onTap: () => _confirmDeletePost(context, onDelete),
+          ),
+        ],
       ],
     );
   }
@@ -166,4 +190,15 @@ class _ContentCard extends StatelessWidget {
         decoration: BoxDecoration(color: color.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(10)),
         child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10)),
       );
+}
+
+Future<void> _confirmDeletePost(BuildContext context, VoidCallback onDelete) async {
+  final bool ok = await showAdminConfirmDialog(
+    context,
+    title: 'Delete post permanently?',
+    message: 'This post will be permanently deleted. This cannot be undone.',
+  );
+  if (ok) {
+    onDelete();
+  }
 }

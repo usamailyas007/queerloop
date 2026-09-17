@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../widgets/admin_confirm_dialog.dart';
+import '../../widgets/admin_delete_icon_button.dart';
 import '../../widgets/admin_remote_avatar.dart';
 import '../models/admin_user_account.dart';
 import '../screens/admin_user_detail_dialog.dart';
@@ -15,6 +17,7 @@ class UserRow extends StatelessWidget {
     required this.onSuspend,
     required this.onReactivate,
     required this.onBan,
+    required this.onDelete,
     required this.suspendOptions,
     super.key,
   });
@@ -24,6 +27,7 @@ class UserRow extends StatelessWidget {
   final ValueChanged<int> onSuspend;
   final VoidCallback onReactivate;
   final VoidCallback onBan;
+  final VoidCallback onDelete;
   final Map<String, int> suspendOptions;
 
   static final DateFormat _joinedFormat = DateFormat('d MMM yyyy');
@@ -107,17 +111,29 @@ class UserRow extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 128,
+            width: 168,
             child: Align(
               alignment: Alignment.centerRight,
-              child: _RowAction(
-                status: user.status,
-                busy: busy,
-                handle: user.handle,
-                suspendOptions: suspendOptions,
-                onSuspend: onSuspend,
-                onReactivate: onReactivate,
-                onBan: onBan,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  _RowAction(
+                    status: user.status,
+                    busy: busy,
+                    handle: user.handle,
+                    suspendOptions: suspendOptions,
+                    onSuspend: onSuspend,
+                    onReactivate: onReactivate,
+                    onBan: onBan,
+                  ),
+                  if (!busy) ...<Widget>[
+                    const SizedBox(width: 6),
+                    AdminDeleteIconButton(
+                      tooltip: 'Delete account',
+                      onTap: () => _confirmDeleteUser(context, user.handle, onDelete),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
@@ -133,6 +149,17 @@ class UserRow extends StatelessWidget {
     }
     final int days = until.difference(DateTime.now()).inDays;
     return days <= 0 ? 'Suspended' : 'Suspended ${days}d';
+  }
+}
+
+Future<void> _confirmDeleteUser(BuildContext context, String handle, VoidCallback onDelete) async {
+  final bool ok = await showAdminConfirmDialog(
+    context,
+    title: 'Delete account permanently?',
+    message: '$handle and all of their content will be permanently deleted. This cannot be undone.',
+  );
+  if (ok) {
+    onDelete();
   }
 }
 

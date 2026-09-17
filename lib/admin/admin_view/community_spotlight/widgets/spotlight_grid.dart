@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_outline_button.dart';
+import '../../widgets/admin_confirm_dialog.dart';
 import '../models/spotlight.dart';
 import '../provider/spotlights_provider.dart';
 import '../screens/spotlight_image.dart';
@@ -15,6 +16,7 @@ class SpotlightGrid extends StatelessWidget {
     required this.onView,
     required this.onEdit,
     required this.onRerun,
+    required this.onDelete,
     super.key,
   });
 
@@ -22,6 +24,7 @@ class SpotlightGrid extends StatelessWidget {
   final ValueChanged<Spotlight> onView;
   final ValueChanged<Spotlight> onEdit;
   final ValueChanged<Spotlight> onRerun;
+  final ValueChanged<Spotlight> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -76,10 +79,11 @@ class SpotlightGrid extends StatelessWidget {
           final Spotlight s = items[index];
           return _Card(
             spotlight: s,
-            busy: provider.isRerunning(s.id),
+            busy: provider.isRerunning(s.id) || provider.isDeleting(s.id),
             onView: () => onView(s),
             onEdit: () => onEdit(s),
             onRerun: () => onRerun(s),
+            onDelete: () => onDelete(s),
           );
         },
       ),
@@ -94,6 +98,7 @@ class _Card extends StatelessWidget {
     required this.onView,
     required this.onEdit,
     required this.onRerun,
+    required this.onDelete,
   });
 
   final Spotlight spotlight;
@@ -101,6 +106,7 @@ class _Card extends StatelessWidget {
   final VoidCallback onView;
   final VoidCallback onEdit;
   final VoidCallback onRerun;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -182,6 +188,12 @@ class _Card extends StatelessWidget {
                               onTap: spotlight.live ? onEdit : onRerun,
                             ),
                           ),
+                          const SizedBox(width: 6),
+                          _MiniButton(
+                            label: 'Delete',
+                            danger: true,
+                            onTap: () => _confirmDeleteSpotlight(context, spotlight.title, onDelete),
+                          ),
                         ],
                       ),
               ],
@@ -194,10 +206,11 @@ class _Card extends StatelessWidget {
 }
 
 class _MiniButton extends StatelessWidget {
-  const _MiniButton({required this.label, required this.onTap});
+  const _MiniButton({required this.label, required this.onTap, this.danger = false});
 
   final String label;
   final VoidCallback onTap;
+  final bool danger;
 
   @override
   Widget build(BuildContext context) {
@@ -205,18 +218,33 @@ class _MiniButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: AppColors.adminSurfaceAlt,
+          color: danger ? AppColors.adminPink.withValues(alpha: 0.14) : AppColors.adminSurfaceAlt,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.adminBorder),
+          border: Border.all(color: danger ? AppColors.adminPink.withValues(alpha: 0.4) : AppColors.adminBorder),
         ),
         child: Text(
           label,
-          style: const TextStyle(color: AppColors.adminTextPrimary, fontWeight: FontWeight.w700, fontSize: 11),
+          style: TextStyle(
+            color: danger ? AppColors.adminPink : AppColors.adminTextPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 11,
+          ),
         ),
       ),
     );
+  }
+}
+
+Future<void> _confirmDeleteSpotlight(BuildContext context, String title, VoidCallback onDelete) async {
+  final bool ok = await showAdminConfirmDialog(
+    context,
+    title: 'Delete spotlight permanently?',
+    message: '"$title" will be permanently deleted. This cannot be undone.',
+  );
+  if (ok) {
+    onDelete();
   }
 }

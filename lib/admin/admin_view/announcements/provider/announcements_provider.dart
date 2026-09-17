@@ -20,6 +20,7 @@ class AnnouncementsProvider extends ChangeNotifier {
   String? _error;
   bool _hasLoadedOnce = false;
   int _page = 1;
+  final Set<String> _deletingIds = <String>{};
 
   List<Announcement> get announcements =>
       List<Announcement>.unmodifiable(_announcements);
@@ -27,6 +28,7 @@ class AnnouncementsProvider extends ChangeNotifier {
   bool get isSending => _isSending;
   String? get error => _error;
   bool get isEmpty => _hasLoadedOnce && !_isLoading && _announcements.isEmpty;
+  bool isDeleting(String id) => _deletingIds.contains(id);
 
   // ── Client-side pagination ────────────────────────────────────────────────
 
@@ -121,6 +123,30 @@ class AnnouncementsProvider extends ChangeNotifier {
       return null;
     } finally {
       _isSending = false;
+      notifyListeners();
+    }
+  }
+
+  /// Returns true on success (`error` set on failure).
+  Future<bool> deleteAnnouncement(String id) async {
+    if (_deletingIds.contains(id)) {
+      return false;
+    }
+    _deletingIds.add(id);
+    notifyListeners();
+    try {
+      await _service.deleteAnnouncement(id);
+      _announcements = _announcements.where((Announcement a) => a.id != id).toList();
+      _page = _page.clamp(1, pageCount);
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      return false;
+    } catch (_) {
+      _error = 'Could not delete this announcement. Please try again.';
+      return false;
+    } finally {
+      _deletingIds.remove(id);
       notifyListeners();
     }
   }

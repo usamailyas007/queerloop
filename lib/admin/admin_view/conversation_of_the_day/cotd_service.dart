@@ -61,4 +61,16 @@ class CotdService {
         await _client.patch(ApiEndpoints.adminCotdAnswerHide(answerId));
     return CotdAnswer.fromJson(data as Map<String, dynamic>);
   }
+
+  /// DELETE /admin/cotd/:id — deletes the question, cascading its answers.
+  Future<void> deleteQuestion(String id) async {
+    debugPrint('🚀 [CotdService] DELETE ${ApiEndpoints.adminCotdQuestion(id)}');
+    await _client.delete(ApiEndpoints.adminCotdQuestion(id));
+  }
+
+  /// DELETE /admin/cotd/answers/:id
+  Future<void> deleteAnswer(String answerId) async {
+    debugPrint('🚀 [CotdService] DELETE ${ApiEndpoints.adminCotdAnswer(answerId)}');
+    await _client.delete(ApiEndpoints.adminCotdAnswer(answerId));
+  }
 }
