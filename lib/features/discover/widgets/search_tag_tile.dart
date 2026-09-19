@@ -127,7 +127,7 @@ class SearchTagTile extends StatelessWidget {
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => _buildFallback(context),
       );
-    } else if (img.isNotEmpty) {
+    } else if (img.startsWith('assets/')) {
       return Image.asset(
         img,
         fit: BoxFit.cover,

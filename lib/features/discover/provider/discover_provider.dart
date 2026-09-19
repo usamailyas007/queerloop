@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_images.dart';
+import '../../home/models/post_item_model.dart';
+import '../../home/models/reel_item_model.dart';
 import '../models/discover_models.dart';
 import '../services/discover_service.dart';
 import '../widgets/search_tag_tile.dart';
@@ -46,7 +48,7 @@ class DiscoverProvider extends ChangeNotifier {
   static const List<String> _tabMapping = <String>[
     'all',
     'posts',
-    'posts', // Reels queries posts
+    'reels',
     'people',
     'tags',
     'communities',
@@ -59,9 +61,73 @@ class DiscoverProvider extends ChangeNotifier {
   MultiTabSearchResults _searchResults = const MultiTabSearchResults();
   MultiTabSearchResults get currentSearchResults => _searchResults;
 
-  List<DiscoverSearchResult> get searchResults => _searchResults.posts;
+  // Live content from HomeFeedProvider for seamless offline/in-app search matching
+  List<PostItemModel> _liveHomePosts = const <PostItemModel>[];
+  List<ReelItemModel> _liveHomeReels = const <ReelItemModel>[];
 
-  List<DiscoverPerson> get peopleResults => _searchResults.people;
+  void syncHomeFeedContent({
+    List<PostItemModel> posts = const <PostItemModel>[],
+    List<ReelItemModel> reels = const <ReelItemModel>[],
+  }) {
+    _liveHomePosts = posts;
+    _liveHomeReels = reels;
+  }
+
+  // Current authenticated user (to exclude from search/explore)
+  String? _currentUserId;
+  String? _currentUsername;
+
+  void setCurrentUser({String? userId, String? username}) {
+    if (_currentUserId != userId || _currentUsername != username) {
+      _currentUserId = userId;
+      _currentUsername = username;
+      notifyListeners();
+    }
+  }
+
+  List<DiscoverSearchResult> _filterCurrentUser(List<DiscoverSearchResult> list) {
+    if (_currentUserId == null && _currentUsername == null) {
+      return list;
+    }
+    final String cleanUid = _currentUserId?.trim().toLowerCase() ?? '';
+    final String cleanUname = _currentUsername?.replaceAll('@', '').trim().toLowerCase() ?? '';
+    return list.where((DiscoverSearchResult p) {
+      if (cleanUid.isNotEmpty && p.authorId != null && p.authorId!.trim().toLowerCase() == cleanUid) {
+        return false;
+      }
+      if (cleanUname.isNotEmpty &&
+          p.authorUsername != null &&
+          p.authorUsername!.replaceAll('@', '').trim().toLowerCase() == cleanUname) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  List<DiscoverSearchResult> get searchResults => _filterCurrentUser(_searchResults.posts);
+
+  List<DiscoverSearchResult> get postsResults =>
+      searchResults.where((DiscoverSearchResult p) => !p.isReel).toList();
+
+  List<DiscoverSearchResult> get reelsResults =>
+      searchResults.where((DiscoverSearchResult p) => p.isReel).toList();
+
+  List<DiscoverPerson> get peopleResults {
+    if (_currentUserId == null && _currentUsername == null) {
+      return _searchResults.people;
+    }
+    final String cleanUid = _currentUserId?.trim().toLowerCase() ?? '';
+    final String cleanUname = _currentUsername?.replaceAll('@', '').trim().toLowerCase() ?? '';
+    return _searchResults.people.where((DiscoverPerson p) {
+      if (cleanUid.isNotEmpty && p.id != null && p.id!.trim().toLowerCase() == cleanUid) {
+        return false;
+      }
+      if (cleanUname.isNotEmpty && p.username.replaceAll('@', '').trim().toLowerCase() == cleanUname) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
 
   List<TagSearchResultItem> get tagResults => _searchResults.tags;
 
@@ -79,8 +145,9 @@ class DiscoverProvider extends ChangeNotifier {
             _searchResults.tags.isNotEmpty ||
             _searchResults.communities.isNotEmpty;
       case 1:
+        return postsResults.isNotEmpty;
       case 2:
-        return _searchResults.posts.isNotEmpty;
+        return reelsResults.isNotEmpty;
       case 3:
         return _searchResults.people.isNotEmpty;
       case 4:
@@ -159,10 +226,48 @@ class DiscoverProvider extends ChangeNotifier {
     }
 
     try {
-      final MultiTabSearchResults results = await _discoverService.search(
+      MultiTabSearchResults results = await _discoverService.search(
         query: query,
         tab: tabName,
       );
+
+      // Merge matching posts and reels from live home feed so recently created or loaded content is immediately searchable
+      final String qLower = query.toLowerCase();
+      final List<DiscoverSearchResult> localMatched = <DiscoverSearchResult>[];
+
+      if (tabName == 'all' || tabName == 'posts') {
+        for (final PostItemModel p in _liveHomePosts) {
+          if (p.postType.toUpperCase().trim() == 'VIDEO') continue;
+          if (p.content.toLowerCase().contains(qLower) ||
+              p.username.toLowerCase().contains(qLower)) {
+            localMatched.add(DiscoverSearchResult.fromPostItem(p));
+          }
+        }
+      }
+
+      if (tabName == 'all' || tabName == 'reels') {
+        for (final ReelItemModel r in _liveHomeReels) {
+          if (r.caption.toLowerCase().contains(qLower) ||
+              r.username.toLowerCase().contains(qLower) ||
+              r.tags.any((String t) => t.toLowerCase().contains(qLower))) {
+            localMatched.add(DiscoverSearchResult.fromReelItem(r));
+          }
+        }
+      }
+
+      if (localMatched.isNotEmpty) {
+        final Set<String> existingIds =
+            results.posts.map((DiscoverSearchResult p) => p.id ?? '').toSet();
+        final List<DiscoverSearchResult> mergedPosts =
+            List<DiscoverSearchResult>.from(results.posts);
+        for (final DiscoverSearchResult lm in localMatched) {
+          if (lm.id != null && !existingIds.contains(lm.id)) {
+            mergedPosts.add(lm);
+            existingIds.add(lm.id!);
+          }
+        }
+        results = results.copyWith(posts: mergedPosts);
+      }
 
       _searchCache[cacheKey] = results;
 
@@ -304,7 +409,15 @@ class DiscoverProvider extends ChangeNotifier {
     DiscoverCreator(avatarAsset: AppImages.user4, username: 'kt'),
   ];
 
-  List<DiscoverCreator> get creatorsToWatch => _creatorsToWatch;
+  List<DiscoverCreator> get creatorsToWatch {
+    if (_currentUsername == null || _currentUsername!.isEmpty) {
+      return _creatorsToWatch;
+    }
+    final String cleanUname = _currentUsername!.replaceAll('@', '').trim().toLowerCase();
+    return _creatorsToWatch.where((DiscoverCreator c) =>
+      c.username.replaceAll('@', '').trim().toLowerCase() != cleanUname
+    ).toList();
+  }
 
   Future<void> fetchCreatorsToWatch() async {
     if (_discoverService == null) return;
@@ -330,7 +443,15 @@ class DiscoverProvider extends ChangeNotifier {
     DiscoverCreator(avatarAsset: AppImages.user4, username: 'kt'),
   ];
 
-  List<DiscoverCreator> get newCreators => _newCreators;
+  List<DiscoverCreator> get newCreators {
+    if (_currentUsername == null || _currentUsername!.isEmpty) {
+      return _newCreators;
+    }
+    final String cleanUname = _currentUsername!.replaceAll('@', '').trim().toLowerCase();
+    return _newCreators.where((DiscoverCreator c) =>
+      c.username.replaceAll('@', '').trim().toLowerCase() != cleanUname
+    ).toList();
+  }
 
   Future<void> fetchNewCreators() async {
     if (_discoverService == null) return;

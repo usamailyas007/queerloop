@@ -12,6 +12,7 @@ import '../../../core/widgets/app_follow_button.dart';
 import '../../../core/widgets/app_user_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/auth_provider.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../models/reel_item_model.dart';
 import '../screens/profile_tab_screen.dart';
@@ -268,10 +269,20 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   @override
   Widget build(BuildContext context) {
     final ReelItemModel item = widget.reel;
-    final String? currentUserId = context.watch<AuthProvider>().userId;
+    final AuthProvider auth = context.watch<AuthProvider>();
+    final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+    final String? currentUserId = auth.userId ?? profileProvider.profile?.id;
+    final String myUsername = (auth.user?.displayName ?? profileProvider.username)
+        .replaceAll('@', '')
+        .trim()
+        .toLowerCase();
+    final String reelUsername =
+        item.username.replaceAll('@', '').trim().toLowerCase();
     final bool isOwnReel = (item.authorId != null &&
             currentUserId != null &&
-            item.authorId!.trim().toLowerCase() == currentUserId.trim().toLowerCase()) ||
+            item.authorId!.trim().toLowerCase() ==
+                currentUserId.trim().toLowerCase()) ||
+        (myUsername.isNotEmpty && reelUsername == myUsername) ||
         item.username == '@you';
     final double viewPaddingBottom = MediaQuery.of(context).viewPadding.bottom;
     final double paddingBottom = MediaQuery.of(context).padding.bottom;

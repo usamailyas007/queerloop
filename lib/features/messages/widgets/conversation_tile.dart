@@ -21,6 +21,22 @@ class ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String titleText = (conversation.displayName != null &&
+            conversation.displayName!.trim().isNotEmpty)
+        ? conversation.displayName!.trim()
+        : (conversation.username.startsWith('@')
+            ? conversation.username
+            : '@${conversation.username}');
+
+    final String? handleText = (conversation.displayName != null &&
+            conversation.displayName!.trim().isNotEmpty &&
+            conversation.username.isNotEmpty &&
+            conversation.username != 'User')
+        ? (conversation.username.startsWith('@')
+            ? conversation.username
+            : '@${conversation.username}')
+        : null;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -99,7 +115,7 @@ class ConversationTile extends StatelessWidget {
                     children: <Widget>[
                       Flexible(
                         child: Text(
-                          conversation.username,
+                          titleText,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.titleSmall.copyWith(
@@ -109,6 +125,20 @@ class ConversationTile extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (handleText != null) ...<Widget>[
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            handleText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.caption.copyWith(
+                              color: context.themeTextMuted,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
                       if (conversation.isMuted) ...<Widget>[
                         const SizedBox(width: 6),
                         SvgPicture.asset(

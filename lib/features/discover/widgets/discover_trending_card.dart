@@ -94,7 +94,7 @@ class DiscoverTrendingCard extends StatelessWidget {
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => _buildFallback(context),
       );
-    } else if (thumb.isNotEmpty) {
+    } else if (thumb.startsWith('assets/')) {
       return Image.asset(
         thumb,
         width: 44,

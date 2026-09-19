@@ -86,7 +86,11 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
 
         // If we have a conversation UUID, load messages from backend
         if (convId.contains('-') && convId != widget.conversation.participantId) {
-          p.loadMessages(convId);
+          await p.loadMessages(convId);
+        }
+
+        if (mounted) {
+          p.markAllMessagesAsRead(convId);
         }
       }
     });
@@ -116,6 +120,20 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
     final String cleanUsername = activeConv.username.startsWith('@')
         ? activeConv.username
         : '@${activeConv.username}';
+
+    final String titleText = (activeConv.displayName != null &&
+            activeConv.displayName!.trim().isNotEmpty)
+        ? activeConv.displayName!.trim()
+        : cleanUsername;
+
+    final String? handleText = (activeConv.displayName != null &&
+            activeConv.displayName!.trim().isNotEmpty &&
+            activeConv.username.isNotEmpty &&
+            activeConv.username != 'User')
+        ? (activeConv.username.startsWith('@')
+            ? activeConv.username
+            : '@${activeConv.username}')
+        : null;
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -215,7 +233,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                   children: <Widget>[
                                     Flexible(
                                       child: Text(
-                                        activeConv.username,
+                                        titleText,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: AppTextStyles.titleMedium.copyWith(
@@ -256,8 +274,10 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                       : (isRestricted
                                           ? 'Restricted'
                                           : (isMuted
-                                              ? 'Muted until 12 Aug'
-                                              : 'Active now')),
+                                              ? 'Muted'
+                                              : (handleText != null
+                                                  ? '$handleText • Active now'
+                                                  : 'Active now'))),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTextStyles.caption.copyWith(
@@ -505,46 +525,47 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                     ? fallbackMessages
                                     : activeConv.messages);
 
+                        final bool hasUnread = effectiveMessages
+                            .any((ChatMessageModel m) => !m.isMe && !m.isRead);
+                        if (hasUnread) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              provider.markAllMessagesAsRead(activeConv.id);
+                            }
+                          });
+                        }
+
                         return Column(
                           children: <Widget>[
-                            for (int i = 0; i < effectiveMessages.length; i++) ...<Widget>[
-                              Builder(
-                                builder: (BuildContext itemCtx) {
-                                  final ChatMessageModel msg = effectiveMessages[i];
-                                  if (!msg.isMe && !msg.isRead) {
-                                    provider.markMessageRead(activeConv.id, msg.id);
-                                  }
-                                  return GestureDetector(
-                                    onLongPress: () {
-                                      ChatMessageActionSheet.show(
-                                        context,
-                                        messageText: msg.text ?? '',
-                                        isMe: msg.isMe,
-                                        onEmojiReaction: (String emoji) {
-                                          provider.toggleReaction(
-                                              activeConv.id, msg.id, emoji);
-                                        },
-                                        onDeleteForMe: () {
-                                          provider.unsendMessage(
-                                              activeConv.id, msg.id);
-                                        },
-                                        onUnsend: () {
-                                          provider.unsendMessage(
-                                              activeConv.id, msg.id);
-                                        },
-                                      );
+                            for (final ChatMessageModel msg in effectiveMessages)
+                              GestureDetector(
+                                onLongPress: () {
+                                  ChatMessageActionSheet.show(
+                                    context,
+                                    messageText: msg.text ?? '',
+                                    isMe: msg.isMe,
+                                    onEmojiReaction: (String emoji) {
+                                      provider.toggleReaction(
+                                          activeConv.id, msg.id, emoji);
                                     },
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(
-                                          bottom: AppSpacing.md),
-                                      child: ChatBubble(
-                                        message: msg,
-                                      ),
-                                    ),
+                                    onDeleteForMe: () {
+                                      provider.unsendMessage(
+                                          activeConv.id, msg.id);
+                                    },
+                                    onUnsend: () {
+                                      provider.unsendMessage(
+                                          activeConv.id, msg.id);
+                                    },
                                   );
                                 },
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                      bottom: AppSpacing.md),
+                                  child: ChatBubble(
+                                    message: msg,
+                                  ),
+                                ),
                               ),
-                            ],
                           ],
                         );
                       },

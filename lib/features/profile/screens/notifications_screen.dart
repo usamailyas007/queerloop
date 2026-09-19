@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
@@ -9,6 +11,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_snackbar.dart';
+import '../services/user_relationship_service.dart';
 import 'followers_following_screen.dart';
 import 'user_profile_screen.dart';
 
@@ -21,6 +24,7 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   int _selectedFilterIndex = 0;
+  String _samRequestStatus = '';
 
   static const List<String> _filters = <String>[
     'All',
@@ -349,21 +353,106 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.sm),
-                          AppGradientButton(
-                            text: 'Accept',
-                            height: 32,
-                            width: 76,
-                            borderRadius: BorderRadius.circular(AppRadius.pill),
-                            onPressed: () {},
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          AppOutlineButton(
-                            text: 'Decline',
-                            height: 32,
-                            width: 76,
-                            onPressed: () {},
-                          ),
+                          if (_samRequestStatus == 'accepted')
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: context.themeCyanBadgeBackground,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.pill),
+                                border: Border.all(
+                                  color: AppColors.gradientCyan,
+                                ),
+                              ),
+                              child: const Text(
+                                'Accepted',
+                                style: TextStyle(
+                                  color: AppColors.gradientCyan,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            )
+                          else if (_samRequestStatus == 'declined')
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: context.themeCardBackground,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.pill),
+                                border: Border.all(
+                                  color: context.themeBorder,
+                                ),
+                              ),
+                              child: Text(
+                                'Declined',
+                                style: TextStyle(
+                                  color: context.themeTextMuted,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            )
+                          else ...<Widget>[
+                            const SizedBox(width: AppSpacing.sm),
+                            AppGradientButton(
+                              text: 'Accept',
+                              height: 32,
+                              width: 76,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.pill),
+                              onPressed: () async {
+                                setState(() => _samRequestStatus = 'accepted');
+                                final UserRelationshipService rel =
+                                    UserRelationshipService(
+                                        context.read<ApiClient>());
+                                final String? reqId =
+                                    await rel.resolveUserId('sam.arroyo');
+                                if (reqId != null) {
+                                  await rel.acceptFollowRequest(reqId);
+                                }
+                                if (context.mounted) {
+                                  AppSnackBar.showSuccess(
+                                    context,
+                                    title: 'Request accepted',
+                                    subtitle:
+                                        '@sam.arroyo is now following you',
+                                  );
+                                }
+                              },
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
+                            AppOutlineButton(
+                              text: 'Decline',
+                              height: 32,
+                              width: 76,
+                              onPressed: () async {
+                                setState(() => _samRequestStatus = 'declined');
+                                final UserRelationshipService rel =
+                                    UserRelationshipService(
+                                        context.read<ApiClient>());
+                                final String? reqId =
+                                    await rel.resolveUserId('sam.arroyo');
+                                if (reqId != null) {
+                                  await rel.rejectFollowRequest(reqId);
+                                }
+                                if (context.mounted) {
+                                  AppSnackBar.show(
+                                    context,
+                                    title: 'Request declined',
+                                    subtitle:
+                                        'Follow request from @sam.arroyo declined',
+                                  );
+                                }
+                              },
+                            ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: AppSpacing.xs),

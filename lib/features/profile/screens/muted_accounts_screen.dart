@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
@@ -8,18 +9,8 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
-
-class MutedUserItem {
-  const MutedUserItem({
-    required this.username,
-    required this.mutedDate,
-    required this.avatarAsset,
-  });
-
-  final String username;
-  final String mutedDate;
-  final String avatarAsset;
-}
+import '../models/user_relationship_models.dart';
+import '../provider/profile_provider.dart';
 
 class MutedAccountsScreen extends StatefulWidget {
   const MutedAccountsScreen({super.key});
@@ -31,32 +22,26 @@ class MutedAccountsScreen extends StatefulWidget {
 class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
   String _searchQuery = '';
 
-  final List<MutedUserItem> _mutedUsers = <MutedUserItem>[
-    const MutedUserItem(
-      username: '@nightowl_j',
-      mutedDate: 'Muted 9 Jul',
-      avatarAsset: AppImages.user1,
-    ),
-    const MutedUserItem(
-      username: '@ramble.rae',
-      mutedDate: 'Muted 2 Jul',
-      avatarAsset: AppImages.user2,
-    ),
-    const MutedUserItem(
-      username: '@quietriot',
-      mutedDate: 'Muted 21 Jun',
-      avatarAsset: AppImages.user3,
-    ),
-  ];
-
-  void _unmuteUser(MutedUserItem user) {
-    setState(() {
-      _mutedUsers.remove(user);
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<ProfileProvider>().loadMutedAccounts();
+      }
     });
+  }
+
+  void _unmuteUser(MutedAccountItem user) {
+    final ProfileProvider provider = context.read<ProfileProvider>();
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+
+    provider.unmuteUser(user.userId);
 
     AppSnackBar.show(
       context,
-      title: '${user.username} unmuted',
+      messenger: messenger,
+      title: '@${user.username} unmuted',
       subtitle: 'You will now see their posts in your feed',
       icon: SvgPicture.asset(
         AppIcons.mute,
@@ -69,18 +54,36 @@ class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
       ),
       actionLabel: 'Undo',
       onAction: () {
-        setState(() {
-          _mutedUsers.add(user);
-        });
+        provider.muteUser(
+          user.userId,
+          username: user.username,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
+          scope: user.scope ?? 'posts',
+        );
       },
     );
   }
 
+  String _formatMutedText(DateTime? date) {
+    if (date == null) return 'Muted';
+    const List<String> months = <String>[
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return 'Until ${date.day} ${months[date.month - 1]}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final List<MutedUserItem> filtered = _mutedUsers.where((MutedUserItem user) {
+    final ProfileProvider provider = context.watch<ProfileProvider>();
+    final List<MutedAccountItem> mutedList = provider.mutedAccounts;
+    final bool isLoading = provider.isLoadingMuted;
+
+    final List<MutedAccountItem> filtered = mutedList.where((MutedAccountItem user) {
       return _searchQuery.isEmpty ||
-          user.username.toLowerCase().contains(_searchQuery.toLowerCase());
+          user.username.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          (user.displayName?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false);
     }).toList();
 
     return Scaffold(
@@ -138,130 +141,147 @@ class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
 
             // ── Main Content Body ───────────────────────────────────────────
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                children: <Widget>[
-                  // Search Bar Input Field using AppTextField
-                  AppTextField(
-                    hintText: 'Search muted accounts',
-                    prefixIconPath: AppIcons.searchSvg,
-                    onChanged: (String val) =>
-                        setState(() => _searchQuery = val),
-                  ),
-
-                  const SizedBox(height: AppSpacing.lg),
-
-                  // Subtitle Description
-                  Text(
-                    "Muted accounts can still see and interact with your posts — you just won't see theirs.",
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.themeTextSecondary,
-                      fontSize: 13,
-                      height: 1.35,
+              child: RefreshIndicator(
+                color: AppColors.gradientPink,
+                onRefresh: () => provider.loadMutedAccounts(forceRefresh: true),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  children: <Widget>[
+                    // Search Bar Input Field using AppTextField
+                    AppTextField(
+                      hintText: 'Search muted accounts',
+                      prefixIconPath: AppIcons.searchSvg,
+                      onChanged: (String val) =>
+                          setState(() => _searchQuery = val),
                     ),
-                  ),
 
-                  const SizedBox(height: AppSpacing.lg),
+                    const SizedBox(height: AppSpacing.lg),
 
-                  // Muted Accounts List
-                  if (filtered.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 40),
-                      child: Center(
-                        child: Text(
-                          'No muted accounts found.',
-                          style: TextStyle(
-                            color: context.themeTextMuted,
-                            fontSize: 14,
+                    // Subtitle Description
+                    Text(
+                      'Muted accounts remain in your following list, but their posts and comments are hidden from your feeds. They are not told.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.themeTextSecondary,
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                    ),
+
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // Muted Accounts List / Loader / Empty State
+                    if (isLoading && mutedList.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.gradientPink,
                           ),
                         ),
-                      ),
-                    )
-                  else
-                    ...filtered.map((MutedUserItem user) {
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                        child: Row(
-                          children: <Widget>[
-                            // User Avatar
-                            ClipOval(
-                              child: user.avatarAsset.startsWith('http')
-                                  ? Image.network(
-                                      user.avatarAsset,
-                                      width: 44,
-                                      height: 44,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, _, _) =>
-                                          const Icon(Icons.person, size: 44),
-                                    )
-                                  : Image.asset(
-                                      user.avatarAsset.isNotEmpty
-                                          ? user.avatarAsset
-                                          : AppImages.user1,
-                                      width: 44,
-                                      height: 44,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, _, _) =>
-                                          const Icon(Icons.person, size: 44),
-                                    ),
+                      )
+                    else if (filtered.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: Text(
+                            mutedList.isEmpty
+                                ? 'No muted accounts.'
+                                : 'No muted accounts found.',
+                            style: TextStyle(
+                              color: context.themeTextMuted,
+                              fontSize: 14,
                             ),
-                            const SizedBox(width: AppSpacing.md),
+                          ),
+                        ),
+                      )
+                    else
+                      ...filtered.map((MutedAccountItem user) {
+                        final String avatar = user.avatarUrl ?? '';
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                          child: Row(
+                            children: <Widget>[
+                              // User Avatar
+                              ClipOval(
+                                child: avatar.startsWith('http')
+                                    ? Image.network(
+                                        avatar,
+                                        width: 44,
+                                        height: 44,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) =>
+                                            const Icon(Icons.person, size: 44),
+                                      )
+                                    : Image.asset(
+                                        avatar.isNotEmpty
+                                            ? avatar
+                                            : AppImages.user1,
+                                        width: 44,
+                                        height: 44,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) =>
+                                            const Icon(Icons.person, size: 44),
+                                      ),
+                              ),
+                              const SizedBox(width: AppSpacing.md),
 
-                            // Username & Muted Date
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text(
-                                    user.username,
+                              // Username & Muted Date / Scope
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      '@${user.username}',
+                                      style: AppTextStyles.bodyMedium.copyWith(
+                                        color: context.themeTextPrimary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _formatMutedText(user.mutedUntil),
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: context.themeTextMuted,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // Unmute Button
+                              GestureDetector(
+                                onTap: () => _unmuteUser(user),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: context.themeCardBackground,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: context.themeBorder,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'Unmute',
                                     style: AppTextStyles.bodyMedium.copyWith(
                                       color: context.themeTextPrimary,
                                       fontWeight: FontWeight.w700,
-                                      fontSize: 14,
+                                      fontSize: 13,
                                     ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    user.mutedDate,
-                                    style: AppTextStyles.bodySmall.copyWith(
-                                      color: context.themeTextMuted,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // Unmute Button
-                            GestureDetector(
-                              onTap: () => _unmuteUser(user),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: context.themeCardBackground,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: context.themeBorder,
-                                  ),
-                                ),
-                                child: Text(
-                                  'Unmute',
-                                  style: AppTextStyles.bodyMedium.copyWith(
-                                    color: context.themeTextPrimary,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13,
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                ],
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
+                ),
               ),
             ),
           ],

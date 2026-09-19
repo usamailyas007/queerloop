@@ -461,7 +461,7 @@ class HomeFeedProvider extends ChangeNotifier {
 
       _followingReels
         ..clear()
-        ..addAll(batch.reels);
+        ..addAll(batch.reels.map((ReelItemModel r) => r.copyWith(isFollowing: true)));
 
       _followingPosts
         ..clear()
@@ -766,8 +766,39 @@ class HomeFeedProvider extends ChangeNotifier {
     }
   }
 
-  void toggleFollowReel(String id) {
-    _updateReelInAllLists(id, (r) => r.copyWith(isFollowing: !r.isFollowing));
+  void toggleFollowReel(String id, {bool? isFollowing}) {
+    _updateReelInAllLists(
+      id,
+      (ReelItemModel r) => r.copyWith(isFollowing: isFollowing ?? !r.isFollowing),
+    );
+    notifyListeners();
+  }
+
+  void setAuthorFollowStatus({
+    required String authorId,
+    required bool isFollowing,
+    String? username,
+  }) {
+    final String cleanAuthor = authorId.trim().toLowerCase();
+    final String cleanUser =
+        username?.replaceAll('@', '').trim().toLowerCase() ?? '';
+
+    void updateReels(List<ReelItemModel> list) {
+      for (int i = 0; i < list.length; i++) {
+        final ReelItemModel r = list[i];
+        final bool matches = (r.authorId != null &&
+                r.authorId!.toLowerCase() == cleanAuthor) ||
+            (cleanUser.isNotEmpty &&
+                r.username.replaceAll('@', '').toLowerCase() == cleanUser);
+        if (matches) {
+          list[i] = r.copyWith(isFollowing: isFollowing);
+        }
+      }
+    }
+
+    updateReels(_forYouReels);
+    updateReels(_followingReels);
+    updateReels(_communityReels);
     notifyListeners();
   }
 
@@ -896,7 +927,7 @@ class HomeFeedProvider extends ChangeNotifier {
     _communityReels.removeWhere((ReelItemModel r) => r.id == id);
     notifyListeners();
 
-    if (_contentService != null && id.contains('-')) {
+    if (_contentService != null && !id.startsWith('mock_') && !id.startsWith('profile_reel_')) {
       try {
         await _contentService!.deletePost(id);
         return true;

@@ -283,7 +283,14 @@ class ConversationModel {
     String? pDisplayName;
     String? pAvatarUrl;
 
-    if (json['participant'] is Map<String, dynamic>) {
+    if (json['otherParticipant'] is Map<String, dynamic>) {
+      final Map<String, dynamic> other =
+          json['otherParticipant'] as Map<String, dynamic>;
+      pId = (other['userId'] ?? other['id'] ?? other['_id'])?.toString();
+      pUsername = (other['username'] ?? other['name'] ?? other['handle'] ?? 'User').toString();
+      pDisplayName = (other['displayName'] ?? other['name'])?.toString();
+      pAvatarUrl = (other['avatarUrl'] ?? other['avatar'] ?? other['profilePicture'])?.toString();
+    } else if (json['participant'] is Map<String, dynamic>) {
       final Map<String, dynamic> part =
           json['participant'] as Map<String, dynamic>;
       pId = (part['id'] ?? part['_id'] ?? part['userId'] ?? part['user_id'])?.toString();
@@ -324,6 +331,16 @@ class ConversationModel {
       pUsername = (json['username'] ?? 'User').toString();
       pDisplayName = json['displayName']?.toString();
       pAvatarUrl = (json['avatarUrl'] ?? json['avatar'])?.toString();
+    }
+
+    if (pId == null || pId.trim().isEmpty) {
+      final String? pA = json['participantAId']?.toString();
+      final String? pB = json['participantBId']?.toString();
+      if (pA != null && pA.isNotEmpty && pA != currentUserId) {
+        pId = pA;
+      } else if (pB != null && pB.isNotEmpty && pB != currentUserId) {
+        pId = pB;
+      }
     }
 
     if (pId != null && pId.trim().isEmpty) {
@@ -468,7 +485,14 @@ class MessageRequestModel {
     String? pDisplayName;
     String? pAvatarUrl;
 
-    if (json['participant'] is Map<String, dynamic>) {
+    if (json['otherParticipant'] is Map<String, dynamic>) {
+      final Map<String, dynamic> other =
+          json['otherParticipant'] as Map<String, dynamic>;
+      pId = (other['userId'] ?? other['id'] ?? other['_id'])?.toString();
+      pUsername = (other['username'] ?? other['name'] ?? other['handle'] ?? 'User').toString();
+      pDisplayName = (other['displayName'] ?? other['name'])?.toString();
+      pAvatarUrl = (other['avatarUrl'] ?? other['avatar'] ?? other['profilePicture'])?.toString();
+    } else if (json['participant'] is Map<String, dynamic>) {
       final Map<String, dynamic> part =
           json['participant'] as Map<String, dynamic>;
       pId = (part['id'] ?? part['_id'] ?? part['userId'] ?? part['user_id'])?.toString();
@@ -522,6 +546,19 @@ class MessageRequestModel {
       pUsername = (json['username'] ?? 'User').toString();
       pDisplayName = json['displayName']?.toString();
       pAvatarUrl = (json['avatarUrl'] ?? json['avatar'])?.toString();
+    }
+
+    if (pId == null || pId.trim().isEmpty) {
+      final String? initId = json['initiatorId']?.toString();
+      final String? pA = json['participantAId']?.toString();
+      final String? pB = json['participantBId']?.toString();
+      if (initId != null && initId.isNotEmpty && initId != currentUserId) {
+        pId = initId;
+      } else if (pA != null && pA.isNotEmpty && pA != currentUserId) {
+        pId = pA;
+      } else if (pB != null && pB.isNotEmpty && pB != currentUserId) {
+        pId = pB;
+      }
     }
 
     if (pId != null && pId.trim().isEmpty) {

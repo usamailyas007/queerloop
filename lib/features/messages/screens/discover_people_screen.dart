@@ -14,6 +14,7 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../auth/auth_provider.dart';
 import '../../discover/models/discover_models.dart';
 import '../../discover/services/discover_service.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../models/message_models.dart';
 import '../provider/messages_provider.dart';
@@ -78,8 +79,23 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
       }
 
       if (mounted) {
+        final AuthProvider auth = context.read<AuthProvider>();
+        final ProfileProvider profile = context.read<ProfileProvider>();
+        final String myUsername = (auth.user?.displayName ?? profile.username)
+            .replaceAll('@', '')
+            .trim()
+            .toLowerCase();
+
+        final List<DiscoverCreator> filtered = creators.where((DiscoverCreator c) {
+          if (myUsername.isNotEmpty &&
+              c.username.replaceAll('@', '').trim().toLowerCase() == myUsername) {
+            return false;
+          }
+          return true;
+        }).toList();
+
         setState(() {
-          _suggestedPeople = creators;
+          _suggestedPeople = filtered;
           _isLoadingSuggestions = false;
         });
       }
@@ -126,8 +142,26 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
           await discover.search(query: query, tab: 'people');
 
       if (mounted && _currentQuery == query) {
+        final AuthProvider auth = context.read<AuthProvider>();
+        final ProfileProvider profile = context.read<ProfileProvider>();
+        final String? myId = auth.userId ?? profile.profile?.id;
+        final String myUsername = (auth.user?.displayName ?? profile.username)
+            .replaceAll('@', '')
+            .trim()
+            .toLowerCase();
+
+        final List<DiscoverPerson> filtered = results.people.where((DiscoverPerson p) {
+          if (myId != null && p.id != null && p.id!.trim().toLowerCase() == myId.trim().toLowerCase()) {
+            return false;
+          }
+          if (myUsername.isNotEmpty && p.username.replaceAll('@', '').trim().toLowerCase() == myUsername) {
+            return false;
+          }
+          return true;
+        }).toList();
+
         setState(() {
-          _searchResults = results.people;
+          _searchResults = filtered;
           _isSearching = false;
         });
       }

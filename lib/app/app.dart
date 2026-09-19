@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
+import '../admin/admin_view/community_spotlight/provider/spotlights_provider.dart';
 import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
 import '../core/network/network_info.dart';
@@ -12,12 +13,15 @@ import '../features/auth/auth_provider.dart';
 import '../features/create_post/provider/create_post_provider.dart';
 import '../features/create_post/services/media_upload_service.dart';
 import '../features/create_post/services/post_content_service.dart';
+import '../features/discover/provider/cotd_provider.dart';
 import '../features/discover/provider/discover_provider.dart';
+import '../features/discover/services/cotd_service.dart';
 import '../features/discover/services/discover_service.dart';
 import '../features/home/provider/home_feed_provider.dart';
 import '../features/messages/provider/messages_provider.dart';
 import '../features/messages/services/conversations_service.dart';
 import '../features/profile/provider/profile_provider.dart';
+import '../features/profile/services/user_relationship_service.dart';
 import '../features/profile_setup/profile_setup_service.dart';
 import '../features/profile_setup/provider/profile_setup_provider.dart';
 import '../features/reports/provider/report_provider.dart';
@@ -58,14 +62,21 @@ class App extends StatelessWidget {
                 );
             // Jab bhi user sign out kare, wizard ko Step 1 pe reset karo
             if (auth.status == AuthStatus.signedOut) {
-              provider.reset();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                provider.reset();
+              });
             }
             return provider;
           },
         ),
+        Provider<UserRelationshipService>(
+          create: (BuildContext ctx) =>
+              UserRelationshipService(ctx.read<ApiClient>()),
+        ),
         ChangeNotifierProvider<ProfileProvider>(
           create: (BuildContext ctx) => ProfileProvider(
             client: ctx.read<ApiClient>(),
+            relationshipService: ctx.read<UserRelationshipService>(),
           ),
         ),
         ChangeNotifierProxyProvider<AuthProvider, HomeFeedProvider>(
@@ -79,7 +90,9 @@ class App extends StatelessWidget {
                   contentService: PostContentService(ctx.read<ApiClient>()),
                   mediaService: MediaUploadService(ctx.read<ApiClient>()),
                 );
-            provider.updateUser(auth.userId);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              provider.updateUser(auth.userId);
+            });
             return provider;
           },
         ),
@@ -104,10 +117,12 @@ class App extends StatelessWidget {
                   service: ctx.read<ConversationsService>(),
                   currentUserId: auth.userId,
                 );
-            provider.updateAuth(
-              userId: auth.userId,
-              service: ctx.read<ConversationsService>(),
-            );
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              provider.updateAuth(
+                userId: auth.userId,
+                service: ctx.read<ConversationsService>(),
+              );
+            });
             return provider;
           },
         ),
@@ -128,6 +143,18 @@ class App extends StatelessWidget {
           create: (BuildContext ctx) => DiscoverProvider(
             discoverService: ctx.read<DiscoverService>(),
           ),
+        ),
+        Provider<CotdService>(
+          create: (BuildContext ctx) => CotdService(ctx.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<CotdProvider>(
+          create: (BuildContext ctx) => CotdProvider(
+            service: ctx.read<CotdService>(),
+          ),
+        ),
+        ChangeNotifierProvider<SpotlightsProvider>(
+          create: (BuildContext ctx) =>
+              SpotlightsProvider(client: ctx.read<ApiClient>()),
         ),
       ],
       child: Consumer<ThemeProvider>(

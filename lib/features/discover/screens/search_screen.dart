@@ -8,10 +8,13 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_tag_chip.dart';
+import '../../auth/auth_provider.dart';
 import '../../home/models/post_item_model.dart';
+import '../../home/provider/home_feed_provider.dart';
 import '../../home/screens/hashtag_posts_screen.dart';
 import '../../home/widgets/comments_bottom_sheet.dart';
 import '../../home/widgets/post_feed_card.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../models/discover_models.dart';
 import '../provider/discover_provider.dart';
 import '../widgets/clear_search_history_dialog.dart';
@@ -44,6 +47,21 @@ class _SearchScreenState extends State<SearchScreen> {
     _focusNode.addListener(_onFocusChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
+      if (mounted) {
+        final AuthProvider auth = context.read<AuthProvider>();
+        final ProfileProvider profile = context.read<ProfileProvider>();
+        final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+        final String? myId = auth.userId ?? profile.profile?.id;
+        final String myUsername = (auth.user?.displayName ?? profile.username)
+            .replaceAll('@', '')
+            .trim();
+        final DiscoverProvider disc = context.read<DiscoverProvider>();
+        disc.setCurrentUser(userId: myId, username: myUsername);
+        disc.syncHomeFeedContent(
+          posts: homeFeed.posts,
+          reels: homeFeed.reels,
+        );
+      }
     });
   }
 
@@ -288,7 +306,7 @@ class _SearchResultsBody extends StatelessWidget {
               // ── Tab 0: All (Comprehensive Overview) ────────────────────────
               if (provider.selectedSearchTab == 0) ...<Widget>[
                 // 1. TOP POSTS Section
-                if (provider.searchResults.isNotEmpty) ...<Widget>[
+                if (provider.postsResults.isNotEmpty) ...<Widget>[
                   _buildSectionHeader(
                     context: context,
                     title: 'TOP POSTS',
@@ -296,7 +314,21 @@ class _SearchResultsBody extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   SearchPostsGrid(
-                    results: provider.searchResults.take(6).toList(),
+                    results: provider.postsResults.take(6).toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+
+                // 1b. TOP REELS Section
+                if (provider.reelsResults.isNotEmpty) ...<Widget>[
+                  _buildSectionHeader(
+                    context: context,
+                    title: 'TOP REELS',
+                    onSeeAll: () => provider.setSelectedSearchTab(2),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  SearchPostsGrid(
+                    results: provider.reelsResults.take(6).toList(),
                   ),
                   const SizedBox(height: AppSpacing.xl),
                 ],
@@ -341,14 +373,31 @@ class _SearchResultsBody extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   ...provider.peopleResults.take(4).map(
-                    (DiscoverPerson p) => Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      child: SearchPersonTile(
-                        person: p,
-                        isFollowing: provider.isFollowing(p.username),
-                        onFollow: () => provider.toggleFollow(p.username),
-                      ),
-                    ),
+                    (DiscoverPerson p) {
+                      final ProfileProvider profile = context.watch<ProfileProvider>();
+                      final bool isFollowing = profile.isFollowingUser(userId: p.id, username: p.username) ||
+                          provider.isFollowing(p.username);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: SearchPersonTile(
+                          person: p,
+                          isFollowing: isFollowing,
+                          onFollow: () async {
+                            final bool willFollow = !isFollowing;
+                            provider.toggleFollow(p.username);
+                            if (p.id != null && p.id!.isNotEmpty) {
+                              try {
+                                if (willFollow) {
+                                  await profile.followUser(p.id!, username: p.username);
+                                } else {
+                                  await profile.unfollowUser(p.id!, username: p.username);
+                                }
+                              } catch (_) {}
+                            }
+                          },
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: AppSpacing.xl),
                 ],
@@ -377,57 +426,172 @@ class _SearchResultsBody extends StatelessWidget {
 
               // ── Tab 1: Posts (Full Posts Feed) ─────────────────────────────
               if (provider.selectedSearchTab == 1) ...<Widget>[
-                ...provider.searchResults.map(
-                  (DiscoverSearchResult res) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: PostFeedCard(
-                      post: PostItemModel(
-                        id: res.id ?? 'search_${res.caption.hashCode}',
-                        username: res.authorUsername ?? '@queer_creator',
-                        pronounsTime: 'they/them · recent',
-                        avatarAsset: (res.authorAvatar != null && res.authorAvatar!.isNotEmpty)
-                            ? res.authorAvatar!
-                            : AppImages.user1,
-                        content: (res.caption != null && res.caption!.isNotEmpty)
-                            ? res.caption!
-                            : 'Shared post',
-                        likesCount: res.likesCount ?? 0,
-                        commentsCount: res.commentsCount ?? 0,
-                        postImageAsset: res.imageAsset,
-                        isLiked: res.isLiked,
-                      ),
-                      onLikeToggle: () {},
-                      onSaveToggle: () {},
-                      onOpenComments: () {
-                        showModalBottomSheet<void>(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => CommentsBottomSheet(
-                            totalComments: res.commentsCount ?? 0,
+                if (provider.postsResults.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(
+                            Icons.article_outlined,
+                            size: 48,
+                            color: context.themeTextMuted,
                           ),
-                        );
-                      },
+                          const SizedBox(height: 12),
+                          Text(
+                            'No posts found',
+                            style: AppTextStyles.titleMedium.copyWith(
+                              color: context.themeTextPrimary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            "No photo or text posts matching '${provider.searchQuery}'.",
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.caption.copyWith(
+                              color: context.themeTextMuted,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                  )
+                else
+                  ...provider.postsResults.map(
+                    (DiscoverSearchResult res) {
+                      final String img = (res.imageAsset.isNotEmpty
+                              ? res.imageAsset
+                              : (res.thumbnailUrl ?? ''))
+                          .trim();
+                      final bool isHttp =
+                          img.startsWith('http://') || img.startsWith('https://');
+                      final bool isAsset = img.startsWith('assets/');
+
+                      final String fallbackImg = <String>[
+                        AppImages.searchResult1,
+                        AppImages.searchResult2,
+                        AppImages.searchResult3,
+                        AppImages.searchResult4,
+                        AppImages.searchResult5,
+                        AppImages.searchResult6,
+                      ][(res.id ?? '').hashCode.abs() % 6];
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: PostFeedCard(
+                          post: PostItemModel(
+                            id: res.id ?? 'search_${res.caption.hashCode}',
+                            authorId: res.authorId,
+                            username: (res.authorUsername != null &&
+                                    res.authorUsername!.trim().isNotEmpty)
+                                ? res.authorUsername!.trim()
+                                : '@queer_creator',
+                            pronounsTime: 'they/them · recent',
+                            avatarAsset: (res.authorAvatar != null &&
+                                    res.authorAvatar!.trim().isNotEmpty)
+                                ? res.authorAvatar!.trim()
+                                : AppImages.user1,
+                            content: (res.caption != null &&
+                                    res.caption!.trim().isNotEmpty)
+                                ? res.caption!
+                                : 'Shared post',
+                            likesCount: res.likesCount ?? 0,
+                            commentsCount: res.commentsCount ?? 0,
+                            postImageUrl: isHttp ? img : null,
+                            postImageAsset: isAsset
+                                ? img
+                                : (!isHttp ? fallbackImg : null),
+                            postType: 'PHOTO',
+                            communityId: res.communityId,
+                            isLiked: res.isLiked,
+                          ),
+                          onLikeToggle: () {},
+                          onSaveToggle: () {},
+                          onOpenComments: () {
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => CommentsBottomSheet(
+                                totalComments: res.commentsCount ?? 0,
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
                   ),
-                ),
               ],
 
               // ── Tab 2: Reels (Reels Grid) ──────────────────────────────────
-              if (provider.selectedSearchTab == 2)
-                SearchPostsGrid(results: provider.searchResults),
+              if (provider.selectedSearchTab == 2) ...<Widget>[
+                if (provider.reelsResults.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(
+                            Icons.video_library_outlined,
+                            size: 48,
+                            color: context.themeTextMuted,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No reels found',
+                            style: AppTextStyles.titleMedium.copyWith(
+                              color: context.themeTextPrimary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            "No reels matching '${provider.searchQuery}'.",
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.caption.copyWith(
+                              color: context.themeTextMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  SearchPostsGrid(
+                    results: provider.reelsResults,
+                  ),
+              ],
 
-              // ── Tab 3: People ──────────────────────────────────────────────
               if (provider.selectedSearchTab == 3)
                 ...provider.peopleResults.map(
-                  (DiscoverPerson p) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: SearchPersonTile(
-                      person: p,
-                      isFollowing: provider.isFollowing(p.username),
-                      onFollow: () => provider.toggleFollow(p.username),
-                    ),
-                  ),
+                  (DiscoverPerson p) {
+                    final ProfileProvider profile = context.watch<ProfileProvider>();
+                    final bool isFollowing = profile.isFollowingUser(userId: p.id, username: p.username) ||
+                        provider.isFollowing(p.username);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: SearchPersonTile(
+                        person: p,
+                        isFollowing: isFollowing,
+                        onFollow: () async {
+                          final bool willFollow = !isFollowing;
+                          provider.toggleFollow(p.username);
+                          if (p.id != null && p.id!.isNotEmpty) {
+                            try {
+                              if (willFollow) {
+                                await profile.followUser(p.id!, username: p.username);
+                              } else {
+                                await profile.unfollowUser(p.id!, username: p.username);
+                              }
+                            } catch (_) {}
+                          }
+                        },
+                      ),
+                    );
+                  },
                 ),
 
               // ── Tab 4: Tags (Tags List Screen) ─────────────────────────────

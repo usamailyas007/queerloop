@@ -34,6 +34,11 @@ class UserProfile {
     this.followersCount,
     this.followingCount,
     this.postsCount,
+    this.relationship,
+    this.isFollowing,
+    this.isPending,
+    this.isBlocked,
+    this.isMuted,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> rawJson) {
@@ -48,14 +53,33 @@ class UserProfile {
 
     final dynamic rawFollowers = json['followersCount'] ??
         json['followerCount'] ??
+        json['followers_count'] ??
+        json['follower_count'] ??
         (json['_count'] is Map ? json['_count']['followers'] : null) ??
+        (json['counts'] is Map ? json['counts']['followers'] : null) ??
+        (json['stats'] is Map ? json['stats']['followers'] : null) ??
+        (json['metrics'] is Map ? json['metrics']['followers'] : null) ??
         json['followers'];
+
     final dynamic rawFollowing = json['followingCount'] ??
-        (json['_count'] is Map ? json['_count']['following'] : null) ??
-        json['following'];
+        json['followingsCount'] ??
+        json['following_count'] ??
+        json['followings_count'] ??
+        (json['_count'] is Map ? json['_count']['following'] ?? json['_count']['followings'] : null) ??
+        (json['counts'] is Map ? json['counts']['following'] ?? json['counts']['followings'] : null) ??
+        (json['stats'] is Map ? json['stats']['following'] ?? json['stats']['followings'] : null) ??
+        (json['metrics'] is Map ? json['metrics']['following'] ?? json['metrics']['followings'] : null) ??
+        json['following'] ??
+        json['followings'];
+
     final dynamic rawPosts = json['postsCount'] ??
         json['postCount'] ??
+        json['posts_count'] ??
+        json['post_count'] ??
         (json['_count'] is Map ? json['_count']['posts'] : null) ??
+        (json['counts'] is Map ? json['counts']['posts'] : null) ??
+        (json['stats'] is Map ? json['stats']['posts'] : null) ??
+        (json['metrics'] is Map ? json['metrics']['posts'] : null) ??
         json['posts'];
 
     return UserProfile(
@@ -111,6 +135,22 @@ class UserProfile {
           : (rawPosts is List
               ? rawPosts.length
               : int.tryParse(rawPosts?.toString() ?? '0')),
+      relationship: (json['relationship'] ??
+              json['relationshipStatus'] ??
+              rawJson['relationship'])
+          ?.toString(),
+      isFollowing: json['isFollowing'] == true ||
+          rawJson['isFollowing'] == true ||
+          (json['relationship'] == 'following'),
+      isPending: json['isPending'] == true ||
+          rawJson['isPending'] == true ||
+          (json['relationship'] == 'pending'),
+      isBlocked: json['isBlocked'] == true ||
+          rawJson['isBlocked'] == true ||
+          (json['relationship'] == 'blocked'),
+      isMuted: json['isMuted'] == true ||
+          rawJson['isMuted'] == true ||
+          (json['relationship'] == 'muted'),
     );
   }
 
@@ -144,12 +184,98 @@ class UserProfile {
   final int? followersCount;
   final int? followingCount;
   final int? postsCount;
+  final String? relationship;
+  final bool? isFollowing;
+  final bool? isPending;
+  final bool? isBlocked;
+  final bool? isMuted;
 
   String get formattedPronouns {
     if (pronounsPrivate == true || pronouns == null || pronouns!.isEmpty) {
       return '';
     }
     return pronouns!.join(' · ');
+  }
+
+  UserProfile copyWith({
+    String? id,
+    String? email,
+    String? displayName,
+    String? username,
+    String? bio,
+    String? avatarUrl,
+    List<String>? pronouns,
+    bool? pronounsPrivate,
+    List<String>? interests,
+    bool? isPrivate,
+    bool? showInDiscover,
+    String? allowMessagesFrom,
+    String? allowCommentsFrom,
+    bool? hideMyLikes,
+    String? profileVisibility,
+    bool? showActivityStatus,
+    bool? sendReadReceipts,
+    bool? notifyOnLike,
+    bool? notifyOnComment,
+    bool? notifyOnFollow,
+    bool? notifyOnMessage,
+    bool? notifyOnFollowRequests,
+    bool? notifyOnCommunityPosts,
+    bool? notifyOnAnnouncementsFeatures,
+    bool? notifyOnSafetyModerationUpdates,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    int? followersCount,
+    int? followingCount,
+    int? postsCount,
+    String? relationship,
+    bool? isFollowing,
+    bool? isPending,
+    bool? isBlocked,
+    bool? isMuted,
+  }) {
+    return UserProfile(
+      id: id ?? this.id,
+      email: email ?? this.email,
+      displayName: displayName ?? this.displayName,
+      username: username ?? this.username,
+      bio: bio ?? this.bio,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      pronouns: pronouns ?? this.pronouns,
+      pronounsPrivate: pronounsPrivate ?? this.pronounsPrivate,
+      interests: interests ?? this.interests,
+      isPrivate: isPrivate ?? this.isPrivate,
+      showInDiscover: showInDiscover ?? this.showInDiscover,
+      allowMessagesFrom: allowMessagesFrom ?? this.allowMessagesFrom,
+      allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
+      hideMyLikes: hideMyLikes ?? this.hideMyLikes,
+      profileVisibility: profileVisibility ?? this.profileVisibility,
+      showActivityStatus: showActivityStatus ?? this.showActivityStatus,
+      sendReadReceipts: sendReadReceipts ?? this.sendReadReceipts,
+      notifyOnLike: notifyOnLike ?? this.notifyOnLike,
+      notifyOnComment: notifyOnComment ?? this.notifyOnComment,
+      notifyOnFollow: notifyOnFollow ?? this.notifyOnFollow,
+      notifyOnMessage: notifyOnMessage ?? this.notifyOnMessage,
+      notifyOnFollowRequests:
+          notifyOnFollowRequests ?? this.notifyOnFollowRequests,
+      notifyOnCommunityPosts:
+          notifyOnCommunityPosts ?? this.notifyOnCommunityPosts,
+      notifyOnAnnouncementsFeatures:
+          notifyOnAnnouncementsFeatures ?? this.notifyOnAnnouncementsFeatures,
+      notifyOnSafetyModerationUpdates:
+          notifyOnSafetyModerationUpdates ??
+              this.notifyOnSafetyModerationUpdates,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      followersCount: followersCount ?? this.followersCount,
+      followingCount: followingCount ?? this.followingCount,
+      postsCount: postsCount ?? this.postsCount,
+      relationship: relationship ?? this.relationship,
+      isFollowing: isFollowing ?? this.isFollowing,
+      isPending: isPending ?? this.isPending,
+      isBlocked: isBlocked ?? this.isBlocked,
+      isMuted: isMuted ?? this.isMuted,
+    );
   }
 
   /// Merge an incoming partial response into the current profile.
@@ -191,6 +317,11 @@ class UserProfile {
       followersCount: other.followersCount ?? followersCount,
       followingCount: other.followingCount ?? followingCount,
       postsCount: other.postsCount ?? postsCount,
+      relationship: other.relationship ?? relationship,
+      isFollowing: other.isFollowing ?? isFollowing,
+      isPending: other.isPending ?? isPending,
+      isBlocked: other.isBlocked ?? isBlocked,
+      isMuted: other.isMuted ?? isMuted,
     );
   }
 }

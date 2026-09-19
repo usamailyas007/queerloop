@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/config/api_endpoints.dart';
+import '../../../core/theme/app_images.dart';
 import '../models/discover_models.dart';
 import '../widgets/search_tag_tile.dart';
 
@@ -80,6 +81,9 @@ class DiscoverService {
     }
   }
 
+  static final Map<String, Map<String, String>> _mediaStatusCache =
+      <String, Map<String, String>>{};
+
   // ── Multi-Tab Search ───────────────────────────────────────────────────────
   /// Posts: GET /search?q=:query&limit=10
   /// Other tabs & All: GET /discover/search?query=:query&tab=:tab
@@ -95,6 +99,42 @@ class DiscoverService {
     try {
       debugPrint('🔍 [DiscoverService] Searching query: "$q", tab: "$tab"');
 
+      // ── Dedicated Reels Search ────────────────────────────────────────────
+      if (tab == 'reels') {
+        try {
+          final dynamic res = await _client.get(
+            ApiEndpoints.discoverSearch(query: q, tab: 'reels'),
+            useCache: false,
+          );
+          final MultiTabSearchResults parsed =
+              _parseSearchResults(res, activeTab: 'reels');
+          if (parsed.posts.isNotEmpty) {
+            return await _resolveMediaForSearchResults(parsed);
+          }
+        } catch (_) {}
+
+        // Fallback to /search?q=
+        try {
+          final dynamic res = await _client.get(
+            ApiEndpoints.searchPosts(query: q, limit: 15),
+            useCache: false,
+          );
+          final MultiTabSearchResults parsed =
+              _parseSearchResults(res, activeTab: 'posts');
+          if (parsed.posts.isNotEmpty) {
+            return await _resolveMediaForSearchResults(parsed);
+          }
+        } catch (_) {}
+
+        final dynamic resFallback = await _client.get(
+          ApiEndpoints.discoverSearch(query: q, tab: 'posts'),
+          useCache: false,
+        );
+        final MultiTabSearchResults parsed =
+            _parseSearchResults(resFallback, activeTab: 'posts');
+        return await _resolveMediaForSearchResults(parsed);
+      }
+
       // ── Dedicated Posts Search Endpoint ──────────────────────────────────
       if (tab == 'posts') {
         try {
@@ -106,7 +146,7 @@ class DiscoverService {
           final MultiTabSearchResults parsed =
               _parseSearchResults(res, activeTab: 'posts');
           if (parsed.posts.isNotEmpty) {
-            return parsed;
+            return await _resolveMediaForSearchResults(parsed);
           }
         } catch (e) {
           debugPrint(
@@ -119,7 +159,9 @@ class DiscoverService {
           ApiEndpoints.discoverSearch(query: q, tab: 'posts'),
           useCache: false,
         );
-        return _parseSearchResults(resFallback, activeTab: 'posts');
+        final MultiTabSearchResults parsed =
+            _parseSearchResults(resFallback, activeTab: 'posts');
+        return await _resolveMediaForSearchResults(parsed);
       }
 
       // ── All or Other Tabs (People, Tags, Communities) ─────────────────────
@@ -144,7 +186,7 @@ class DiscoverService {
         } catch (_) {}
       }
 
-      return results;
+      return await _resolveMediaForSearchResults(results);
     } on ApiException catch (e) {
       debugPrint('❌ [DiscoverService] search error: $e');
       return const MultiTabSearchResults();
@@ -152,6 +194,101 @@ class DiscoverService {
       debugPrint('❌ [DiscoverService] search unexpected: $e\n$stack');
       return const MultiTabSearchResults();
     }
+  }
+
+  Future<MultiTabSearchResults> _resolveMediaForSearchResults(
+      MultiTabSearchResults results) async {
+    if (results.posts.isEmpty) return results;
+
+    final List<DiscoverSearchResult> resolved = <DiscoverSearchResult>[];
+    for (final DiscoverSearchResult item in results.posts) {
+      final bool hasHttpImage = item.imageAsset.startsWith('http://') ||
+          item.imageAsset.startsWith('https://');
+      final bool hasHttpVideo = item.videoUrl != null &&
+          (item.videoUrl!.startsWith('http://') ||
+              item.videoUrl!.startsWith('https://'));
+
+      if (hasHttpImage && (!item.isReel || hasHttpVideo)) {
+        resolved.add(item);
+        continue;
+      }
+
+      final String? mediaId = item.mediaRefs.isNotEmpty
+          ? item.mediaRefs.first
+          : (item.imageAsset.isNotEmpty &&
+                  !item.imageAsset.startsWith('http') &&
+                  !item.imageAsset.startsWith('assets/')
+              ? item.imageAsset
+              : null);
+
+      if (mediaId != null && mediaId.isNotEmpty) {
+        if (_mediaStatusCache.containsKey(mediaId)) {
+          final Map<String, String> cached = _mediaStatusCache[mediaId]!;
+          final String? url = cached['url'];
+          final String? thumb = cached['thumbnailUrl'];
+          final bool isVid = item.type == 'VIDEO' ||
+              (url != null &&
+                  (url.endsWith('.mp4') ||
+                      url.endsWith('.m3u8') ||
+                      url.contains('video')));
+          resolved.add(item.copyWith(
+            imageAsset: url ?? thumb ?? item.imageAsset,
+            videoUrl: isVid ? (url ?? item.videoUrl) : item.videoUrl,
+            thumbnailUrl: thumb ?? (isVid ? thumb : url) ?? item.thumbnailUrl,
+          ));
+          continue;
+        }
+
+        try {
+          final dynamic mediaData =
+              await _client.get(ApiEndpoints.mediaStatus(mediaId));
+          if (mediaData is Map<String, dynamic>) {
+            final String? url = mediaData['url'] as String? ??
+                mediaData['downloadUrl'] as String?;
+            final String? thumb = mediaData['thumbnailUrl'] as String?;
+            final Map<String, String> cacheEntry = <String, String>{};
+            if (url != null) cacheEntry['url'] = url;
+            if (thumb != null) cacheEntry['thumbnailUrl'] = thumb;
+            if (cacheEntry.isNotEmpty) {
+              _mediaStatusCache[mediaId] = cacheEntry;
+            }
+            final bool isVid = item.type == 'VIDEO' ||
+                (url != null &&
+                    (url.endsWith('.mp4') ||
+                        url.endsWith('.m3u8') ||
+                        url.contains('video')));
+
+            resolved.add(item.copyWith(
+              imageAsset: url ?? thumb ?? item.imageAsset,
+              videoUrl: isVid ? (url ?? item.videoUrl) : item.videoUrl,
+              thumbnailUrl: thumb ?? (isVid ? thumb : url) ?? item.thumbnailUrl,
+            ));
+            continue;
+          }
+        } catch (e) {
+          debugPrint('⚠️ [DiscoverService] Could not resolve media $mediaId: $e');
+        }
+      }
+
+      if (!item.isReel &&
+          !item.imageAsset.startsWith('http') &&
+          !item.imageAsset.startsWith('assets/')) {
+        final int hash = (item.id ?? '').hashCode.abs() % 6;
+        final String fallbackImg = <String>[
+          AppImages.searchResult1,
+          AppImages.searchResult2,
+          AppImages.searchResult3,
+          AppImages.searchResult4,
+          AppImages.searchResult5,
+          AppImages.searchResult6,
+        ][hash];
+        resolved.add(item.copyWith(imageAsset: fallbackImg));
+      } else {
+        resolved.add(item);
+      }
+    }
+
+    return results.copyWith(posts: resolved);
   }
 
   // ── Recent Searches ────────────────────────────────────────────────────────

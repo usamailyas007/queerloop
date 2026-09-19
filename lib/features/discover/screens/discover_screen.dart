@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../admin/admin_view/community_spotlight/provider/spotlights_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../l10n/app_localizations.dart';
 import '../models/discover_models.dart';
+import '../provider/cotd_provider.dart';
 import '../provider/discover_provider.dart';
 import '../widgets/discover_community_tile.dart';
 import '../widgets/discover_conversation_card.dart';
@@ -14,10 +16,34 @@ import '../widgets/discover_section_label.dart';
 import '../widgets/discover_spotlight_card.dart';
 import '../widgets/discover_static_search_bar.dart';
 import '../widgets/discover_trending_card.dart';
+import '../../auth/auth_provider.dart';
+import '../../profile/provider/profile_provider.dart';
 import 'search_screen.dart';
 
-class DiscoverScreen extends StatelessWidget {
+class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
+
+  @override
+  State<DiscoverScreen> createState() => _DiscoverScreenState();
+}
+
+class _DiscoverScreenState extends State<DiscoverScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final AuthProvider auth = context.read<AuthProvider>();
+        final ProfileProvider profile = context.read<ProfileProvider>();
+        final String? myId = auth.userId ?? profile.profile?.id;
+        final String myUsername = (auth.user?.displayName ?? profile.username)
+            .replaceAll('@', '')
+            .trim();
+        context.read<DiscoverProvider>().setCurrentUser(userId: myId, username: myUsername);
+        context.read<SpotlightsProvider>().loadInitial();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +70,13 @@ class _DiscoverScreenBody extends StatelessWidget {
       backgroundColor: context.themeBackground,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () => context.read<DiscoverProvider>().fetchDiscoverData(refresh: true),
+          onRefresh: () async {
+            await Future.wait<void>(<Future<void>>[
+              context.read<DiscoverProvider>().fetchDiscoverData(refresh: true),
+              context.read<CotdProvider>().refresh(),
+              context.read<SpotlightsProvider>().refresh(),
+            ]);
+          },
           color: AppColors.gradientCyan,
           backgroundColor: context.themeCardBackground,
           child: CustomScrollView(

@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../create_post/widgets/custom_gradient_switch.dart';
+import '../../profile/services/user_relationship_service.dart';
 import '../provider/messages_provider.dart';
 import 'block_user_modal_dialog.dart';
 import 'delete_chat_modal_dialog.dart';
@@ -296,11 +298,33 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                 subtitle: 'Ends the conversation, removes all contact',
                 isCyanHighlight: true,
                 onTap: () {
+                  final ApiClient client = context.read<ApiClient>();
+                  final UserRelationshipService relService =
+                      UserRelationshipService(client);
                   Navigator.pop(context);
                   BlockUserModalDialog.show(
                     context,
                     username: username,
-                    onConfirmBlock: () => provider.toggleBlock(username),
+                    onConfirmBlock: () async {
+                      provider.toggleBlock(username);
+                      String? targetId = userId;
+                      if (targetId == null || targetId.isEmpty) {
+                        targetId = await relService.resolveUserId(username);
+                      }
+                      if (targetId != null && targetId.isNotEmpty) {
+                        await relService.blockUser(targetId);
+                      }
+                    },
+                    onConfirmUnblock: () async {
+                      provider.toggleBlock(username);
+                      String? targetId = userId;
+                      if (targetId == null || targetId.isEmpty) {
+                        targetId = await relService.resolveUserId(username);
+                      }
+                      if (targetId != null && targetId.isNotEmpty) {
+                        await relService.unblockUser(targetId);
+                      }
+                    },
                   );
                 },
               ),

@@ -14,11 +14,18 @@ import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/models/profile_models.dart';
+import '../models/user_relationship_models.dart';
+import '../services/user_relationship_service.dart';
 
 class ProfileProvider extends ChangeNotifier {
-  ProfileProvider({required ApiClient client}) : _client = client;
+  ProfileProvider({
+    required ApiClient client,
+    UserRelationshipService? relationshipService,
+  })  : _client = client,
+        _relationshipService = relationshipService ?? UserRelationshipService(client);
 
   final ApiClient _client;
+  final UserRelationshipService _relationshipService;
 
   UserProfile? _profile;
   bool _isBusy = false;
@@ -37,6 +44,59 @@ class ProfileProvider extends ChangeNotifier {
   List<PostItemModel> _savedPosts = <PostItemModel>[];
   List<ReelItemModel> _savedReels = <ReelItemModel>[];
   bool _isLoadingSaved = false;
+  bool _hasFetchedLiked = false;
+  bool _hasFetchedSaved = false;
+
+  List<BlockedAccountItem> _blockedAccounts = <BlockedAccountItem>[];
+  bool _isLoadingBlocked = false;
+
+  List<MutedAccountItem> _mutedAccounts = <MutedAccountItem>[];
+  bool _isLoadingMuted = false;
+
+  List<FollowRequestItem> _followRequests = <FollowRequestItem>[];
+  bool _isLoadingFollowRequests = false;
+
+  List<UserRelationItem> _followers = <UserRelationItem>[];
+  List<UserRelationItem> _following = <UserRelationItem>[];
+  final Set<String> _followingUserIds = <String>{};
+  final Set<String> _followingUsernames = <String>{};
+  bool _isLoadingRelations = false;
+
+  Set<String> get followingUserIds => Set<String>.unmodifiable(_followingUserIds);
+  Set<String> get followingUsernames => Set<String>.unmodifiable(_followingUsernames);
+
+  bool isFollowingUser({String? userId, String? username}) {
+    if (userId != null && userId.trim().isNotEmpty) {
+      final String cleanId = userId.trim().toLowerCase();
+      if (_followingUserIds.contains(cleanId)) return true;
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      final String cleanUsername =
+          username.replaceAll('@', '').trim().toLowerCase();
+      if (_followingUsernames.contains(cleanUsername)) return true;
+    }
+    return false;
+  }
+
+  void addFollowedUser({required String userId, String? username}) {
+    if (userId.trim().isNotEmpty) {
+      _followingUserIds.add(userId.trim().toLowerCase());
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      _followingUsernames.add(username.replaceAll('@', '').trim().toLowerCase());
+    }
+    notifyListeners();
+  }
+
+  void removeFollowedUser({required String userId, String? username}) {
+    if (userId.trim().isNotEmpty) {
+      _followingUserIds.remove(userId.trim().toLowerCase());
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      _followingUsernames.remove(username.replaceAll('@', '').trim().toLowerCase());
+    }
+    notifyListeners();
+  }
 
   UserProfile? get profile => _profile;
   bool get isBusy => _isBusy;
@@ -51,10 +111,27 @@ class ProfileProvider extends ChangeNotifier {
   List<PostItemModel> get likedPosts => _likedPosts;
   List<ReelItemModel> get likedReels => _likedReels;
   bool get isLoadingLiked => _isLoadingLiked;
+  bool get hasFetchedLiked => _hasFetchedLiked;
 
   List<PostItemModel> get savedPosts => _savedPosts;
   List<ReelItemModel> get savedReels => _savedReels;
   bool get isLoadingSaved => _isLoadingSaved;
+  bool get hasFetchedSaved => _hasFetchedSaved;
+
+  List<BlockedAccountItem> get blockedAccounts => _blockedAccounts;
+  bool get isLoadingBlocked => _isLoadingBlocked;
+
+  List<MutedAccountItem> get mutedAccounts => _mutedAccounts;
+  bool get isLoadingMuted => _isLoadingMuted;
+
+  List<FollowRequestItem> get followRequests => _followRequests;
+  bool get isLoadingFollowRequests => _isLoadingFollowRequests;
+
+  List<UserRelationItem> get followers => _followers;
+  List<UserRelationItem> get following => _following;
+  bool get isLoadingRelations => _isLoadingRelations;
+
+  UserRelationshipService get relationshipService => _relationshipService;
 
   String get displayName => _profile?.displayName ?? 'Ash Mercado';
   String get username => _profile?.username ?? 'ashinorbit';
@@ -76,10 +153,33 @@ class ProfileProvider extends ChangeNotifier {
     return '0';
   }
 
-  String get followersCount =>
-      _profile?.followersCount != null ? '${_profile!.followersCount}' : '0';
-  String get followingCount =>
-      _profile?.followingCount != null ? '${_profile!.followingCount}' : '0';
+  String get followersCount {
+    final int? profileCount = _profile?.followersCount;
+    if (_followers.length > (profileCount ?? 0)) {
+      return '${_followers.length}';
+    }
+    if (profileCount != null && profileCount > 0) {
+      return '$profileCount';
+    }
+    if (_followers.isNotEmpty) {
+      return '${_followers.length}';
+    }
+    return '${profileCount ?? 0}';
+  }
+
+  String get followingCount {
+    final int? profileCount = _profile?.followingCount;
+    if (_following.length > (profileCount ?? 0)) {
+      return '${_following.length}';
+    }
+    if (profileCount != null && profileCount > 0) {
+      return '$profileCount';
+    }
+    if (_following.isNotEmpty) {
+      return '${_following.length}';
+    }
+    return '${profileCount ?? 0}';
+  }
 
   List<String> get interests => _profile?.interests ?? const <String>[];
   bool get isPrivate => _profile?.isPrivate ?? false;
@@ -138,6 +238,12 @@ class ProfileProvider extends ChangeNotifier {
         _userPosts.clear();
         _userReels.clear();
         _userCommunities.clear();
+        _likedPosts.clear();
+        _likedReels.clear();
+        _savedPosts.clear();
+        _savedReels.clear();
+        _hasFetchedLiked = false;
+        _hasFetchedSaved = false;
       }
     }
 
@@ -148,11 +254,13 @@ class ProfileProvider extends ChangeNotifier {
     }
     _error = null;
 
-    // Batch call: fetch profile details, communities, and user posts concurrently
+    // Batch call: fetch profile details, communities, user posts, followers, and following list concurrently
     await Future.wait(<Future<void>>[
       _fetchProfileDetails(userId),
       fetchUserCommunities(userId),
       fetchUserContent(userId),
+      loadFollowers(userId),
+      loadFollowing(userId),
     ]);
   }
 
@@ -375,9 +483,14 @@ class ProfileProvider extends ChangeNotifier {
 
   /// List User's Liked Posts. GET /users/me/likes
   Future<void> fetchLikedPosts({bool force = false}) async {
-    if (!force && (_likedPosts.isNotEmpty || _likedReels.isNotEmpty)) return;
-    _isLoadingLiked = true;
-    notifyListeners();
+    if (!force && _hasFetchedLiked && (_likedPosts.isNotEmpty || _likedReels.isNotEmpty)) {
+      return;
+    }
+    // Only show full loading state if we haven't loaded items yet
+    if (_likedPosts.isEmpty && _likedReels.isEmpty) {
+      _isLoadingLiked = true;
+      notifyListeners();
+    }
 
     try {
       final PostContentService service = PostContentService(_client);
@@ -386,19 +499,26 @@ class ProfileProvider extends ChangeNotifier {
 
       _likedPosts = batch.posts;
       _likedReels = batch.reels;
+      _hasFetchedLiked = true;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Error fetching liked posts: $e');
     } finally {
       _isLoadingLiked = false;
+      _hasFetchedLiked = true;
       notifyListeners();
     }
   }
 
   /// List User's Saved Posts. GET /users/me/saved
   Future<void> fetchSavedPosts({bool force = false}) async {
-    if (!force && (_savedPosts.isNotEmpty || _savedReels.isNotEmpty)) return;
-    _isLoadingSaved = true;
-    notifyListeners();
+    if (!force && _hasFetchedSaved && (_savedPosts.isNotEmpty || _savedReels.isNotEmpty)) {
+      return;
+    }
+    // Only show full loading state if we haven't loaded items yet
+    if (_savedPosts.isEmpty && _savedReels.isEmpty) {
+      _isLoadingSaved = true;
+      notifyListeners();
+    }
 
     try {
       final PostContentService service = PostContentService(_client);
@@ -407,10 +527,12 @@ class ProfileProvider extends ChangeNotifier {
 
       _savedPosts = batch.posts;
       _savedReels = batch.reels;
+      _hasFetchedSaved = true;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Error fetching saved posts: $e');
     } finally {
       _isLoadingSaved = false;
+      _hasFetchedSaved = true;
       notifyListeners();
     }
   }
@@ -423,6 +545,9 @@ class ProfileProvider extends ChangeNotifier {
     _likedReels.removeWhere((ReelItemModel r) => r.id == postId);
     _savedPosts.removeWhere((PostItemModel p) => p.id == postId);
     _savedReels.removeWhere((ReelItemModel r) => r.id == postId);
+    if (_profile != null && (_profile!.postsCount ?? 0) > 0) {
+      _profile = _profile!.copyWith(postsCount: _profile!.postsCount! - 1);
+    }
     notifyListeners();
 
     try {
@@ -620,6 +745,332 @@ class ProfileProvider extends ChangeNotifier {
     if (_error == null) return;
     _error = null;
     notifyListeners();
+  }
+
+  // ── Blocked Accounts Management ───────────────────────────────────────────
+
+  Future<void> loadBlockedAccounts({bool forceRefresh = false}) async {
+    _isLoadingBlocked = true;
+    notifyListeners();
+    try {
+      _blockedAccounts = await _relationshipService.getBlockedAccounts();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to load blocked accounts: $e');
+    } finally {
+      _isLoadingBlocked = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> blockUser(
+    String userId, {
+    String? username,
+    String? displayName,
+    String? avatarUrl,
+  }) async {
+    try {
+      final bool success = await _relationshipService.blockUser(userId);
+      if (success) {
+        final String effectiveUsername = username ?? 'user';
+        if (!_blockedAccounts.any((BlockedAccountItem a) => a.userId == userId)) {
+          _blockedAccounts.insert(
+            0,
+            BlockedAccountItem(
+              userId: userId,
+              username: effectiveUsername,
+              displayName: displayName ?? effectiveUsername,
+              avatarUrl: avatarUrl,
+              blockedAt: DateTime.now(),
+            ),
+          );
+        }
+        _followers.removeWhere((UserRelationItem r) => r.userId == userId);
+        _following.removeWhere((UserRelationItem r) => r.userId == userId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to block user $userId: $e');
+      return false;
+    }
+  }
+
+  Future<bool> unblockUser(String userId) async {
+    try {
+      final bool success = await _relationshipService.unblockUser(userId);
+      if (success) {
+        _blockedAccounts.removeWhere((BlockedAccountItem a) => a.userId == userId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to unblock user $userId: $e');
+      return false;
+    }
+  }
+
+  // ── Muted Accounts Management ─────────────────────────────────────────────
+
+  Future<void> loadMutedAccounts({bool forceRefresh = false}) async {
+    _isLoadingMuted = true;
+    notifyListeners();
+    try {
+      _mutedAccounts = await _relationshipService.getMutedAccounts();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to load muted accounts: $e');
+    } finally {
+      _isLoadingMuted = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> muteUser(
+    String userId, {
+    String? username,
+    String? displayName,
+    String? avatarUrl,
+    String scope = 'posts',
+    int durationHours = 8,
+  }) async {
+    try {
+      final bool success = await _relationshipService.muteUser(
+        userId,
+        scope: scope,
+        durationHours: durationHours,
+      );
+      if (success) {
+        final String effectiveUsername = username ?? 'user';
+        if (!_mutedAccounts.any((MutedAccountItem a) => a.userId == userId)) {
+          _mutedAccounts.insert(
+            0,
+            MutedAccountItem(
+              userId: userId,
+              username: effectiveUsername,
+              displayName: displayName ?? effectiveUsername,
+              avatarUrl: avatarUrl,
+              mutedUntil: DateTime.now().add(Duration(hours: durationHours)),
+              scope: scope,
+            ),
+          );
+        }
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to mute user $userId: $e');
+      return false;
+    }
+  }
+
+  Future<bool> unmuteUser(String userId) async {
+    try {
+      final bool success = await _relationshipService.unmuteUser(userId);
+      if (success) {
+        _mutedAccounts.removeWhere((MutedAccountItem a) => a.userId == userId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to unmute user $userId: $e');
+      return false;
+    }
+  }
+
+  // ── Follow Requests Management ────────────────────────────────────────────
+
+  Future<void> loadFollowRequests({bool forceRefresh = false}) async {
+    _isLoadingFollowRequests = true;
+    notifyListeners();
+    try {
+      _followRequests = await _relationshipService.getFollowRequests();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to load follow requests: $e');
+    } finally {
+      _isLoadingFollowRequests = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> acceptFollowRequest(String requestId) async {
+    try {
+      final bool success = await _relationshipService.acceptFollowRequest(requestId);
+      if (success) {
+        _followRequests.removeWhere((FollowRequestItem r) => r.id == requestId || r.userId == requestId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to accept follow request $requestId: $e');
+      return false;
+    }
+  }
+
+  Future<bool> rejectFollowRequest(String requestId) async {
+    try {
+      final bool success = await _relationshipService.rejectFollowRequest(requestId);
+      if (success) {
+        _followRequests.removeWhere((FollowRequestItem r) => r.id == requestId || r.userId == requestId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to reject follow request $requestId: $e');
+      return false;
+    }
+  }
+
+  // ── Followers & Following Operations ──────────────────────────────────────
+
+  Future<List<UserRelationItem>> loadFollowers(String userId) async {
+    _isLoadingRelations = true;
+    notifyListeners();
+    try {
+      final List<UserRelationItem> items =
+          await _relationshipService.getFollowers(userId);
+      _followers = items;
+      if (_profile != null) {
+        final int current = _profile!.followersCount ?? 0;
+        final int updated = items.length > current ? items.length : current;
+        _profile = _profile!.copyWith(followersCount: updated);
+      }
+      return items;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to load followers for $userId: $e');
+      return <UserRelationItem>[];
+    } finally {
+      _isLoadingRelations = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<UserRelationItem>> loadFollowing(String userId) async {
+    _isLoadingRelations = true;
+    notifyListeners();
+    try {
+      final List<UserRelationItem> items =
+          await _relationshipService.getFollowing(userId);
+      _following = items;
+      for (final UserRelationItem u in items) {
+        if (u.userId.trim().isNotEmpty) {
+          _followingUserIds.add(u.userId.trim().toLowerCase());
+        }
+        if (u.username.trim().isNotEmpty) {
+          _followingUsernames.add(u.username.replaceAll('@', '').trim().toLowerCase());
+        }
+      }
+      if (_profile != null) {
+        final int current = _profile!.followingCount ?? 0;
+        final int updated = items.length > current ? items.length : current;
+        _profile = _profile!.copyWith(followingCount: updated);
+      }
+      return items;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to load following for $userId: $e');
+      return <UserRelationItem>[];
+    } finally {
+      _isLoadingRelations = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> followUser(String userId, {String? username}) async {
+    try {
+      final bool success = await _relationshipService.followUser(userId);
+      if (success) {
+        if (userId.trim().isNotEmpty) {
+          _followingUserIds.add(userId.trim().toLowerCase());
+        }
+        if (username != null && username.trim().isNotEmpty) {
+          _followingUsernames.add(username.replaceAll('@', '').trim().toLowerCase());
+        }
+        final int idx = _following.indexWhere(
+            (UserRelationItem u) => u.userId.toLowerCase() == userId.toLowerCase());
+        if (idx != -1) {
+          _following[idx] = _following[idx].copyWith(isFollowing: true);
+        } else {
+          _following.insert(
+            0,
+            UserRelationItem(
+              userId: userId,
+              username: username ?? 'user',
+              displayName: username ?? 'User',
+              isFollowing: true,
+            ),
+          );
+        }
+        final int fIdx = _followers.indexWhere(
+            (UserRelationItem u) => u.userId.toLowerCase() == userId.toLowerCase());
+        if (fIdx != -1) {
+          _followers[fIdx] = _followers[fIdx].copyWith(isFollowing: true);
+        }
+        // If current profile is loaded, increment followingCount
+        if (_profile != null) {
+          final int cur = _profile!.followingCount ?? _following.length;
+          _profile = _profile!.copyWith(
+            followingCount: cur + 1,
+          );
+        }
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to follow user $userId: $e');
+      rethrow;
+    }
+  }
+
+  Future<bool> unfollowUser(String userId, {String? username}) async {
+    try {
+      final bool success = await _relationshipService.unfollowUser(userId);
+      if (success) {
+        if (userId.trim().isNotEmpty) {
+          _followingUserIds.remove(userId.trim().toLowerCase());
+        }
+        if (username != null && username.trim().isNotEmpty) {
+          _followingUsernames.remove(username.replaceAll('@', '').trim().toLowerCase());
+        }
+        _following.removeWhere(
+            (UserRelationItem u) => u.userId.toLowerCase() == userId.toLowerCase());
+        final int fIdx = _followers.indexWhere(
+            (UserRelationItem u) => u.userId.toLowerCase() == userId.toLowerCase());
+        if (fIdx != -1) {
+          _followers[fIdx] = _followers[fIdx].copyWith(isFollowing: false);
+        }
+        if (_profile != null) {
+          final int cur = _profile!.followingCount ?? _following.length + 1;
+          final int count = cur - 1;
+          _profile = _profile!.copyWith(
+            followingCount: count > 0 ? count : 0,
+          );
+        }
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to unfollow user $userId: $e');
+      rethrow;
+    }
+  }
+
+  Future<bool> removeFollower(String userId) async {
+    try {
+      final bool success = await _relationshipService.removeFollower(userId);
+      if (success) {
+        _followers.removeWhere((UserRelationItem u) => u.userId == userId);
+        if (_profile != null) {
+          final int cur = _profile!.followersCount ?? _followers.length + 1;
+          final int count = cur - 1;
+          _profile = _profile!.copyWith(
+            followersCount: count > 0 ? count : 0,
+          );
+        }
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to remove follower $userId: $e');
+      rethrow;
+    }
   }
 }
 

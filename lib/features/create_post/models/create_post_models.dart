@@ -193,8 +193,50 @@ class PostResponseModel {
     final Map<String, dynamic> map =
         (json['data'] is Map<String, dynamic>) ? json['data'] as Map<String, dynamic> : json;
 
-    final List<dynamic>? rawMediaRefs =
-        (map['mediaRefs'] ?? map['mediarefs'] ?? map['media']) as List<dynamic>?;
+    final List<String> extractedMediaRefs = <String>[];
+    final dynamic rawMedia = map['mediaRefs'] ??
+        map['mediarefs'] ??
+        map['media'] ??
+        map['mediaUrls'] ??
+        map['images'] ??
+        map['imageUrls'] ??
+        map['attachments'] ??
+        map['imageUrl'] ??
+        map['photoUrl'] ??
+        map['mediaUrl'] ??
+        map['image'];
+
+    if (rawMedia is List) {
+      for (final dynamic item in rawMedia) {
+        if (item is String && item.isNotEmpty) {
+          extractedMediaRefs.add(item);
+        } else if (item is Map) {
+          final dynamic url = item['url'] ??
+              item['downloadUrl'] ??
+              item['mediaUrl'] ??
+              item['thumbnailUrl'] ??
+              item['path'] ??
+              item['id'] ??
+              item['_id'];
+          if (url != null && url.toString().isNotEmpty) {
+            extractedMediaRefs.add(url.toString());
+          }
+        }
+      }
+    } else if (rawMedia is String && rawMedia.isNotEmpty) {
+      extractedMediaRefs.add(rawMedia);
+    } else if (rawMedia is Map) {
+      final dynamic url = rawMedia['url'] ??
+          rawMedia['downloadUrl'] ??
+          rawMedia['mediaUrl'] ??
+          rawMedia['thumbnailUrl'] ??
+          rawMedia['path'] ??
+          rawMedia['id'];
+      if (url != null && url.toString().isNotEmpty) {
+        extractedMediaRefs.add(url.toString());
+      }
+    }
+
     final List<dynamic>? rawTags = map['tags'] as List<dynamic>?;
 
     final dynamic rawLikes = map['likeCount'] ?? map['likesCount'] ?? map['likes'] ?? (map['_count'] is Map ? map['_count']['likes'] : null);
@@ -269,8 +311,7 @@ class PostResponseModel {
         final String? matchedId = m.group(1);
         if (matchedId != null &&
             matchedId != postId &&
-            (rawMediaRefs == null ||
-                !rawMediaRefs.any((dynamic r) => r.toString().contains(matchedId)))) {
+            !extractedMediaRefs.any((dynamic r) => r.toString().contains(matchedId))) {
           finalAuthorId = matchedId;
           break;
         }
@@ -335,7 +376,7 @@ class PostResponseModel {
       authorDisplayName: resolvedAuthorDisplayName,
       authorAvatar: resolvedAuthorAvatar,
       createdAt: map['createdAt']?.toString(),
-      mediaRefs: rawMediaRefs?.map((e) => e.toString()).toList() ?? <String>[],
+      mediaRefs: extractedMediaRefs,
       tags: rawTags?.map((e) => e.toString()).toList() ?? <String>[],
       community: (map['community'] ?? map['communityId'])?.toString(),
       communityId: map['communityId']?.toString(),

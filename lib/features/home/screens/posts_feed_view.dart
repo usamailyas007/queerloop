@@ -288,9 +288,28 @@ class PostsFeedView extends StatelessWidget {
 
           final int postIndex = showCommunityFilter ? index - 1 : index;
           final PostItemModel item = posts[postIndex];
+          final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+          final bool isFollowingAuthor = profileProvider.isFollowingUser(
+            userId: item.authorId,
+            username: item.username,
+          );
 
           return PostFeedCard(
             post: item,
+            isFollowing: isFollowingAuthor,
+            onFollowToggle: () async {
+              if (provider.isGuest) {
+                onGuestActionTriggered?.call();
+              } else {
+                final String? authorId = item.authorId;
+                if (authorId == null || authorId.isEmpty) return;
+                if (isFollowingAuthor) {
+                  await profileProvider.unfollowUser(authorId, username: item.username);
+                } else {
+                  await profileProvider.followUser(authorId, username: item.username);
+                }
+              }
+            },
             onLikeToggle: () {
               if (provider.isGuest) {
                 onGuestActionTriggered?.call();

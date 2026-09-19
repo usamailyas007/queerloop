@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../models/message_models.dart';
@@ -13,6 +14,29 @@ class MessagesProvider extends ChangeNotifier {
 
   ConversationsService? _service;
   String? _currentUserId;
+  bool _isDisposed = false;
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (_isDisposed) return;
+    final WidgetsBinding binding = WidgetsBinding.instance;
+    if (binding.schedulerPhase == SchedulerPhase.persistentCallbacks ||
+        binding.schedulerPhase == SchedulerPhase.midFrameMicrotasks) {
+      binding.addPostFrameCallback((_) {
+        if (!_isDisposed) {
+          super.notifyListeners();
+        }
+      });
+    } else {
+      super.notifyListeners();
+    }
+  }
 
   void updateAuth({String? userId, ConversationsService? service}) {
     bool shouldReload = false;
@@ -25,8 +49,10 @@ class MessagesProvider extends ChangeNotifier {
       shouldReload = true;
     }
     if (shouldReload) {
-      loadConversations();
-      loadMessageRequests();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        loadConversations();
+        loadMessageRequests();
+      });
     }
   }
 
@@ -432,6 +458,44 @@ class MessagesProvider extends ChangeNotifier {
         conversationId: conversationId,
         messageId: messageId,
       );
+    }
+  }
+
+  // ── Mark All Messages Read In Conversation ─────────────────────────────────
+  Future<void> markAllMessagesAsRead(String conversationId) async {
+    final List<ChatMessageModel>? msgs = _messagesByConvId[conversationId];
+    if (msgs == null || msgs.isEmpty) return;
+
+    final List<String> unreadIds = msgs
+        .where((ChatMessageModel m) => !m.isMe && !m.isRead)
+        .map((ChatMessageModel m) => m.id)
+        .toList();
+
+    if (unreadIds.isEmpty) return;
+
+    for (final String msgId in unreadIds) {
+      final int idx = msgs.indexWhere((ChatMessageModel m) => m.id == msgId);
+      if (idx != -1) {
+        msgs[idx] = msgs[idx].copyWith(isRead: true);
+      }
+    }
+
+    final int convIdx =
+        _conversations.indexWhere((ConversationModel c) => c.id == conversationId);
+    if (convIdx != -1) {
+      _conversations[convIdx] =
+          _conversations[convIdx].copyWith(unreadCount: 0);
+    }
+
+    notifyListeners();
+
+    if (_service != null) {
+      for (final String msgId in unreadIds) {
+        _service!.markMessageRead(
+          conversationId: conversationId,
+          messageId: msgId,
+        );
+      }
     }
   }
 

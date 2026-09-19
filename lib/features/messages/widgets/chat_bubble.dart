@@ -366,10 +366,14 @@ class ChatBubble extends StatelessWidget {
               ),
             ),
 
-          if (isMe && message.type == MessageType.gradientText) ...<Widget>[
+          if (isMe) ...<Widget>[
             const SizedBox(height: 4),
             Text(
-              'Read 9:14',
+              message.isRead
+                  ? (message.timestamp.isNotEmpty && message.timestamp != 'Just now'
+                      ? 'Read ${message.timestamp}'
+                      : 'Read')
+                  : 'Sent',
               style: AppTextStyles.caption.copyWith(
                 color: context.themeTextMuted,
                 fontSize: 11,

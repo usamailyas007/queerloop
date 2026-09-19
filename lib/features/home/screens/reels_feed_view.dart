@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../auth/auth_provider.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/provider/profile_setup_provider.dart';
@@ -162,7 +163,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
           },
           onOpenReportSafety: () {
             Navigator.pop(context);
-            _showSafetySheet(context, reel);
+            _showSafetySheet(reel);
           },
         );
       },
@@ -180,8 +181,26 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     );
   }
 
-  void _showSafetySheet(BuildContext context, ReelItemModel reel) {
-    showModalBottomSheet<void>(
+  Future<void> _showSafetySheet(ReelItemModel reel) async {
+    final AuthProvider auth = context.read<AuthProvider>();
+    final ProfileProvider profileProvider = context.read<ProfileProvider>();
+    final String? currentUserId = auth.userId ?? profileProvider.profile?.id;
+    final String myUsername = (auth.user?.displayName ?? profileProvider.username)
+        .replaceAll('@', '')
+        .trim()
+        .toLowerCase();
+    final String reelUsername =
+        reel.username.replaceAll('@', '').trim().toLowerCase();
+    final bool isOwnReel = profileProvider.userReels.any((ReelItemModel r) => r.id == reel.id) ||
+        (reel.authorId != null &&
+            currentUserId != null &&
+            reel.authorId!.trim().toLowerCase() ==
+                currentUserId.trim().toLowerCase()) ||
+        (myUsername.isNotEmpty && reelUsername == myUsername) ||
+        reel.username == '@you' ||
+        reel.username == 'you';
+
+    final dynamic deleted = await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -191,9 +210,20 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
           postId: reel.id,
           authorId: reel.authorId ?? reel.username,
           communityId: reel.communityId,
+          isReel: true,
+          isCreator: isOwnReel,
         );
       },
     );
+
+    if (deleted == true && mounted) {
+      setState(() {});
+      final List<ReelItemModel> currentReels =
+          widget.customReels ?? context.read<HomeFeedProvider>().reels;
+      if (currentReels.isEmpty && widget.customReels != null) {
+        Navigator.pop(context);
+      }
+    }
   }
 
   @override
@@ -329,6 +359,12 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
         },
         itemBuilder: (context, index) {
           final ReelItemModel item = reels[index];
+          final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+          final bool isAuthorFollowed = profileProvider.isFollowingUser(
+            userId: item.authorId,
+            username: item.username,
+          ) || item.isFollowing;
+
           final bool isVisuallyActive = (widget.customReels != null)
               ? (index == _activePage)
               : (index == _activePage &&
@@ -337,7 +373,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
 
           return ReelFeedCard(
             key: ValueKey<String>(item.id),
-            reel: item,
+            reel: item.copyWith(isFollowing: isAuthorFollowed),
             isActive: isVisuallyActive,
             hasBottomBar: widget.hasBottomBar,
             showCommunityFilterTag: provider.activeTopTab == TopTab.communities,
@@ -356,11 +392,34 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                 provider.toggleSaveReel(item.id);
               }
             },
-            onFollowToggle: () {
+            onFollowToggle: () async {
               if (provider.isGuest) {
                 widget.onGuestActionTriggered?.call();
               } else {
-                provider.toggleFollowReel(item.id);
+                final String? targetId = item.authorId;
+                final bool willFollow = !isAuthorFollowed;
+                if (targetId != null && targetId.isNotEmpty) {
+                  provider.setAuthorFollowStatus(
+                    authorId: targetId,
+                    username: item.username,
+                    isFollowing: willFollow,
+                  );
+                  try {
+                    if (willFollow) {
+                      await profileProvider.followUser(targetId, username: item.username);
+                    } else {
+                      await profileProvider.unfollowUser(targetId, username: item.username);
+                    }
+                  } catch (e) {
+                    provider.setAuthorFollowStatus(
+                      authorId: targetId,
+                      username: item.username,
+                      isFollowing: !willFollow,
+                    );
+                  }
+                } else {
+                  provider.toggleFollowReel(item.id);
+                }
               }
             },
             onOpenComments: () {
@@ -382,7 +441,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                 _showShareSheet(context, item);
               }
             },
-            onOpenSafety: () => _showSafetySheet(context, item),
+            onOpenSafety: () => _showSafetySheet(item),
             onOpenFilterCommunities: () =>
                 _showFilterCommunitiesSheet(context, provider),
           );

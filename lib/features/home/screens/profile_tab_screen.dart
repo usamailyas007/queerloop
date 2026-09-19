@@ -41,12 +41,19 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
   Future<void> _loadProfile() async {
     final String? userId = context.read<AuthProvider>().userId;
     if (userId != null && userId.isNotEmpty) {
-      await context.read<ProfileProvider>().fetchProfile(userId);
+      final ProfileProvider profile = context.read<ProfileProvider>();
+      await profile.fetchProfile(userId);
       if (!mounted) return;
+      // Fetch following and followers so all screens know our relationships
+      profile.loadFollowing(userId);
+      profile.loadFollowers(userId);
+      // Preload saved and liked posts in the background so tabs load instantly without flash
+      profile.fetchSavedPosts();
+      profile.fetchLikedPosts();
       if (_selectedTabIndex == 2) {
-        await context.read<ProfileProvider>().fetchSavedPosts(force: true);
+        await profile.fetchSavedPosts(force: true);
       } else if (_selectedTabIndex == 3) {
-        await context.read<ProfileProvider>().fetchLikedPosts(force: true);
+        await profile.fetchLikedPosts(force: true);
       }
     }
   }
@@ -287,12 +294,12 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     selectedIndex: _selectedTabIndex,
                     isOwnProfile: true,
                     onTabSelected: (int index) {
-                      setState(() => _selectedTabIndex = index);
                       if (index == 2) {
                         context.read<ProfileProvider>().fetchSavedPosts();
                       } else if (index == 3) {
                         context.read<ProfileProvider>().fetchLikedPosts();
                       }
+                      setState(() => _selectedTabIndex = index);
                     },
                   ),
 
@@ -361,7 +368,10 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
 
                   // Tab 2: Saved Grid & Posts
                   if (_selectedTabIndex == 2) ...<Widget>[
-                    if (profileProvider.isLoadingSaved)
+                    if ((!profileProvider.hasFetchedSaved ||
+                            profileProvider.isLoadingSaved) &&
+                        profileProvider.savedReels.isEmpty &&
+                        profileProvider.savedPosts.isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 40),
                         child: Center(
@@ -440,7 +450,10 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
 
                   // Tab 3: Liked Grid & Posts
                   if (_selectedTabIndex == 3) ...<Widget>[
-                    if (profileProvider.isLoadingLiked)
+                    if ((!profileProvider.hasFetchedLiked ||
+                            profileProvider.isLoadingLiked) &&
+                        profileProvider.likedReels.isEmpty &&
+                        profileProvider.likedPosts.isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 40),
                         child: Center(

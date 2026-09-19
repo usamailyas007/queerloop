@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_snackbar.dart';
+import '../provider/profile_provider.dart';
+import '../services/user_relationship_service.dart';
 import '../../messages/widgets/block_user_modal_dialog.dart';
 import '../../messages/widgets/mute_duration_bottom_sheet.dart';
 import '../../messages/widgets/report_conversation_bottom_sheet.dart';
@@ -263,11 +267,33 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
               title: 'Mute $cleanHandle',
               subtitle: 'Stay following, stop seeing posts',
               onTap: () {
+                final ProfileProvider profileProvider =
+                    context.read<ProfileProvider>();
+                final ApiClient apiClient = context.read<ApiClient>();
                 Navigator.pop(context);
                 MuteDurationBottomSheet.show(
                   context,
                   username: username,
-                  onConfirmMute: (String duration) {},
+                  onConfirmMute: (String duration) async {
+                    String? targetId = userId;
+                    if (targetId == null || targetId.isEmpty) {
+                      final UserRelationshipService service =
+                          UserRelationshipService(apiClient);
+                      targetId = await service.resolveUserId(username);
+                    }
+                    if (targetId != null && targetId.isNotEmpty) {
+                      int hours = 8;
+                      if (duration.contains('24')) hours = 24;
+                      if (duration.contains('7')) hours = 168;
+                      if (duration.contains('30')) hours = 720;
+                      await profileProvider.muteUser(
+                        targetId,
+                        username: username,
+                        scope: 'posts',
+                        durationHours: hours,
+                      );
+                    }
+                  },
                 );
               },
             ),
@@ -284,11 +310,38 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
               subtitle: 'They lose all contact with you',
               titleColor: AppColors.gradientCyan,
               onTap: () {
+                final ProfileProvider profileProvider =
+                    context.read<ProfileProvider>();
+                final ApiClient apiClient = context.read<ApiClient>();
                 Navigator.pop(context);
                 BlockUserModalDialog.show(
                   context,
                   username: username,
-                  onConfirmBlock: () {},
+                  onConfirmBlock: () async {
+                    String? targetId = userId;
+                    if (targetId == null || targetId.isEmpty) {
+                      final UserRelationshipService service =
+                          UserRelationshipService(apiClient);
+                      targetId = await service.resolveUserId(username);
+                    }
+                    if (targetId != null && targetId.isNotEmpty) {
+                      await profileProvider.blockUser(
+                        targetId,
+                        username: username,
+                      );
+                    }
+                  },
+                  onConfirmUnblock: () async {
+                    String? targetId = userId;
+                    if (targetId == null || targetId.isEmpty) {
+                      final UserRelationshipService service =
+                          UserRelationshipService(apiClient);
+                      targetId = await service.resolveUserId(username);
+                    }
+                    if (targetId != null && targetId.isNotEmpty) {
+                      await profileProvider.unblockUser(targetId);
+                    }
+                  },
                 );
               },
             ),

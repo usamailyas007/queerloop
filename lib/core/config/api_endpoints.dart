@@ -24,6 +24,43 @@ abstract final class ApiEndpoints {
   static String user(String id) => '/users/$id';
   static const String usernameAvailable = '/users/username-available';
 
+  // ── User Relationships ────────────────────────────────────────────────────
+  /// Follow user (A follows B, or request to follow private account): POST /users/:id/follow
+  /// Unfollow user: DELETE /users/:id/follow
+  static String userFollow(String userId) => '/users/$userId/follow';
+
+  /// List user's followers (public): GET /users/:id/followers
+  static String userFollowers(String userId) => '/users/$userId/followers';
+
+  /// List user's following (public): GET /users/:id/following
+  static String userFollowing(String userId) => '/users/$userId/following';
+
+  /// Block user: POST /users/:id/block · Unblock: DELETE /users/:id/block
+  static String userBlock(String userId) => '/users/$userId/block';
+
+  /// Mute user: POST /users/:id/mute · Unmute: DELETE /users/:id/mute
+  static String userMute(String userId) => '/users/$userId/mute';
+
+  /// Remove user as a follower: DELETE /users/me/followers/:userId
+  static String userRemoveFollower(String userId) => '/users/me/followers/$userId';
+
+  /// List current user's follow requests: GET /users/me/follow-requests
+  static const String userFollowRequests = '/users/me/follow-requests';
+
+  /// Accept follow request: POST /users/me/follow-requests/:id/accept
+  static String userFollowRequestAccept(String requestId) =>
+      '/users/me/follow-requests/$requestId/accept';
+
+  /// Reject follow request: POST /users/me/follow-requests/:id/reject
+  static String userFollowRequestReject(String requestId) =>
+      '/users/me/follow-requests/$requestId/reject';
+
+  /// List current user's muted accounts: GET /users/me/muted
+  static const String userMuted = '/users/me/muted';
+
+  /// List current user's blocked accounts: GET /users/me/blocked
+  static const String userBlocked = '/users/me/blocked';
+
   // ── Admin ─────────────────────────────────────────────────────────────────
   /// Paginated account list for the admin console. GET /admin/users
   static const String adminUsers = '/admin/users';
@@ -102,9 +139,19 @@ abstract final class ApiEndpoints {
   /// Published announcement feed. GET /engagement/announcements
   static const String engagementAnnouncements = '/engagement/announcements';
 
+  /// Current Conversation of the Day. GET /engagement/cotd/current
+  static const String cotdCurrent = '/engagement/cotd/current';
+
+  /// Submit an answer to a CotD question. POST /engagement/cotd/:id/answers
+  static String cotdAnswerSubmit(String questionId) =>
+      '/engagement/cotd/$questionId/answers';
+
   /// Answers to a conversation-of-the-day question. GET /engagement/cotd/:id/answers
   static String cotdAnswers(String questionId) =>
       '/engagement/cotd/$questionId/answers';
+
+  /// Single spotlight detail. GET /engagement/spotlights/:id
+  static String engagementSpotlight(String id) => '/engagement/spotlights/$id';
 
   /// Community spotlight feed. GET /engagement/spotlights (optional ?search=)
   static const String engagementSpotlights = '/engagement/spotlights';
