@@ -1,48 +1,116 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../profile/provider/profile_provider.dart';
+import '../../profile_setup/models/community_model.dart';
+import '../../profile_setup/provider/profile_setup_provider.dart';
 
 class FilterCommunitiesBottomSheet extends StatefulWidget {
   const FilterCommunitiesBottomSheet({
     required this.selectedCommunity,
     required this.onApply,
+    this.communities,
     super.key,
   });
 
   final String selectedCommunity;
-  final ValueChanged<String> onApply;
+  final void Function(String communityName, String? communityId) onApply;
+  final List<CommunityModel>? communities;
 
   @override
   State<FilterCommunitiesBottomSheet> createState() =>
       _FilterCommunitiesBottomSheetState();
 }
 
+class _CommunityFilterOption {
+  const _CommunityFilterOption({required this.name, this.id});
+  final String name;
+  final String? id;
+}
+
 class _FilterCommunitiesBottomSheetState
     extends State<FilterCommunitiesBottomSheet> {
-  late String _selected;
-
-  final List<String> _communitiesList = <String>[
-    'All Communities',
-    'Lesbian',
-    'Bisexual',
-    'Non-binary',
-    'Gay',
-    'Queer',
-    'Transgender',
-  ];
+  late String _selectedName;
+  String? _selectedId;
 
   @override
   void initState() {
     super.initState();
-    _selected = widget.selectedCommunity;
+    _selectedName = widget.selectedCommunity;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        try {
+          final ProfileSetupProvider setup = context.read<ProfileSetupProvider>();
+          if (setup.allCommunities.isEmpty) {
+            setup.fetchCommunities();
+          }
+        } catch (_) {}
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+
+    final List<CommunityModel> availableComms = <CommunityModel>[];
+    if (widget.communities != null && widget.communities!.isNotEmpty) {
+      availableComms.addAll(widget.communities!);
+    }
+    try {
+      final ProfileSetupProvider setup = context.watch<ProfileSetupProvider>();
+      for (final CommunityModel c in setup.allCommunities) {
+        if (!availableComms.any((existing) => existing.id == c.id)) {
+          availableComms.add(c);
+        }
+      }
+    } catch (_) {}
+    try {
+      final ProfileProvider profile = context.watch<ProfileProvider>();
+      for (final CommunityModel c in profile.userCommunities) {
+        if (!availableComms.any((existing) => existing.id == c.id)) {
+          availableComms.add(c);
+        }
+      }
+    } catch (_) {}
+
+    final List<_CommunityFilterOption> options = <_CommunityFilterOption>[
+      const _CommunityFilterOption(name: 'All Communities', id: null),
+    ];
+    for (final CommunityModel c in availableComms) {
+      if (c.name.trim().isNotEmpty &&
+          !options.any((o) => o.name.toLowerCase() == c.name.toLowerCase())) {
+        options.add(_CommunityFilterOption(name: c.name, id: c.id));
+      }
+    }
+    if (options.length == 1) {
+      const List<String> defaultNames = <String>[
+        'Lesbian',
+        'Bisexual',
+        'Non-binary',
+        'Gay',
+        'Queer',
+        'Transgender',
+      ];
+      for (final String n in defaultNames) {
+        options.add(_CommunityFilterOption(name: n, id: null));
+      }
+    }
+
+    if (_selectedId == null &&
+        _selectedName.toLowerCase() != 'all communities') {
+      final int initialIdx = options.indexWhere(
+        (o) => o.name.toLowerCase() == _selectedName.toLowerCase(),
+      );
+      if (initialIdx != -1 && options[initialIdx].id != null) {
+        _selectedId = options[initialIdx].id;
+      }
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -119,17 +187,19 @@ class _FilterCommunitiesBottomSheetState
               ),
               child: ListView.separated(
                 shrinkWrap: true,
-                itemCount: _communitiesList.length,
+                itemCount: options.length,
                 separatorBuilder: (context, index) =>
                     const SizedBox(height: AppSpacing.sm),
                 itemBuilder: (context, index) {
-                  final String communityName = _communitiesList[index];
-                  final bool isSelected = _selected == communityName;
+                  final _CommunityFilterOption option = options[index];
+                  final bool isSelected =
+                      _selectedName.toLowerCase() == option.name.toLowerCase();
 
                   return GestureDetector(
                     onTap: () {
                       setState(() {
-                        _selected = communityName;
+                        _selectedName = option.name;
+                        _selectedId = option.id;
                       });
                     },
                     child: AnimatedContainer(
@@ -154,7 +224,7 @@ class _FilterCommunitiesBottomSheetState
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: <Widget>[
                           Text(
-                            communityName,
+                            option.name,
                             style: TextStyle(
                               color: context.themeTextPrimary,
                               fontSize: 14,
@@ -183,7 +253,7 @@ class _FilterCommunitiesBottomSheetState
             AppGradientButton(
               text: l10n.filterApplyBtn,
               onPressed: () {
-                widget.onApply(_selected);
+                widget.onApply(_selectedName, _selectedId);
                 Navigator.pop(context);
               },
             ),

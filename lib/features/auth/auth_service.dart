@@ -70,6 +70,7 @@ class AuthService {
     required String email,
     required String password,
   }) async {
+    _client.authToken = null;
     if (AppConfig.useMockApi) {
       debugPrint('ℹ️ [AuthService] Mock API is ON. Returning mock register response.');
       return RegisterResponse(
@@ -106,6 +107,7 @@ class AuthService {
     bool staySignedIn = false,
     String? deviceLabel,
   }) async {
+    _client.authToken = null;
     if (AppConfig.useMockApi) {
       debugPrint('ℹ️ [AuthService] Mock API is ON. Returning mock verify session.');
       return _mockSession(email);
@@ -139,6 +141,7 @@ class AuthService {
   // Returns: { message }
 
   Future<void> resendEmailOtp(String email) async {
+    _client.authToken = null;
     if (AppConfig.useMockApi) {
       debugPrint('ℹ️ [AuthService] Mock resendEmailOtp for $email');
       return;
@@ -158,6 +161,7 @@ class AuthService {
     required String email,
     required String password,
   }) async {
+    _client.authToken = null;
     if (AppConfig.useMockApi) {
       debugPrint('ℹ️ [AuthService] Mock API is ON. Returning mock sign-in session.');
       return _mockSession(email);
@@ -391,6 +395,7 @@ class AuthService {
   Future<void> clearAllLocalData() async {
     debugPrint(
         '🧹 [AuthService] Clearing authentication credentials and temporary cache...');
+    _client.authToken = null;
     _inMemoryAccessToken = null;
     _inMemoryRefreshToken = null;
     try {

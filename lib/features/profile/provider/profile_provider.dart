@@ -30,6 +30,14 @@ class ProfileProvider extends ChangeNotifier {
   List<CommunityModel> _userCommunities = <CommunityModel>[];
   bool _isLoadingContent = false;
 
+  List<PostItemModel> _likedPosts = <PostItemModel>[];
+  List<ReelItemModel> _likedReels = <ReelItemModel>[];
+  bool _isLoadingLiked = false;
+
+  List<PostItemModel> _savedPosts = <PostItemModel>[];
+  List<ReelItemModel> _savedReels = <ReelItemModel>[];
+  bool _isLoadingSaved = false;
+
   UserProfile? get profile => _profile;
   bool get isBusy => _isBusy;
   String? get error => _error;
@@ -39,6 +47,14 @@ class ProfileProvider extends ChangeNotifier {
   List<ReelItemModel> get userReels => _userReels;
   List<CommunityModel> get userCommunities => _userCommunities;
   bool get isLoadingContent => _isLoadingContent;
+
+  List<PostItemModel> get likedPosts => _likedPosts;
+  List<ReelItemModel> get likedReels => _likedReels;
+  bool get isLoadingLiked => _isLoadingLiked;
+
+  List<PostItemModel> get savedPosts => _savedPosts;
+  List<ReelItemModel> get savedReels => _savedReels;
+  bool get isLoadingSaved => _isLoadingSaved;
 
   String get displayName => _profile?.displayName ?? 'Ash Mercado';
   String get username => _profile?.username ?? 'ashinorbit';
@@ -242,6 +258,98 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
+  Future<_ContentBatch> _processPosts(
+    List<PostResponseModel> posts, {
+    String? fallbackAuthorId,
+    bool markSaved = false,
+  }) async {
+    final List<PostItemModel> userPostsList = <PostItemModel>[];
+    final List<ReelItemModel> userReelsList = <ReelItemModel>[];
+
+    for (final PostResponseModel post in posts) {
+      String? mediaUrl;
+      String? thumbnailUrl;
+
+      if (post.mediaRefs.isNotEmpty) {
+        final String mediaId = post.mediaRefs.first;
+        try {
+          final dynamic mediaData =
+              await _client.get(ApiEndpoints.mediaStatus(mediaId));
+          if (mediaData is Map<String, dynamic>) {
+            mediaUrl = mediaData['url'] as String? ??
+                mediaData['downloadUrl'] as String?;
+            thumbnailUrl = mediaData['thumbnailUrl'] as String?;
+          }
+        } catch (e) {
+          debugPrint('⚠️ [ProfileProvider] Could not resolve media $mediaId: $e');
+        }
+      }
+
+      final String type = post.type.toUpperCase().trim();
+      final String authorUsername =
+          post.authorName ?? _profile?.username ?? 'you';
+      final String formattedUsername = authorUsername.startsWith('@')
+          ? authorUsername
+          : '@$authorUsername';
+      final String avatar = (post.authorAvatar != null &&
+              post.authorAvatar!.isNotEmpty)
+          ? post.authorAvatar!
+          : ((_profile?.avatarUrl != null && _profile!.avatarUrl!.isNotEmpty)
+              ? _profile!.avatarUrl!
+              : AppImages.user1);
+
+      if (type == 'VIDEO') {
+        userReelsList.add(
+          ReelItemModel(
+            id: post.id,
+            authorId: post.authorId ?? fallbackAuthorId ?? _cachedUserId,
+            authorDisplayName: post.authorDisplayName,
+            username: formattedUsername,
+            pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
+                ? _formatTime(post.createdAt)
+                : 'just now',
+            avatarAsset: avatar,
+            videoAsset: '',
+            videoUrl: mediaUrl,
+            thumbnailUrl: thumbnailUrl,
+            caption: post.body.isNotEmpty ? post.body : post.caption,
+            likesCount: post.likesCount,
+            commentsCount: post.commentsCount,
+            isLiked: post.isLiked,
+            isSaved: markSaved || post.isSaved,
+            tags: post.tags,
+            durationText:
+                (post.duration != null && post.duration!.isNotEmpty)
+                    ? post.duration!
+                    : '0:30',
+          ),
+        );
+      } else {
+        // PHOTO or TEXT
+        userPostsList.add(
+          PostItemModel(
+            id: post.id,
+            authorId: post.authorId ?? fallbackAuthorId ?? _cachedUserId,
+            username: formattedUsername,
+            pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
+                ? _formatTime(post.createdAt)
+                : 'just now',
+            avatarAsset: avatar,
+            content: post.body.isNotEmpty ? post.body : post.caption,
+            likesCount: post.likesCount,
+            commentsCount: post.commentsCount,
+            isLiked: post.isLiked,
+            isSaved: markSaved || post.isSaved,
+            postImageUrl: mediaUrl,
+            postType: type,
+          ),
+        );
+      }
+    }
+
+    return _ContentBatch(posts: userPostsList, reels: userReelsList);
+  }
+
   Future<void> fetchUserContent(String userId) async {
     if (userId.isEmpty) return;
 
@@ -252,92 +360,78 @@ class ProfileProvider extends ChangeNotifier {
       final PostContentService service = PostContentService(_client);
       final List<PostResponseModel> posts =
           await service.getPostsByAuthor(userId);
+      final _ContentBatch batch =
+          await _processPosts(posts, fallbackAuthorId: userId);
 
-      final List<PostItemModel> userPostsList = <PostItemModel>[];
-      final List<ReelItemModel> userReelsList = <ReelItemModel>[];
-
-      for (final PostResponseModel post in posts) {
-        String? mediaUrl;
-        String? thumbnailUrl;
-
-        if (post.mediaRefs.isNotEmpty) {
-          final String mediaId = post.mediaRefs.first;
-          try {
-            final dynamic mediaData =
-                await _client.get(ApiEndpoints.mediaStatus(mediaId));
-            if (mediaData is Map<String, dynamic>) {
-              mediaUrl = mediaData['url'] as String? ??
-                  mediaData['downloadUrl'] as String?;
-              thumbnailUrl = mediaData['thumbnailUrl'] as String?;
-            }
-          } catch (e) {
-            debugPrint('⚠️ [ProfileProvider] Could not resolve media $mediaId: $e');
-          }
-        }
-
-        final String type = post.type.toUpperCase().trim();
-        final String authorUsername = _profile?.username ?? 'you';
-        final String formattedUsername = authorUsername.startsWith('@')
-            ? authorUsername
-            : '@$authorUsername';
-        final String avatar =
-            (_profile?.avatarUrl != null && _profile!.avatarUrl!.isNotEmpty)
-                ? _profile!.avatarUrl!
-                : AppImages.user1;
-
-        if (type == 'VIDEO') {
-          userReelsList.add(
-            ReelItemModel(
-              id: post.id,
-              authorId: post.authorId ?? userId,
-              username: formattedUsername,
-              pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
-                  ? _formatTime(post.createdAt)
-                  : 'just now',
-              avatarAsset: avatar,
-              videoAsset: '',
-              videoUrl: mediaUrl,
-              thumbnailUrl: thumbnailUrl,
-              caption: post.body.isNotEmpty ? post.body : post.caption,
-              likesCount: post.likesCount,
-              commentsCount: post.commentsCount,
-              isLiked: post.isLiked,
-              tags: post.tags,
-              durationText:
-                  (post.duration != null && post.duration!.isNotEmpty)
-                      ? post.duration!
-                      : '0:30',
-            ),
-          );
-        } else {
-          // PHOTO or TEXT
-          userPostsList.add(
-            PostItemModel(
-              id: post.id,
-              authorId: post.authorId ?? userId,
-              username: formattedUsername,
-              pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
-                  ? _formatTime(post.createdAt)
-                  : 'just now',
-              avatarAsset: avatar,
-              content: post.body.isNotEmpty ? post.body : post.caption,
-              likesCount: post.likesCount,
-              commentsCount: post.commentsCount,
-              isLiked: post.isLiked,
-              postImageUrl: mediaUrl,
-              postType: type,
-            ),
-          );
-        }
-      }
-
-      _userPosts = userPostsList;
-      _userReels = userReelsList;
+      _userPosts = batch.posts;
+      _userReels = batch.reels;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Error fetching user content: $e');
     } finally {
       _isLoadingContent = false;
       notifyListeners();
+    }
+  }
+
+  /// List User's Liked Posts. GET /users/me/likes
+  Future<void> fetchLikedPosts({bool force = false}) async {
+    if (!force && (_likedPosts.isNotEmpty || _likedReels.isNotEmpty)) return;
+    _isLoadingLiked = true;
+    notifyListeners();
+
+    try {
+      final PostContentService service = PostContentService(_client);
+      final List<PostResponseModel> posts = await service.getLikedPosts();
+      final _ContentBatch batch = await _processPosts(posts);
+
+      _likedPosts = batch.posts;
+      _likedReels = batch.reels;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Error fetching liked posts: $e');
+    } finally {
+      _isLoadingLiked = false;
+      notifyListeners();
+    }
+  }
+
+  /// List User's Saved Posts. GET /users/me/saved
+  Future<void> fetchSavedPosts({bool force = false}) async {
+    if (!force && (_savedPosts.isNotEmpty || _savedReels.isNotEmpty)) return;
+    _isLoadingSaved = true;
+    notifyListeners();
+
+    try {
+      final PostContentService service = PostContentService(_client);
+      final List<PostResponseModel> posts = await service.getSavedPosts();
+      final _ContentBatch batch = await _processPosts(posts, markSaved: true);
+
+      _savedPosts = batch.posts;
+      _savedReels = batch.reels;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Error fetching saved posts: $e');
+    } finally {
+      _isLoadingSaved = false;
+      notifyListeners();
+    }
+  }
+
+  /// Delete own Post or Video Post. DELETE /posts/:id
+  Future<bool> deletePost(String postId) async {
+    _userPosts.removeWhere((PostItemModel p) => p.id == postId);
+    _userReels.removeWhere((ReelItemModel r) => r.id == postId);
+    _likedPosts.removeWhere((PostItemModel p) => p.id == postId);
+    _likedReels.removeWhere((ReelItemModel r) => r.id == postId);
+    _savedPosts.removeWhere((PostItemModel p) => p.id == postId);
+    _savedReels.removeWhere((ReelItemModel r) => r.id == postId);
+    notifyListeners();
+
+    try {
+      final PostContentService service = PostContentService(_client);
+      await service.deletePost(postId);
+      return true;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Error deleting post: $e');
+      return false;
     }
   }
 
@@ -527,4 +621,10 @@ class ProfileProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+}
+
+class _ContentBatch {
+  const _ContentBatch({required this.posts, required this.reels});
+  final List<PostItemModel> posts;
+  final List<ReelItemModel> reels;
 }

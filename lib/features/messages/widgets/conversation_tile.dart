@@ -35,11 +35,15 @@ class ConversationTile extends StatelessWidget {
                   context,
                   MaterialPageRoute<void>(
                     builder: (_) => UserProfileScreen(
+                      userId: conversation.participantId,
                       username: conversation.username.replaceAll('@', ''),
-                      name: conversation.username
-                          .replaceAll('@', '')
-                          .split('.')
-                          .first,
+                      name: (conversation.displayName != null &&
+                              conversation.displayName!.isNotEmpty)
+                          ? conversation.displayName!
+                          : conversation.username
+                              .replaceAll('@', '')
+                              .split('.')
+                              .first,
                       avatarAsset: conversation.avatarAsset,
                     ),
                   ),
@@ -93,12 +97,16 @@ class ConversationTile extends StatelessWidget {
                 children: <Widget>[
                   Row(
                     children: <Widget>[
-                      Text(
-                        conversation.username,
-                        style: AppTextStyles.titleSmall.copyWith(
-                          color: context.themeTextPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
+                      Flexible(
+                        child: Text(
+                          conversation.username,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.titleSmall.copyWith(
+                            color: context.themeTextPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
                         ),
                       ),
                       if (conversation.isMuted) ...<Widget>[

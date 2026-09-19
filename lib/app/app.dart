@@ -12,8 +12,11 @@ import '../features/auth/auth_provider.dart';
 import '../features/create_post/provider/create_post_provider.dart';
 import '../features/create_post/services/media_upload_service.dart';
 import '../features/create_post/services/post_content_service.dart';
+import '../features/discover/provider/discover_provider.dart';
+import '../features/discover/services/discover_service.dart';
 import '../features/home/provider/home_feed_provider.dart';
 import '../features/messages/provider/messages_provider.dart';
+import '../features/messages/services/conversations_service.dart';
 import '../features/profile/provider/profile_provider.dart';
 import '../features/profile_setup/profile_setup_service.dart';
 import '../features/profile_setup/provider/profile_setup_provider.dart';
@@ -86,8 +89,28 @@ class App extends StatelessWidget {
             contentService: PostContentService(ctx.read<ApiClient>()),
           ),
         ),
-        ChangeNotifierProvider<MessagesProvider>(
-            create: (_) => MessagesProvider()),
+        Provider<ConversationsService>(
+          create: (BuildContext ctx) =>
+              ConversationsService(ctx.read<ApiClient>()),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, MessagesProvider>(
+          create: (BuildContext ctx) => MessagesProvider(
+            service: ConversationsService(ctx.read<ApiClient>()),
+          ),
+          update: (BuildContext ctx, AuthProvider auth,
+              MessagesProvider? existing) {
+            final MessagesProvider provider = existing ??
+                MessagesProvider(
+                  service: ctx.read<ConversationsService>(),
+                  currentUserId: auth.userId,
+                );
+            provider.updateAuth(
+              userId: auth.userId,
+              service: ctx.read<ConversationsService>(),
+            );
+            return provider;
+          },
+        ),
         Provider<ReportService>(
           create: (BuildContext ctx) =>
               ReportService(ctx.read<ApiClient>()),
@@ -95,6 +118,15 @@ class App extends StatelessWidget {
         ChangeNotifierProvider<ReportProvider>(
           create: (BuildContext ctx) => ReportProvider(
             service: ctx.read<ReportService>(),
+          ),
+        ),
+        Provider<DiscoverService>(
+          create: (BuildContext ctx) =>
+              DiscoverService(ctx.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<DiscoverProvider>(
+          create: (BuildContext ctx) => DiscoverProvider(
+            discoverService: ctx.read<DiscoverService>(),
           ),
         ),
       ],
@@ -110,6 +142,7 @@ class App extends StatelessWidget {
             supportedLocales: AppLocalizations.supportedLocales,
             routes: AppRoutes.routes,
             onGenerateRoute: AppRoutes.onGenerateRoute,
+            navigatorObservers: <NavigatorObserver>[appRouteObserver],
             builder: (BuildContext context, Widget? child) {
               return GestureDetector(
                 behavior: HitTestBehavior.translucent,

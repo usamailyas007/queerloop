@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:video_player/video_player.dart';
 
 import 'package:provider/provider.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/widgets/app_follow_button.dart';
@@ -51,7 +53,7 @@ class ReelFeedCard extends StatefulWidget {
 }
 
 class _ReelFeedCardState extends State<ReelFeedCard>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver, RouteAware {
   // ── Video player ────────────────────────────────────────────────────────
   VideoPlayerController? _videoController;
   bool _videoInitialized = false;
@@ -62,6 +64,35 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   late AnimationController _animController;
   late Animation<double> _scaleAnim;
   bool _showDoubleTapHeart = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ModalRoute<void>? route = ModalRoute.of(context);
+    if (route != null) {
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPushNext() {
+    // A new route was pushed on top of this screen (e.g. SearchScreen, ProfileScreen, Comments)
+    _videoController?.pause();
+  }
+
+  @override
+  void didPopNext() {
+    // User returned to this screen
+    if (widget.isActive && !_isPaused && _videoInitialized && !_isDisposed) {
+      _videoController?.play();
+    }
+  }
+
+  @override
+  void didPop() {
+    // This route is being popped
+    _videoController?.pause();
+  }
 
   @override
   void initState() {
@@ -117,18 +148,27 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         if (mounted) {
           setState(() => _videoInitialized = true);
         }
-        if (widget.isActive && !_isPaused) {
+        if (widget.isActive && !_isPaused && !_isDisposed) {
           controller.play();
         } else {
           controller.pause();
         }
       } else {
         void onReady() {
-          if (!_isDisposed && mounted && controller.value.isInitialized) {
+          if (_isDisposed || !mounted) {
+            try {
+              controller.removeListener(onReady);
+              controller.pause();
+            } catch (_) {}
+            return;
+          }
+          if (controller.value.isInitialized) {
             controller.removeListener(onReady);
             setState(() => _videoInitialized = true);
-            if (widget.isActive && !_isPaused) {
+            if (widget.isActive && !_isPaused && !_isDisposed) {
               controller.play();
+            } else {
+              controller.pause();
             }
           }
         }
@@ -155,11 +195,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
 
   @override
   void deactivate() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_isDisposed && mounted) {
-        _videoController?.pause();
-      }
-    });
+    _videoController?.pause();
     super.deactivate();
   }
 
@@ -182,12 +218,12 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   @override
   void dispose() {
     _isDisposed = true;
-    WidgetsBinding.instance.removeObserver(this);
-    // Pause controller when swiping away without disposing instance managed by ReelVideoPreloader
     try {
-      if (_videoController?.value.isPlaying == true) {
-        _videoController?.pause();
-      }
+      appRouteObserver.unsubscribe(this);
+    } catch (_) {}
+    WidgetsBinding.instance.removeObserver(this);
+    try {
+      _videoController?.pause();
       _videoController = null;
     } catch (e) {
       debugPrint('Error pausing reel video: $e');
@@ -333,15 +369,11 @@ class _ReelFeedCardState extends State<ReelFeedCard>
               left: 0,
               right: 0,
               bottom: 0,
-              child: VideoProgressIndicator(
-                _videoController!,
-                allowScrubbing: true,
-                colors: VideoProgressColors(
-                  playedColor: AppColors.gradientPink,
-                  bufferedColor: Colors.white24,
-                  backgroundColor: Colors.white12,
-                ),
-                padding: EdgeInsets.zero,
+              child: _SafeVideoProgressIndicator(
+                controller: _videoController!,
+                playedColor: AppColors.gradientPink,
+                bufferedColor: Colors.white24,
+                backgroundColor: Colors.white12,
               ),
             ),
 
@@ -474,50 +506,41 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      // 1. Community Filter Tag (if active)
+                      // 1. Community Filter Button (taps to open FilterCommunitiesBottomSheet)
                       if (widget.showCommunityFilterTag) ...<Widget>[
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: AppColors.secondaryGradientButton,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Text(
-                            'Lesbian · community only',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
                         GestureDetector(
                           onTap: widget.onOpenFilterCommunities,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
+                              horizontal: 10,
                               vertical: 5,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.45),
+                              gradient: AppColors.secondaryGradientButton,
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.3),
-                              ),
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: AppColors.gradientCyan.withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: <Widget>[
+                                const Icon(
+                                  Icons.groups_rounded,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 5),
                                 Text(
                                   widget.selectedCommunity,
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                                 const SizedBox(width: 4),
@@ -608,6 +631,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                   children: <Widget>[
                     GestureDetector(
                       onTap: () {
+                        ReelVideoPreloader.instance.pauseAll();
                         final AuthProvider auth = context.read<AuthProvider>();
                         final String? currentUserId = auth.userId;
                         final String? authorId = item.authorId;
@@ -631,10 +655,13 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                               builder: (_) => UserProfileScreen(
                                 userId: item.authorId,
                                 username: item.username.replaceAll('@', ''),
-                                name: item.username
-                                    .replaceAll('@', '')
-                                    .split('.')
-                                    .first,
+                                name: (item.authorDisplayName != null &&
+                                        item.authorDisplayName!.isNotEmpty)
+                                    ? item.authorDisplayName!
+                                    : item.username
+                                        .replaceAll('@', '')
+                                        .split('.')
+                                        .first,
                                 avatarAsset: item.avatarAsset,
                               ),
                             ),
@@ -736,6 +763,146 @@ class _RightActionButton extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SafeVideoProgressIndicator extends StatefulWidget {
+  const _SafeVideoProgressIndicator({
+    required this.controller,
+    required this.playedColor,
+    required this.bufferedColor,
+    required this.backgroundColor,
+  });
+
+  final VideoPlayerController controller;
+  final Color playedColor;
+  final Color bufferedColor;
+  final Color backgroundColor;
+
+  @override
+  State<_SafeVideoProgressIndicator> createState() =>
+      _SafeVideoProgressIndicatorState();
+}
+
+class _SafeVideoProgressIndicatorState
+    extends State<_SafeVideoProgressIndicator> {
+  VoidCallback? _listener;
+
+  @override
+  void initState() {
+    super.initState();
+    _attachListener();
+  }
+
+  @override
+  void didUpdateWidget(_SafeVideoProgressIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      _detachListener(oldWidget.controller);
+      _attachListener();
+    }
+  }
+
+  void _attachListener() {
+    _listener = () {
+      if (!mounted) return;
+      final SchedulerPhase phase = SchedulerBinding.instance.schedulerPhase;
+      if (phase == SchedulerPhase.persistentCallbacks ||
+          phase == SchedulerPhase.midFrameMicrotasks) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() {});
+        });
+      } else {
+        setState(() {});
+      }
+    };
+    widget.controller.addListener(_listener!);
+  }
+
+  void _detachListener(VideoPlayerController ctrl) {
+    if (_listener != null) {
+      try {
+        ctrl.removeListener(_listener!);
+      } catch (_) {}
+    }
+  }
+
+  @override
+  void dispose() {
+    _detachListener(widget.controller);
+    super.dispose();
+  }
+
+  void _seekToRelativePosition(Offset globalPosition) {
+    final RenderObject? renderBox = context.findRenderObject();
+    if (renderBox is! RenderBox) return;
+    final Offset localPosition = renderBox.globalToLocal(globalPosition);
+    final double relative =
+        (localPosition.dx / renderBox.size.width).clamp(0.0, 1.0);
+    final Duration duration = widget.controller.value.duration;
+    if (duration > Duration.zero) {
+      widget.controller.seekTo(duration * relative);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final VideoPlayerValue val = widget.controller.value;
+    final int durationMs = val.duration.inMilliseconds;
+    final int positionMs = val.position.inMilliseconds;
+
+    final double progress = (durationMs > 0)
+        ? (positionMs / durationMs).clamp(0.0, 1.0)
+        : 0.0;
+
+    double maxBuffered = 0.0;
+    if (durationMs > 0 && val.buffered.isNotEmpty) {
+      for (final DurationRange range in val.buffered) {
+        final double end = range.end.inMilliseconds / durationMs;
+        if (end > maxBuffered) maxBuffered = end.clamp(0.0, 1.0);
+      }
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragDown: (DragDownDetails details) =>
+          _seekToRelativePosition(details.globalPosition),
+      onHorizontalDragUpdate: (DragUpdateDetails details) =>
+          _seekToRelativePosition(details.globalPosition),
+      child: Container(
+        height: 14,
+        alignment: Alignment.bottomCenter,
+        color: Colors.transparent,
+        child: SizedBox(
+          height: 2.5,
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final double width = constraints.maxWidth;
+              return Stack(
+                children: <Widget>[
+                  // Background track
+                  Container(
+                    width: width,
+                    color: widget.backgroundColor,
+                  ),
+                  // Buffered track
+                  if (maxBuffered > 0)
+                    Container(
+                      width: width * maxBuffered,
+                      color: widget.bufferedColor,
+                    ),
+                  // Played progress track
+                  Container(
+                    width: width * progress,
+                    color: widget.playedColor,
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }

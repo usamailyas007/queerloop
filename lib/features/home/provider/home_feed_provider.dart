@@ -12,6 +12,12 @@ import '../services/reel_video_preloader.dart';
 enum TopTab { following, forYou, communities }
 enum SubMode { reels, posts }
 
+class _FeedBatch {
+  const _FeedBatch({required this.reels, required this.posts});
+  final List<ReelItemModel> reels;
+  final List<PostItemModel> posts;
+}
+
 class HomeFeedProvider extends ChangeNotifier {
   HomeFeedProvider({
     PostContentService? contentService,
@@ -32,14 +38,51 @@ class HomeFeedProvider extends ChangeNotifier {
   TopTab _activeTopTab = TopTab.forYou;
   SubMode _activeSubMode = SubMode.reels;
   String _selectedCommunityFilter = 'All Communities';
-  bool _isLoadingFeed = true;
+  String? _selectedCommunityId;
+
+  static final List<PostItemModel> _defaultForYouPosts = <PostItemModel>[
+    const PostItemModel(
+      id: 'post_1',
+      username: '@theo.vance',
+      pronounsTime: 'he/him · 18m',
+      avatarAsset: AppImages.user4,
+      content:
+          'Told my grandma about Dev over the phone and she said "finally, you sounded lonely in December." Eleven months of rehearsing a speech for nothing.',
+      likesCount: 5600,
+      commentsCount: 311,
+      postImageAsset: AppImages.forYouImg,
+      isLiked: false,
+    ),
+    const PostItemModel(
+      id: 'post_2',
+      username: '@nadia.builds',
+      pronounsTime: 'she/her · 1h',
+      avatarAsset: AppImages.user1,
+      content:
+          'Reminder that the Tuesday support call is open to anyone, camera off is normal, and nobody has to speak.',
+      likesCount: 1200,
+      commentsCount: 311,
+      isLiked: false,
+    ),
+  ];
+
+  // Tab-specific feed stores to keep tabs independent and smooth
+  final List<ReelItemModel> _forYouReels = <ReelItemModel>[];
+  final List<PostItemModel> _forYouPosts =
+      List<PostItemModel>.from(_defaultForYouPosts);
+
+  final List<ReelItemModel> _followingReels = <ReelItemModel>[];
+  final List<PostItemModel> _followingPosts = <PostItemModel>[];
+
+  final List<ReelItemModel> _communityReels = <ReelItemModel>[];
+  final List<PostItemModel> _communityPosts = <PostItemModel>[];
+
+  bool _isLoadingForYou = true;
+  bool _isLoadingFollowing = false;
+  bool _isLoadingCommunities = false;
 
   // In-memory cache for resolved media URLs to prevent duplicate CDN fetches
   final Map<String, MediaUploadResult> _mediaCache = <String, MediaUploadResult>{};
-
-  // Live Feed Lists — empty initially, populated only from backend API
-  final List<ReelItemModel> _reels = <ReelItemModel>[];
-  final List<PostItemModel> _posts = <PostItemModel>[];
 
   // Getters
   String? get currentUserId => _currentUserId;
@@ -48,7 +91,18 @@ class HomeFeedProvider extends ChangeNotifier {
   TopTab get activeTopTab => _activeTopTab;
   SubMode get activeSubMode => _activeSubMode;
   String get selectedCommunityFilter => _selectedCommunityFilter;
-  bool get isLoadingFeed => _isLoadingFeed;
+  String? get selectedCommunityId => _selectedCommunityId;
+
+  bool get isLoadingFeed {
+    switch (_activeTopTab) {
+      case TopTab.following:
+        return _isLoadingFollowing;
+      case TopTab.communities:
+        return _isLoadingCommunities;
+      case TopTab.forYou:
+        return _isLoadingForYou;
+    }
+  }
 
   String _prefsKeyForUser(String userId) => 'user_liked_posts_$userId';
 
@@ -75,27 +129,40 @@ class HomeFeedProvider extends ChangeNotifier {
     _syncInMemLikedState();
     notifyListeners();
 
-    // Refresh feed to fetch latest like counts
-    await loadFeed();
+    // Refresh active feed to fetch latest like counts
+    await loadFeed(force: true);
   }
 
   void _syncInMemLikedState() {
-    for (int i = 0; i < _reels.length; i++) {
-      final ReelItemModel r = _reels[i];
-      final bool shouldBeLiked =
-          _currentUserId != null && _userLikedPostIds.contains(r.id);
-      if (r.isLiked != shouldBeLiked) {
-        _reels[i] = r.copyWith(isLiked: shouldBeLiked);
+    void syncReels(List<ReelItemModel> list) {
+      for (int i = 0; i < list.length; i++) {
+        final ReelItemModel r = list[i];
+        final bool shouldBeLiked =
+            _currentUserId != null && _userLikedPostIds.contains(r.id);
+        if (r.isLiked != shouldBeLiked) {
+          list[i] = r.copyWith(isLiked: shouldBeLiked);
+        }
       }
     }
-    for (int i = 0; i < _posts.length; i++) {
-      final PostItemModel p = _posts[i];
-      final bool shouldBeLiked =
-          _currentUserId != null && _userLikedPostIds.contains(p.id);
-      if (p.isLiked != shouldBeLiked) {
-        _posts[i] = p.copyWith(isLiked: shouldBeLiked);
+
+    void syncPosts(List<PostItemModel> list) {
+      for (int i = 0; i < list.length; i++) {
+        final PostItemModel p = list[i];
+        final bool shouldBeLiked =
+            _currentUserId != null && _userLikedPostIds.contains(p.id);
+        if (p.isLiked != shouldBeLiked) {
+          list[i] = p.copyWith(isLiked: shouldBeLiked);
+        }
       }
     }
+
+    syncReels(_forYouReels);
+    syncReels(_followingReels);
+    syncReels(_communityReels);
+
+    syncPosts(_forYouPosts);
+    syncPosts(_followingPosts);
+    syncPosts(_communityPosts);
   }
 
   Future<void> _persistUserLikes() async {
@@ -112,23 +179,31 @@ class HomeFeedProvider extends ChangeNotifier {
   }
 
   List<ReelItemModel> get reels {
-    if (_activeTopTab == TopTab.following) {
-      final List<ReelItemModel> following =
-          _reels.where((r) => r.isFollowing).toList();
-      return following.isNotEmpty ? following : _reels;
-    } else if (_activeTopTab == TopTab.communities) {
-      final List<ReelItemModel> communityReels = _reels
-          .where((r) => r.tags.any((t) => t.toLowerCase().contains('community')))
-          .toList();
-      return communityReels.isNotEmpty ? communityReels : _reels;
+    switch (_activeTopTab) {
+      case TopTab.following:
+        return _followingReels;
+      case TopTab.communities:
+        return _communityReels;
+      case TopTab.forYou:
+        return _forYouReels;
     }
-    return _reels;
   }
 
-  List<PostItemModel> get posts => List<PostItemModel>.unmodifiable(
-      _posts.where((p) => p.postType.toUpperCase().trim() != 'VIDEO'));
+  List<PostItemModel> get posts {
+    switch (_activeTopTab) {
+      case TopTab.following:
+        return List<PostItemModel>.unmodifiable(
+            _followingPosts.where((p) => p.postType.toUpperCase().trim() != 'VIDEO'));
+      case TopTab.communities:
+        return List<PostItemModel>.unmodifiable(
+            _communityPosts.where((p) => p.postType.toUpperCase().trim() != 'VIDEO'));
+      case TopTab.forYou:
+        return List<PostItemModel>.unmodifiable(
+            _forYouPosts.where((p) => p.postType.toUpperCase().trim() != 'VIDEO'));
+    }
+  }
 
-  bool get isFollowingEmpty => false;
+  bool get isFollowingEmpty => _followingReels.isEmpty && _followingPosts.isEmpty;
 
   void updateServices({
     PostContentService? contentService,
@@ -138,224 +213,330 @@ class HomeFeedProvider extends ChangeNotifier {
     if (mediaService != null) _mediaService = mediaService;
   }
 
-  // ── Load Feed from Content Service ─────────────────────────────────────────
-  Future<void> loadFeed() async {
+  // ── Helpers to Build Reel & Post Models from Backend Response ──────────────
+  Future<ReelItemModel> _buildReelItem(PostResponseModel post) async {
+    String? videoUrl;
+    String? thumbnailUrl;
+
+    if (post.mediaRefs.isNotEmpty && _mediaService != null) {
+      final String mediaId = post.mediaRefs.first;
+      MediaUploadResult? media = _mediaCache[mediaId];
+      if (media == null) {
+        try {
+          media = await _mediaService!.getMediaStatus(mediaId);
+          _mediaCache[mediaId] = media;
+        } catch (e) {
+          debugPrint('⚠️ [HomeFeed] Could not resolve reel media $mediaId: $e');
+        }
+      }
+      videoUrl = media?.url ?? media?.downloadUrl;
+      thumbnailUrl = media?.thumbnailUrl;
+    }
+
+    final bool isLiked = _currentUserId != null &&
+        (_userLikedPostIds.contains(post.id) || post.isLiked);
+    if (isLiked && _currentUserId != null) {
+      _userLikedPostIds.add(post.id);
+    }
+
+    final String resolvedUsername = (post.authorName != null && post.authorName!.isNotEmpty)
+        ? (post.authorName!.startsWith('@') ? post.authorName! : '@${post.authorName!}')
+        : (post.authorId != null && post.authorId!.length >= 6
+            ? '@user_${post.authorId!.substring(0, 6)}'
+            : (post.id.length >= 6 ? '@user_${post.id.substring(0, 6)}' : '@creator'));
+
+    final String resolvedAvatar = (post.authorAvatar != null && post.authorAvatar!.isNotEmpty)
+        ? post.authorAvatar!
+        : AppImages.user1;
+
+    return ReelItemModel(
+      id: post.id,
+      authorId: post.authorId,
+      authorDisplayName: post.authorDisplayName,
+      username: resolvedUsername,
+      pronounsTime: _formatTime(post.createdAt),
+      avatarAsset: resolvedAvatar,
+      videoAsset: '',
+      videoUrl: videoUrl,
+      thumbnailUrl: thumbnailUrl,
+      caption: post.body.isNotEmpty ? post.body : post.caption,
+      likesCount: post.likesCount,
+      commentsCount: post.commentsCount,
+      isLiked: isLiked,
+      tags: post.tags,
+      communityId: post.communityId,
+      durationText: (post.duration != null && post.duration!.isNotEmpty)
+          ? post.duration!
+          : '0:30',
+    );
+  }
+
+  Future<PostItemModel> _buildPostItem(PostResponseModel post) async {
+    String? imageUrl;
+
+    if (post.mediaRefs.isNotEmpty && _mediaService != null) {
+      final String mediaId = post.mediaRefs.first;
+      MediaUploadResult? media = _mediaCache[mediaId];
+      if (media == null) {
+        try {
+          media = await _mediaService!.getMediaStatus(mediaId);
+          _mediaCache[mediaId] = media;
+        } catch (e) {
+          debugPrint('⚠️ [HomeFeed] Could not resolve post media $mediaId: $e');
+        }
+      }
+      imageUrl = media?.url ?? media?.downloadUrl ?? media?.thumbnailUrl;
+    }
+
+    final bool isLiked = _currentUserId != null &&
+        (_userLikedPostIds.contains(post.id) || post.isLiked);
+    if (isLiked && _currentUserId != null) {
+      _userLikedPostIds.add(post.id);
+    }
+
+    final String resolvedPostUsername = (post.authorName != null && post.authorName!.isNotEmpty)
+        ? (post.authorName!.startsWith('@') ? post.authorName! : '@${post.authorName!}')
+        : (post.authorId != null && post.authorId!.length >= 6
+            ? '@user_${post.authorId!.substring(0, 6)}'
+            : (post.id.length >= 6 ? '@user_${post.id.substring(0, 6)}' : '@creator'));
+
+    final String resolvedPostAvatar = (post.authorAvatar != null && post.authorAvatar!.isNotEmpty)
+        ? post.authorAvatar!
+        : AppImages.user4;
+
+    return PostItemModel(
+      id: post.id,
+      authorId: post.authorId,
+      username: resolvedPostUsername,
+      pronounsTime: _formatTime(post.createdAt),
+      avatarAsset: resolvedPostAvatar,
+      content: post.body.isNotEmpty ? post.body : post.caption,
+      likesCount: post.likesCount,
+      commentsCount: post.commentsCount,
+      postImageUrl: imageUrl,
+      postType: post.type,
+      communityId: post.communityId,
+      isLiked: isLiked,
+    );
+  }
+
+  // ── Unified Post & Reel Parser (used by Following & Community feeds) ───────
+  Future<_FeedBatch> _processPosts(List<PostResponseModel> rawPosts) async {
+    final List<ReelItemModel> parsedReels = <ReelItemModel>[];
+    final List<PostItemModel> parsedPosts = <PostItemModel>[];
+
+    for (final PostResponseModel post in rawPosts) {
+      final String postType = post.type.toUpperCase().trim();
+      final bool isVideo = postType == 'VIDEO' ||
+          (post.duration != null && post.duration!.isNotEmpty);
+
+      if (isVideo) {
+        parsedReels.add(await _buildReelItem(post));
+      } else {
+        parsedPosts.add(await _buildPostItem(post));
+      }
+    }
+
+    return _FeedBatch(reels: parsedReels, posts: parsedPosts);
+  }
+
+  // ── 1. Load For You Feed (Identical to Original Working Version) ───────────
+  Future<void> loadForYouFeed({bool force = false}) async {
     if (_contentService == null) {
-      _isLoadingFeed = false;
+      _isLoadingForYou = false;
       notifyListeners();
       return;
     }
 
-    final bool hadData = _reels.isNotEmpty || _posts.isNotEmpty;
-    if (!hadData) {
-      _isLoadingFeed = true;
-      notifyListeners();
+    if (!force &&
+        _forYouReels.isNotEmpty &&
+        _forYouPosts.isNotEmpty &&
+        !_forYouPosts.any((PostItemModel p) => p.id.startsWith('post_'))) {
+      _isLoadingForYou = false;
+      return;
     }
 
+    _isLoadingForYou = true;
+    notifyListeners();
+
     try {
-      // 1. Fetch Trending Reels (VIDEO only)
-      final List<PostResponseModel> trendingPosts =
-          await _contentService!.getTrendingPosts();
+      // 1. Fetch Trending Reels (From /posts/trending, all treated as reels exactly as in original version)
+      List<PostResponseModel> trendingPosts = <PostResponseModel>[];
+      try {
+        trendingPosts = await _contentService!.getTrendingPosts();
+      } catch (e) {
+        debugPrint('⚠️ [HomeFeedProvider] Error getting trending posts: $e');
+      }
 
       final List<ReelItemModel> liveReels = <ReelItemModel>[];
       for (final PostResponseModel post in trendingPosts) {
-        String? videoUrl;
-        String? thumbnailUrl;
-
-        if (post.mediaRefs.isNotEmpty && _mediaService != null) {
-          final String mediaId = post.mediaRefs.first;
-          MediaUploadResult? media = _mediaCache[mediaId];
-          if (media == null) {
-            try {
-              media = await _mediaService!.getMediaStatus(mediaId);
-              _mediaCache[mediaId] = media;
-            } catch (e) {
-              debugPrint('⚠️ [HomeFeed] Could not resolve reel media $mediaId: $e');
-            }
-          }
-          videoUrl = media?.url ?? media?.downloadUrl;
-          thumbnailUrl = media?.thumbnailUrl;
+        try {
+          liveReels.add(await _buildReelItem(post));
+        } catch (e) {
+          debugPrint('⚠️ [HomeFeedProvider] Error building reel: $e');
         }
-
-        final bool isLiked = _currentUserId != null &&
-            (_userLikedPostIds.contains(post.id) || post.isLiked);
-        if (isLiked && _currentUserId != null) {
-          _userLikedPostIds.add(post.id);
-        }
-
-        final String resolvedUsername = (post.authorName != null && post.authorName!.isNotEmpty)
-            ? (post.authorName!.startsWith('@') ? post.authorName! : '@${post.authorName!}')
-            : (post.authorId != null && post.authorId!.length >= 6
-                ? '@user_${post.authorId!.substring(0, 6)}'
-                : (post.id.length >= 6 ? '@user_${post.id.substring(0, 6)}' : '@creator'));
-
-        final String resolvedAvatar = (post.authorAvatar != null && post.authorAvatar!.isNotEmpty)
-            ? post.authorAvatar!
-            : AppImages.user1;
-
-        liveReels.add(
-          ReelItemModel(
-            id: post.id,
-            authorId: post.authorId,
-            username: resolvedUsername,
-            pronounsTime: _formatTime(post.createdAt),
-            avatarAsset: resolvedAvatar,
-            videoAsset: '',
-            videoUrl: videoUrl,
-            thumbnailUrl: thumbnailUrl,
-            caption: post.body.isNotEmpty ? post.body : post.caption,
-            likesCount: post.likesCount,
-            commentsCount: post.commentsCount,
-            isLiked: isLiked,
-            tags: post.tags,
-            communityId: post.communityId,
-            durationText: (post.duration != null && post.duration!.isNotEmpty)
-                ? post.duration!
-                : '0:30',
-          ),
-        );
       }
 
-      // 2. Fetch General Feed Posts (TEXT, PHOTO, VIDEO)
-      final List<PostResponseModel> feedPosts =
-          await _contentService!.getFeedPosts();
+      // 2. Fetch General Feed Posts (/posts)
+      List<PostResponseModel> feedPosts = <PostResponseModel>[];
+      try {
+        feedPosts = await _contentService!.getFeedPosts();
+      } catch (e) {
+        debugPrint('⚠️ [HomeFeedProvider] Error getting feed posts: $e');
+      }
 
       final List<PostItemModel> livePosts = <PostItemModel>[];
       for (final PostResponseModel post in feedPosts) {
-        final String postType = post.type.toUpperCase().trim();
+        try {
+          final String postType = post.type.toUpperCase().trim();
 
-        // ── Video Posts Handling ──────────────────────────────────────────
-        // Video posts belong exclusively to Reels and must NEVER appear
-        // as naked text posts in the Posts feed.
-        if (postType == 'VIDEO') {
-          if (!liveReels.any((r) => r.id == post.id)) {
-            String? videoUrl;
-            String? thumbnailUrl;
-
-            if (post.mediaRefs.isNotEmpty && _mediaService != null) {
-              final String mediaId = post.mediaRefs.first;
-              MediaUploadResult? media = _mediaCache[mediaId];
-              if (media == null) {
-                try {
-                  media = await _mediaService!.getMediaStatus(mediaId);
-                  _mediaCache[mediaId] = media;
-                } catch (e) {
-                  debugPrint('⚠️ [HomeFeed] Could not resolve video post media $mediaId: $e');
-                }
-              }
-              videoUrl = media?.url ?? media?.downloadUrl;
-              thumbnailUrl = media?.thumbnailUrl;
+          // Video posts belong exclusively to Reels
+          if (postType == 'VIDEO') {
+            if (!liveReels.any((r) => r.id == post.id)) {
+              liveReels.add(await _buildReelItem(post));
             }
-
-            final bool isLiked = _currentUserId != null &&
-                (_userLikedPostIds.contains(post.id) || post.isLiked);
-            if (isLiked && _currentUserId != null) {
-              _userLikedPostIds.add(post.id);
-            }
-
-            final String resolvedUsername = (post.authorName != null && post.authorName!.isNotEmpty)
-                ? (post.authorName!.startsWith('@') ? post.authorName! : '@${post.authorName!}')
-                : (post.authorId != null && post.authorId!.length >= 6
-                    ? '@user_${post.authorId!.substring(0, 6)}'
-                    : (post.id.length >= 6 ? '@user_${post.id.substring(0, 6)}' : '@creator'));
-
-            final String resolvedAvatar = (post.authorAvatar != null && post.authorAvatar!.isNotEmpty)
-                ? post.authorAvatar!
-                : AppImages.user1;
-
-            liveReels.add(
-              ReelItemModel(
-                id: post.id,
-                authorId: post.authorId,
-                username: resolvedUsername,
-                pronounsTime: _formatTime(post.createdAt),
-                avatarAsset: resolvedAvatar,
-                videoAsset: '',
-                videoUrl: videoUrl,
-                thumbnailUrl: thumbnailUrl,
-                caption: post.body.isNotEmpty ? post.body : post.caption,
-                likesCount: post.likesCount,
-                commentsCount: post.commentsCount,
-                isLiked: isLiked,
-                tags: post.tags,
-                communityId: post.communityId,
-                durationText: (post.duration != null && post.duration!.isNotEmpty)
-                    ? post.duration!
-                    : '0:30',
-              ),
-            );
+          } else {
+            livePosts.add(await _buildPostItem(post));
           }
-          // Do NOT add to livePosts
-          continue;
+        } catch (e) {
+          debugPrint('⚠️ [HomeFeedProvider] Error building post: $e');
         }
+      }
 
-        // ── Text & Photo Posts ────────────────────────────────────────────
-        String? imageUrl;
-
-        if (post.mediaRefs.isNotEmpty && _mediaService != null) {
-          final String mediaId = post.mediaRefs.first;
-          MediaUploadResult? media = _mediaCache[mediaId];
-          if (media == null) {
+      // 3. Fallback: If feedPosts (/posts) was empty or failed (e.g. 503), check trendingPosts for non-video posts
+      if (livePosts.isEmpty) {
+        for (final PostResponseModel post in trendingPosts) {
+          final String postType = post.type.toUpperCase().trim();
+          if (postType != 'VIDEO' &&
+              (post.duration == null || post.duration!.isEmpty)) {
             try {
-              media = await _mediaService!.getMediaStatus(mediaId);
-              _mediaCache[mediaId] = media;
-            } catch (e) {
-              debugPrint('⚠️ [HomeFeed] Could not resolve post media $mediaId: $e');
-            }
+              livePosts.add(await _buildPostItem(post));
+            } catch (_) {}
           }
-          imageUrl = media?.url ?? media?.downloadUrl ?? media?.thumbnailUrl;
         }
+      }
 
-        final bool isLiked = _currentUserId != null &&
-            (_userLikedPostIds.contains(post.id) || post.isLiked);
-        if (isLiked && _currentUserId != null) {
-          _userLikedPostIds.add(post.id);
-        }
+      if (liveReels.isNotEmpty || _forYouReels.isEmpty) {
+        _forYouReels
+          ..clear()
+          ..addAll(liveReels);
+      }
 
-        final String resolvedPostUsername = (post.authorName != null && post.authorName!.isNotEmpty)
-            ? (post.authorName!.startsWith('@') ? post.authorName! : '@${post.authorName!}')
-            : (post.authorId != null && post.authorId!.length >= 6
-                ? '@user_${post.authorId!.substring(0, 6)}'
-                : (post.id.length >= 6 ? '@user_${post.id.substring(0, 6)}' : '@creator'));
+      if (livePosts.isNotEmpty) {
+        _forYouPosts
+          ..clear()
+          ..addAll(livePosts);
+      } else if (_forYouPosts.isEmpty) {
+        _forYouPosts.addAll(_defaultForYouPosts);
+      }
 
-        final String resolvedPostAvatar = (post.authorAvatar != null && post.authorAvatar!.isNotEmpty)
-            ? post.authorAvatar!
-            : AppImages.user4;
+      if (_forYouReels.isNotEmpty && _activeTopTab == TopTab.forYou) {
+        ReelVideoPreloader.instance.preloadSurrounding(_forYouReels, 0);
+      }
+    } catch (e) {
+      debugPrint('❌ [HomeFeedProvider] Failed to load For You feed: $e');
+    } finally {
+      _isLoadingForYou = false;
+      notifyListeners();
+    }
+  }
 
-        livePosts.add(
-          PostItemModel(
-            id: post.id,
-            authorId: post.authorId,
-            username: resolvedPostUsername,
-            pronounsTime: _formatTime(post.createdAt),
-            avatarAsset: resolvedPostAvatar,
-            content: post.body.isNotEmpty ? post.body : post.caption,
-            likesCount: post.likesCount,
-            commentsCount: post.commentsCount,
-            postImageUrl: imageUrl,
-            postType: post.type,
-            communityId: post.communityId,
-            isLiked: isLiked,
-          ),
+  // ── 2. Load Following Feed (GET /feed/following) ───────────────────────────
+  Future<void> loadFollowingFeed({bool force = false}) async {
+    if (_contentService == null) return;
+    if (_isLoadingFollowing) return;
+
+    if (!force && (_followingReels.isNotEmpty || _followingPosts.isNotEmpty)) {
+      return;
+    }
+
+    _isLoadingFollowing = true;
+    notifyListeners();
+
+    try {
+      final List<PostResponseModel> rawPosts =
+          await _contentService!.getFollowingFeed();
+
+      final _FeedBatch batch = await _processPosts(rawPosts);
+
+      _followingReels
+        ..clear()
+        ..addAll(batch.reels);
+
+      _followingPosts
+        ..clear()
+        ..addAll(batch.posts);
+
+      if (_followingReels.isNotEmpty && _activeTopTab == TopTab.following) {
+        ReelVideoPreloader.instance.preloadSurrounding(_followingReels, 0);
+      }
+    } catch (e) {
+      debugPrint('❌ [HomeFeedProvider] Failed to load Following feed: $e');
+    } finally {
+      _isLoadingFollowing = false;
+      notifyListeners();
+    }
+  }
+
+  // ── 3. Load Community Feed (GET /feed/community?...) ───────────────────────
+  Future<void> loadCommunityFeed({bool force = false}) async {
+    if (_contentService == null) return;
+    if (_isLoadingCommunities) return;
+
+    if (!force &&
+        (_communityReels.isNotEmpty || _communityPosts.isNotEmpty) &&
+        _selectedCommunityId == null) {
+      return;
+    }
+
+    _isLoadingCommunities = true;
+    notifyListeners();
+
+    try {
+      final List<PostResponseModel> rawPosts;
+      if (_selectedCommunityId != null && _selectedCommunityId!.isNotEmpty) {
+        rawPosts = await _contentService!.getCommunityFeed(
+          communityId: _selectedCommunityId,
+        );
+      } else {
+        rawPosts = await _contentService!.getCommunityFeed(
+          scope: 'joined',
         );
       }
 
-      _reels
-        ..clear()
-        ..addAll(liveReels);
+      final _FeedBatch batch = await _processPosts(rawPosts);
 
-      _posts
+      _communityReels
         ..clear()
-        ..addAll(livePosts);
+        ..addAll(batch.reels);
 
-      if (_reels.isNotEmpty) {
-        ReelVideoPreloader.instance.preloadSurrounding(_reels, 0);
+      _communityPosts
+        ..clear()
+        ..addAll(batch.posts);
+
+      if (_communityReels.isNotEmpty && _activeTopTab == TopTab.communities) {
+        ReelVideoPreloader.instance.preloadSurrounding(_communityReels, 0);
       }
     } catch (e) {
-      debugPrint('❌ [HomeFeedProvider] Failed to load live feed: $e');
+      debugPrint('❌ [HomeFeedProvider] Failed to load Community feed: $e');
     } finally {
-      _isLoadingFeed = false;
+      _isLoadingCommunities = false;
       notifyListeners();
+    }
+  }
+
+  // ── General Feed Refresh (refreshes current active tab) ───────────────────
+  Future<void> loadFeed({bool force = false}) async {
+    switch (_activeTopTab) {
+      case TopTab.forYou:
+        await loadForYouFeed(force: force || _forYouReels.isNotEmpty || _forYouPosts.isNotEmpty);
+        break;
+      case TopTab.following:
+        await loadFollowingFeed(force: true);
+        break;
+      case TopTab.communities:
+        await loadCommunityFeed(force: true);
+        break;
     }
   }
 
@@ -380,18 +561,34 @@ class HomeFeedProvider extends ChangeNotifier {
     }
   }
 
+  // Helpers to synchronize item mutations across all tabs
+  void _updateReelInAllLists(String id, ReelItemModel Function(ReelItemModel) updater) {
+    void updateInList(List<ReelItemModel> list) {
+      final int idx = list.indexWhere((r) => r.id == id);
+      if (idx != -1) list[idx] = updater(list[idx]);
+    }
+
+    updateInList(_forYouReels);
+    updateInList(_followingReels);
+    updateInList(_communityReels);
+  }
+
+  void _updatePostInAllLists(String id, PostItemModel Function(PostItemModel) updater) {
+    void updateInList(List<PostItemModel> list) {
+      final int idx = list.indexWhere((p) => p.id == id);
+      if (idx != -1) list[idx] = updater(list[idx]);
+    }
+
+    updateInList(_forYouPosts);
+    updateInList(_followingPosts);
+    updateInList(_communityPosts);
+  }
+
   // Increment comment count locally when comment is added
   void incrementCommentCount(String postId) {
-    final int pIdx = _posts.indexWhere((p) => p.id == postId);
-    if (pIdx != -1) {
-      _posts[pIdx] = _posts[pIdx].copyWith(commentsCount: _posts[pIdx].commentsCount + 1);
-      notifyListeners();
-    }
-    final int rIdx = _reels.indexWhere((r) => r.id == postId);
-    if (rIdx != -1) {
-      _reels[rIdx] = _reels[rIdx].copyWith(commentsCount: _reels[rIdx].commentsCount + 1);
-      notifyListeners();
-    }
+    _updatePostInAllLists(postId, (p) => p.copyWith(commentsCount: p.commentsCount + 1));
+    _updateReelInAllLists(postId, (r) => r.copyWith(commentsCount: r.commentsCount + 1));
+    notifyListeners();
   }
 
   // Actions
@@ -402,6 +599,9 @@ class HomeFeedProvider extends ChangeNotifier {
   }
 
   void setBottomNavIndex(int index) {
+    if (index != 0) {
+      ReelVideoPreloader.instance.pauseAll();
+    }
     if (index == 0 && _bottomNavIndex != 0) {
       _activeTopTab = TopTab.forYou;
     }
@@ -410,46 +610,90 @@ class HomeFeedProvider extends ChangeNotifier {
   }
 
   void resetToHome() {
+    ReelVideoPreloader.instance.pauseAll();
     _bottomNavIndex = 0;
     _activeTopTab = TopTab.forYou;
     _activeSubMode = SubMode.reels;
     _selectedCommunityFilter = 'All Communities';
+    _selectedCommunityId = null;
     notifyListeners();
   }
 
   void setTopTab(TopTab tab) {
+    if (_activeTopTab == tab) return;
+    ReelVideoPreloader.instance.pauseAll();
     _activeTopTab = tab;
     notifyListeners();
+
+    switch (tab) {
+      case TopTab.forYou:
+        if (_forYouReels.isEmpty && _forYouPosts.isEmpty && !_isLoadingForYou) {
+          loadForYouFeed();
+        } else if (_forYouReels.isNotEmpty) {
+          ReelVideoPreloader.instance.preloadSurrounding(_forYouReels, 0);
+        }
+        break;
+      case TopTab.following:
+        if (_followingReels.isEmpty && _followingPosts.isEmpty && !_isLoadingFollowing) {
+          loadFollowingFeed();
+        } else if (_followingReels.isNotEmpty) {
+          ReelVideoPreloader.instance.preloadSurrounding(_followingReels, 0);
+        }
+        break;
+      case TopTab.communities:
+        if (_communityReels.isEmpty && _communityPosts.isEmpty && !_isLoadingCommunities) {
+          loadCommunityFeed();
+        } else if (_communityReels.isNotEmpty) {
+          ReelVideoPreloader.instance.preloadSurrounding(_communityReels, 0);
+        }
+        break;
+    }
   }
 
   void setSubMode(SubMode mode) {
+    if (_activeSubMode == mode) return;
+    if (mode == SubMode.posts) {
+      ReelVideoPreloader.instance.pauseAll();
+      if (_activeTopTab == TopTab.forYou && _forYouPosts.isEmpty) {
+        loadForYouFeed();
+      }
+    }
     _activeSubMode = mode;
     notifyListeners();
   }
 
-  void setSelectedCommunityFilter(String val) {
+  void setSelectedCommunityFilter(String val, {String? communityId}) {
     _selectedCommunityFilter = val;
+    _selectedCommunityId = communityId;
+    if (_activeTopTab != TopTab.communities) {
+      _activeTopTab = TopTab.communities;
+    }
     notifyListeners();
+    loadCommunityFeed(force: true);
   }
 
   Future<void> toggleLikeReel(String id) async {
-    final int index = _reels.indexWhere((ReelItemModel r) => r.id == id);
-    if (index == -1) return;
-
-    final ReelItemModel item = _reels[index];
-    final bool newLiked = !item.isLiked;
-    final int newCount = newLiked
-        ? item.likesCount + 1
-        : (item.likesCount > 0 ? item.likesCount - 1 : 0);
-
-    _reels[index] = item.copyWith(isLiked: newLiked, likesCount: newCount);
-
-    // Also sync matching item in _posts if present
-    final int pIdx = _posts.indexWhere((PostItemModel p) => p.id == id);
-    if (pIdx != -1) {
-      _posts[pIdx] =
-          _posts[pIdx].copyWith(isLiked: newLiked, likesCount: newCount);
+    ReelItemModel? target;
+    for (final List<ReelItemModel> list in <List<ReelItemModel>>[
+      _forYouReels,
+      _followingReels,
+      _communityReels,
+    ]) {
+      final int idx = list.indexWhere((r) => r.id == id);
+      if (idx != -1) {
+        target = list[idx];
+        break;
+      }
     }
+    if (target == null) return;
+
+    final bool newLiked = !target.isLiked;
+    final int newCount = newLiked
+        ? target.likesCount + 1
+        : (target.likesCount > 0 ? target.likesCount - 1 : 0);
+
+    _updateReelInAllLists(id, (r) => r.copyWith(isLiked: newLiked, likesCount: newCount));
+    _updatePostInAllLists(id, (p) => p.copyWith(isLiked: newLiked, likesCount: newCount));
 
     if (_currentUserId != null) {
       if (newLiked) {
@@ -471,18 +715,16 @@ class HomeFeedProvider extends ChangeNotifier {
         }
       } catch (err) {
         debugPrint('Error syncing like for reel $id: $err');
-        // Revert on error
-        final int curIdx = _reels.indexWhere((ReelItemModel r) => r.id == id);
-        if (curIdx != -1) {
-          _reels[curIdx] = item;
-        }
-        final int curPIdx = _posts.indexWhere((PostItemModel p) => p.id == id);
-        if (curPIdx != -1) {
-          _posts[curPIdx] = _posts[curPIdx]
-              .copyWith(isLiked: item.isLiked, likesCount: item.likesCount);
-        }
+        _updateReelInAllLists(
+          id,
+          (r) => r.copyWith(isLiked: target!.isLiked, likesCount: target.likesCount),
+        );
+        _updatePostInAllLists(
+          id,
+          (p) => p.copyWith(isLiked: target!.isLiked, likesCount: target.likesCount),
+        );
         if (_currentUserId != null) {
-          if (item.isLiked) {
+          if (target.isLiked) {
             _userLikedPostIds.add(id);
           } else {
             _userLikedPostIds.remove(id);
@@ -495,52 +737,83 @@ class HomeFeedProvider extends ChangeNotifier {
   }
 
   void toggleSaveReel(String id) {
-    final int index = _reels.indexWhere((ReelItemModel r) => r.id == id);
-    if (index != -1) {
-      final ReelItemModel item = _reels[index];
-      _reels[index] = item.copyWith(isSaved: !item.isSaved);
-      notifyListeners();
+    ReelItemModel? target;
+    for (final List<ReelItemModel> list in <List<ReelItemModel>>[
+      _forYouReels,
+      _followingReels,
+      _communityReels,
+    ]) {
+      final int i = list.indexWhere((ReelItemModel r) => r.id == id);
+      if (i != -1) {
+        target = list[i];
+        break;
+      }
+    }
+    final bool newSaved = !(target?.isSaved ?? false);
+    _updateReelInAllLists(id, (r) => r.copyWith(isSaved: newSaved));
+    notifyListeners();
+
+    if (_contentService != null && id.contains('-')) {
+      if (newSaved) {
+        _contentService!.savePost(id).catchError((dynamic e) {
+          debugPrint('⚠️ [HomeFeed] Save reel failed: $e');
+        });
+      } else {
+        _contentService!.unsavePost(id).catchError((dynamic e) {
+          debugPrint('⚠️ [HomeFeed] Unsave reel failed: $e');
+        });
+      }
     }
   }
 
   void toggleFollowReel(String id) {
-    final int index = _reels.indexWhere((ReelItemModel r) => r.id == id);
-    if (index != -1) {
-      final ReelItemModel item = _reels[index];
-      _reels[index] = item.copyWith(isFollowing: !item.isFollowing);
-      notifyListeners();
-    }
+    _updateReelInAllLists(id, (r) => r.copyWith(isFollowing: !r.isFollowing));
+    notifyListeners();
   }
 
   void addNewReel(ReelItemModel reel) {
-    _reels.insert(0, reel);
+    _forYouReels.insert(0, reel);
+    if (_activeTopTab == TopTab.following) {
+      _followingReels.insert(0, reel);
+    } else if (_activeTopTab == TopTab.communities) {
+      _communityReels.insert(0, reel);
+    }
     notifyListeners();
   }
 
   void addNewPost(PostItemModel post) {
     if (post.postType.toUpperCase().trim() == 'VIDEO') return;
-    _posts.insert(0, post);
+    _forYouPosts.insert(0, post);
+    if (_activeTopTab == TopTab.following) {
+      _followingPosts.insert(0, post);
+    } else if (_activeTopTab == TopTab.communities) {
+      _communityPosts.insert(0, post);
+    }
     notifyListeners();
   }
 
   Future<void> toggleLikePost(String id) async {
-    final int index = _posts.indexWhere((PostItemModel p) => p.id == id);
-    if (index == -1) return;
-
-    final PostItemModel item = _posts[index];
-    final bool newLiked = !item.isLiked;
-    final int newCount = newLiked
-        ? item.likesCount + 1
-        : (item.likesCount > 0 ? item.likesCount - 1 : 0);
-
-    _posts[index] = item.copyWith(isLiked: newLiked, likesCount: newCount);
-
-    // Also sync matching item in _reels if present
-    final int rIdx = _reels.indexWhere((ReelItemModel r) => r.id == id);
-    if (rIdx != -1) {
-      _reels[rIdx] =
-          _reels[rIdx].copyWith(isLiked: newLiked, likesCount: newCount);
+    PostItemModel? target;
+    for (final List<PostItemModel> list in <List<PostItemModel>>[
+      _forYouPosts,
+      _followingPosts,
+      _communityPosts,
+    ]) {
+      final int idx = list.indexWhere((p) => p.id == id);
+      if (idx != -1) {
+        target = list[idx];
+        break;
+      }
     }
+    if (target == null) return;
+
+    final bool newLiked = !target.isLiked;
+    final int newCount = newLiked
+        ? target.likesCount + 1
+        : (target.likesCount > 0 ? target.likesCount - 1 : 0);
+
+    _updatePostInAllLists(id, (p) => p.copyWith(isLiked: newLiked, likesCount: newCount));
+    _updateReelInAllLists(id, (r) => r.copyWith(isLiked: newLiked, likesCount: newCount));
 
     if (_currentUserId != null) {
       if (newLiked) {
@@ -562,17 +835,16 @@ class HomeFeedProvider extends ChangeNotifier {
         }
       } catch (err) {
         debugPrint('Error syncing like for post $id: $err');
-        final int curIdx = _posts.indexWhere((PostItemModel p) => p.id == id);
-        if (curIdx != -1) {
-          _posts[curIdx] = item;
-        }
-        final int curRIdx = _reels.indexWhere((ReelItemModel r) => r.id == id);
-        if (curRIdx != -1) {
-          _reels[curRIdx] = _reels[curRIdx]
-              .copyWith(isLiked: item.isLiked, likesCount: item.likesCount);
-        }
+        _updatePostInAllLists(
+          id,
+          (p) => p.copyWith(isLiked: target!.isLiked, likesCount: target.likesCount),
+        );
+        _updateReelInAllLists(
+          id,
+          (r) => r.copyWith(isLiked: target!.isLiked, likesCount: target.likesCount),
+        );
         if (_currentUserId != null) {
-          if (item.isLiked) {
+          if (target.isLiked) {
             _userLikedPostIds.add(id);
           } else {
             _userLikedPostIds.remove(id);
@@ -585,11 +857,54 @@ class HomeFeedProvider extends ChangeNotifier {
   }
 
   void toggleSavePost(String id) {
-    final int index = _posts.indexWhere((PostItemModel p) => p.id == id);
-    if (index != -1) {
-      final PostItemModel item = _posts[index];
-      _posts[index] = item.copyWith(isSaved: !item.isSaved);
-      notifyListeners();
+    PostItemModel? target;
+    for (final List<PostItemModel> list in <List<PostItemModel>>[
+      _forYouPosts,
+      _followingPosts,
+      _communityPosts,
+    ]) {
+      final int i = list.indexWhere((PostItemModel p) => p.id == id);
+      if (i != -1) {
+        target = list[i];
+        break;
+      }
     }
+    final bool newSaved = !(target?.isSaved ?? false);
+    _updatePostInAllLists(id, (p) => p.copyWith(isSaved: newSaved));
+    notifyListeners();
+
+    if (_contentService != null && id.contains('-')) {
+      if (newSaved) {
+        _contentService!.savePost(id).catchError((dynamic e) {
+          debugPrint('⚠️ [HomeFeed] Save post failed: $e');
+        });
+      } else {
+        _contentService!.unsavePost(id).catchError((dynamic e) {
+          debugPrint('⚠️ [HomeFeed] Unsave post failed: $e');
+        });
+      }
+    }
+  }
+
+  Future<bool> deletePost(String id) async {
+    // Optimistically remove from all post and reel feeds
+    _forYouPosts.removeWhere((PostItemModel p) => p.id == id);
+    _forYouReels.removeWhere((ReelItemModel r) => r.id == id);
+    _followingPosts.removeWhere((PostItemModel p) => p.id == id);
+    _followingReels.removeWhere((ReelItemModel r) => r.id == id);
+    _communityPosts.removeWhere((PostItemModel p) => p.id == id);
+    _communityReels.removeWhere((ReelItemModel r) => r.id == id);
+    notifyListeners();
+
+    if (_contentService != null && id.contains('-')) {
+      try {
+        await _contentService!.deletePost(id);
+        return true;
+      } catch (e) {
+        debugPrint('⚠️ [HomeFeed] Delete post failed: $e');
+        return false;
+      }
+    }
+    return true;
   }
 }

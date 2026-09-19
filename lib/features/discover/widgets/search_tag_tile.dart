@@ -7,15 +7,48 @@ import '../../../core/theme/app_text_styles.dart';
 class TagSearchResultItem {
   const TagSearchResultItem({
     required this.name,
-    required this.postsCount,
-    required this.weeklyCount,
-    required this.imageAsset,
+    this.postsCount = '0',
+    this.weeklyCount = '0',
+    this.imageAsset = '',
   });
 
   final String name;
   final String postsCount;
   final String weeklyCount;
   final String imageAsset;
+
+  factory TagSearchResultItem.fromJson(Map<String, dynamic> json) {
+    final String rawName = (json['name'] ?? json['tag'] ?? json['hashtag'] ?? '').toString();
+    final String tagName = rawName.startsWith('#') ? rawName : (rawName.isNotEmpty ? '#$rawName' : '#tag');
+
+    final int pCount = json['postsCount'] is num
+        ? (json['postsCount'] as num).toInt()
+        : (int.tryParse(json['postsCount']?.toString() ?? json['count']?.toString() ?? '') ?? 0);
+    final String pStr = pCount > 1000
+        ? '${(pCount / 1000).toStringAsFixed(1)}K'
+        : (pCount > 0 ? '$pCount' : '0');
+
+    final int wCount = json['weeklyCount'] is num
+        ? (json['weeklyCount'] as num).toInt()
+        : (int.tryParse(json['weeklyCount']?.toString() ?? '') ?? 0);
+    final String wStr = wCount > 1000
+        ? '${(wCount / 1000).toStringAsFixed(1)}K'
+        : (wCount > 0 ? '$wCount' : '0');
+
+    final String img = (json['thumbnailUrl'] ??
+            json['imageUrl'] ??
+            json['mediaUrl'] ??
+            json['imageAsset'] ??
+            '')
+        .toString();
+
+    return TagSearchResultItem(
+      name: tagName,
+      postsCount: pStr,
+      weeklyCount: wStr,
+      imageAsset: img,
+    );
+  }
 }
 
 class SearchTagTile extends StatelessWidget {
@@ -43,14 +76,13 @@ class SearchTagTile extends StatelessWidget {
         ),
         child: Row(
           children: <Widget>[
-            // Tag image thumbnail
+            // Tag image thumbnail or icon
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                tag.imageAsset,
+              child: SizedBox(
                 width: 56,
                 height: 56,
-                fit: BoxFit.cover,
+                child: _buildThumbnail(context),
               ),
             ),
 
@@ -86,4 +118,38 @@ class SearchTagTile extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildThumbnail(BuildContext context) {
+    final String img = tag.imageAsset.trim();
+    if (img.startsWith('http://') || img.startsWith('https://')) {
+      return Image.network(
+        img,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _buildFallback(context),
+      );
+    } else if (img.isNotEmpty) {
+      return Image.asset(
+        img,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _buildFallback(context),
+      );
+    }
+    return _buildFallback(context);
+  }
+
+  Widget _buildFallback(BuildContext context) {
+    return Container(
+      color: AppColors.gradientPink.withValues(alpha: 0.12),
+      child: Center(
+        child: Text(
+          '#',
+          style: AppTextStyles.titleLarge.copyWith(
+            color: AppColors.gradientPink,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
 }
+

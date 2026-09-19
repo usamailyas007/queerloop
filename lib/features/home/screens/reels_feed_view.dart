@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../profile/provider/profile_provider.dart';
+import '../../profile_setup/models/community_model.dart';
+import '../../profile_setup/provider/profile_setup_provider.dart';
 import '../models/reel_item_model.dart';
 import '../provider/home_feed_provider.dart';
 import '../services/reel_video_preloader.dart';
@@ -71,8 +74,15 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
   }
 
   @override
+  void deactivate() {
+    ReelVideoPreloader.instance.pauseAll();
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
+    ReelVideoPreloader.instance.pauseAll();
     super.dispose();
   }
 
@@ -80,6 +90,23 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     BuildContext context,
     HomeFeedProvider provider,
   ) {
+    List<CommunityModel> availableComms = const <CommunityModel>[];
+    try {
+      final List<CommunityModel> userComms =
+          context.read<ProfileProvider>().userCommunities;
+      final List<CommunityModel> allComms =
+          context.read<ProfileSetupProvider>().allCommunities;
+
+      final Map<String, CommunityModel> commMap = <String, CommunityModel>{};
+      for (final CommunityModel c in userComms) {
+        commMap[c.id] = c;
+      }
+      for (final CommunityModel c in allComms) {
+        commMap.putIfAbsent(c.id, () => c);
+      }
+      availableComms = commMap.values.toList();
+    } catch (_) {}
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -87,8 +114,12 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
       builder: (context) {
         return FilterCommunitiesBottomSheet(
           selectedCommunity: provider.selectedCommunityFilter,
-          onApply: (String community) {
-            provider.setSelectedCommunityFilter(community);
+          communities: availableComms,
+          onApply: (String community, String? communityId) {
+            provider.setSelectedCommunityFilter(
+              community,
+              communityId: communityId,
+            );
           },
         );
       },
@@ -98,8 +129,9 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
   void _showCommentsSheet(
     BuildContext context,
     String postId,
-    int totalComments,
-  ) {
+    int totalComments, {
+    String? postAuthorId,
+  }) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -107,6 +139,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
       builder: (context) {
         return CommentsBottomSheet(
           postId: postId,
+          postAuthorId: postAuthorId,
           totalComments: totalComments,
           onCommentAdded: () {
             context.read<HomeFeedProvider>().incrementCommentCount(postId);
@@ -168,7 +201,15 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     final HomeFeedProvider provider = context.watch<HomeFeedProvider>();
     final List<ReelItemModel> reels = widget.customReels ?? provider.reels;
     final double topInset = MediaQuery.of(context).padding.top + 50;
+
+    if (provider.isLoadingFeed && reels.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.gradientPink),
+      );
+    }
+
     if (reels.isEmpty) {
+      final bool isCommunityTab = provider.activeTopTab == TopTab.communities;
       return RefreshIndicator(
         color: AppColors.gradientPink,
         backgroundColor: const Color(0xFF1E1E2E),
@@ -180,10 +221,81 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
               physics: const AlwaysScrollableScrollPhysics(),
               child: SizedBox(
                 height: constraints.maxHeight,
-                child: HomeEmptyStateView(
-                  onOpenExplore: () {
-                    provider.setTopTab(TopTab.forYou);
-                  },
+                child: Stack(
+                  children: <Widget>[
+                    HomeEmptyStateView(
+                      title: isCommunityTab &&
+                              provider.selectedCommunityFilter !=
+                                  'All Communities'
+                          ? 'No videos in ${provider.selectedCommunityFilter}'
+                          : null,
+                      subtitle: isCommunityTab &&
+                              provider.selectedCommunityFilter !=
+                                  'All Communities'
+                          ? 'There are no videos in this community yet. Explore other communities or be the first to post!'
+                          : null,
+                      buttonText: isCommunityTab ? 'Explore Communities' : null,
+                      onOpenExplore: () {
+                        if (isCommunityTab) {
+                          _showFilterCommunitiesSheet(context, provider);
+                        } else {
+                          provider.loadFeed(force: true);
+                        }
+                      },
+                    ),
+                    if (isCommunityTab)
+                      Positioned(
+                        top: topInset + 10,
+                        left: 16,
+                        child: GestureDetector(
+                          onTap: () =>
+                              _showFilterCommunitiesSheet(context, provider),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: AppColors.secondaryGradientButton,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: AppColors.gradientCyan
+                                      .withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                const Icon(
+                                  Icons.groups_rounded,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  provider.selectedCommunityFilter,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  color: Colors.white70,
+                                  size: 16,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             );
@@ -217,10 +329,16 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
         },
         itemBuilder: (context, index) {
           final ReelItemModel item = reels[index];
+          final bool isVisuallyActive = (widget.customReels != null)
+              ? (index == _activePage)
+              : (index == _activePage &&
+                  provider.bottomNavIndex == 0 &&
+                  provider.activeSubMode == SubMode.reels);
+
           return ReelFeedCard(
             key: ValueKey<String>(item.id),
             reel: item,
-            isActive: index == _activePage,
+            isActive: isVisuallyActive,
             hasBottomBar: widget.hasBottomBar,
             showCommunityFilterTag: provider.activeTopTab == TopTab.communities,
             selectedCommunity: provider.selectedCommunityFilter,
@@ -249,7 +367,12 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
               if (provider.isGuest) {
                 widget.onGuestActionTriggered?.call();
               } else {
-                _showCommentsSheet(context, item.id, item.commentsCount);
+                _showCommentsSheet(
+                  context,
+                  item.id,
+                  item.commentsCount,
+                  postAuthorId: item.authorId,
+                );
               }
             },
             onOpenShare: () {

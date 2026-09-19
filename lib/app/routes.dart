@@ -99,3 +99,8 @@ abstract final class AppRoutes {
 
 // Alias for convenience across screens
 typedef Routes = AppRoutes;
+
+/// Global RouteObserver to monitor route push/pop events across screens (e.g. pausing reel audio).
+final RouteObserver<ModalRoute<void>> appRouteObserver =
+    RouteObserver<ModalRoute<void>>();
+

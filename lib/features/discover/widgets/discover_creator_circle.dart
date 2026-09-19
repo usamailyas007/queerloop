@@ -29,6 +29,7 @@ class DiscoverCreatorCircle extends StatelessWidget {
           context,
           MaterialPageRoute<void>(
             builder: (_) => UserProfileScreen(
+              userId: creator.id,
               username: creator.username.replaceAll('@', ''),
               name: creator.username.replaceAll('@', '').split('.').first,
               avatarAsset: creator.avatarAsset,

@@ -109,6 +109,25 @@ abstract final class ApiEndpoints {
   /// Community spotlight feed. GET /engagement/spotlights (optional ?search=)
   static const String engagementSpotlights = '/engagement/spotlights';
 
+  // ── Feeds ─────────────────────────────────────────────────────────────────
+  /// Following feed. GET /feed/following
+  static const String feedFollowing = '/feed/following';
+
+  /// Community feed. GET /feed/community?communityId=:id or ?scope=joined
+  static String feedCommunity({String? communityId, String? scope}) {
+    final Map<String, String> query = <String, String>{};
+    if (communityId != null && communityId.isNotEmpty) {
+      query['communityId'] = communityId;
+    }
+    if (scope != null && scope.isNotEmpty) {
+      query['scope'] = scope;
+    }
+    if (query.isEmpty) return '/feed/community';
+    final String queryStr =
+        query.entries.map((MapEntry<String, String> e) => '${e.key}=${e.value}').join('&');
+    return '/feed/community?$queryStr';
+  }
+
   // ── Posts / Media ─────────────────────────────────────────────────────────
   /// Trending posts. GET /posts/trending
   static const String postsTrending = '/posts/trending';
@@ -166,10 +185,95 @@ abstract final class ApiEndpoints {
   /// Like a post. POST /posts/:id/like · Unlike: DELETE /posts/:id/like
   static String postLike(String id) => '/posts/$id/like';
 
+  /// Save a post. POST /posts/:id/save · Unsave: DELETE /posts/:id/save
+  static String postSave(String id) => '/posts/$id/save';
+
   /// Comments for a post. GET / POST /posts/:id/comments
   static String postComments(String id) => '/posts/$id/comments';
+
+  /// Single comment operations (Delete). DELETE /comments/:commentId
+  static String comment(String commentId) => '/comments/$commentId';
+
+  /// Like / unlike a comment. POST /comments/:commentId/like · DELETE /comments/:commentId/like
+  static String commentLike(String commentId) => '/comments/$commentId/like';
+
+  /// List posts by community. GET /posts?communityId=:communityId
+  static String postsByCommunity(String communityId) =>
+      '/posts?communityId=$communityId';
+
+  /// User's liked posts. GET /users/me/likes
+  static const String userLikes = '/users/me/likes';
+
+  /// User's saved posts. GET /users/me/saved
+  static const String userSaved = '/users/me/saved';
 
   // ── Reports ────────────────────────────────────────────────────────────────
   /// File a user report. POST /reports
   static const String reports = '/reports';
+
+  // ── Discover & Search ──────────────────────────────────────────────────────
+  /// Search Posts: GET /search?q=:query&limit=:limit
+  static String searchPosts({required String query, int limit = 10}) =>
+      '/search?q=${Uri.encodeQueryComponent(query)}&limit=$limit';
+
+  /// Multi-Tab Search: GET /discover/search?query=:query&tab=:tab
+  static String discoverSearch({required String query, String tab = 'all'}) =>
+      '/discover/search?query=${Uri.encodeQueryComponent(query)}&tab=${Uri.encodeQueryComponent(tab)}';
+
+  /// Trending Hashtags (public): GET /discover/trending
+  static const String discoverTrending = '/discover/trending';
+
+  /// Creators: GET /discover/creators?type=:type (to_watch | new)
+  static String discoverCreators({required String type}) =>
+      '/discover/creators?type=$type';
+
+  /// Recent Searches: GET / POST / DELETE /discover/recent-searches
+  static const String discoverRecentSearches = '/discover/recent-searches';
+
+  /// Delete one recent search: DELETE /discover/recent-searches/:id
+  static String discoverRecentSearch(String id) =>
+      '/discover/recent-searches/$id';
+
+  // ── Conversations & Messages ───────────────────────────────────────────────
+  /// List conversations or Start conversation: GET / POST /conversations
+  static const String conversations = '/conversations';
+
+  /// Clear/delete conversation for self: DELETE /conversations/:id
+  static String conversation(String id) => '/conversations/$id';
+
+  /// Message requests: GET /conversations/requests
+  static const String conversationRequests = '/conversations/requests';
+
+  /// Accept message request: POST /conversations/:id/accept
+  static String conversationAccept(String id) => '/conversations/$id/accept';
+
+  /// Reject message request: POST /conversations/:id/reject
+  static String conversationReject(String id) => '/conversations/$id/reject';
+
+  /// List messages or Send message: GET / POST /conversations/:id/messages
+  static String conversationMessages(String id) =>
+      '/conversations/$id/messages';
+
+  /// Unsend message: DELETE /conversations/:id/messages/:messageId
+  static String conversationMessage(String id, String messageId) =>
+      '/conversations/$id/messages/$messageId';
+
+  /// Mark message read: POST /conversations/:id/messages/:messageId/read
+  static String conversationMessageRead(String id, String messageId) =>
+      '/conversations/$id/messages/$messageId/read';
+
+  /// Mute / Unmute conversation: POST / DELETE /conversations/:id/mute
+  static String conversationMute(String id) => '/conversations/$id/mute';
+
+  /// React to message: POST /conversations/:id/messages/:messageId/reactions
+  static String conversationMessageReactions(String id, String messageId) =>
+      '/conversations/$id/messages/$messageId/reactions';
+
+  /// Remove reaction: DELETE /conversations/:id/messages/:messageId/reactions?emoji=:emoji
+  static String conversationMessageReaction(
+    String id,
+    String messageId,
+    String emoji,
+  ) =>
+      '/conversations/$id/messages/$messageId/reactions?emoji=${Uri.encodeQueryComponent(emoji)}';
 }

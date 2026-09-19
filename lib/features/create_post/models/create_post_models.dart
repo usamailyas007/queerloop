@@ -149,6 +149,7 @@ class PostResponseModel {
     this.type = 'TEXT',
     this.authorId,
     this.authorName,
+    this.authorDisplayName,
     this.authorAvatar,
     this.createdAt,
     this.mediaRefs = const <String>[],
@@ -161,6 +162,7 @@ class PostResponseModel {
     this.likesCount = 0,
     this.commentsCount = 0,
     this.isLiked = false,
+    this.isSaved = false,
     this.duration,
   });
 
@@ -169,6 +171,7 @@ class PostResponseModel {
   final String type;
   final String? authorId;
   final String? authorName;
+  final String? authorDisplayName;
   final String? authorAvatar;
   final String? createdAt;
   final List<String> mediaRefs;
@@ -181,6 +184,7 @@ class PostResponseModel {
   final int likesCount;
   final int commentsCount;
   final bool isLiked;
+  final bool isSaved;
   final String? duration;
 
   String get body => caption;
@@ -213,35 +217,112 @@ class PostResponseModel {
     }
 
     final String? resolvedAuthorId = (map['authorId'] ??
+            map['author_id'] ??
             map['ownerId'] ??
+            map['owner_id'] ??
+            map['creatorId'] ??
+            map['creator_id'] ??
             map['userId'] ??
-            (map['author'] is Map ? map['author']['id'] : null) ??
-            (map['user'] is Map ? map['user']['id'] : null))
+            map['user_id'] ??
+            map['participantId'] ??
+            map['createdBy'] ??
+            map['postedBy'] ??
+            map['uploaderId'] ??
+            (map['author'] is Map
+                ? (map['author']['id'] ??
+                    map['author']['_id'] ??
+                    map['author']['userId'] ??
+                    map['author']['authorId'])
+                : (map['author'] is String ? map['author'] : null)) ??
+            (map['user'] is Map
+                ? (map['user']['id'] ??
+                    map['user']['_id'] ??
+                    map['user']['userId'])
+                : (map['user'] is String ? map['user'] : null)) ??
+            (map['creator'] is Map
+                ? (map['creator']['id'] ??
+                    map['creator']['_id'] ??
+                    map['creator']['userId'])
+                : null))
         ?.toString();
 
+    String? finalAuthorId = (resolvedAuthorId != null && resolvedAuthorId.trim().isNotEmpty)
+        ? resolvedAuthorId.trim()
+        : null;
+
+    if (finalAuthorId == null) {
+      final String fullStr = map.toString();
+      final Match? match = RegExp(
+        r'/(?:original|images|videos|users|avatars)/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})',
+      ).firstMatch(fullStr);
+      if (match != null) {
+        finalAuthorId = match.group(1);
+      }
+    }
+
+    if (finalAuthorId == null) {
+      final String postId = (map['id'] ?? map['_id'] ?? '').toString();
+      final Iterable<Match> matches = RegExp(
+        r'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})',
+      ).allMatches(map.toString());
+      for (final Match m in matches) {
+        final String? matchedId = m.group(1);
+        if (matchedId != null &&
+            matchedId != postId &&
+            (rawMediaRefs == null ||
+                !rawMediaRefs.any((dynamic r) => r.toString().contains(matchedId)))) {
+          finalAuthorId = matchedId;
+          break;
+        }
+      }
+    }
+
     final String? resolvedAuthorName = (map['author'] is Map
-            ? (map['author']['displayName'] ??
-                map['author']['username'] ??
+            ? (map['author']['username'] ??
+                map['author']['userName'] ??
+                map['author']['handle'] ??
+                map['author']['displayName'] ??
                 map['author']['name'])
             : null) ??
         (map['user'] is Map
-            ? (map['user']['displayName'] ??
-                map['user']['username'] ??
+            ? (map['user']['username'] ??
+                map['user']['userName'] ??
+                map['user']['handle'] ??
+                map['user']['displayName'] ??
                 map['user']['name'])
             : null) ??
         map['authorName']?.toString() ??
-        map['userName']?.toString();
+        map['author_name']?.toString() ??
+        map['userName']?.toString() ??
+        map['username']?.toString();
+
+    final String? resolvedAuthorDisplayName = (map['author'] is Map
+            ? (map['author']['displayName'] ??
+                map['author']['name'] ??
+                map['author']['fullName'])
+            : null) ??
+        (map['user'] is Map
+            ? (map['user']['displayName'] ??
+                map['user']['name'] ??
+                map['user']['fullName'])
+            : null) ??
+        map['displayName']?.toString() ??
+        map['authorDisplayName']?.toString();
 
     final String? resolvedAuthorAvatar = (map['author'] is Map
             ? (map['author']['avatarUrl'] ??
                 map['author']['avatar'] ??
-                map['author']['profilePic'])
+                map['author']['profilePic'] ??
+                map['author']['profilePicture'])
             : null) ??
         (map['user'] is Map
             ? (map['user']['avatarUrl'] ??
                 map['user']['avatar'] ??
-                map['user']['profilePic'])
+                map['user']['profilePic'] ??
+                map['user']['profilePicture'])
             : null) ??
+        map['authorAvatar']?.toString() ??
+        map['author_avatar']?.toString() ??
         map['avatarUrl']?.toString() ??
         map['avatar']?.toString();
 
@@ -249,8 +330,9 @@ class PostResponseModel {
       id: (map['id'] ?? map['_id'] ?? '').toString(),
       caption: (map['body'] ?? map['caption'] ?? '').toString(),
       type: (map['type'] ?? 'TEXT').toString(),
-      authorId: resolvedAuthorId,
+      authorId: finalAuthorId,
       authorName: resolvedAuthorName,
+      authorDisplayName: resolvedAuthorDisplayName,
       authorAvatar: resolvedAuthorAvatar,
       createdAt: map['createdAt']?.toString(),
       mediaRefs: rawMediaRefs?.map((e) => e.toString()).toList() ?? <String>[],
@@ -263,6 +345,7 @@ class PostResponseModel {
       likesCount: rawLikes is num ? rawLikes.toInt() : int.tryParse(rawLikes?.toString() ?? '0') ?? 0,
       commentsCount: rawComments is num ? rawComments.toInt() : int.tryParse(rawComments?.toString() ?? '0') ?? 0,
       isLiked: (map['isLiked'] ?? map['liked'] ?? false) == true,
+      isSaved: (map['isSaved'] ?? map['saved'] ?? false) == true,
       duration: durationStr,
     );
   }

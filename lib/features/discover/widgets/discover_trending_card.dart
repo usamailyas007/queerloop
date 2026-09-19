@@ -72,11 +72,10 @@ class DiscoverTrendingCard extends StatelessWidget {
             ),
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              child: Image.asset(
-                item.thumbnailAsset,
+              child: SizedBox(
                 width: 44,
                 height: 44,
-                fit: BoxFit.cover,
+                child: _buildThumbnail(context),
               ),
             ),
           ],
@@ -84,4 +83,42 @@ class DiscoverTrendingCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildThumbnail(BuildContext context) {
+    final String thumb = item.thumbnailAsset.trim();
+    if (thumb.startsWith('http://') || thumb.startsWith('https://')) {
+      return Image.network(
+        thumb,
+        width: 44,
+        height: 44,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _buildFallback(context),
+      );
+    } else if (thumb.isNotEmpty) {
+      return Image.asset(
+        thumb,
+        width: 44,
+        height: 44,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _buildFallback(context),
+      );
+    }
+    return _buildFallback(context);
+  }
+
+  Widget _buildFallback(BuildContext context) {
+    return Container(
+      color: rankColor.withValues(alpha: 0.15),
+      child: Center(
+        child: Text(
+          '#',
+          style: AppTextStyles.titleMedium.copyWith(
+            color: rankColor,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
 }
+

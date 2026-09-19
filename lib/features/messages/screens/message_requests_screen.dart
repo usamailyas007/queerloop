@@ -10,12 +10,30 @@ import '../../profile/screens/user_profile_screen.dart';
 import '../models/message_models.dart';
 import '../provider/messages_provider.dart';
 
-class MessageRequestsScreen extends StatelessWidget {
+import 'chat_screen.dart';
+
+class MessageRequestsScreen extends StatefulWidget {
   const MessageRequestsScreen({super.key});
+
+  @override
+  State<MessageRequestsScreen> createState() => _MessageRequestsScreenState();
+}
+
+class _MessageRequestsScreenState extends State<MessageRequestsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<MessagesProvider>().loadMessageRequests(force: true);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final MessagesProvider provider = context.watch<MessagesProvider>();
+    final bool isLoading = provider.isLoadingRequests;
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -87,136 +105,275 @@ class MessageRequestsScreen extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.xl),
 
-            // ── List of Message Request Cards ────────────────────────────────
+            // ── List of Message Request Cards OR Empty State ─────────────────
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                itemCount: provider.messageRequests.length,
-                itemBuilder: (BuildContext context, int index) {
-                  final MessageRequestModel req =
-                      provider.messageRequests[index];
-                  final String cleanUsername = req.username.startsWith('@')
-                      ? req.username
-                      : '@${req.username}';
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: AppSpacing.lg),
-                    child: Column(
-                      children: <Widget>[
-                        // Request Info Card
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push<void>(
-                              context,
-                              MaterialPageRoute<void>(
-                                builder: (_) => UserProfileScreen(
-                                  username: req.username.replaceAll('@', ''),
-                                  name: req.username
-                                      .replaceAll('@', '')
-                                      .split('.')
-                                      .first,
-                                  avatarAsset: req.avatarAsset,
-                                ),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(AppSpacing.md),
-                            decoration: BoxDecoration(
-                              color: context.themeCardBackground,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.card),
-                              border: Border.all(
-                                color: context.themeBorder,
-                              ),
-                            ),
-                            child: Row(
-                              children: <Widget>[
-                                ClipOval(
-                                  child: Image.asset(
-                                    req.avatarAsset,
-                                    width: 40,
-                                    height: 40,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.md),
-                                Expanded(
+              child: RefreshIndicator(
+                color: AppColors.gradientPink,
+                onRefresh: () =>
+                    context.read<MessagesProvider>().loadMessageRequests(force: true),
+                child: isLoading && provider.messageRequests.isEmpty
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.gradientPink,
+                        ),
+                      )
+                    : provider.messageRequests.isEmpty
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: <Widget>[
+                              SizedBox(
+                                height:
+                                    MediaQuery.of(context).size.height * 0.45,
+                                child: Center(
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: <Widget>[
+                                      Icon(
+                                        Icons.mark_email_read_outlined,
+                                        size: 56,
+                                        color: context.themeIconMuted,
+                                      ),
+                                      const SizedBox(height: AppSpacing.md),
                                       Text(
-                                        cleanUsername,
+                                        'No message requests',
                                         style:
-                                            AppTextStyles.titleSmall.copyWith(
+                                            AppTextStyles.titleMedium.copyWith(
                                           color: context.themeTextPrimary,
                                           fontWeight: FontWeight.w700,
-                                          fontSize: 14,
+                                          fontSize: 16,
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
+                                      const SizedBox(height: 6),
                                       Text(
-                                        req.previewMessage,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                        'You have answered all incoming requests.',
                                         style: AppTextStyles.bodySmall.copyWith(
                                           color: context.themeTextSecondary,
-                                          fontSize: 12,
+                                          fontSize: 13,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
+                          )
+                        : ListView.builder(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.lg),
+                            itemCount: provider.messageRequests.length,
+                            itemBuilder: (BuildContext context, int index) {
+                        final MessageRequestModel req =
+                            provider.messageRequests[index];
+                        final String cleanUsername = req.username.startsWith('@')
+                            ? req.username
+                            : '@${req.username}';
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+                          child: Column(
+                            children: <Widget>[
+                              // Request Info Card (Tap opens ChatScreen to view)
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.push<void>(
+                                    context,
+                                    MaterialPageRoute<void>(
+                                      builder: (_) =>
+                                          ChangeNotifierProvider<MessagesProvider>.value(
+                                        value: provider,
+                                        child: ChatScreen(
+                                          conversation: ConversationModel(
+                                            id: req.id,
+                                            participantId: req.participantId,
+                                            username: req.username,
+                                            displayName: req.displayName,
+                                            avatarUrl: req.avatarUrl,
+                                            avatarAsset: req.avatarAsset,
+                                            lastMessage: req.previewMessage,
+                                            timeAgo: 'Just now',
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(AppSpacing.md),
+                                  decoration: BoxDecoration(
+                                    color: context.themeCardBackground,
+                                    borderRadius:
+                                        BorderRadius.circular(AppRadius.card),
+                                    border: Border.all(
+                                      color: context.themeBorder,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: <Widget>[
+                                      GestureDetector(
+                                        onTap: () {
+                                          Navigator.push<void>(
+                                            context,
+                                            MaterialPageRoute<void>(
+                                              builder: (_) => UserProfileScreen(
+                                                username: req.username
+                                                    .replaceAll('@', ''),
+                                                name: req.displayName ??
+                                                    req.username
+                                                        .replaceAll('@', '')
+                                                        .split('.')
+                                                        .first,
+                                                avatarAsset: req.avatarAsset,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        child: ClipOval(
+                                          child: req.avatarAsset.startsWith('http')
+                                              ? Image.network(
+                                                  req.avatarAsset,
+                                                  width: 40,
+                                                  height: 40,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (_, _, _) =>
+                                                      const Icon(Icons.person,
+                                                          size: 40),
+                                                )
+                                              : Image.asset(
+                                                  req.avatarAsset,
+                                                  width: 40,
+                                                  height: 40,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppSpacing.md),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: <Widget>[
+                                            Text(
+                                              cleanUsername,
+                                              style: AppTextStyles.titleSmall
+                                                  .copyWith(
+                                                color: context.themeTextPrimary,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              req.previewMessage,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppTextStyles.bodySmall
+                                                  .copyWith(
+                                                color: context.themeTextSecondary,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: context.themeIconMuted,
+                                        size: 20,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: AppSpacing.sm),
+
+                              // Action Buttons Row (Accept, Delete, Block)
+                              Row(
+                                children: <Widget>[
+                                  // Accept (AppGradientButton)
+                                  Expanded(
+                                    flex: 3,
+                                    child: AppGradientButton(
+                                      text: 'Accept',
+                                      onPressed: () async {
+                                        final bool ok = await provider
+                                            .acceptRequest(req.id);
+                                        if (context.mounted && ok) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Request accepted! Chat moved to your main inbox.',
+                                              ),
+                                              duration: Duration(seconds: 2),
+                                              backgroundColor:
+                                                  AppColors.gradientCyan,
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      height: 38,
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+
+                                  // Delete (AppOutlineButton)
+                                  Expanded(
+                                    flex: 3,
+                                    child: AppOutlineButton(
+                                      text: 'Delete',
+                                      onPressed: () async {
+                                        final bool ok = await provider
+                                            .rejectRequest(req.id);
+                                        if (context.mounted && ok) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Message request deleted.',
+                                              ),
+                                              duration: Duration(seconds: 2),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      height: 38,
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+
+                                  // Block (AppOutlineButton with Cyan Border & Text)
+                                  Expanded(
+                                    flex: 2,
+                                    child: AppOutlineButton(
+                                      text: 'Block',
+                                      onPressed: () {
+                                        provider.toggleBlock(req.username);
+                                        provider.rejectRequest(req.id);
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Blocked $cleanUsername',
+                                            ),
+                                            duration:
+                                                const Duration(seconds: 2),
+                                          ),
+                                        );
+                                      },
+                                      height: 38,
+                                      borderColor: AppColors.gradientCyan,
+                                      textColor: AppColors.gradientCyan,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ),
-
-                        const SizedBox(height: AppSpacing.sm),
-
-                        // Action Buttons Row (Accept, Delete, Block)
-                        Row(
-                          children: <Widget>[
-                            // Accept (AppGradientButton)
-                            Expanded(
-                              flex: 3,
-                              child: AppGradientButton(
-                                text: 'Accept',
-                                onPressed: () => provider.removeRequest(req.id),
-                                height: 38,
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-
-                            // Delete (AppOutlineButton)
-                            Expanded(
-                              flex: 3,
-                              child: AppOutlineButton(
-                                text: 'Delete',
-                                onPressed: () => provider.removeRequest(req.id),
-                                height: 38,
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-
-                            // Block (AppOutlineButton with Cyan Border & Text)
-                            Expanded(
-                              flex: 2,
-                              child: AppOutlineButton(
-                                text: 'Block',
-                                onPressed: () => provider.removeRequest(req.id),
-                                height: 38,
-                                borderColor: AppColors.gradientCyan,
-                                textColor: AppColors.gradientCyan,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  );
-                },
               ),
             ),
           ],

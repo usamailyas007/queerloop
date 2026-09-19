@@ -30,6 +30,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final MessagesProvider provider = context.read<MessagesProvider>();
+        provider.loadConversations();
+        provider.loadMessageRequests();
+      }
+    });
   }
 
   @override
@@ -40,14 +47,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<MessagesProvider>(
-      create: (_) => MessagesProvider(),
-      child: Consumer<MessagesProvider>(
-        builder:
-            (BuildContext context, MessagesProvider provider, Widget? child) {
-          final int requestCount = provider.messageRequests.length;
-          final bool isEmpty = provider.conversations.isEmpty;
-          final ConversationModel? deletedConv = provider.lastDeletedConv;
+    final MessagesProvider provider = context.watch<MessagesProvider>();
+    final int requestCount = provider.messageRequests.length;
+    final bool isEmpty = provider.conversations.isEmpty;
+    final ConversationModel? deletedConv = provider.lastDeletedConv;
 
           return Scaffold(
             backgroundColor: context.themeBackground,
@@ -179,7 +182,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   const SizedBox(height: AppSpacing.sm),
 
                   // ── Body: Conversations List OR Empty State (Image 1) ─────
-                  if (isEmpty)
+                  if (isEmpty && requestCount == 0 && _searchController.text.trim().isEmpty)
                     Expanded(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -265,10 +268,18 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     )
                   else
                     Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.lg),
-                        children: <Widget>[
+                      child: RefreshIndicator(
+                        color: AppColors.gradientPink,
+                        onRefresh: () async {
+                          await Future.wait<void>(<Future<void>>[
+                            provider.loadConversations(force: true),
+                            provider.loadMessageRequests(force: true),
+                          ]);
+                        },
+                        child: ListView(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.lg),
+                          children: <Widget>[
                           // ── Message Requests Banner Card ────────────────────
                           if (requestCount > 0)
                             GestureDetector(
@@ -367,10 +378,109 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               ),
                             ),
 
-                          const SizedBox(height: AppSpacing.md),
+                          if (_searchController.text.trim().isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                              child: GestureDetector(
+                                onTap: () {
+                                  Navigator.push<void>(
+                                    context,
+                                    MaterialPageRoute<void>(
+                                      builder: (_) =>
+                                          ChangeNotifierProvider<MessagesProvider>.value(
+                                        value: provider,
+                                        child: DiscoverPeopleScreen(
+                                          initialQuery: _searchController.text.trim(),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.lg,
+                                    vertical: AppSpacing.md,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: context.themeCardBackground,
+                                    borderRadius:
+                                        BorderRadius.circular(AppRadius.card),
+                                    border: Border.all(
+                                      color: AppColors.gradientCyan
+                                          .withValues(alpha: 0.4),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: <Widget>[
+                                      const Icon(
+                                        Icons.person_search_rounded,
+                                        color: AppColors.gradientCyan,
+                                        size: 22,
+                                      ),
+                                      const SizedBox(width: AppSpacing.md),
+                                      Expanded(
+                                        child: Text(
+                                          'Search for "${_searchController.text.trim()}" in People',
+                                          style: AppTextStyles.bodyMedium.copyWith(
+                                            color: AppColors.gradientCyan,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      const Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: AppColors.gradientCyan,
+                                        size: 20,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
 
-                          // ── Conversations List with Dismissible Swipe Action (Image 2) ──
-                          ...provider.conversations.map(
+                          if (isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: AppSpacing.xxl,
+                              ),
+                              child: Center(
+                                child: Column(
+                                  children: <Widget>[
+                                    Icon(
+                                      _searchController.text.trim().isNotEmpty
+                                          ? Icons.search_off_rounded
+                                          : Icons.chat_bubble_outline_rounded,
+                                      size: 44,
+                                      color: context.themeIconMuted,
+                                    ),
+                                    const SizedBox(height: AppSpacing.md),
+                                    Text(
+                                      _searchController.text.trim().isNotEmpty
+                                          ? 'No matching conversations'
+                                          : 'No main conversations yet',
+                                      style: AppTextStyles.titleSmall.copyWith(
+                                        color: context.themeTextPrimary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _searchController.text.trim().isNotEmpty
+                                          ? 'Tap the button above to search real people across the app.'
+                                          : 'Accept requests above or tap (+) to start chatting.',
+                                      textAlign: TextAlign.center,
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: context.themeTextSecondary,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          else
+                            // ── Conversations List with Dismissible Swipe Action (Image 2) ──
+                            ...provider.conversations.map(
                             (ConversationModel conv) => Dismissible(
                               key: ValueKey<String>(conv.id),
                               direction: DismissDirection.endToStart,
@@ -439,12 +549,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         ],
                       ),
                     ),
+                  ),
                 ],
               ),
             ),
           );
-        },
-      ),
-    );
   }
 }

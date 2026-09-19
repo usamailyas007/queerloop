@@ -1,156 +1,256 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_images.dart';
 import '../models/discover_models.dart';
+import '../services/discover_service.dart';
 import '../widgets/search_tag_tile.dart';
 
 class DiscoverProvider extends ChangeNotifier {
-  // ── Search State ─────────────────────────────────────────────────────
+  DiscoverProvider({DiscoverService? discoverService})
+      : _discoverService = discoverService {
+    fetchDiscoverData();
+  }
+
+  final DiscoverService? _discoverService;
+
+  Timer? _debounceTimer;
+
+  // ── Loading States ──────────────────────────────────────────────────────────
+  bool _isLoadingTrending = false;
+  bool _isLoadingCreatorsToWatch = false;
+  bool _isLoadingNewCreators = false;
+  bool _isLoadingSearch = false;
+  bool _isLoadingRecentSearches = false;
+
+  bool get isLoadingTrending => _isLoadingTrending;
+  bool get isLoadingCreatorsToWatch => _isLoadingCreatorsToWatch;
+  bool get isLoadingNewCreators => _isLoadingNewCreators;
+  bool get isLoadingSearch => _isLoadingSearch;
+  bool get isLoadingRecentSearches => _isLoadingRecentSearches;
+
+  // ── Search State ────────────────────────────────────────────────────────────
   bool _isSearchFocused = false;
   String _searchQuery = '';
-  bool _hasResults = true; // toggle between results/no-results
 
   bool get isSearchFocused => _isSearchFocused;
   String get searchQuery => _searchQuery;
-  bool get hasResults => _hasResults;
-  bool get isSearching => _searchQuery.isNotEmpty;
+  bool get isSearching => _searchQuery.trim().isNotEmpty;
 
-  // ── Search Tab ───────────────────────────────────────────────────────
+  // ── Search Tab ──────────────────────────────────────────────────────────────
   // 0=All, 1=Posts, 2=Reels, 3=People, 4=Tags, 5=Communities
   int _selectedSearchTab = 0;
   int get selectedSearchTab => _selectedSearchTab;
 
+  static const List<String> _tabMapping = <String>[
+    'all',
+    'posts',
+    'posts', // Reels queries posts
+    'people',
+    'tags',
+    'communities',
+  ];
+
+  // In-memory search cache: "tab:query" -> MultiTabSearchResults
+  final Map<String, MultiTabSearchResults> _searchCache = <String, MultiTabSearchResults>{};
+
+  // Live search results
+  MultiTabSearchResults _searchResults = const MultiTabSearchResults();
+  MultiTabSearchResults get currentSearchResults => _searchResults;
+
+  List<DiscoverSearchResult> get searchResults => _searchResults.posts;
+
+  List<DiscoverPerson> get peopleResults => _searchResults.people;
+
+  List<TagSearchResultItem> get tagResults => _searchResults.tags;
+
+  List<DiscoverCommunity> get communityResults => _searchResults.communities;
+
+  bool get hasResults {
+    if (_searchQuery.trim().isEmpty) return false;
+    if (_isLoadingSearch) return true; // Show results layout during search transition
+
+    switch (_selectedSearchTab) {
+      case 0:
+        return _searchResults.isNotEmpty ||
+            _searchResults.posts.isNotEmpty ||
+            _searchResults.people.isNotEmpty ||
+            _searchResults.tags.isNotEmpty ||
+            _searchResults.communities.isNotEmpty;
+      case 1:
+      case 2:
+        return _searchResults.posts.isNotEmpty;
+      case 3:
+        return _searchResults.people.isNotEmpty;
+      case 4:
+        return _searchResults.tags.isNotEmpty;
+      case 5:
+        return _searchResults.communities.isNotEmpty;
+      default:
+        return _searchResults.isNotEmpty;
+    }
+  }
+
   void setSearchFocused(bool focused) {
+    if (_isSearchFocused == focused) return;
     _isSearchFocused = focused;
     notifyListeners();
   }
 
   void setSearchQuery(String query) {
+    if (_searchQuery == query) return;
     _searchQuery = query;
-    // Simulate: "fit guide" has results, anything else might not
-    _hasResults = query.toLowerCase().contains('fit');
+
+    _debounceTimer?.cancel();
+    final String trimmed = query.trim();
+
+    if (trimmed.isEmpty) {
+      _isLoadingSearch = false;
+      _searchResults = const MultiTabSearchResults();
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingSearch = true;
     notifyListeners();
+
+    _debounceTimer = Timer(const Duration(milliseconds: 350), () {
+      _executeSearch(trimmed, _selectedSearchTab);
+    });
   }
 
   void setSelectedSearchTab(int index) {
+    if (_selectedSearchTab == index) return;
     _selectedSearchTab = index;
     notifyListeners();
+
+    final String trimmed = _searchQuery.trim();
+    if (trimmed.isNotEmpty) {
+      _executeSearch(trimmed, index);
+    }
   }
 
   void clearSearchQuery() {
+    _debounceTimer?.cancel();
     _searchQuery = '';
     _isSearchFocused = false;
+    _isLoadingSearch = false;
+    _searchResults = const MultiTabSearchResults();
     notifyListeners();
   }
 
-  // ── Recent Searches ──────────────────────────────────────────────────
-  final List<String> _recentSearches = <String>[
-    'binder fit guide',
-    '@jules.does',
-    '#chosenfamily',
-  ];
+  Future<void> _executeSearch(String query, int tabIndex) async {
+    final String tabName =
+        (tabIndex >= 0 && tabIndex < _tabMapping.length) ? _tabMapping[tabIndex] : 'all';
+    final String cacheKey = '$tabName:${query.toLowerCase()}';
+
+    if (_searchCache.containsKey(cacheKey)) {
+      _searchResults = _searchCache[cacheKey]!;
+      _isLoadingSearch = false;
+      notifyListeners();
+      return;
+    }
+
+    if (_discoverService == null) {
+      _isLoadingSearch = false;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final MultiTabSearchResults results = await _discoverService.search(
+        query: query,
+        tab: tabName,
+      );
+
+      _searchCache[cacheKey] = results;
+
+      // Only apply if the search query hasn't changed while request was in-flight
+      if (_searchQuery.trim() == query) {
+        _searchResults = results;
+        _isLoadingSearch = false;
+        notifyListeners();
+
+        // Save to recent searches if there are results
+        if (results.isNotEmpty) {
+          saveRecentSearch(query);
+        }
+      }
+    } catch (_) {
+      if (_searchQuery.trim() == query) {
+        _isLoadingSearch = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  // ── Recent Searches ──────────────────────────────────────────────────────────
+  final List<RecentSearchItem> _recentSearches = <RecentSearchItem>[];
 
   List<String> get recentSearches =>
-      List<String>.unmodifiable(_recentSearches);
+      _recentSearches.map((RecentSearchItem r) => r.query).toList();
 
-  void removeRecentSearch(String query) {
-    _recentSearches.remove(query);
+  List<RecentSearchItem> get recentSearchesItems =>
+      List<RecentSearchItem>.unmodifiable(_recentSearches);
+
+  Future<void> fetchRecentSearches() async {
+    if (_discoverService == null) return;
+    _isLoadingRecentSearches = true;
     notifyListeners();
+
+    try {
+      final List<RecentSearchItem> items = await _discoverService.getRecentSearches();
+      _recentSearches.clear();
+      _recentSearches.addAll(items);
+    } finally {
+      _isLoadingRecentSearches = false;
+      notifyListeners();
+    }
   }
 
-  void clearAllRecentSearches() {
+  Future<void> saveRecentSearch(String query) async {
+    final String trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+
+    // Optimistic local update
+    _recentSearches.removeWhere((RecentSearchItem item) => item.query.toLowerCase() == trimmed.toLowerCase());
+    _recentSearches.insert(0, RecentSearchItem(id: trimmed, query: trimmed));
+    notifyListeners();
+
+    if (_discoverService != null) {
+      await _discoverService.saveRecentSearch(trimmed);
+    }
+  }
+
+  Future<void> removeRecentSearch(String queryOrId) async {
+    // Optimistic local removal
+    final int index = _recentSearches.indexWhere(
+      (RecentSearchItem item) => item.id == queryOrId || item.query == queryOrId,
+    );
+    String idToDelete = queryOrId;
+    if (index != -1) {
+      idToDelete = _recentSearches[index].id;
+      _recentSearches.removeAt(index);
+      notifyListeners();
+    }
+
+    if (_discoverService != null) {
+      await _discoverService.deleteRecentSearch(idToDelete);
+    }
+  }
+
+  Future<void> clearAllRecentSearches() async {
     _recentSearches.clear();
     notifyListeners();
+
+    if (_discoverService != null) {
+      await _discoverService.clearAllRecentSearches();
+    }
   }
 
-  // ── Suggested Tags ───────────────────────────────────────────────────
-  final List<String> suggestedTags = const <String>[
-    '#transjoy',
-    '#dragbrunch',
-    '#comingout',
-    '#queerbooks',
-    '#binderfit',
-    '#prideprep',
-  ];
-
-  // ── Search Results ───────────────────────────────────────────────────
-  final List<DiscoverSearchResult> searchResults = const <DiscoverSearchResult>[
-    DiscoverSearchResult(imageAsset: AppImages.searchResult1, viewCount: '12.4K'),
-    DiscoverSearchResult(imageAsset: AppImages.searchResult2),
-    DiscoverSearchResult(imageAsset: AppImages.searchResult3),
-    DiscoverSearchResult(imageAsset: AppImages.searchResult4),
-    DiscoverSearchResult(imageAsset: AppImages.searchResult5),
-    DiscoverSearchResult(imageAsset: AppImages.searchResult6),
-  ];
-
-  // ── Tag Results ──────────────────────────────────────────────────────
-  final List<TagSearchResultItem> tagResults = const <TagSearchResultItem>[
-    TagSearchResultItem(
-      name: '#topsurgery',
-      postsCount: '41.2K',
-      weeklyCount: '2.4K',
-      imageAsset: AppImages.searchResult1,
-    ),
-    TagSearchResultItem(
-      name: '#topsurgeryrecovery',
-      postsCount: '18.9K',
-      weeklyCount: '1.1K',
-      imageAsset: AppImages.searchResult2,
-    ),
-    TagSearchResultItem(
-      name: '#topsurgeryjourney',
-      postsCount: '9.4K',
-      weeklyCount: '620',
-      imageAsset: AppImages.searchResult3,
-    ),
-    TagSearchResultItem(
-      name: '#scarcare',
-      postsCount: '6.8K',
-      weeklyCount: '410',
-      imageAsset: AppImages.searchResult4,
-    ),
-    TagSearchResultItem(
-      name: '#postopday1',
-      postsCount: '3.3K',
-      weeklyCount: '180',
-      imageAsset: AppImages.searchResult5,
-    ),
-    TagSearchResultItem(
-      name: '#surgeonreviews',
-      postsCount: '2.1K',
-      weeklyCount: '96',
-      imageAsset: AppImages.searchResult6,
-    ),
-  ];
-
-  // ── People Results ───────────────────────────────────────────────────
-  final List<DiscoverPerson> peopleResults = const <DiscoverPerson>[
-    DiscoverPerson(
-      avatarAsset: AppImages.user1,
-      username: 'rowankeeps',
-      pronouns: 'they/them',
-      followers: '41K followers',
-      isFollowing: false,
-    ),
-    DiscoverPerson(
-      avatarAsset: AppImages.user2,
-      username: 'jules.does',
-      pronouns: 'she/they',
-      followers: '12K followers',
-      isFollowing: true,
-    ),
-  ];
-
-  // ── You Might Like ───────────────────────────────────────────────────
-  final List<DiscoverCreator> youMightLike = const <DiscoverCreator>[
-    DiscoverCreator(avatarAsset: AppImages.user1, username: 'sam.a'),
-    DiscoverCreator(avatarAsset: AppImages.user2, username: 'nadia'),
-    DiscoverCreator(avatarAsset: AppImages.user3, username: 'theo'),
-    DiscoverCreator(avatarAsset: AppImages.user4, username: 'kit'),
-  ];
-
-  // ── Trending ─────────────────────────────────────────────────────────
-  final List<TrendingItem> trendingItems = const <TrendingItem>[
+  // ── Trending Hashtags ────────────────────────────────────────────────────────
+  List<TrendingItem> _trendingItems = const <TrendingItem>[
     TrendingItem(
       rank: '01',
       hashtag: '#chosenfamily',
@@ -177,7 +277,103 @@ class DiscoverProvider extends ChangeNotifier {
     ),
   ];
 
-  // ── Communities ──────────────────────────────────────────────────────
+  List<TrendingItem> get trendingItems => _trendingItems.take(4).toList();
+
+  Future<void> fetchTrendingHashtags() async {
+    if (_discoverService == null) return;
+    _isLoadingTrending = true;
+    notifyListeners();
+
+    try {
+      final List<TrendingItem> items =
+          await _discoverService.getTrendingHashtags();
+      if (items.isNotEmpty) {
+        _trendingItems = items.take(4).toList();
+      }
+    } finally {
+      _isLoadingTrending = false;
+      notifyListeners();
+    }
+  }
+
+  // ── Creators ─────────────────────────────────────────────────────────────────
+  List<DiscoverCreator> _creatorsToWatch = const <DiscoverCreator>[
+    DiscoverCreator(avatarAsset: AppImages.user1, username: 'jahvi'),
+    DiscoverCreator(avatarAsset: AppImages.user2, username: 'molly'),
+    DiscoverCreator(avatarAsset: AppImages.user3, username: 'theo'),
+    DiscoverCreator(avatarAsset: AppImages.user4, username: 'kt'),
+  ];
+
+  List<DiscoverCreator> get creatorsToWatch => _creatorsToWatch;
+
+  Future<void> fetchCreatorsToWatch() async {
+    if (_discoverService == null) return;
+    _isLoadingCreatorsToWatch = true;
+    notifyListeners();
+
+    try {
+      final List<DiscoverCreator> creators =
+          await _discoverService.getCreators(type: 'to_watch');
+      if (creators.isNotEmpty) {
+        _creatorsToWatch = creators;
+      }
+    } finally {
+      _isLoadingCreatorsToWatch = false;
+      notifyListeners();
+    }
+  }
+
+  List<DiscoverCreator> _newCreators = const <DiscoverCreator>[
+    DiscoverCreator(avatarAsset: AppImages.user2, username: 'jamal'),
+    DiscoverCreator(avatarAsset: AppImages.user3, username: 'molly'),
+    DiscoverCreator(avatarAsset: AppImages.user1, username: 'theo'),
+    DiscoverCreator(avatarAsset: AppImages.user4, username: 'kt'),
+  ];
+
+  List<DiscoverCreator> get newCreators => _newCreators;
+
+  Future<void> fetchNewCreators() async {
+    if (_discoverService == null) return;
+    _isLoadingNewCreators = true;
+    notifyListeners();
+
+    try {
+      final List<DiscoverCreator> creators =
+          await _discoverService.getCreators(type: 'new');
+      if (creators.isNotEmpty) {
+        _newCreators = creators;
+      }
+    } finally {
+      _isLoadingNewCreators = false;
+      notifyListeners();
+    }
+  }
+
+  // ── Unified Initial / Refresh Fetch ──────────────────────────────────────────
+  Future<void> fetchDiscoverData({bool refresh = false}) async {
+    if (_discoverService == null) return;
+    await Future.wait<void>(<Future<void>>[
+      fetchTrendingHashtags(),
+      fetchCreatorsToWatch(),
+      fetchNewCreators(),
+      fetchRecentSearches(),
+    ]);
+  }
+
+  // ── Dynamic Tags & Creators ──────────────────────────────────────────────────
+  List<String> get suggestedTags {
+    if (_trendingItems.isNotEmpty) {
+      return _trendingItems
+          .map((TrendingItem t) => t.hashtag)
+          .where((String h) => h.isNotEmpty)
+          .take(8)
+          .toList();
+    }
+    return const <String>[];
+  }
+
+  List<DiscoverCreator> get youMightLike => _creatorsToWatch;
+
   final List<DiscoverCommunity> communities = const <DiscoverCommunity>[
     DiscoverCommunity(
       imageAsset: AppImages.queer,
@@ -229,28 +425,15 @@ class DiscoverProvider extends ChangeNotifier {
     ),
   ];
 
-  // ── Creators To Watch ────────────────────────────────────────────────
-  final List<DiscoverCreator> creatorsToWatch = const <DiscoverCreator>[
-    DiscoverCreator(avatarAsset: AppImages.user1, username: 'jahvi'),
-    DiscoverCreator(avatarAsset: AppImages.user2, username: 'molly'),
-    DiscoverCreator(avatarAsset: AppImages.user3, username: 'theo'),
-    DiscoverCreator(avatarAsset: AppImages.user4, username: 'kt'),
-  ];
-
-  final List<DiscoverCreator> newCreators = const <DiscoverCreator>[
-    DiscoverCreator(avatarAsset: AppImages.user2, username: 'jamal'),
-    DiscoverCreator(avatarAsset: AppImages.user3, username: 'molly'),
-    DiscoverCreator(avatarAsset: AppImages.user1, username: 'theo'),
-    DiscoverCreator(avatarAsset: AppImages.user4, username: 'kt'),
-  ];
-
-  // ── Toggle Following ─────────────────────────────────────────────────
+  // ── Toggle Following ─────────────────────────────────────────────────────────
   final Map<String, bool> _followStates = <String, bool>{};
 
   bool isFollowing(String username) {
     if (_followStates.containsKey(username)) return _followStates[username]!;
     try {
-      return peopleResults.firstWhere((DiscoverPerson p) => p.username == username).isFollowing;
+      return peopleResults
+          .firstWhere((DiscoverPerson p) => p.username == username)
+          .isFollowing;
     } catch (_) {
       return false;
     }
@@ -261,13 +444,15 @@ class DiscoverProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Join Community ───────────────────────────────────────────────────
+  // ── Join Community ───────────────────────────────────────────────────────────
   final Map<String, bool> _joinStates = <String, bool>{};
 
   bool isJoined(String communityName) {
     if (_joinStates.containsKey(communityName)) return _joinStates[communityName]!;
     try {
-      return communities.firstWhere((DiscoverCommunity c) => c.name == communityName).isJoined;
+      return communities
+          .firstWhere((DiscoverCommunity c) => c.name == communityName)
+          .isJoined;
     } catch (_) {
       return false;
     }
@@ -276,5 +461,11 @@ class DiscoverProvider extends ChangeNotifier {
   void toggleJoin(String communityName) {
     _joinStates[communityName] = !isJoined(communityName);
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
   }
 }

@@ -348,6 +348,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                                     context,
                                     MaterialPageRoute<void>(
                                       builder: (_) => UserProfileScreen(
+                                        userId: req['id'] ?? req['userId'],
                                         username: req['username']!
                                             .replaceAll('@', ''),
                                         name: req['name'] ?? req['username']!,
@@ -471,6 +472,8 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                                       context,
                                       MaterialPageRoute<void>(
                                         builder: (_) => UserProfileScreen(
+                                          userId: _requests.first['id'] ??
+                                              _requests.first['userId'],
                                           username: _requests.first['username']!
                                               .replaceAll('@', ''),
                                           name: _requests.first['name'] ??
@@ -517,6 +520,8 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                                         context,
                                         MaterialPageRoute<void>(
                                           builder: (_) => UserProfileScreen(
+                                            userId: _requests.first['id'] ??
+                                                _requests.first['userId'],
                                             username: _requests
                                                 .first['username']!
                                                 .replaceAll('@', ''),
@@ -591,6 +596,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                                       context,
                                       MaterialPageRoute<void>(
                                         builder: (_) => UserProfileScreen(
+                                          userId: user['id'] ?? user['userId'],
                                           username: user['username']!.replaceAll('@', ''),
                                           name: user['name'] ?? user['username']!,
                                           avatarAsset: user['avatar']!,
@@ -634,6 +640,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                                         context,
                                         MaterialPageRoute<void>(
                                           builder: (_) => UserProfileScreen(
+                                            userId: user['id'] ?? user['userId'],
                                             username: user['username']!.replaceAll('@', ''),
                                             name: user['name'] ?? user['username']!,
                                             avatarAsset: user['avatar']!,

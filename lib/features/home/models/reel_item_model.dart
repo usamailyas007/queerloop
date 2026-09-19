@@ -2,6 +2,7 @@ class ReelItemModel {
   const ReelItemModel({
     required this.id,
     this.authorId,
+    this.authorDisplayName,
     required this.username,
     required this.pronounsTime,
     required this.avatarAsset,
@@ -22,6 +23,7 @@ class ReelItemModel {
 
   final String id;
   final String? authorId;
+  final String? authorDisplayName;
   final String username;
   final String pronounsTime;
   final String avatarAsset;

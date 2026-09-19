@@ -21,10 +21,7 @@ class DiscoverScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<DiscoverProvider>(
-      create: (_) => DiscoverProvider(),
-      child: const _DiscoverScreenBody(),
-    );
+    return const _DiscoverScreenBody();
   }
 }
 
@@ -46,52 +43,55 @@ class _DiscoverScreenBody extends StatelessWidget {
     return Scaffold(
       backgroundColor: context.themeBackground,
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: <Widget>[
-            // ── App Bar ────────────────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.md,
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                ),
-                child: Text(
-                  l10n.guestDiscoverTitle,
-                  style: AppTextStyles.headingMedium.copyWith(
-                    color: context.themeTextPrimary,
+        child: RefreshIndicator(
+          onRefresh: () => context.read<DiscoverProvider>().fetchDiscoverData(refresh: true),
+          color: AppColors.gradientCyan,
+          backgroundColor: context.themeCardBackground,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: <Widget>[
+              // ── App Bar ────────────────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.md,
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                  ),
+                  child: Text(
+                    l10n.guestDiscoverTitle,
+                    style: AppTextStyles.headingMedium.copyWith(
+                      color: context.themeTextPrimary,
+                    ),
                   ),
                 ),
               ),
-            ),
 
-            // ── Static Search Bar ──────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                  vertical: AppSpacing.sm,
-                ),
-                child: GestureDetector(
-                  onTap: () => Navigator.push<void>(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          ChangeNotifierProvider<DiscoverProvider>.value(
-                            value: provider,
-                            child: const SearchScreen(),
-                          ),
-                    ),
+              // ── Static Search Bar ──────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.sm,
                   ),
-                  child: AbsorbPointer(
-                    child: DiscoverStaticSearchBar(
-                      hint: l10n.guestDiscoverSearchHint,
+                  child: GestureDetector(
+                    onTap: () => Navigator.push<void>(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const SearchScreen(),
+                      ),
+                    ),
+                    child: AbsorbPointer(
+                      child: DiscoverStaticSearchBar(
+                        hint: l10n.guestDiscoverSearchHint,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
 
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
 
@@ -276,6 +276,8 @@ class _DiscoverScreenBody extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
+}
+

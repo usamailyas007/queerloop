@@ -42,6 +42,12 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
     final String? userId = context.read<AuthProvider>().userId;
     if (userId != null && userId.isNotEmpty) {
       await context.read<ProfileProvider>().fetchProfile(userId);
+      if (!mounted) return;
+      if (_selectedTabIndex == 2) {
+        await context.read<ProfileProvider>().fetchSavedPosts(force: true);
+      } else if (_selectedTabIndex == 3) {
+        await context.read<ProfileProvider>().fetchLikedPosts(force: true);
+      }
     }
   }
 
@@ -282,6 +288,11 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     isOwnProfile: true,
                     onTabSelected: (int index) {
                       setState(() => _selectedTabIndex = index);
+                      if (index == 2) {
+                        context.read<ProfileProvider>().fetchSavedPosts();
+                      } else if (index == 3) {
+                        context.read<ProfileProvider>().fetchLikedPosts();
+                      }
                     },
                   ),
 
@@ -348,13 +359,163 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       showPlayCounts: true,
                     ),
 
-                  // Tab 2: Saved Grid
-                  if (_selectedTabIndex == 2)
-                    const ProfileMediaGridWidget(showPlayCounts: false),
+                  // Tab 2: Saved Grid & Posts
+                  if (_selectedTabIndex == 2) ...<Widget>[
+                    if (profileProvider.isLoadingSaved)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.gradientPink,
+                          ),
+                        ),
+                      )
+                    else if (profileProvider.savedReels.isEmpty &&
+                        profileProvider.savedPosts.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 40,
+                          horizontal: 24,
+                        ),
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.bookmark_border_rounded,
+                              size: 44,
+                              color: isDark ? Colors.white30 : Colors.black26,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No saved posts yet',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: context.themeTextPrimary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Posts and reels you save will appear here.',
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.themeTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else ...<Widget>[
+                      if (profileProvider.savedReels.isNotEmpty)
+                        ProfileMediaGridWidget(
+                          customReels: profileProvider.savedReels,
+                          showPlayCounts: false,
+                          emptyTitle: 'No saved reels yet',
+                          emptySubtitle: 'Reels you save will appear here.',
+                          emptyIcon: Icons.bookmark_border_rounded,
+                        ),
+                      if (profileProvider.savedPosts.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: AppSpacing.md),
+                        ...profileProvider.savedPosts.map(
+                          (post) => PostFeedCard(
+                            post: post,
+                            onLikeToggle: () {
+                              context
+                                  .read<HomeFeedProvider>()
+                                  .toggleLikePost(post.id);
+                            },
+                            onSaveToggle: () {
+                              context
+                                  .read<HomeFeedProvider>()
+                                  .toggleSavePost(post.id);
+                              profileProvider.fetchSavedPosts(force: true);
+                            },
+                            onOpenComments: () {},
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
 
-                  // Tab 3: Liked Grid
-                  if (_selectedTabIndex == 3)
-                    const ProfileMediaGridWidget(showPlayCounts: false),
+                  // Tab 3: Liked Grid & Posts
+                  if (_selectedTabIndex == 3) ...<Widget>[
+                    if (profileProvider.isLoadingLiked)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.gradientPink,
+                          ),
+                        ),
+                      )
+                    else if (profileProvider.likedReels.isEmpty &&
+                        profileProvider.likedPosts.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 40,
+                          horizontal: 24,
+                        ),
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.favorite_border_rounded,
+                              size: 44,
+                              color: isDark ? Colors.white30 : Colors.black26,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No liked posts yet',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: context.themeTextPrimary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Posts and reels you like will appear here.',
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.themeTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else ...<Widget>[
+                      if (profileProvider.likedReels.isNotEmpty)
+                        ProfileMediaGridWidget(
+                          customReels: profileProvider.likedReels,
+                          showPlayCounts: false,
+                          emptyTitle: 'No liked reels yet',
+                          emptySubtitle: 'Reels you like will appear here.',
+                          emptyIcon: Icons.favorite_border_rounded,
+                        ),
+                      if (profileProvider.likedPosts.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: AppSpacing.md),
+                        ...profileProvider.likedPosts.map(
+                          (post) => PostFeedCard(
+                            post: post,
+                            onLikeToggle: () {
+                              context
+                                  .read<HomeFeedProvider>()
+                                  .toggleLikePost(post.id);
+                              profileProvider.fetchLikedPosts(force: true);
+                            },
+                            onSaveToggle: () {
+                              context
+                                  .read<HomeFeedProvider>()
+                                  .toggleSavePost(post.id);
+                            },
+                            onOpenComments: () {},
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
 
                   // Extra Bottom Safety Clearance for Floating Nav Bar
                   const SizedBox(height: 120),

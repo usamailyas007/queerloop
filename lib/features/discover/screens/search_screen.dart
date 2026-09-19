@@ -84,15 +84,32 @@ class _SearchScreenState extends State<SearchScreen> {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
                 child: provider.isSearching
-                    ? (provider.hasResults
-                        ? const _SearchResultsBody(
-                            key: ValueKey<String>('results'))
-                        : _NoResultsBody(
-                            key: const ValueKey<String>('no-results'),
-                            query: provider.searchQuery,
-                          ))
-                    : const _SearchIdleBody(
-                        key: ValueKey<String>('idle'),
+                    ? (provider.isLoadingSearch
+                        ? const Center(
+                            key: ValueKey<String>('loading'),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                AppColors.gradientCyan,
+                              ),
+                            ),
+                          )
+                        : (provider.hasResults
+                            ? const _SearchResultsBody(
+                                key: ValueKey<String>('results'))
+                            : _NoResultsBody(
+                                key: const ValueKey<String>('no-results'),
+                                query: provider.searchQuery,
+                              )))
+                    : _SearchIdleBody(
+                        key: const ValueKey<String>('idle'),
+                        onSelectQuery: (String q) {
+                          _controller.text = q;
+                          _controller.selection = TextSelection.fromPosition(
+                            TextPosition(offset: q.length),
+                          );
+                          provider.setSearchQuery(q);
+                        },
                       ),
               ),
             ),
@@ -107,7 +124,12 @@ class _SearchScreenState extends State<SearchScreen> {
 // Idle State
 // ─────────────────────────────────────────────────────────────────────────────
 class _SearchIdleBody extends StatelessWidget {
-  const _SearchIdleBody({super.key});
+  const _SearchIdleBody({
+    super.key,
+    this.onSelectQuery,
+  });
+
+  final ValueChanged<String>? onSelectQuery;
 
   @override
   Widget build(BuildContext context) {
@@ -117,81 +139,75 @@ class _SearchIdleBody extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       children: <Widget>[
         // RECENT header
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: <Widget>[
-            const DiscoverSectionLabel(label: 'RECENT'),
-            GestureDetector(
-              onTap: () async {
-                final bool confirmed =
-                    await ClearSearchHistoryDialog.show(context);
-                if (confirmed) provider.clearAllRecentSearches();
-              },
-              child: Text(
-                'Clear Search History',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: context.isDarkMode
-                      ? AppColors.gradientPink
-                      : context.themeTextPrimary,
-                  fontWeight: FontWeight.w700,
+        if (provider.recentSearches.isNotEmpty) ...<Widget>[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              const DiscoverSectionLabel(label: 'RECENT'),
+              GestureDetector(
+                onTap: () async {
+                  final bool confirmed =
+                      await ClearSearchHistoryDialog.show(context);
+                  if (confirmed) provider.clearAllRecentSearches();
+                },
+                child: Text(
+                  'Clear Search History',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.isDarkMode
+                        ? AppColors.gradientPink
+                        : context.themeTextPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        ...provider.recentSearches.map(
-          (String q) => SearchRecentTile(
-            query: q,
-            onDelete: () => provider.removeRecentSearch(q),
+            ],
           ),
-        ),
-
-        const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.sm),
+          ...provider.recentSearches.map(
+            (String q) => SearchRecentTile(
+              query: q,
+              onTap: () => onSelectQuery?.call(q),
+              onDelete: () => provider.removeRecentSearch(q),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+        ],
 
         // SUGGESTED FOR YOU
-        const DiscoverSectionLabel(label: 'SUGGESTED FOR YOU'),
-        const SizedBox(height: AppSpacing.md),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: provider.suggestedTags
-              .map(
-                (String tag) => AppTagChip(
-                  label: tag,
-                  onTap: () {
-                    Navigator.push<void>(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => HashtagPostsScreen(
-                          hashtag: tag,
-                          postsCount: '4.2K posts',
-                          rankColor: AppColors.gradientCyan,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              )
-              .toList(),
-        ),
-
-        const SizedBox(height: AppSpacing.xl),
+        if (provider.suggestedTags.isNotEmpty) ...<Widget>[
+          const DiscoverSectionLabel(label: 'SUGGESTED FOR YOU'),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: provider.suggestedTags
+                .map(
+                  (String tag) => AppTagChip(
+                    label: tag,
+                    onTap: () => onSelectQuery?.call(tag),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+        ],
 
         // BROWSE COMMUNITIES
-        const DiscoverSectionLabel(label: 'BROWSE COMMUNITIES'),
-        const SizedBox(height: AppSpacing.md),
-        ...provider.communities.take(2).map(
-              (DiscoverCommunity c) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: DiscoverCommunityTile(
-                  community: c,
-                  isJoined: provider.isJoined(c.name),
-                  onJoin: () => provider.toggleJoin(c.name),
+        if (provider.communities.isNotEmpty) ...<Widget>[
+          const DiscoverSectionLabel(label: 'BROWSE COMMUNITIES'),
+          const SizedBox(height: AppSpacing.md),
+          ...provider.communities.take(2).map(
+                (DiscoverCommunity c) => Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: DiscoverCommunityTile(
+                    community: c,
+                    isJoined: provider.isJoined(c.name),
+                    onJoin: () => provider.toggleJoin(c.name),
+                  ),
                 ),
               ),
-            ),
-        const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.xl),
+        ],
       ],
     );
   }
@@ -210,30 +226,6 @@ class _SearchResultsBody extends StatelessWidget {
     'People',
     'Tags',
     'Communities',
-  ];
-
-  static const List<PostItemModel> _samplePosts = <PostItemModel>[
-    PostItemModel(
-      id: 'p1',
-      username: '@theo.vance',
-      pronounsTime: 'he/him · 18m',
-      avatarAsset: AppImages.user1,
-      content:
-          'Told my grandma about Dev over the phone and she said "finally, you sounded lonely in December." Eleven months of rehearsing a speech for nothing.',
-      likesCount: 5600,
-      commentsCount: 311,
-      postImageAsset: AppImages.searchResult3,
-    ),
-    PostItemModel(
-      id: 'p2',
-      username: '@nadia.builds',
-      pronounsTime: 'she/her · 1h',
-      avatarAsset: AppImages.user2,
-      content:
-          'Reminder that the Tuesday support call is open to anyone, camera off is normal, and nobody has to speak.',
-      likesCount: 1200,
-      commentsCount: 311,
-    ),
   ];
 
   Widget _buildSectionHeader({
@@ -278,7 +270,14 @@ class _SearchResultsBody extends StatelessWidget {
           selectedIndex: provider.selectedSearchTab,
           onTabSelected: provider.setSelectedSearchTab,
         ),
-        Divider(color: context.themeDivider, height: 1),
+        if (provider.isLoadingSearch)
+          const LinearProgressIndicator(
+            backgroundColor: Colors.transparent,
+            valueColor: AlwaysStoppedAnimation<Color>(AppColors.gradientCyan),
+            minHeight: 2,
+          )
+        else
+          Divider(color: context.themeDivider, height: 1),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.symmetric(
@@ -289,95 +288,114 @@ class _SearchResultsBody extends StatelessWidget {
               // ── Tab 0: All (Comprehensive Overview) ────────────────────────
               if (provider.selectedSearchTab == 0) ...<Widget>[
                 // 1. TOP POSTS Section
-                _buildSectionHeader(
-                  context: context,
-                  title: 'TOP POSTS',
-                  onSeeAll: () => provider.setSelectedSearchTab(1),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                SearchPostsGrid(
-                  results: provider.searchResults.take(3).toList(),
-                ),
-
-                const SizedBox(height: AppSpacing.xl),
+                if (provider.searchResults.isNotEmpty) ...<Widget>[
+                  _buildSectionHeader(
+                    context: context,
+                    title: 'TOP POSTS',
+                    onSeeAll: () => provider.setSelectedSearchTab(1),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  SearchPostsGrid(
+                    results: provider.searchResults.take(6).toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
 
                 // 2. TOP TAGS Section
-                _buildSectionHeader(
-                  context: context,
-                  title: 'TOP TAGS',
-                  onSeeAll: () => provider.setSelectedSearchTab(4),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                ...provider.tagResults.take(2).map(
-                      (TagSearchResultItem t) => Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: SearchTagTile(
-                          tag: t,
-                          onTap: () {
-                            Navigator.push<void>(
-                              context,
-                              MaterialPageRoute<void>(
-                                builder: (_) => HashtagPostsScreen(
-                                  hashtag: t.name,
-                                  postsCount: '${t.postsCount} posts',
-                                  rankColor: AppColors.gradientCyan,
+                if (provider.tagResults.isNotEmpty) ...<Widget>[
+                  _buildSectionHeader(
+                    context: context,
+                    title: 'TOP TAGS',
+                    onSeeAll: () => provider.setSelectedSearchTab(4),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  ...provider.tagResults.take(4).map(
+                        (TagSearchResultItem t) => Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: SearchTagTile(
+                            tag: t,
+                            onTap: () {
+                              Navigator.push<void>(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) => HashtagPostsScreen(
+                                    hashtag: t.name,
+                                    postsCount: '${t.postsCount} posts',
+                                    rankColor: AppColors.gradientCyan,
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
                       ),
-                    ),
-
-                const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
 
                 // 3. PEOPLE Section
-                _buildSectionHeader(
-                  context: context,
-                  title: 'PEOPLE',
-                  onSeeAll: () => provider.setSelectedSearchTab(3),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                ...provider.peopleResults.map(
-                  (DiscoverPerson p) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: SearchPersonTile(
-                      person: p,
-                      isFollowing: provider.isFollowing(p.username),
-                      onFollow: () => provider.toggleFollow(p.username),
-                    ),
+                if (provider.peopleResults.isNotEmpty) ...<Widget>[
+                  _buildSectionHeader(
+                    context: context,
+                    title: 'PEOPLE',
+                    onSeeAll: () => provider.setSelectedSearchTab(3),
                   ),
-                ),
-
-                const SizedBox(height: AppSpacing.xl),
-
-                // 4. COMMUNITIES TO EXPLORE Section
-                _buildSectionHeader(
-                  context: context,
-                  title: 'COMMUNITIES TO EXPLORE',
-                  onSeeAll: () => provider.setSelectedSearchTab(5),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                ...provider.communities.take(3).map(
-                      (DiscoverCommunity c) => Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: DiscoverCommunityTile(
-                          community: c,
-                          isJoined: provider.isJoined(c.name),
-                          onJoin: () => provider.toggleJoin(c.name),
-                        ),
+                  const SizedBox(height: AppSpacing.md),
+                  ...provider.peopleResults.take(4).map(
+                    (DiscoverPerson p) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: SearchPersonTile(
+                        person: p,
+                        isFollowing: provider.isFollowing(p.username),
+                        onFollow: () => provider.toggleFollow(p.username),
                       ),
                     ),
-                const SizedBox(height: AppSpacing.xl),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+
+                // 4. COMMUNITIES TO EXPLORE Section
+                if (provider.communityResults.isNotEmpty) ...<Widget>[
+                  _buildSectionHeader(
+                    context: context,
+                    title: 'COMMUNITIES TO EXPLORE',
+                    onSeeAll: () => provider.setSelectedSearchTab(5),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  ...provider.communityResults.take(4).map(
+                        (DiscoverCommunity c) => Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: DiscoverCommunityTile(
+                            community: c,
+                            isJoined: provider.isJoined(c.name),
+                            onJoin: () => provider.toggleJoin(c.name),
+                          ),
+                        ),
+                      ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
               ],
 
               // ── Tab 1: Posts (Full Posts Feed) ─────────────────────────────
               if (provider.selectedSearchTab == 1) ...<Widget>[
-                ..._samplePosts.map(
-                  (PostItemModel p) => Padding(
+                ...provider.searchResults.map(
+                  (DiscoverSearchResult res) => Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.md),
                     child: PostFeedCard(
-                      post: p,
+                      post: PostItemModel(
+                        id: res.id ?? 'search_${res.caption.hashCode}',
+                        username: res.authorUsername ?? '@queer_creator',
+                        pronounsTime: 'they/them · recent',
+                        avatarAsset: (res.authorAvatar != null && res.authorAvatar!.isNotEmpty)
+                            ? res.authorAvatar!
+                            : AppImages.user1,
+                        content: (res.caption != null && res.caption!.isNotEmpty)
+                            ? res.caption!
+                            : 'Shared post',
+                        likesCount: res.likesCount ?? 0,
+                        commentsCount: res.commentsCount ?? 0,
+                        postImageAsset: res.imageAsset,
+                        isLiked: res.isLiked,
+                      ),
                       onLikeToggle: () {},
                       onSaveToggle: () {},
                       onOpenComments: () {
@@ -385,8 +403,9 @@ class _SearchResultsBody extends StatelessWidget {
                           context: context,
                           isScrollControlled: true,
                           backgroundColor: Colors.transparent,
-                          builder: (_) =>
-                              const CommentsBottomSheet(totalComments: 311),
+                          builder: (_) => CommentsBottomSheet(
+                            totalComments: res.commentsCount ?? 0,
+                          ),
                         );
                       },
                     ),
@@ -437,7 +456,7 @@ class _SearchResultsBody extends StatelessWidget {
 
               // ── Tab 5: Communities ─────────────────────────────────────────
               if (provider.selectedSearchTab == 5)
-                ...provider.communities.map(
+                ...provider.communityResults.map(
                   (DiscoverCommunity c) => Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                     child: DiscoverCommunityTile(
@@ -545,20 +564,22 @@ class _NoResultsBody extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.xl),
-              // YOU MIGHT LIKE
-              const DiscoverSectionLabel(label: 'YOU MIGHT LIKE'),
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: provider.youMightLike
-                    .map(
-                      (DiscoverCreator c) => Padding(
-                        padding: const EdgeInsets.only(right: AppSpacing.lg),
-                        child: DiscoverCreatorCircle(creator: c, size: 60),
-                      ),
-                    )
-                    .toList(),
-              ),
+              if (provider.youMightLike.isNotEmpty) ...<Widget>[
+                const SizedBox(height: AppSpacing.xl),
+                // YOU MIGHT LIKE
+                const DiscoverSectionLabel(label: 'YOU MIGHT LIKE'),
+                const SizedBox(height: AppSpacing.md),
+                Row(
+                  children: provider.youMightLike
+                      .map(
+                        (DiscoverCreator c) => Padding(
+                          padding: const EdgeInsets.only(right: AppSpacing.lg),
+                          child: DiscoverCreatorCircle(creator: c, size: 60),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
             ],
           ),
         ),

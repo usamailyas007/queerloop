@@ -33,11 +33,10 @@ class DiscoverCommunityTile extends StatelessWidget {
         children: <Widget>[
           ClipRRect(
             borderRadius: BorderRadius.circular(AppRadius.sm),
-            child: Image.asset(
-              community.imageAsset,
+            child: SizedBox(
               width: 48,
               height: 48,
-              fit: BoxFit.cover,
+              child: _buildImage(context),
             ),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -67,4 +66,43 @@ class DiscoverCommunityTile extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildImage(BuildContext context) {
+    final String img = community.imageAsset.trim();
+    if (img.startsWith('http://') || img.startsWith('https://')) {
+      return Image.network(
+        img,
+        width: 48,
+        height: 48,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _buildFallback(context),
+      );
+    } else if (img.isNotEmpty) {
+      return Image.asset(
+        img,
+        width: 48,
+        height: 48,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _buildFallback(context),
+      );
+    }
+    return _buildFallback(context);
+  }
+
+  Widget _buildFallback(BuildContext context) {
+    final String initial = community.name.isNotEmpty ? community.name[0].toUpperCase() : 'C';
+    return Container(
+      color: AppColors.gradientPink.withValues(alpha: 0.15),
+      child: Center(
+        child: Text(
+          initial,
+          style: AppTextStyles.titleMedium.copyWith(
+            color: AppColors.gradientPink,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
 }
+

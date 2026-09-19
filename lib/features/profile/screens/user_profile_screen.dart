@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/api/api_exception.dart';
 import '../../../core/config/api_endpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
@@ -11,8 +12,12 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
+import '../../auth/auth_provider.dart';
 import '../../create_post/models/create_post_models.dart';
+import '../../discover/models/discover_models.dart';
+import '../../discover/services/discover_service.dart';
 import '../../messages/models/message_models.dart';
+import '../../messages/provider/messages_provider.dart';
 import '../../messages/screens/chat_screen.dart';
 import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/models/profile_models.dart';
@@ -46,15 +51,61 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _isRequested = false; // Default: Not requested (shows Follow initially)
   bool _isFollowing = false; // Default: Not following (shows Follow initially)
   bool _isLoading = false;
+  bool _isStartingChat = false;
+  String? _resolvedUserId;
   UserProfile? _profile;
   List<PostResponseModel> _authorPosts = <PostResponseModel>[];
   List<CommunityModel> _userCommunities = <CommunityModel>[];
 
+  String? get _effectiveUserId {
+    if (_profile?.id != null && _profile!.id.trim().isNotEmpty) {
+      return _profile!.id.trim();
+    }
+    if (_resolvedUserId != null && _resolvedUserId!.trim().isNotEmpty) {
+      return _resolvedUserId!.trim();
+    }
+    if (widget.userId != null && widget.userId!.trim().isNotEmpty) {
+      return widget.userId!.trim();
+    }
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
-    if (widget.userId != null && widget.userId!.isNotEmpty) {
-      _fetchUserProfile(widget.userId!);
+    if (widget.userId != null && widget.userId!.trim().isNotEmpty) {
+      _fetchUserProfile(widget.userId!.trim());
+    } else if (widget.username.trim().isNotEmpty) {
+      _resolveUserByUsername(widget.username);
+    }
+  }
+
+  Future<void> _resolveUserByUsername(String rawUsername) async {
+    final String cleanUsername = rawUsername.replaceAll('@', '').trim();
+    if (cleanUsername.isEmpty) return;
+    try {
+      final DiscoverService discover =
+          DiscoverService(context.read<ApiClient>());
+      final MultiTabSearchResults results = await discover.search(
+        query: cleanUsername,
+        tab: 'people',
+      );
+      if (results.people.isNotEmpty) {
+        final DiscoverPerson person = results.people.firstWhere(
+          (DiscoverPerson p) =>
+              p.username.replaceAll('@', '').toLowerCase() ==
+              cleanUsername.toLowerCase(),
+          orElse: () => results.people.first,
+        );
+        if (person.id != null && person.id!.trim().isNotEmpty && mounted) {
+          setState(() {
+            _resolvedUserId = person.id!.trim();
+          });
+          _fetchUserProfile(person.id!.trim());
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [UserProfile] Could not resolve username to id: $e');
     }
   }
 
@@ -77,6 +128,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       }
     } catch (e) {
       debugPrint('❌ [UserProfile] Failed to fetch user profile: $e');
+      if (widget.username.trim().isNotEmpty && _resolvedUserId == null) {
+        _resolveUserByUsername(widget.username);
+      }
     }
 
     try {
@@ -152,6 +206,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             : (widget.userId != null ? '' : 'Documenting recovery, one honest video at a time.'));
     final String currentPronouns = _profile?.formattedPronouns ??
         (isPrivateAccount ? 'he / him' : '');
+
+    final AuthProvider auth = context.watch<AuthProvider>();
+    final String? myId = auth.userId;
+    final String? myName = auth.user?.displayName;
+    final bool isOwnProfile = (myId != null &&
+            myId.isNotEmpty &&
+            _effectiveUserId == myId) ||
+        (myName != null &&
+            myName.isNotEmpty &&
+            widget.username.replaceAll('@', '').toLowerCase() ==
+                myName.replaceAll('@', '').toLowerCase());
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -229,7 +294,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       UserProfileOptionsBottomSheet.show(
                         context,
                         username: currentUsername,
-                        userId: widget.userId,
+                        userId: _effectiveUserId,
                       );
                     },
                     child: Container(
@@ -294,7 +359,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           interestsList:
                               _profile?.interests ?? const <String>[],
                           communitiesList: _userCommunities,
-                    actionButtons: Row(
+                    actionButtons: isOwnProfile
+                        ? Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: AppOutlineButton(
+                                  text: 'Edit Profile',
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                  },
+                                ),
+                              ),
+                            ],
+                          )
+                        : Row(
                       children: <Widget>[
                         Expanded(
                           child: isPrivateAccount
@@ -367,23 +445,163 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         const SizedBox(width: AppSpacing.md),
                         Expanded(
                           child: AppOutlineButton(
-                            text: 'Message',
-                            onPressed: () {
-                              Navigator.push<void>(
-                                context,
-                                MaterialPageRoute<void>(
-                                  builder: (_) => ChatScreen(
-                                    conversation: ConversationModel(
-                                      id: 'c2',
-                                      username: widget.username,
-                                      avatarAsset: widget.avatarAsset,
-                                      lastMessage: 'Active now',
-                                      timeAgo: 'Just now',
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
+                            text: _isStartingChat ? 'Loading...' : 'Message',
+                            onPressed: _isStartingChat
+                                ? () {}
+                                : () async {
+                                    final ScaffoldMessengerState messenger =
+                                        ScaffoldMessenger.of(context);
+                                    final NavigatorState navigator =
+                                        Navigator.of(context);
+                                    final MessagesProvider provider =
+                                        context.read<MessagesProvider>();
+                                    final ApiClient apiClient =
+                                        context.read<ApiClient>();
+                                    final AuthProvider auth =
+                                        context.read<AuthProvider>();
+
+                                    setState(() {
+                                      _isStartingChat = true;
+                                    });
+
+                                    try {
+                                      String? targetId = _effectiveUserId;
+
+                                      // If targetId is still not resolved, attempt resolution now
+                                      if (targetId == null || targetId.isEmpty) {
+                                        final String cleanUsername = widget
+                                            .username
+                                            .replaceAll('@', '')
+                                            .trim();
+                                        if (cleanUsername.isNotEmpty) {
+                                          try {
+                                            final DiscoverService discover =
+                                                DiscoverService(apiClient);
+                                            final MultiTabSearchResults results =
+                                                await discover.search(
+                                              query: cleanUsername,
+                                              tab: 'people',
+                                            );
+                                            if (results.people.isNotEmpty) {
+                                              final DiscoverPerson person =
+                                                  results.people.firstWhere(
+                                                (DiscoverPerson p) =>
+                                                    p.username
+                                                        .replaceAll('@', '')
+                                                        .toLowerCase() ==
+                                                    cleanUsername.toLowerCase(),
+                                                orElse: () =>
+                                                    results.people.first,
+                                              );
+                                              targetId = person.id;
+                                              if (mounted && targetId != null) {
+                                                setState(() {
+                                                  _resolvedUserId = targetId;
+                                                });
+                                              }
+                                            }
+                                          } catch (_) {}
+                                        }
+                                      }
+
+                                      if (targetId == null || targetId.trim().isEmpty) {
+                                        messenger.showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Cannot start conversation: User ID not found.',
+                                            ),
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      final String cleanTargetId =
+                                          targetId.trim();
+                                      final String? myId = auth.userId;
+                                      if (myId != null &&
+                                          cleanTargetId == myId) {
+                                        messenger.showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'You cannot start a conversation with yourself.',
+                                            ),
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      ConversationModel? conv;
+                                      String? errorText;
+                                      try {
+                                        conv = await provider
+                                            .startConversation(cleanTargetId);
+                                      } on ApiException catch (e) {
+                                        errorText = e.message.isNotEmpty
+                                            ? e.message
+                                            : 'This user is not accepting messages from you.';
+                                      } catch (e) {
+                                        errorText =
+                                            'Unable to start conversation right now.';
+                                      }
+
+                                      if (conv == null) {
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              errorText ??
+                                                  'This user is not accepting messages from you.',
+                                            ),
+                                            duration:
+                                                const Duration(seconds: 3),
+                                            backgroundColor:
+                                                Colors.redAccent.shade700,
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      final String currentUsername = (_profile?.username != null &&
+                                              _profile!.username!.trim().isNotEmpty)
+                                          ? _profile!.username!.trim()
+                                          : widget.username.replaceAll('@', '').trim();
+                                      final String currentName = (_profile?.displayName != null &&
+                                              _profile!.displayName!.trim().isNotEmpty)
+                                          ? _profile!.displayName!.trim()
+                                          : widget.name.trim();
+                                      final String currentAvatar = (_profile?.avatarUrl != null &&
+                                              _profile!.avatarUrl!.trim().isNotEmpty)
+                                          ? _profile!.avatarUrl!.trim()
+                                          : widget.avatarAsset.trim();
+
+                                      final ConversationModel enrichedConv = conv.copyWith(
+                                        username: currentUsername.isNotEmpty && currentUsername != 'User'
+                                            ? currentUsername
+                                            : conv.username,
+                                        displayName: currentName.isNotEmpty ? currentName : conv.displayName,
+                                        avatarUrl: currentAvatar.startsWith('http') ? currentAvatar : conv.avatarUrl,
+                                        avatarAsset: currentAvatar.isNotEmpty ? currentAvatar : conv.avatarAsset,
+                                        participantId: cleanTargetId,
+                                      );
+
+                                      provider.updateConversation(enrichedConv);
+
+                                      navigator.push<void>(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => ChatScreen(
+                                            conversation: enrichedConv,
+                                          ),
+                                        ),
+                                      );
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() {
+                                          _isStartingChat = false;
+                                        });
+                                      }
+                                    }
+                                  },
                           ),
                         ),
                       ],

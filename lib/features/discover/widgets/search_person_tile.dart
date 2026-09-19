@@ -32,6 +32,7 @@ class SearchPersonTile extends StatelessWidget {
                 context,
                 MaterialPageRoute<void>(
                   builder: (_) => UserProfileScreen(
+                    userId: person.id,
                     username: person.username,
                     name: person.username.replaceAll('@', '').split('.').first,
                     avatarAsset: person.avatarAsset,

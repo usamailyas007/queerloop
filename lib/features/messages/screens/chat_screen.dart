@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
+import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_outline_button.dart';
@@ -14,6 +15,8 @@ import '../provider/messages_provider.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/chat_message_action_sheet.dart';
 import '../widgets/chat_options_bottom_sheet.dart';
+import '../../auth/auth_provider.dart';
+import '../services/conversations_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
 
 class ChatScreen extends StatelessWidget {
@@ -26,15 +29,20 @@ class ChatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final MessagesProvider? existingProvider =
-        context.read<MessagesProvider?>();
+    MessagesProvider? existingProvider;
+    try {
+      existingProvider = context.read<MessagesProvider>();
+    } catch (_) {}
 
     if (existingProvider != null) {
       return _ChatScreenContent(conversation: conversation);
     }
 
     return ChangeNotifierProvider<MessagesProvider>(
-      create: (_) => MessagesProvider(),
+      create: (BuildContext ctx) => MessagesProvider(
+        service: ctx.read<ConversationsService>(),
+        currentUserId: ctx.read<AuthProvider>().userId,
+      ),
       child: _ChatScreenContent(conversation: conversation),
     );
   }
@@ -56,6 +64,32 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
   void initState() {
     super.initState();
     _messageController = TextEditingController();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (mounted) {
+        final MessagesProvider p = context.read<MessagesProvider>();
+        String convId = widget.conversation.id;
+
+        // If conversation ID is missing or equal to participantId, start/resolve conversation
+        if (convId == widget.conversation.participantId || !convId.contains('-')) {
+          final String? pId = widget.conversation.participantId ??
+              (convId.contains('-') ? convId : null);
+          if (pId != null && pId.trim().isNotEmpty) {
+            try {
+              final ConversationModel? started =
+                  await p.startConversation(pId.trim());
+              if (started != null) {
+                convId = started.id;
+              }
+            } catch (_) {}
+          }
+        }
+
+        // If we have a conversation UUID, load messages from backend
+        if (convId.contains('-') && convId != widget.conversation.participantId) {
+          p.loadMessages(convId);
+        }
+      }
+    });
   }
 
   @override
@@ -68,7 +102,11 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
   Widget build(BuildContext context) {
     final MessagesProvider provider = context.watch<MessagesProvider>();
     final ConversationModel activeConv = provider.conversations.firstWhere(
-      (ConversationModel c) => c.id == widget.conversation.id,
+      (ConversationModel c) =>
+          c.id == widget.conversation.id ||
+          (widget.conversation.participantId != null &&
+              widget.conversation.participantId!.isNotEmpty &&
+              c.participantId == widget.conversation.participantId),
       orElse: () => widget.conversation,
     );
 
@@ -111,8 +149,12 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                           context,
                           MaterialPageRoute<void>(
                             builder: (_) => UserProfileScreen(
+                              userId: activeConv.participantId,
                               username: activeConv.username,
-                              name: activeConv.username.split('.').first,
+                              name: (activeConv.displayName != null &&
+                                      activeConv.displayName!.isNotEmpty)
+                                  ? activeConv.displayName!
+                                  : activeConv.username.split('.').first,
                               avatarAsset: activeConv.avatarAsset,
                             ),
                           ),
@@ -136,12 +178,33 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                             )
                           else
                             ClipOval(
-                              child: Image.asset(
-                                activeConv.avatarAsset,
-                                width: 36,
-                                height: 36,
-                                fit: BoxFit.cover,
-                              ),
+                              child: activeConv.avatarAsset.startsWith('http')
+                                  ? Image.network(
+                                      activeConv.avatarAsset,
+                                      width: 36,
+                                      height: 36,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Image.asset(
+                                        AppImages.user1,
+                                        width: 36,
+                                        height: 36,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    )
+                                  : Image.asset(
+                                      activeConv.avatarAsset.isNotEmpty
+                                          ? activeConv.avatarAsset
+                                          : AppImages.user1,
+                                      width: 36,
+                                      height: 36,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Image.asset(
+                                        AppImages.user1,
+                                        width: 36,
+                                        height: 36,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
                             ),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
@@ -150,12 +213,16 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                               children: <Widget>[
                                 Row(
                                   children: <Widget>[
-                                    Text(
-                                      activeConv.username,
-                                      style: AppTextStyles.titleMedium.copyWith(
-                                        color: context.themeTextPrimary,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 15,
+                                    Flexible(
+                                      child: Text(
+                                        activeConv.username,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTextStyles.titleMedium.copyWith(
+                                          color: context.themeTextPrimary,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 15,
+                                        ),
                                       ),
                                     ),
                                     if (isRestricted && !isBlocked) ...<Widget>[
@@ -191,6 +258,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                           : (isMuted
                                               ? 'Muted until 12 Aug'
                                               : 'Active now')),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: AppTextStyles.caption.copyWith(
                                     color: (isBlocked || isRestricted)
                                         ? AppColors.gradientCyan
@@ -230,6 +299,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                       ChatOptionsBottomSheet.show(
                         context,
                         username: activeConv.username,
+                        conversationId: activeConv.id,
+                        userId: activeConv.participantId,
                       );
                     },
                     child: Icon(
@@ -419,31 +490,65 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                     const SizedBox(height: AppSpacing.lg),
 
                     // Render Chat Bubbles
-                    for (int i = 0; i < activeConv.messages.length; i++) ...<Widget>[
-                      Builder(
-                        builder: (BuildContext itemCtx) {
-                          final ChatMessageModel msg = activeConv.messages[i];
-                          return GestureDetector(
-                            onLongPress: () {
-                              ChatMessageActionSheet.show(
-                                context,
-                                messageText: msg.text ?? '',
-                                isMe: msg.isMe,
-                                onDeleteForMe: () {
-                                  provider.deleteMessage(activeConv.id, msg.id);
+                    Builder(
+                      builder: (BuildContext _) {
+                        final List<ChatMessageModel> chatMessages =
+                            provider.getMessagesFor(activeConv.id);
+                        final List<ChatMessageModel> fallbackMessages =
+                            activeConv.id != widget.conversation.id
+                                ? provider.getMessagesFor(widget.conversation.id)
+                                : const <ChatMessageModel>[];
+                        final List<ChatMessageModel> effectiveMessages =
+                            chatMessages.isNotEmpty
+                                ? chatMessages
+                                : (fallbackMessages.isNotEmpty
+                                    ? fallbackMessages
+                                    : activeConv.messages);
+
+                        return Column(
+                          children: <Widget>[
+                            for (int i = 0; i < effectiveMessages.length; i++) ...<Widget>[
+                              Builder(
+                                builder: (BuildContext itemCtx) {
+                                  final ChatMessageModel msg = effectiveMessages[i];
+                                  if (!msg.isMe && !msg.isRead) {
+                                    provider.markMessageRead(activeConv.id, msg.id);
+                                  }
+                                  return GestureDetector(
+                                    onLongPress: () {
+                                      ChatMessageActionSheet.show(
+                                        context,
+                                        messageText: msg.text ?? '',
+                                        isMe: msg.isMe,
+                                        onEmojiReaction: (String emoji) {
+                                          provider.toggleReaction(
+                                              activeConv.id, msg.id, emoji);
+                                        },
+                                        onDeleteForMe: () {
+                                          provider.unsendMessage(
+                                              activeConv.id, msg.id);
+                                        },
+                                        onUnsend: () {
+                                          provider.unsendMessage(
+                                              activeConv.id, msg.id);
+                                        },
+                                      );
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(
+                                          bottom: AppSpacing.md),
+                                      child: ChatBubble(
+                                        message: msg,
+                                      ),
+                                    ),
+                                  );
                                 },
-                              );
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                              child: ChatBubble(
-                                message: msg,
                               ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+                            ],
+                          ],
+                        );
+                      },
+                    ),
 
                     // Typing indicator (if active & not blocked/restricted)
                     if (activeConv.isTyping &&

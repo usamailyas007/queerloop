@@ -9,6 +9,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../create_post/widgets/custom_gradient_switch.dart';
 import '../provider/messages_provider.dart';
 import 'block_user_modal_dialog.dart';
+import 'delete_chat_modal_dialog.dart';
 import 'mute_duration_bottom_sheet.dart';
 import 'report_conversation_bottom_sheet.dart';
 import 'restrict_user_modal_dialog.dart';
@@ -213,12 +214,44 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  MuteDurationBottomSheet.show(
-                    context,
-                    username: username,
-                    onConfirmMute: (String duration) =>
-                        provider.toggleMute(username),
-                  );
+                  final bool isCurrentlyMuted = conversationId != null
+                      ? (provider.isMuted(conversationId!) ||
+                          provider.isMuted(username))
+                      : provider.isMuted(username);
+
+                  if (isCurrentlyMuted) {
+                    if (conversationId != null) {
+                      provider.unmuteConversation(conversationId!);
+                    } else {
+                      provider.toggleMute(username);
+                    }
+                  } else {
+                    MuteDurationBottomSheet.show(
+                      context,
+                      username: username,
+                      onConfirmMute: (String duration) {
+                        String apiDuration = '1_week';
+                        if (duration.contains('24')) {
+                          apiDuration = '24_hours';
+                        } else if (duration.contains('7')) {
+                          apiDuration = '1_week';
+                        } else if (duration.contains('30')) {
+                          apiDuration = '1_month';
+                        } else if (duration.toLowerCase().contains('undo')) {
+                          apiDuration = 'indefinite';
+                        }
+
+                        if (conversationId != null) {
+                          provider.muteConversation(
+                            conversationId!,
+                            duration: apiDuration,
+                          );
+                        } else {
+                          provider.toggleMute(username);
+                        }
+                      },
+                    );
+                  }
                 },
               ),
 
@@ -296,7 +329,31 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                 },
               ),
 
-              // 5. Typing Indicator toggle switch
+              // 5. Delete Chat
+              if (conversationId != null)
+                _buildOptionTile(
+                  context: context,
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.redAccent,
+                    size: 18,
+                  ),
+                  title: 'Delete chat',
+                  subtitle: 'Remove this conversation for yourself',
+                  onTap: () {
+                    Navigator.pop(context);
+                    DeleteChatModalDialog.show(
+                      context,
+                      username: username,
+                      onConfirmDelete: () {
+                        provider.deleteConversation(conversationId!);
+                        Navigator.of(context).pop();
+                      },
+                    );
+                  },
+                ),
+
+              // 6. Typing Indicator toggle switch
               _buildOptionTile(
                 context: context,
                 icon: Icon(

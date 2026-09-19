@@ -178,7 +178,9 @@ class ChatBubble extends StatelessWidget {
 
           // ── Image Bubble with Reaction Badge ─────────────────────────────
           if (message.type == MessageType.image &&
-              (message.imageFilePath != null || message.imageAsset != null))
+              (message.imageFilePath != null ||
+                  message.imageAsset != null ||
+                  message.mediaUrl != null))
             Align(
               alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
               child: Column(
@@ -194,12 +196,46 @@ class ChatBubble extends StatelessWidget {
                             height: 190,
                             fit: BoxFit.cover,
                           )
-                        : Image.asset(
-                            message.imageAsset!,
-                            width: 190,
-                            height: 190,
-                            fit: BoxFit.cover,
-                          ),
+                        : (message.mediaUrl != null &&
+                                message.mediaUrl!.startsWith('http'))
+                            ? Image.network(
+                                message.mediaUrl!,
+                                width: 190,
+                                height: 190,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Image.asset(
+                                  AppImages.user1,
+                                  width: 190,
+                                  height: 190,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : (message.imageAsset != null &&
+                                    message.imageAsset!.startsWith('http'))
+                                ? Image.network(
+                                    message.imageAsset!,
+                                    width: 190,
+                                    height: 190,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Image.asset(
+                                      AppImages.user1,
+                                      width: 190,
+                                      height: 190,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  )
+                                : Image.asset(
+                                    message.imageAsset ?? AppImages.user1,
+                                    width: 190,
+                                    height: 190,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Image.asset(
+                                      AppImages.user1,
+                                      width: 190,
+                                      height: 190,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
                   ),
                   if (message.reactionEmoji != null)
                     _buildReactionPill(
@@ -238,11 +274,26 @@ class ChatBubble extends StatelessWidget {
                             child: Stack(
                               fit: StackFit.expand,
                               children: <Widget>[
-                                Image.asset(
-                                  message.postThumbnailAsset ??
-                                      AppImages.forYouImg,
-                                  fit: BoxFit.cover,
-                                ),
+                                (message.postThumbnailAsset != null &&
+                                        message.postThumbnailAsset!
+                                            .startsWith('http'))
+                                    ? Image.network(
+                                        message.postThumbnailAsset!,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) => Image.asset(
+                                          AppImages.forYouImg,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      )
+                                    : Image.asset(
+                                        message.postThumbnailAsset ??
+                                            AppImages.forYouImg,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) => Image.asset(
+                                          AppImages.forYouImg,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
                                 // View Count Badge
                                 Positioned(
                                   bottom: 8,

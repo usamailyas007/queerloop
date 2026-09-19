@@ -111,15 +111,42 @@ class PostContentService {
       return const <PostResponseModel>[];
     }
 
-    final dynamic response =
-        await _client.get(ApiEndpoints.posts, useCache: false);
-    if (response is List) {
-      return response
-          .map((dynamic item) =>
-              PostResponseModel.fromJson(item as Map<String, dynamic>))
-          .toList();
+    try {
+      final dynamic response =
+          await _client.get(ApiEndpoints.posts, useCache: false);
+      final List<PostResponseModel> parsed = _parsePostsList(response);
+      if (parsed.isNotEmpty) return parsed;
+    } catch (e) {
+      debugPrint('⚠️ [PostContent] Failed to fetch feed posts (/posts): $e');
     }
-    return <PostResponseModel>[];
+
+    // Fallback 1: Dedicated Search Posts endpoint GET /search?q=&limit=20
+    try {
+      final dynamic searchResponse = await _client.get(
+        ApiEndpoints.searchPosts(query: '', limit: 20),
+        useCache: false,
+      );
+      final List<PostResponseModel> searchParsed =
+          _parsePostsList(searchResponse);
+      if (searchParsed.isNotEmpty) return searchParsed;
+    } catch (e) {
+      debugPrint('⚠️ [PostContent] Fallback /search failed: $e');
+    }
+
+    // Fallback 2: Discover Multi-Tab Search GET /discover/search?query=&tab=posts
+    try {
+      final dynamic discoverResponse = await _client.get(
+        ApiEndpoints.discoverSearch(query: '', tab: 'posts'),
+        useCache: false,
+      );
+      final List<PostResponseModel> discoverParsed =
+          _parsePostsList(discoverResponse);
+      if (discoverParsed.isNotEmpty) return discoverParsed;
+    } catch (e) {
+      debugPrint('⚠️ [PostContent] Fallback /discover/search failed: $e');
+    }
+
+    return const <PostResponseModel>[];
   }
 
   // ── Trending Posts (Video-Only) ───────────────────────────────────────────
@@ -129,14 +156,82 @@ class PostContentService {
       return const <PostResponseModel>[];
     }
 
-    final dynamic response = await _client.get(ApiEndpoints.trendingPosts);
-    if (response is List) {
-      return response
-          .map((dynamic item) =>
-              PostResponseModel.fromJson(item as Map<String, dynamic>))
-          .toList();
+    try {
+      final dynamic response = await _client.get(ApiEndpoints.trendingPosts);
+      return _parsePostsList(response);
+    } catch (e) {
+      debugPrint('⚠️ [PostContent] Failed to fetch trending posts (/posts/trending): $e');
+      return const <PostResponseModel>[];
     }
-    return <PostResponseModel>[];
+  }
+
+  // ── Following Feed ────────────────────────────────────────────────────────
+  // GET /feed/following
+  Future<List<PostResponseModel>> getFollowingFeed() async {
+    if (AppConfig.useMockApi) {
+      return const <PostResponseModel>[];
+    }
+    debugPrint(
+        '🚀 [PostContent] Fetching Following Feed (GET ${ApiEndpoints.feedFollowing})');
+    try {
+      final dynamic response =
+          await _client.get(ApiEndpoints.feedFollowing, useCache: false);
+      return _parsePostsList(response);
+    } catch (e) {
+      debugPrint('⚠️ [PostContent] Failed to fetch following feed: $e');
+      return const <PostResponseModel>[];
+    }
+  }
+
+  // ── Community Feed ────────────────────────────────────────────────────────
+  // GET /feed/community?communityId=:id OR ?scope=joined
+  Future<List<PostResponseModel>> getCommunityFeed({
+    String? communityId,
+    String? scope,
+  }) async {
+    if (AppConfig.useMockApi) {
+      return const <PostResponseModel>[];
+    }
+    if (communityId != null && communityId.trim().isNotEmpty) {
+      final List<PostResponseModel> posts =
+          await getPostsByCommunity(communityId.trim());
+      if (posts.isNotEmpty) return posts;
+    }
+    final String path = ApiEndpoints.feedCommunity(
+      communityId: communityId,
+      scope: scope,
+    );
+    debugPrint('🚀 [PostContent] Fetching Community Feed (GET $path)');
+    try {
+      final dynamic response = await _client.get(path, useCache: false);
+      return _parsePostsList(response);
+    } catch (e) {
+      debugPrint('⚠️ [PostContent] Failed to fetch community feed: $e');
+      return const <PostResponseModel>[];
+    }
+  }
+
+  List<PostResponseModel> _parsePostsList(dynamic response) {
+    List<dynamic> rawList = <dynamic>[];
+    if (response is List) {
+      rawList = response;
+    } else if (response is Map<String, dynamic>) {
+      if (response['data'] is List) {
+        rawList = response['data'] as List<dynamic>;
+      } else if (response['posts'] is List) {
+        rawList = response['posts'] as List<dynamic>;
+      } else if (response['items'] is List) {
+        rawList = response['items'] as List<dynamic>;
+      } else if (response['feed'] is List) {
+        rawList = response['feed'] as List<dynamic>;
+      } else if (response['results'] is List) {
+        rawList = response['results'] as List<dynamic>;
+      }
+    }
+    return rawList
+        .whereType<Map<String, dynamic>>()
+        .map(PostResponseModel.fromJson)
+        .toList();
   }
 
   // ── Record View ───────────────────────────────────────────────────────────
@@ -164,25 +259,52 @@ class PostContentService {
     await _client.delete(ApiEndpoints.postLike(postId));
   }
 
-  // ── Create Comment ────────────────────────────────────────────────────────
-  // POST /posts/:id/comments (Content Service, Port 3013)
-  // Backend Schema: { body: string (1-500 chars) }
+  // ── Save Post ─────────────────────────────────────────────────────────────
+  // POST /posts/:id/save (Content Service)
+  Future<void> savePost(String postId) async {
+    if (AppConfig.useMockApi) return;
+    await _client.post(ApiEndpoints.postSave(postId));
+  }
+
+  // ── Unsave Post ───────────────────────────────────────────────────────────
+  // DELETE /posts/:id/save (Content Service)
+  Future<void> unsavePost(String postId) async {
+    if (AppConfig.useMockApi) return;
+    await _client.delete(ApiEndpoints.postSave(postId));
+  }
+
+  // ── Delete Post / Video Post ──────────────────────────────────────────────
+  // DELETE /posts/:id (Content Service)
+  Future<void> deletePost(String postId) async {
+    if (AppConfig.useMockApi) return;
+    await _client.delete(ApiEndpoints.post(postId));
+  }
+
+  // ── Create Comment or Reply ───────────────────────────────────────────────
+  // POST /posts/:id/comments (Content Service)
+  // Backend Schema: { body: string (1-500 chars), parentId?: string }
   Future<Map<String, dynamic>> createComment({
     required String postId,
     required String content,
+    String? parentId,
   }) async {
     final String trimmedBody = content.trim();
+    final Map<String, dynamic> body = <String, dynamic>{'body': trimmedBody};
+    if (parentId != null && parentId.trim().isNotEmpty) {
+      body['parentId'] = parentId.trim();
+    }
+
     if (AppConfig.useMockApi) {
       return <String, dynamic>{
         'id': 'comment_${DateTime.now().millisecondsSinceEpoch}',
         'body': trimmedBody,
-        'content': trimmedBody,
+        'parentId': ?parentId,
       };
     }
 
     final dynamic response = await _client.post(
       ApiEndpoints.postComments(postId),
-      body: <String, dynamic>{'body': trimmedBody},
+      body: body,
     );
     if (response is Map<String, dynamic>) {
       return response;
@@ -191,11 +313,84 @@ class PostContentService {
   }
 
   // ── Get Comments ──────────────────────────────────────────────────────────
-  // GET /posts/:id/comments (Content Service, Port 3013)
+  // GET /posts/:id/comments (Content Service)
   Future<List<dynamic>> getComments(String postId) async {
     if (AppConfig.useMockApi) return const <dynamic>[];
-    final dynamic response = await _client.get(ApiEndpoints.postComments(postId));
+    final dynamic response =
+        await _client.get(ApiEndpoints.postComments(postId), useCache: false);
     if (response is List) return response;
+    if (response is Map<String, dynamic>) {
+      if (response['data'] is List) return response['data'] as List<dynamic>;
+      if (response['comments'] is List) {
+        return response['comments'] as List<dynamic>;
+      }
+    }
     return const <dynamic>[];
+  }
+
+  // ── Like Comment ──────────────────────────────────────────────────────────
+  // POST /comments/:id/like
+  Future<void> likeComment(String commentId) async {
+    if (AppConfig.useMockApi) return;
+    await _client.post(ApiEndpoints.commentLike(commentId));
+  }
+
+  // ── Unlike Comment ────────────────────────────────────────────────────────
+  // DELETE /comments/:id/like
+  Future<void> unlikeComment(String commentId) async {
+    if (AppConfig.useMockApi) return;
+    await _client.delete(ApiEndpoints.commentLike(commentId));
+  }
+
+  // ── Delete Comment or Reply ───────────────────────────────────────────────
+  // DELETE /comments/:id
+  Future<void> deleteComment(String commentId) async {
+    if (AppConfig.useMockApi) return;
+    await _client.delete(ApiEndpoints.comment(commentId));
+  }
+
+  // ── List Posts by Community ───────────────────────────────────────────────
+  // GET /posts?communityId=:communityId
+  Future<List<PostResponseModel>> getPostsByCommunity(
+      String communityId) async {
+    if (AppConfig.useMockApi) return const <PostResponseModel>[];
+    try {
+      final dynamic response = await _client.get(
+        ApiEndpoints.postsByCommunity(communityId),
+        useCache: false,
+      );
+      return _parsePostsList(response);
+    } catch (e) {
+      debugPrint('⚠️ [PostContent] Failed to fetch community posts: $e');
+      return const <PostResponseModel>[];
+    }
+  }
+
+  // ── List User's Liked Posts ───────────────────────────────────────────────
+  // GET /users/me/likes
+  Future<List<PostResponseModel>> getLikedPosts() async {
+    if (AppConfig.useMockApi) return const <PostResponseModel>[];
+    try {
+      final dynamic response =
+          await _client.get(ApiEndpoints.userLikes, useCache: false);
+      return _parsePostsList(response);
+    } catch (e) {
+      debugPrint('⚠️ [PostContent] Failed to fetch liked posts: $e');
+      return const <PostResponseModel>[];
+    }
+  }
+
+  // ── List User's Saved Posts ───────────────────────────────────────────────
+  // GET /users/me/saved
+  Future<List<PostResponseModel>> getSavedPosts() async {
+    if (AppConfig.useMockApi) return const <PostResponseModel>[];
+    try {
+      final dynamic response =
+          await _client.get(ApiEndpoints.userSaved, useCache: false);
+      return _parsePostsList(response);
+    } catch (e) {
+      debugPrint('⚠️ [PostContent] Failed to fetch saved posts: $e');
+      return const <PostResponseModel>[];
+    }
   }
 }

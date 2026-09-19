@@ -27,12 +27,14 @@ class CommentItemModel {
     required this.content,
     this.likesCount = 0,
     this.isLiked = false,
+    this.parentId,
+    List<CommentItemModel>? replies,
     this.isAuthorReply = false,
     this.authorReplyText,
     this.authorReplyUser,
     this.authorReplyAvatar,
     this.moderationReason,
-  });
+  }) : replies = replies ?? <CommentItemModel>[];
 
   final String id;
   final String? authorId;
@@ -42,6 +44,8 @@ class CommentItemModel {
   final String content;
   int likesCount;
   bool isLiked;
+  final String? parentId;
+  final List<CommentItemModel> replies;
   final bool isAuthorReply;
   final String? authorReplyText;
   final String? authorReplyUser;
@@ -53,6 +57,7 @@ class CommentsBottomSheet extends StatefulWidget {
   const CommentsBottomSheet({
     required this.totalComments,
     this.postId,
+    this.postAuthorId,
     this.communityId,
     this.isAnswers = false,
     this.onCommentAdded,
@@ -61,6 +66,7 @@ class CommentsBottomSheet extends StatefulWidget {
 
   final int totalComments;
   final String? postId;
+  final String? postAuthorId;
   final String? communityId;
   final bool isAnswers;
   final VoidCallback? onCommentAdded;
@@ -72,11 +78,13 @@ class CommentsBottomSheet extends StatefulWidget {
 class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
   final TextEditingController _commentInputController =
       TextEditingController();
+  final FocusNode _commentFocusNode = FocusNode();
 
   bool _isLoadingComments = false;
   bool _isSubmittingComment = false;
   List<CommentItemModel> _comments = <CommentItemModel>[];
   final List<CommentItemModel> _hiddenComments = <CommentItemModel>[];
+  CommentItemModel? _replyingToComment;
 
   @override
   void initState() {
@@ -120,41 +128,63 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
       final PostContentService service =
           PostContentService(context.read<ApiClient>());
       final List<dynamic> raw = await service.getComments(widget.postId!);
-      final List<CommentItemModel> parsed = <CommentItemModel>[];
+      final Map<String, CommentItemModel> allMap = <String, CommentItemModel>{};
+      final List<CommentItemModel> topLevel = <CommentItemModel>[];
+      final List<CommentItemModel> pendingReplies = <CommentItemModel>[];
+
       for (final dynamic item in raw) {
         if (item is Map<String, dynamic>) {
           final dynamic author = item['author'];
           final String? authorId = (item['authorId'] ??
                   item['userId'] ??
-                  (author is Map ? author['id'] : null))
+                  (author is Map ? (author['userId'] ?? author['id']) : null))
               ?.toString();
           final String username = author is Map
               ? (author['username'] ?? author['name'] ?? '@user').toString()
               : (item['username'] ?? '@user').toString();
           final String avatar = author is Map
-              ? (author['avatar'] ?? AppImages.user4).toString()
-              : (item['avatar'] ?? AppImages.user4).toString();
+              ? (author['avatarUrl'] ?? author['avatar'] ?? AppImages.user4).toString()
+              : (item['avatarUrl'] ?? item['avatar'] ?? AppImages.user4).toString();
           final String text =
-              (item['content'] ?? item['body'] ?? item['text'] ?? '').toString();
+              (item['body'] ?? item['content'] ?? item['text'] ?? '').toString();
+          final String? parentId = item['parentId']?.toString();
           final String timeAgo = _formatCommentTime(item['createdAt']?.toString());
+          final int likesCount = (item['likeCount'] ?? item['likesCount'] ?? item['likes'] ?? 0) as int? ?? 0;
+          final bool isLiked = (item['isLiked'] ?? item['liked'] ?? false) as bool? ?? false;
 
-          parsed.add(
-            CommentItemModel(
-              id: (item['id'] ?? item['_id'] ?? '').toString(),
-              authorId: authorId,
-              avatarAsset: avatar,
-              username: username,
-              timeAgo: timeAgo,
-              content: text,
-              likesCount: (item['likesCount'] ?? item['likes'] ?? 0) as int? ?? 0,
-              isLiked: (item['isLiked'] ?? false) as bool? ?? false,
-            ),
+          final CommentItemModel model = CommentItemModel(
+            id: (item['id'] ?? item['_id'] ?? '').toString(),
+            authorId: authorId,
+            avatarAsset: avatar,
+            username: username,
+            timeAgo: timeAgo,
+            content: text,
+            parentId: parentId,
+            likesCount: likesCount,
+            isLiked: isLiked,
           );
+
+          allMap[model.id] = model;
+          if (parentId != null && parentId.isNotEmpty) {
+            pendingReplies.add(model);
+          } else {
+            topLevel.add(model);
+          }
         }
       }
+
+      for (final CommentItemModel reply in pendingReplies) {
+        final CommentItemModel? parent = allMap[reply.parentId];
+        if (parent != null) {
+          parent.replies.add(reply);
+        } else {
+          topLevel.add(reply);
+        }
+      }
+
       if (mounted) {
         setState(() {
-          _comments = parsed;
+          _comments = topLevel;
           _isLoadingComments = false;
         });
       }
@@ -183,18 +213,59 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
   @override
   void dispose() {
     _commentInputController.dispose();
+    _commentFocusNode.dispose();
     super.dispose();
   }
 
-  void _toggleLikeComment(CommentItemModel comment) {
+  void _startReply(CommentItemModel comment) {
     setState(() {
-      comment.isLiked = !comment.isLiked;
+      _replyingToComment = comment;
+    });
+    _commentFocusNode.requestFocus();
+  }
+
+  void _cancelReply() {
+    setState(() {
+      _replyingToComment = null;
+    });
+  }
+
+  void _toggleLikeComment(CommentItemModel comment) {
+    final bool wasLiked = comment.isLiked;
+    setState(() {
+      comment.isLiked = !wasLiked;
       if (comment.isLiked) {
         comment.likesCount += 1;
       } else {
         comment.likesCount = (comment.likesCount - 1).clamp(0, 999999);
       }
     });
+
+    if (comment.id.contains('-')) {
+      final PostContentService service =
+          PostContentService(context.read<ApiClient>());
+      if (!wasLiked) {
+        service.likeComment(comment.id).catchError((e) {
+          debugPrint('Error liking comment ${comment.id}: $e');
+          if (mounted) {
+            setState(() {
+              comment.isLiked = false;
+              comment.likesCount = (comment.likesCount - 1).clamp(0, 999999);
+            });
+          }
+        });
+      } else {
+        service.unlikeComment(comment.id).catchError((e) {
+          debugPrint('Error unliking comment ${comment.id}: $e');
+          if (mounted) {
+            setState(() {
+              comment.isLiked = true;
+              comment.likesCount += 1;
+            });
+          }
+        });
+      }
+    }
   }
 
   void _hideComment(CommentItemModel comment) {
@@ -218,11 +289,54 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     });
   }
 
-  void _showCommentOptionsModal(CommentItemModel comment) {
+  Future<void> _deleteComment(CommentItemModel comment,
+      {CommentItemModel? parentComment}) async {
+    final String typeName = widget.isAnswers ? 'Answer' : 'Comment';
+    setState(() {
+      if (parentComment != null) {
+        parentComment.replies
+            .removeWhere((CommentItemModel c) => c.id == comment.id);
+      } else {
+        _comments.removeWhere((CommentItemModel c) => c.id == comment.id);
+      }
+    });
+
+    AppSnackBar.showSuccess(
+      context,
+      title: 'Deleted',
+      subtitle:
+          comment.parentId != null ? 'Reply deleted' : '$typeName deleted',
+    );
+
+    if (comment.id.contains('-')) {
+      try {
+        final PostContentService service =
+            PostContentService(context.read<ApiClient>());
+        await service.deleteComment(comment.id);
+      } catch (e) {
+        debugPrint('Error deleting comment ${comment.id}: $e');
+      }
+    }
+  }
+
+  void _showCommentOptionsModal(CommentItemModel comment,
+      {CommentItemModel? parentComment}) {
     final String typeName = widget.isAnswers ? 'Answer' : 'Comment';
     final String typeNameLower = widget.isAnswers ? 'answer' : 'comment';
     final String typeNamePluralLower =
         widget.isAnswers ? 'answers' : 'comments';
+
+    final AuthProvider auth = context.read<AuthProvider>();
+    final String? currentUserId = auth.userId;
+    final bool isOwnComment = currentUserId != null &&
+        comment.authorId != null &&
+        (currentUserId.trim().toLowerCase() ==
+            comment.authorId!.trim().toLowerCase());
+    final bool isPostAuthor = currentUserId != null &&
+        widget.postAuthorId != null &&
+        (currentUserId.trim().toLowerCase() ==
+            widget.postAuthorId!.trim().toLowerCase());
+    final bool canDelete = isOwnComment || isPostAuthor;
 
     showModalBottomSheet<void>(
       context: context,
@@ -276,6 +390,41 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
+
+                // Option: Delete Comment / Reply (User's own comment or Post author cleanup)
+                if (canDelete)
+                  ListTile(
+                    leading: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: Colors.redAccent,
+                      size: 22,
+                    ),
+                    title: Text(
+                      isOwnComment
+                          ? (comment.parentId != null
+                              ? 'Delete reply'
+                              : 'Delete $typeNameLower')
+                          : 'Delete $typeNameLower (as author)',
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      isOwnComment
+                          ? 'Permanently delete your ${comment.parentId != null ? 'reply' : typeNameLower}'
+                          : 'Remove this $typeNameLower from your post',
+                      style: TextStyle(
+                        color: ctx.themeTextMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _deleteComment(comment, parentComment: parentComment);
+                    },
+                  ),
 
                 // Option 1: Hide Comment / Answer
                 ListTile(
@@ -630,19 +779,42 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     final String text = _commentInputController.text.trim();
     if (text.isEmpty || _isSubmittingComment) return;
 
+    final CommentItemModel? targetReply = _replyingToComment;
+    final String? parentId = targetReply != null
+        ? (targetReply.parentId ?? targetReply.id)
+        : null;
+
     final String tempId = 'c_${DateTime.now().millisecondsSinceEpoch}';
+    final AuthProvider auth = context.read<AuthProvider>();
+    final String myUserId = auth.userId ?? '';
+    final String myUsername = auth.user?.displayName ?? 'you';
+    final String myAvatar = auth.user?.avatarUrl ?? AppImages.user4;
+
     final CommentItemModel optimistic = CommentItemModel(
       id: tempId,
-      avatarAsset: AppImages.user4,
-      username: 'you',
+      authorId: myUserId,
+      avatarAsset: myAvatar,
+      username: myUsername,
       timeAgo: 'Just now',
       content: text,
+      parentId: parentId,
       likesCount: 0,
     );
 
     setState(() {
-      _comments.insert(0, optimistic);
+      if (parentId != null) {
+        final int parentIndex =
+            _comments.indexWhere((CommentItemModel c) => c.id == parentId);
+        if (parentIndex != -1) {
+          _comments[parentIndex].replies.add(optimistic);
+        } else {
+          _comments.insert(0, optimistic);
+        }
+      } else {
+        _comments.insert(0, optimistic);
+      }
       _commentInputController.clear();
+      _replyingToComment = null;
       _isSubmittingComment = true;
     });
 
@@ -655,6 +827,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
         await service.createComment(
           postId: widget.postId!,
           content: text,
+          parentId: parentId,
         );
       } catch (e) {
         debugPrint('Error posting comment: $e');
@@ -678,7 +851,9 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
     final String placeholderText = widget.isAnswers
         ? 'Add a your answer...'
-        : l10n.commentPlaceholder;
+        : (_replyingToComment != null
+            ? 'Replying to @${_replyingToComment!.username}...'
+            : l10n.commentPlaceholder);
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.72,
@@ -764,12 +939,42 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                               _CommentItemTile(
                                 comment: item,
                                 onLikeToggle: () => _toggleLikeComment(item),
-                                onLongPress: () => _showCommentOptionsModal(item),
+                                onLongPress: () =>
+                                    _showCommentOptionsModal(item),
+                                onReplyTap: () => _startReply(item),
                                 replyLabel: l10n.commentReply,
                                 reportLabel: l10n.commentReport,
                                 authorLabel: l10n.commentAuthor,
                                 communityId: widget.communityId,
                               ),
+                              if (item.replies.isNotEmpty) ...<Widget>[
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 42, top: 10),
+                                  child: Column(
+                                    children: <Widget>[
+                                      for (final CommentItemModel reply
+                                          in item.replies) ...<Widget>[
+                                        _CommentItemTile(
+                                          comment: reply,
+                                          onLikeToggle: () =>
+                                              _toggleLikeComment(reply),
+                                          onLongPress: () =>
+                                              _showCommentOptionsModal(reply,
+                                                  parentComment: item),
+                                          onReplyTap: () =>
+                                              _startReply(item),
+                                          replyLabel: l10n.commentReply,
+                                          reportLabel: l10n.commentReport,
+                                          authorLabel: l10n.commentAuthor,
+                                          communityId: widget.communityId,
+                                          isReply: true,
+                                        ),
+                                        const SizedBox(height: 10),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: AppSpacing.lg),
                             ],
 
@@ -850,19 +1055,87 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                         ),
             ),
 
+            // ── Replying Banner if active ───────────────────────────
+            if (_replyingToComment != null)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                margin: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: context.isDarkMode
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.gradientCyan.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    const Icon(
+                      Icons.reply_rounded,
+                      size: 16,
+                      color: AppColors.gradientCyan,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Replying to @${_replyingToComment!.username}',
+                        style: TextStyle(
+                          color: context.themeTextPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _cancelReply,
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: context.themeIconMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             // ── Bottom Fixed Input Bar ────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: Row(
                 children: <Widget>[
                   // Current User Avatar
-                  ClipOval(
-                    child: Image.asset(
-                      AppImages.user4,
-                      width: 36,
-                      height: 36,
-                      fit: BoxFit.cover,
-                    ),
+                  Builder(
+                    builder: (BuildContext context) {
+                      final String? currentAvatarUrl =
+                          context.read<AuthProvider>().user?.avatarUrl;
+                      return ClipOval(
+                        child: currentAvatarUrl != null &&
+                                currentAvatarUrl.startsWith('http')
+                            ? Image.network(
+                                currentAvatarUrl,
+                                width: 36,
+                                height: 36,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Image.asset(
+                                  AppImages.user4,
+                                  width: 36,
+                                  height: 36,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : Image.asset(
+                                AppImages.user4,
+                                width: 36,
+                                height: 36,
+                                fit: BoxFit.cover,
+                              ),
+                      );
+                    },
                   ),
                   const SizedBox(width: 10),
 
@@ -870,6 +1143,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                   Expanded(
                     child: AppTextField(
                       controller: _commentInputController,
+                      focusNode: _commentFocusNode,
                       hintText: placeholderText,
                     ),
                   ),
@@ -923,19 +1197,23 @@ class _CommentItemTile extends StatelessWidget {
     required this.comment,
     required this.onLikeToggle,
     required this.onLongPress,
+    this.onReplyTap,
     required this.replyLabel,
     required this.reportLabel,
     required this.authorLabel,
     this.communityId,
+    this.isReply = false,
   });
 
   final CommentItemModel comment;
   final VoidCallback onLikeToggle;
   final VoidCallback onLongPress;
+  final VoidCallback? onReplyTap;
   final String replyLabel;
   final String reportLabel;
   final String authorLabel;
   final String? communityId;
+  final bool isReply;
 
   void _openProfile(BuildContext context) {
     final AuthProvider auth = context.read<AuthProvider>();
@@ -970,6 +1248,8 @@ class _CommentItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final double avatarSize = isReply ? 28 : 36;
+
     return GestureDetector(
       onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
@@ -985,16 +1265,16 @@ class _CommentItemTile extends StatelessWidget {
                   child: comment.avatarAsset.startsWith('http')
                       ? Image.network(
                           comment.avatarAsset,
-                          width: 36,
-                          height: 36,
+                          width: avatarSize,
+                          height: avatarSize,
                           fit: BoxFit.cover,
                           errorBuilder: (_, _, _) =>
-                              const Icon(Icons.person, size: 36),
+                              Icon(Icons.person, size: avatarSize),
                         )
                       : Image.asset(
                           comment.avatarAsset,
-                          width: 36,
-                          height: 36,
+                          width: avatarSize,
+                          height: avatarSize,
                           fit: BoxFit.cover,
                         ),
                 ),
@@ -1040,7 +1320,7 @@ class _CommentItemTile extends StatelessWidget {
                     Row(
                       children: <Widget>[
                         GestureDetector(
-                          onTap: () {},
+                          onTap: onReplyTap,
                           child: Text(
                             replyLabel,
                             style: TextStyle(
@@ -1086,7 +1366,9 @@ class _CommentItemTile extends StatelessWidget {
                 child: Column(
                   children: <Widget>[
                     Image.asset(
-                      comment.isLiked ? AppIcons.likedLogo : AppIcons.unlikeLogo,
+                      comment.isLiked
+                          ? AppIcons.likedLogo
+                          : AppIcons.unlikeLogo,
                       width: 22,
                       height: 22,
                     ),

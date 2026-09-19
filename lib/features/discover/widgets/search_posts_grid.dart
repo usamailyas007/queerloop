@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
 
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -7,7 +6,7 @@ import '../../home/models/reel_item_model.dart';
 import '../../home/screens/reels_feed_view.dart';
 import '../models/discover_models.dart';
 
-/// 3-column grid of search result reel cards with rounded corners and instant video playback.
+/// 3-column grid of search result reel cards with dynamic image/video thumbnails and playback.
 class SearchPostsGrid extends StatelessWidget {
   const SearchPostsGrid({
     this.results = const <DiscoverSearchResult>[],
@@ -16,56 +15,36 @@ class SearchPostsGrid extends StatelessWidget {
 
   final List<DiscoverSearchResult> results;
 
-  static const List<String> _videoAssets = <String>[
-    'assets/videos/video1.mp4',
-    'assets/videos/video2.mp4',
-    'assets/videos/video3.mp4',
-    'assets/videos/video2.mp4',
-    'assets/videos/video3.mp4',
-    'assets/videos/video1.mp4',
-  ];
-
-  static const List<String> _viewCounts = <String>[
-    '12.4K',
-    '8.9K',
-    '4.2K',
-    '19.1K',
-    '6.7K',
-    '22.5K',
-  ];
-
   List<ReelItemModel> _buildSearchReels() {
-    final List<String> captions = <String>[
-      'Six months post-op. Read the caption before you comment 🤍 #transjoy #recovery',
-      'Quick binder fit check! Finding community in unexpected places ✨ #lgbtq',
-      'Late night thoughts about chosen family & pride 🏳️‍⚧️ #chosenfamily #pride',
-      'Outfit check for the weekend rally! 💫 #queerfashion #transjoy',
-      'Throwback to last month with the best people ❤️ #chosenfamily',
-      'Daily reminder that you are valid and loved 🏳️‍🌈 #support #lgbtq',
-    ];
+    return results.asMap().entries.map((MapEntry<int, DiscoverSearchResult> entry) {
+      final int i = entry.key;
+      final DiscoverSearchResult res = entry.value;
 
-    final int count = results.isNotEmpty ? results.length : _videoAssets.length;
-
-    return List<ReelItemModel>.generate(count, (int i) {
-      final String video = _videoAssets[i % _videoAssets.length];
-      final String caption = captions[i % captions.length];
+      final String img = res.imageAsset.trim();
+      final bool isVideoUrl = img.startsWith('http') &&
+          (img.endsWith('.mp4') || img.endsWith('.m3u8') || img.contains('video'));
 
       return ReelItemModel(
-        id: 'search_reel_$i',
-        username: '@queer_creator',
-        pronounsTime: 'they/them · 2h',
-        avatarAsset: AppImages.user1,
-        videoAsset: video,
-        caption: caption,
-        likesCount: 1500 + (i * 420),
-        commentsCount: 65 + (i * 15),
-        tags: const <String>['#transjoy', '#chosenfamily', '#queer'],
+        id: res.id ?? 'search_reel_$i',
+        authorId: res.authorId,
+        username: res.authorUsername ?? '@creator',
+        pronounsTime: 'they/them · recent',
+        avatarAsset: (res.authorAvatar != null && res.authorAvatar!.isNotEmpty)
+            ? res.authorAvatar!
+            : AppImages.user1,
+        videoAsset: (!img.startsWith('http') && img.endsWith('.mp4')) ? img : '',
+        videoUrl: isVideoUrl ? img : (img.startsWith('http') ? img : null),
+        caption: res.caption ?? '',
+        likesCount: res.likesCount ?? 0,
+        commentsCount: res.commentsCount ?? 0,
+        tags: const <String>[],
       );
-    });
+    }).toList();
   }
 
   void _openReelPlayer(BuildContext context, int initialIndex) {
     final List<ReelItemModel> searchReels = _buildSearchReels();
+    if (searchReels.isEmpty) return;
 
     Navigator.push<void>(
       context,
@@ -113,7 +92,9 @@ class SearchPostsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int itemCount = results.isNotEmpty ? results.length : _videoAssets.length;
+    if (results.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return GridView.builder(
       shrinkWrap: true,
@@ -124,10 +105,11 @@ class SearchPostsGrid extends StatelessWidget {
         mainAxisSpacing: 8,
         childAspectRatio: 0.72,
       ),
-      itemCount: itemCount,
+      itemCount: results.length,
       itemBuilder: (BuildContext context, int index) {
-        final String videoPath = _videoAssets[index % _videoAssets.length];
-        final String countText = _viewCounts[index % _viewCounts.length];
+        final DiscoverSearchResult item = results[index];
+        final String countText = item.viewCount ??
+            (item.likesCount != null ? '${item.likesCount}' : '');
 
         return GestureDetector(
           onTap: () => _openReelPlayer(context, index),
@@ -136,10 +118,7 @@ class SearchPostsGrid extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: <Widget>[
-                _SearchVideoThumbnailWidget(
-                  key: ValueKey<String>('search_vid_${index}_$videoPath'),
-                  videoAsset: videoPath,
-                ),
+                _buildThumbnail(item),
 
                 // Dark gradient bottom overlay
                 Container(
@@ -150,30 +129,36 @@ class SearchPostsGrid extends StatelessWidget {
                       colors: <Color>[
                         Colors.transparent,
                         Colors.transparent,
-                        Colors.black.withValues(alpha: 0.7),
+                        Colors.black.withValues(alpha: 0.75),
                       ],
+                      stops: const <double>[0.0, 0.6, 1.0],
                     ),
                   ),
                 ),
 
-                // Bottom play icon and view count badge
+                // Views count & play icon
                 Positioned(
-                  bottom: 6,
                   left: 6,
+                  bottom: 6,
+                  right: 6,
                   child: Row(
                     children: <Widget>[
                       const Icon(
                         Icons.play_arrow_rounded,
                         color: Colors.white,
-                        size: 15,
+                        size: 14,
                       ),
                       const SizedBox(width: 2),
-                      Text(
-                        countText,
-                        style: AppTextStyles.caption.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11,
+                      Expanded(
+                        child: Text(
+                          countText.isNotEmpty ? countText : 'Watch',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.caption.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
                         ),
                       ),
                     ],
@@ -186,67 +171,33 @@ class SearchPostsGrid extends StatelessWidget {
       },
     );
   }
-}
 
-class _SearchVideoThumbnailWidget extends StatefulWidget {
-  const _SearchVideoThumbnailWidget({
-    required this.videoAsset,
-    super.key,
-  });
-
-  final String videoAsset;
-
-  @override
-  State<_SearchVideoThumbnailWidget> createState() =>
-      _SearchVideoThumbnailWidgetState();
-}
-
-class _SearchVideoThumbnailWidgetState
-    extends State<_SearchVideoThumbnailWidget> {
-  VideoPlayerController? _controller;
-  bool _initialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = VideoPlayerController.asset(widget.videoAsset);
-    _controller!.initialize().then((_) {
-      if (mounted) {
-        setState(() {
-          _initialized = true;
-        });
-      }
-    }).catchError((_) {});
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_initialized && _controller != null) {
-      return SizedBox.expand(
-        child: FittedBox(
-          fit: BoxFit.cover,
-          child: SizedBox(
-            width: _controller!.value.size.width,
-            height: _controller!.value.size.height,
-            child: VideoPlayer(_controller!),
-          ),
-        ),
+  Widget _buildThumbnail(DiscoverSearchResult item) {
+    final String img = item.imageAsset.trim();
+    if (img.startsWith('http://') || img.startsWith('https://')) {
+      return Image.network(
+        img,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _fallbackContainer(),
+      );
+    } else if (img.isNotEmpty) {
+      return Image.asset(
+        img,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _fallbackContainer(),
       );
     }
+    return _fallbackContainer();
+  }
 
+  Widget _fallbackContainer() {
     return Container(
       color: const Color(0xFF1E1B26),
       child: const Center(
         child: Icon(
           Icons.videocam_rounded,
           color: Colors.white24,
-          size: 26,
+          size: 28,
         ),
       ),
     );

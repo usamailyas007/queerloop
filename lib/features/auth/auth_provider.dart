@@ -89,10 +89,11 @@ class AuthProvider extends ChangeNotifier {
       }
     } on ApiException catch (_) {
       // Stored token expired or network unavailable — fall through to signedOut.
+    } catch (_) {
+      // Other unforeseen errors
     }
 
-    _status = AuthStatus.signedOut;
-    notifyListeners();
+    _clearSession();
   }
 
   // ── Register ──────────────────────────────────────────────────────────────
