@@ -13,11 +13,20 @@ abstract final class ApiEndpoints {
   static const String verifyAge = '/auth/verify-age';
   static const String verifyEmail = '/auth/verify-email';
   static const String verifyEmailResend = '/auth/verify-email/resend';
+  static const String cancelDeletion = '/auth/cancel-deletion';
 
   // ── Auth › Password Reset ─────────────────────────────────────────────────
   static const String passwordResetRequest = '/auth/password-reset/request';
   static const String passwordResetVerify = '/auth/password-reset/verify';
   static const String passwordResetConfirm = '/auth/password-reset/confirm';
+
+  // ── Auth › Social ─────────────────────────────────────────────────────────
+  static const String googleSignIn = '/auth/google';
+  static const String appleSignIn = '/auth/apple';
+
+  // ── Users › Account Deletion ─────────────────────────────────────────────────
+  static const String requestAccountDeletion = '/users/me/delete';
+  static const String deletionStatus = '/users/me/deletion-status';
 
   // ── Users ─────────────────────────────────────────────────────────────────
   /// Replace :id at call site: ApiEndpoints.user('abc-123')
@@ -323,4 +332,25 @@ abstract final class ApiEndpoints {
     String emoji,
   ) =>
       '/conversations/$id/messages/$messageId/reactions?emoji=${Uri.encodeQueryComponent(emoji)}';
+
+  // ── Device Push Tokens ─────────────────────────────────────────────────────
+  /// Register a device push token: POST /users/me/device-tokens
+  static const String deviceTokens = '/users/me/device-tokens';
+
+  /// Unregister device push token: DELETE /users/me/device-tokens/:token
+  static String deviceToken(String token) =>
+      '/users/me/device-tokens/${Uri.encodeComponent(token)}';
+
+  // ── Notifications ──────────────────────────────────────────────────────────
+  /// List notifications: GET /notifications
+  static const String notifications = '/notifications';
+
+  /// Unread notifications count: GET /notifications/unread-count
+  static const String notificationsUnreadCount = '/notifications/unread-count';
+
+  /// Mark single notification as read: PATCH /notifications/:id/read
+  static String notificationRead(String id) => '/notifications/$id/read';
+
+  /// Mark all notifications as read: POST /notifications/mark-all-read
+  static const String notificationsMarkAllRead = '/notifications/mark-all-read';
 }

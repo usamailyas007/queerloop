@@ -478,6 +478,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         (isPrivateAccount ? 'he / him' : '');
 
     final AuthProvider auth = context.watch<AuthProvider>();
+    final ProfileProvider profile = context.watch<ProfileProvider>();
     final String? myId = auth.userId;
     final String? myName = auth.user?.displayName;
     final bool isOwnProfile = (myId != null &&
@@ -1156,7 +1157,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                     // Tab 3: Liked Grid
                     if (_selectedTabIndex == 3)
-                      const ProfileMediaGridWidget(showPlayCounts: false),
+                      ProfileMediaGridWidget(
+                        showPlayCounts: false,
+                        customReels: isOwnProfile ? profile.likedReels : null,
+                        emptyTitle: 'No liked reels yet',
+                        emptySubtitle: isOwnProfile
+                            ? 'Reels you like will appear here.'
+                            : 'Nobody sees what this user liked',
+                        emptyIcon: Icons.favorite_border_rounded,
+                      ),
                   ],
 
                   const SizedBox(height: AppSpacing.xxl),

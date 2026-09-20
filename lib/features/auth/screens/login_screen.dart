@@ -20,6 +20,7 @@ import '../auth_provider.dart';
 import '../widgets/auth_divider.dart';
 import '../widgets/auth_footer_link.dart';
 import '../widgets/auth_header.dart';
+import 'account_pending_deletion_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -78,6 +79,37 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
 
+        if (authProvider.errorCode == 'ACCOUNT_PENDING_DELETION') {
+          final dynamic errData = authProvider.errorData;
+          String? restorationToken;
+          String? scheduledFor;
+          if (errData is Map) {
+            final dynamic inner =
+                (errData['data'] is Map) ? errData['data'] : errData;
+            restorationToken = inner['restorationToken']?.toString();
+            scheduledFor =
+                (inner['deletionScheduledAt'] ?? inner['scheduledFor'])
+                    ?.toString();
+          }
+          restorationToken ??= authProvider.pendingDeletionRestorationToken;
+          scheduledFor ??= authProvider.deletionScheduledAt;
+
+          if (restorationToken != null && restorationToken.isNotEmpty) {
+            authProvider.clearError();
+            Navigator.push<void>(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => AccountPendingDeletionScreen(
+                  restorationToken: restorationToken!,
+                  scheduledFor: scheduledFor,
+                ),
+              ),
+            );
+            return;
+          }
+          // No restoration token — fall through to display error
+        }
+
         final String? errorMsg = authProvider.error;
         if (errorMsg != null && errorMsg.isNotEmpty) {
           AppSnackBar.showError(
@@ -131,6 +163,69 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
     setState(() => _isPreloadingFeed = false);
+    _goHome(context);
+  }
+
+  // ── Social Sign-In helpers ─────────────────────────────────────────────────
+
+  Future<void> _signInWithSocial(
+    Future<bool> Function() socialMethod,
+  ) async {
+    final AuthProvider authProvider = context.read<AuthProvider>();
+    if (authProvider.isBusy) return;
+
+    final bool ok = await socialMethod();
+    if (!ok) {
+      if (mounted) {
+        final String? errorMsg = authProvider.error;
+        if (errorMsg != null && errorMsg.isNotEmpty) {
+          AppSnackBar.showError(
+            context,
+            title: 'Sign In Failed',
+            subtitle: errorMsg,
+          );
+          authProvider.clearError();
+        }
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    // Warmup feed after social login
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    homeFeed.resetToHome();
+    final String? uid = authProvider.userId;
+    final List<Future<dynamic>> warmUpTasks = <Future<dynamic>>[];
+    if (uid != null && uid.isNotEmpty) {
+      warmUpTasks.add(
+        context.read<ProfileProvider>().fetchProfile(uid).catchError((_) {}),
+      );
+    }
+    warmUpTasks.add(() async {
+      try {
+        await homeFeed.loadFeed();
+        if (homeFeed.reels.isNotEmpty) {
+          final firstReel = homeFeed.reels.first;
+          final controller =
+              await ReelVideoPreloader.instance.getOrCreate(firstReel);
+          if (controller != null && !controller.value.isInitialized) {
+            await controller.initialize().timeout(
+                  const Duration(seconds: 4),
+                  onTimeout: () => controller,
+                );
+          }
+          ReelVideoPreloader.instance.preloadSurrounding(homeFeed.reels, 0);
+        }
+      } catch (e) {
+        debugPrint('⚠️ [Login] Social pre-fetching feed failed: $e');
+      }
+    }());
+    await Future.wait(warmUpTasks).timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => <dynamic>[],
+    );
+
+    if (!mounted) return;
     _goHome(context);
   }
 
@@ -302,18 +397,36 @@ class _LoginScreenState extends State<LoginScreen> {
                       Row(
                         children: <Widget>[
                           Expanded(
-                            child: AppSocialButton(
-                              text: l10n.authApple,
-                              iconPath: AppIcons.apple,
-                              onPressed: () {},
+                            child: Selector<AuthProvider, bool>(
+                              selector: (_, AuthProvider p) => p.isBusy,
+                              builder: (_, bool busy, _) => AppSocialButton(
+                                text: l10n.authApple,
+                                iconPath: AppIcons.apple,
+                                onPressed: busy
+                                    ? () {}
+                                    : () => _signInWithSocial(
+                                          () => context
+                                              .read<AuthProvider>()
+                                              .signInWithApple(),
+                                        ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
-                            child: AppSocialButton(
-                              text: l10n.authGoogle,
-                              iconPath: AppIcons.google,
-                              onPressed: () {},
+                            child: Selector<AuthProvider, bool>(
+                              selector: (_, AuthProvider p) => p.isBusy,
+                              builder: (_, bool busy, _) => AppSocialButton(
+                                text: l10n.authGoogle,
+                                iconPath: AppIcons.google,
+                                onPressed: busy
+                                    ? () {}
+                                    : () => _signInWithSocial(
+                                          () => context
+                                              .read<AuthProvider>()
+                                              .signInWithGoogle(),
+                                        ),
+                              ),
                             ),
                           ),
                         ],

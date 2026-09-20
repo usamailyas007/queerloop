@@ -252,22 +252,43 @@ class ConversationsService {
   }
 
   // ── 8. Mark Message Read ───────────────────────────────────────────────────
-  /// POST /conversations/:id/messages/:messageId/read
+  /// POST or PATCH /conversations/:id/messages/:messageId/read
   Future<bool> markMessageRead({
     required String conversationId,
     required String messageId,
   }) async {
     try {
-      debugPrint('🚀 [ConversationsService] Marking read $messageId in $conversationId');
+      debugPrint('🚀 [ConversationsService] POST ${ApiEndpoints.conversationMessageRead(conversationId, messageId)}');
       await _client.post(
         ApiEndpoints.conversationMessageRead(conversationId, messageId),
       );
       return true;
-    } on ApiException catch (e) {
-      debugPrint('❌ [ConversationsService] markMessageRead error: $e');
-      return false;
-    } catch (e) {
-      return false;
+    } catch (_) {
+      try {
+        await _client.patch(
+          ApiEndpoints.conversationMessageRead(conversationId, messageId),
+        );
+        return true;
+      } catch (e) {
+        debugPrint('❌ [ConversationsService] markMessageRead error: $e');
+        return false;
+      }
+    }
+  }
+
+  /// Mark all messages in conversation as read
+  Future<bool> markConversationRead(String conversationId) async {
+    try {
+      debugPrint('🚀 [ConversationsService] Marking entire conversation $conversationId read');
+      await _client.post('/conversations/$conversationId/read');
+      return true;
+    } catch (_) {
+      try {
+        await _client.patch('/conversations/$conversationId/read');
+        return true;
+      } catch (_) {
+        return false;
+      }
     }
   }
 
@@ -318,18 +339,26 @@ class ConversationsService {
   }
 
   // ── 11. Unmute Conversation ────────────────────────────────────────────────
-  /// DELETE /conversations/:id/mute
+  /// DELETE /conversations/:id/mute (Fallback: POST /conversations/:id/unmute)
   Future<bool> unmuteConversation(String conversationId) async {
     try {
-      debugPrint('🚀 [ConversationsService] Unmuting $conversationId');
+      debugPrint('🚀 [ConversationsService] Unmuting $conversationId via DELETE ${ApiEndpoints.conversationMute(conversationId)}');
       await _client.delete(ApiEndpoints.conversationMute(conversationId));
       return true;
-    } on ApiException catch (e) {
-      debugPrint('❌ [ConversationsService] unmuteConversation error: $e');
-      return false;
-    } catch (e, stack) {
-      debugPrint('❌ [ConversationsService] unmuteConversation unexpected: $e\n$stack');
-      return false;
+    } catch (_) {
+      try {
+        debugPrint('🚀 [ConversationsService] Fallback unmuting via POST /conversations/$conversationId/unmute');
+        await _client.post('/conversations/$conversationId/unmute');
+        return true;
+      } catch (_) {
+        try {
+          await _client.delete('/conversations/$conversationId/unmute');
+          return true;
+        } catch (e, stack) {
+          debugPrint('❌ [ConversationsService] unmuteConversation unexpected: $e\n$stack');
+          return false;
+        }
+      }
     }
   }
 

@@ -14,6 +14,7 @@ import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/models/profile_models.dart';
+import '../../profile_setup/profile_setup_service.dart';
 import '../models/user_relationship_models.dart';
 import '../services/user_relationship_service.dart';
 
@@ -366,10 +367,114 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
+  /// Checks if a community is joined by checking the user's active communities.
+  bool isCommunityJoined({String? id, String? name}) {
+    if (id != null && id.isNotEmpty) {
+      if (_userCommunities.any((CommunityModel c) => c.id == id)) return true;
+    }
+    if (name != null && name.isNotEmpty) {
+      final String clean = name.trim().toLowerCase();
+      if (_userCommunities.any((CommunityModel c) => c.name.trim().toLowerCase() == clean)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Dynamically joins a community and updates the profile's joined communities.
+  Future<void> joinCommunity(String communityId, {String? name}) async {
+    try {
+      final ProfileSetupService setupService = ProfileSetupService(_client);
+      String targetId = communityId;
+      if (targetId.isEmpty && name != null && name.isNotEmpty) {
+        final List<CommunityModel> allComms = await setupService.getCommunities();
+        final CommunityModel match = allComms.firstWhere(
+          (CommunityModel c) => c.name.trim().toLowerCase() == name.trim().toLowerCase(),
+          orElse: () => const CommunityModel(id: '', name: '', description: ''),
+        );
+        targetId = match.id;
+      }
+      if (targetId.isNotEmpty) {
+        await setupService.joinCommunity(targetId);
+      }
+      if (!_userCommunities.any((CommunityModel c) =>
+          (targetId.isNotEmpty && c.id == targetId) ||
+          (name != null && c.name.trim().toLowerCase() == name.trim().toLowerCase()))) {
+        _userCommunities.add(CommunityModel(
+          id: targetId,
+          name: name ?? '',
+          description: '',
+          isJoined: true,
+        ));
+      }
+      if (_cachedUserId != null && _cachedUserId!.isNotEmpty) {
+        await fetchUserCommunities(_cachedUserId!, forceRefresh: true);
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to join community: $e');
+    }
+  }
+
+  /// Dynamically leaves a community and removes it from the profile's joined communities.
+  Future<void> leaveCommunity(String communityId, {String? name}) async {
+    try {
+      final ProfileSetupService setupService = ProfileSetupService(_client);
+      String targetId = communityId;
+      if (targetId.isEmpty && name != null && name.isNotEmpty) {
+        final CommunityModel match = _userCommunities.firstWhere(
+          (CommunityModel c) => c.name.trim().toLowerCase() == name.trim().toLowerCase(),
+          orElse: () => const CommunityModel(id: '', name: '', description: ''),
+        );
+        targetId = match.id;
+      }
+      if (targetId.isNotEmpty) {
+        await setupService.leaveCommunity(targetId);
+      }
+      _userCommunities.removeWhere((CommunityModel c) =>
+          (targetId.isNotEmpty && c.id == targetId) ||
+          (name != null && c.name.trim().toLowerCase() == name.trim().toLowerCase()));
+      if (_cachedUserId != null && _cachedUserId!.isNotEmpty) {
+        await fetchUserCommunities(_cachedUserId!, forceRefresh: true);
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to leave community: $e');
+    }
+  }
+
+  /// Removes or updates a reel in liked reels when unliked
+  void removeLikedReel(String id) {
+    _likedReels.removeWhere((ReelItemModel r) => r.id == id);
+    _likedPosts.removeWhere((PostItemModel p) => p.id == id);
+    notifyListeners();
+  }
+
+  void updateLikedReel(String id, {required bool isLiked, required int likesCount}) {
+    final int rIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (rIndex != -1) {
+      if (!isLiked) {
+        _likedReels.removeAt(rIndex);
+      } else {
+        _likedReels[rIndex] = _likedReels[rIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+      }
+    }
+    final int pIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (pIndex != -1) {
+      if (!isLiked) {
+        _likedPosts.removeAt(pIndex);
+      } else {
+        _likedPosts[pIndex] = _likedPosts[pIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+      }
+    }
+    notifyListeners();
+  }
+
   Future<_ContentBatch> _processPosts(
     List<PostResponseModel> posts, {
     String? fallbackAuthorId,
     bool markSaved = false,
+    bool markLiked = false,
   }) async {
     final List<PostItemModel> userPostsList = <PostItemModel>[];
     final List<ReelItemModel> userReelsList = <ReelItemModel>[];
@@ -423,7 +528,7 @@ class ProfileProvider extends ChangeNotifier {
             caption: post.body.isNotEmpty ? post.body : post.caption,
             likesCount: post.likesCount,
             commentsCount: post.commentsCount,
-            isLiked: post.isLiked,
+            isLiked: markLiked || post.isLiked,
             isSaved: markSaved || post.isSaved,
             tags: post.tags,
             durationText:
@@ -446,7 +551,7 @@ class ProfileProvider extends ChangeNotifier {
             content: post.body.isNotEmpty ? post.body : post.caption,
             likesCount: post.likesCount,
             commentsCount: post.commentsCount,
-            isLiked: post.isLiked,
+            isLiked: markLiked || post.isLiked,
             isSaved: markSaved || post.isSaved,
             postImageUrl: mediaUrl,
             postType: type,
@@ -495,7 +600,7 @@ class ProfileProvider extends ChangeNotifier {
     try {
       final PostContentService service = PostContentService(_client);
       final List<PostResponseModel> posts = await service.getLikedPosts();
-      final _ContentBatch batch = await _processPosts(posts);
+      final _ContentBatch batch = await _processPosts(posts, markLiked: true);
 
       _likedPosts = batch.posts;
       _likedReels = batch.reels;

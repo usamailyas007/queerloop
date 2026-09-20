@@ -10,6 +10,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../auth/auth_provider.dart';
 import '../../profile/provider/profile_provider.dart';
+import '../../notifications/provider/notifications_provider.dart';
 import '../../profile/screens/edit_profile_screen.dart';
 import '../../profile/screens/followers_following_screen.dart';
 import '../../profile/screens/notifications_screen.dart';
@@ -127,42 +128,80 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                   const Spacer(),
 
                   // Bell Icon (Notifications) -> Opens NotificationsScreen
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push<void>(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => const NotificationsScreen(),
+                  Consumer<NotificationsProvider>(
+                    builder: (BuildContext context, NotificationsProvider notifProvider, _) {
+                      final int unread = notifProvider.unreadCount;
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push<void>(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const NotificationsScreen(),
+                            ),
+                          );
+                        },
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: <Widget>[
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.transparent,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.12)
+                                      : context.themeBorder,
+                                  width: 1.1,
+                                ),
+                              ),
+                              child: Center(
+                                child: SvgPicture.asset(
+                                  AppIcons.bell,
+                                  width: 18,
+                                  height: 18,
+                                  colorFilter: ColorFilter.mode(
+                                    context.themeTextPrimary,
+                                    BlendMode.srcIn,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (unread > 0)
+                              Positioned(
+                                top: -2,
+                                right: -2,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: AppColors.primaryGradientButton,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: context.themeBackground,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    unread > 99 ? '99+' : '$unread',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       );
                     },
-                    child: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.12)
-                              : context.themeBorder,
-                          width: 1.1,
-                        ),
-                      ),
-                      child: Center(
-                        child: SvgPicture.asset(
-                          AppIcons.bell,
-                          width: 18,
-                          height: 18,
-                          colorFilter: ColorFilter.mode(
-                            context.themeTextPrimary,
-                            BlendMode.srcIn,
-                          ),
-                        ),
-                      ),
-                    ),
                   ),
 
                   const SizedBox(width: AppSpacing.sm),

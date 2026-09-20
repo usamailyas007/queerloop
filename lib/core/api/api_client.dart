@@ -374,6 +374,7 @@ class ApiClient {
         path.contains('/auth/register') ||
         path.contains('/auth/verify-email') ||
         path.contains('/auth/password-reset') ||
+        path.contains('/auth/cancel-deletion') ||
         path.contains('/users/username-available');
   }
 }

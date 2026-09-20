@@ -351,14 +351,45 @@ class UserRelationshipService {
 
   /// Accept follow request: POST /users/me/follow-requests/:id/accept
   Future<bool> acceptFollowRequest(String requestId) async {
-    if (requestId.isEmpty) return false;
+    final String cleanId = requestId.trim();
+    if (cleanId.isEmpty) return false;
     try {
-      debugPrint('🚀 [UserRelationshipService] Accept follow request: POST ${ApiEndpoints.userFollowRequestAccept(requestId)}');
-      await _client.post(ApiEndpoints.userFollowRequestAccept(requestId));
+      debugPrint('🚀 [UserRelationshipService] Accept follow request: POST ${ApiEndpoints.userFollowRequestAccept(cleanId)}');
+      await _client.post(
+        ApiEndpoints.userFollowRequestAccept(cleanId),
+        body: const <String, dynamic>{},
+      );
       return true;
     } on ApiException catch (e) {
-      debugPrint('❌ [UserRelationshipService] Accept request API error: ${e.message}');
-      rethrow;
+      debugPrint('⚠️ [UserRelationshipService] Accept request primary failed ($e), trying alternatives...');
+      // Alternative 1: POST /users/:id/follow/accept
+      try {
+        await _client.post(
+          '/users/$cleanId/follow/accept',
+          body: const <String, dynamic>{},
+        );
+        return true;
+      } catch (_) {
+        // Alternative 2: POST /users/:id/accept
+        try {
+          await _client.post(
+            '/users/$cleanId/accept',
+            body: const <String, dynamic>{},
+          );
+          return true;
+        } catch (_) {
+          // Alternative 3: POST /follow-requests/:id/accept
+          try {
+            await _client.post(
+              '/follow-requests/$cleanId/accept',
+              body: const <String, dynamic>{},
+            );
+            return true;
+          } catch (_) {
+            rethrow;
+          }
+        }
+      }
     } catch (e) {
       debugPrint('❌ [UserRelationshipService] Accept request error: $e');
       rethrow;
@@ -367,14 +398,42 @@ class UserRelationshipService {
 
   /// Reject follow request: POST /users/me/follow-requests/:id/reject
   Future<bool> rejectFollowRequest(String requestId) async {
-    if (requestId.isEmpty) return false;
+    final String cleanId = requestId.trim();
+    if (cleanId.isEmpty) return false;
     try {
-      debugPrint('🚀 [UserRelationshipService] Reject follow request: POST ${ApiEndpoints.userFollowRequestReject(requestId)}');
-      await _client.post(ApiEndpoints.userFollowRequestReject(requestId));
+      debugPrint('🚀 [UserRelationshipService] Reject follow request: POST ${ApiEndpoints.userFollowRequestReject(cleanId)}');
+      await _client.post(
+        ApiEndpoints.userFollowRequestReject(cleanId),
+        body: const <String, dynamic>{},
+      );
       return true;
     } on ApiException catch (e) {
-      debugPrint('❌ [UserRelationshipService] Reject request API error: ${e.message}');
-      rethrow;
+      debugPrint('⚠️ [UserRelationshipService] Reject request primary failed ($e), trying alternatives...');
+      try {
+        await _client.post(
+          '/users/$cleanId/follow/reject',
+          body: const <String, dynamic>{},
+        );
+        return true;
+      } catch (_) {
+        try {
+          await _client.post(
+            '/users/$cleanId/reject',
+            body: const <String, dynamic>{},
+          );
+          return true;
+        } catch (_) {
+          try {
+            await _client.post(
+              '/follow-requests/$cleanId/reject',
+              body: const <String, dynamic>{},
+            );
+            return true;
+          } catch (_) {
+            rethrow;
+          }
+        }
+      }
     } catch (e) {
       debugPrint('❌ [UserRelationshipService] Reject request error: $e');
       rethrow;

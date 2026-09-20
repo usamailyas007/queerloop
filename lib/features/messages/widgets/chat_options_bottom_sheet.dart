@@ -11,7 +11,6 @@ import '../../create_post/widgets/custom_gradient_switch.dart';
 import '../../profile/services/user_relationship_service.dart';
 import '../provider/messages_provider.dart';
 import 'block_user_modal_dialog.dart';
-import 'delete_chat_modal_dialog.dart';
 import 'mute_duration_bottom_sheet.dart';
 import 'report_conversation_bottom_sheet.dart';
 import 'restrict_user_modal_dialog.dart';
@@ -152,6 +151,9 @@ class ChatOptionsBottomSheet extends StatelessWidget {
     final MessagesProvider provider = context.watch<MessagesProvider>();
     final String cleanUsername =
         username.startsWith('@') ? username : '@$username';
+    final bool isCurrentlyMuted = conversationId != null
+        ? (provider.isMuted(conversationId!) || provider.isMuted(username))
+        : provider.isMuted(username);
 
     return Container(
       decoration: BoxDecoration(
@@ -195,7 +197,7 @@ class ChatOptionsBottomSheet extends StatelessWidget {
 
               const SizedBox(height: AppSpacing.lg),
 
-              // 1. Mute conversation
+              // 1. Mute / Unmute conversation
               _buildOptionTile(
                 context: context,
                 icon: SvgPicture.asset(
@@ -203,12 +205,18 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                   width: 18,
                   height: 18,
                   colorFilter: ColorFilter.mode(
-                    context.themeTextSecondary,
+                    isCurrentlyMuted
+                        ? AppColors.gradientCyan
+                        : context.themeTextSecondary,
                     BlendMode.srcIn,
                   ),
                 ),
-                title: 'Mute conversation',
-                subtitle: 'Pick how long — you can undo anytime',
+                title: isCurrentlyMuted
+                    ? 'Unmute conversation'
+                    : 'Mute conversation',
+                subtitle: isCurrentlyMuted
+                    ? 'Notifications are currently off'
+                    : 'Pick how long — you can undo anytime',
                 trailing: Icon(
                   Icons.chevron_right_rounded,
                   color: context.themeIconMuted,
@@ -216,11 +224,6 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  final bool isCurrentlyMuted = conversationId != null
-                      ? (provider.isMuted(conversationId!) ||
-                          provider.isMuted(username))
-                      : provider.isMuted(username);
-
                   if (isCurrentlyMuted) {
                     if (conversationId != null) {
                       provider.unmuteConversation(conversationId!);
@@ -353,31 +356,7 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                 },
               ),
 
-              // 5. Delete Chat
-              if (conversationId != null)
-                _buildOptionTile(
-                  context: context,
-                  icon: const Icon(
-                    Icons.delete_outline_rounded,
-                    color: Colors.redAccent,
-                    size: 18,
-                  ),
-                  title: 'Delete chat',
-                  subtitle: 'Remove this conversation for yourself',
-                  onTap: () {
-                    Navigator.pop(context);
-                    DeleteChatModalDialog.show(
-                      context,
-                      username: username,
-                      onConfirmDelete: () {
-                        provider.deleteConversation(conversationId!);
-                        Navigator.of(context).pop();
-                      },
-                    );
-                  },
-                ),
-
-              // 6. Typing Indicator toggle switch
+              // 5. Typing Indicator toggle switch
               _buildOptionTile(
                 context: context,
                 icon: Icon(

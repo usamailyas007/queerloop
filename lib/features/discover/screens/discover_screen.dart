@@ -41,6 +41,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             .trim();
         context.read<DiscoverProvider>().setCurrentUser(userId: myId, username: myUsername);
         context.read<SpotlightsProvider>().loadInitial();
+        if (myId != null && myId.isNotEmpty) {
+          profile.fetchUserCommunities(myId);
+        }
       }
     });
   }
@@ -64,6 +67,7 @@ class _DiscoverScreenBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final DiscoverProvider provider = context.watch<DiscoverProvider>();
+    final ProfileProvider profile = context.watch<ProfileProvider>();
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
@@ -204,13 +208,16 @@ class _DiscoverScreenBody extends StatelessWidget {
 
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
 
-            // ── Communities List ───────────────────────────────────────────
+            // ── Communities List (Top 4) ───────────────────────────────────
             SliverList(
               delegate: SliverChildBuilderDelegate((
                 BuildContext context,
                 int index,
               ) {
-                final DiscoverCommunity c = provider.communities[index];
+                final List<DiscoverCommunity> topCommunities =
+                    provider.communities.take(4).toList();
+                final DiscoverCommunity c = topCommunities[index];
+                final bool isJoined = profile.isCommunityJoined(id: c.id, name: c.name);
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.lg,
@@ -220,11 +227,17 @@ class _DiscoverScreenBody extends StatelessWidget {
                   ),
                   child: DiscoverCommunityTile(
                     community: c,
-                    isJoined: provider.isJoined(c.name),
-                    onJoin: () => provider.toggleJoin(c.name),
+                    isJoined: isJoined,
+                    onJoin: () async {
+                      if (isJoined) {
+                        await profile.leaveCommunity(c.id ?? '', name: c.name);
+                      } else {
+                        await profile.joinCommunity(c.id ?? '', name: c.name);
+                      }
+                    },
                   ),
                 );
-              }, childCount: provider.communities.length),
+              }, childCount: provider.communities.take(4).length),
             ),
 
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),

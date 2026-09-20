@@ -672,7 +672,7 @@ class HomeFeedProvider extends ChangeNotifier {
     loadCommunityFeed(force: true);
   }
 
-  Future<void> toggleLikeReel(String id) async {
+  Future<void> toggleLikeReel(String id, {ReelItemModel? fallbackReel}) async {
     ReelItemModel? target;
     for (final List<ReelItemModel> list in <List<ReelItemModel>>[
       _forYouReels,
@@ -685,7 +685,23 @@ class HomeFeedProvider extends ChangeNotifier {
         break;
       }
     }
-    if (target == null) return;
+    if (target == null && fallbackReel != null) {
+      target = fallbackReel;
+    }
+    if (target == null) {
+      final bool alreadyLiked = _userLikedPostIds.contains(id);
+      target = ReelItemModel(
+        id: id,
+        username: '@creator',
+        pronounsTime: '',
+        avatarAsset: '',
+        videoAsset: '',
+        caption: '',
+        likesCount: alreadyLiked ? 1 : 0,
+        commentsCount: 0,
+        isLiked: alreadyLiked,
+      );
+    }
 
     final bool newLiked = !target.isLiked;
     final int newCount = newLiked
@@ -706,7 +722,8 @@ class HomeFeedProvider extends ChangeNotifier {
 
     notifyListeners();
 
-    if (_contentService != null && id.contains('-')) {
+    final bool isRealBackendId = !id.startsWith('profile_reel_') && !id.startsWith('search_reel_');
+    if (_contentService != null && (id.contains('-') || isRealBackendId)) {
       try {
         if (newLiked) {
           await _contentService!.likePost(id);

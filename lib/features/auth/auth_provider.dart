@@ -59,6 +59,7 @@ class AuthProvider extends ChangeNotifier {
   String? _refreshToken;
   String? _error;
   String? _errorCode;
+  dynamic _errorData;
   int? _retryAfterSeconds;
   bool _isBusy = false;
 
@@ -69,6 +70,9 @@ class AuthProvider extends ChangeNotifier {
   String? get userId => _user?.id;
   String? get error => _error;
   String? get errorCode => _errorCode;
+  dynamic get errorData => _errorData;
+  String? get pendingDeletionRestorationToken => _pendingDeletionRestorationToken;
+  String? get deletionScheduledAt => _deletionScheduledAt;
   int? get retryAfterSeconds => _retryAfterSeconds;
   bool get isBusy => _isBusy;
   bool get isSignedIn => _status == AuthStatus.signedIn;
@@ -244,7 +248,68 @@ class AuthProvider extends ChangeNotifier {
         email: email.trim(),
         password: password,
       );
+      _error = null;
+      _errorCode = null;
+      _errorData = null;
+      _pendingDeletionRestorationToken = null;
+      _deletionScheduledAt = null;
       _applySession(session);
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      _errorCode = failure.code;
+      _errorData = failure.data;
+      _retryAfterSeconds = failure.retryAfterSeconds;
+      if (failure.code == 'ACCOUNT_PENDING_DELETION') {
+        if (failure.data is Map) {
+          final Map map = failure.data as Map;
+          final dynamic inner = (map['data'] is Map) ? map['data'] : map;
+          final dynamic token = inner['restorationToken'];
+          if (token != null) {
+            _pendingDeletionRestorationToken = token.toString();
+          }
+          final dynamic scheduledAt =
+              inner['deletionScheduledAt'] ?? inner['scheduledFor'];
+          if (scheduledAt != null) {
+            _deletionScheduledAt = scheduledAt.toString();
+          }
+        }
+      }
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Unable to log in. Please check your credentials and try again.';
+      _errorCode = null;
+      _errorData = null;
+      _pendingDeletionRestorationToken = null;
+      _deletionScheduledAt = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return false;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  // ── Social Sign-In: Google ────────────────────────────────────────────
+
+  Future<bool> signInWithGoogle() async {
+    if (_isBusy) return false;
+    _setBusy(true);
+    try {
+      final SocialSignInResult result = await _service.signInWithGoogle();
+      if (result.isCancelled) {
+        // User closed the picker — not an error, just stay on auth screen.
+        return false;
+      }
+      if (result.isError) {
+        _error = result.errorMessage ?? 'Google sign-in failed. Please try again.';
+        _errorCode = null;
+        _retryAfterSeconds = null;
+        notifyListeners();
+        return false;
+      }
+      _applySession(result.session!);
       return true;
     } on ApiException catch (failure) {
       _error = failure.message;
@@ -253,7 +318,43 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _error = 'Unable to log in. Please check your credentials and try again.';
+      _error = 'Google sign-in failed. Please try again.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return false;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  // ── Social Sign-In: Apple ────────────────────────────────────────────
+
+  Future<bool> signInWithApple() async {
+    if (_isBusy) return false;
+    _setBusy(true);
+    try {
+      final SocialSignInResult result = await _service.signInWithApple();
+      if (result.isCancelled) {
+        return false;
+      }
+      if (result.isError) {
+        _error = result.errorMessage ?? 'Apple sign-in failed. Please try again.';
+        _errorCode = null;
+        _retryAfterSeconds = null;
+        notifyListeners();
+        return false;
+      }
+      _applySession(result.session!);
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      _errorCode = failure.code;
+      _retryAfterSeconds = failure.retryAfterSeconds;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Apple sign-in failed. Please try again.';
       _errorCode = null;
       _retryAfterSeconds = null;
       notifyListeners();
@@ -370,14 +471,102 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // ── Account Deletion ──────────────────────────────────────────────────────
+
+  /// restorationToken saved here when login returns ACCOUNT_PENDING_DELETION
+  String? _pendingDeletionRestorationToken;
+  String? _deletionScheduledAt;
+
+  void setPendingDeletionToken(String token, {String? scheduledAt}) {
+    _pendingDeletionRestorationToken = token;
+    _deletionScheduledAt = scheduledAt;
+  }
+
+  void clearPendingDeletionToken() {
+    _pendingDeletionRestorationToken = null;
+    _deletionScheduledAt = null;
+  }
+
+  /// Get account deletion status: GET /users/me/deletion-status
+  Future<Map<String, dynamic>> getDeletionStatus() async {
+    try {
+      return await _service.getDeletionStatus();
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  /// Request account deletion. Clears session on success.
+  Future<AccountDeletionResult?> requestAccountDeletion({
+    required String password,
+    required String reason,
+    String? feedback,
+  }) async {
+    if (_isBusy) return null;
+    _setBusy(true);
+    try {
+      final AccountDeletionResult result = await _service.requestAccountDeletion(
+        password: password,
+        reason: reason,
+        feedback: feedback,
+      );
+      _clearSession();
+      return result;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      _errorCode = failure.code;
+      _retryAfterSeconds = failure.retryAfterSeconds;
+      notifyListeners();
+      return null;
+    } catch (e) {
+      _error = 'Failed to request account deletion. Please try again.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return null;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  /// Cancel account deletion using the restorationToken.
+  /// On success: restores the session and logs the user back in.
+  Future<bool> cancelAccountDeletion({required String restorationToken}) async {
+    if (_isBusy) return false;
+    _setBusy(true);
+    try {
+      final AuthSession session = await _service.cancelAccountDeletion(
+        restorationToken: restorationToken,
+      );
+      _pendingDeletionRestorationToken = null;
+      _applySession(session);
+      return true;
+    } on ApiException catch (failure) {
+      _error = failure.message;
+      _errorCode = failure.code;
+      _retryAfterSeconds = failure.retryAfterSeconds;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Failed to cancel deletion. The link may have expired.';
+      _errorCode = null;
+      _retryAfterSeconds = null;
+      notifyListeners();
+      return false;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
   // ── Error management ──────────────────────────────────────────────────────
 
   void clearError() {
-    if (_error == null && _errorCode == null) {
+    if (_error == null && _errorCode == null && _errorData == null) {
       return;
     }
     _error = null;
     _errorCode = null;
+    _errorData = null;
     _retryAfterSeconds = null;
     notifyListeners();
   }

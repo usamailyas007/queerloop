@@ -79,6 +79,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  // ── Social Sign-In ─────────────────────────────────────────────────────────
+
+  Future<void> _signInWithSocial(
+    Future<bool> Function() socialMethod,
+  ) async {
+    final AuthProvider authProvider = context.read<AuthProvider>();
+    if (authProvider.isBusy) return;
+
+    final bool ok = await socialMethod();
+    if (!ok) {
+      if (mounted) {
+        final String? errorMsg = authProvider.error;
+        if (errorMsg != null && errorMsg.isNotEmpty) {
+          AppSnackBar.showError(
+            context,
+            title: 'Sign In Failed',
+            subtitle: errorMsg,
+          );
+          authProvider.clearError();
+        }
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    // Social auth — no OTP verification needed, go directly home.
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      AppRoutes.home,
+      (Route<dynamic> route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -259,7 +292,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       AppSocialButton(
                         text: l10n.authContinueApple,
                         iconPath: AppIcons.apple,
-                        onPressed: () {},
+                        onPressed: () => _signInWithSocial(
+                          () => context.read<AuthProvider>().signInWithApple(),
+                        ),
                       ),
 
                       const SizedBox(height: AppSpacing.md),
@@ -267,7 +302,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       AppSocialButton(
                         text: l10n.authContinueGoogle,
                         iconPath: AppIcons.google,
-                        onPressed: () {},
+                        onPressed: () => _signInWithSocial(
+                          () => context.read<AuthProvider>().signInWithGoogle(),
+                        ),
                       ),
                     ],
                   ),

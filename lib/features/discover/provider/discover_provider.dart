@@ -478,6 +478,7 @@ class DiscoverProvider extends ChangeNotifier {
       fetchCreatorsToWatch(),
       fetchNewCreators(),
       fetchRecentSearches(),
+      fetchCommunities(),
     ]);
   }
 
@@ -495,7 +496,29 @@ class DiscoverProvider extends ChangeNotifier {
 
   List<DiscoverCreator> get youMightLike => _creatorsToWatch;
 
-  final List<DiscoverCommunity> communities = const <DiscoverCommunity>[
+  bool _isLoadingCommunities = false;
+  bool get isLoadingCommunities => _isLoadingCommunities;
+
+  Future<void> fetchCommunities() async {
+    if (_discoverService == null) return;
+    _isLoadingCommunities = true;
+    notifyListeners();
+
+    try {
+      final List<DiscoverCommunity> fetched =
+          await _discoverService.getCommunities();
+      if (fetched.isNotEmpty) {
+        _communities = fetched;
+      }
+    } catch (e) {
+      debugPrint('⚠️ [DiscoverProvider] fetchCommunities error: $e');
+    } finally {
+      _isLoadingCommunities = false;
+      notifyListeners();
+    }
+  }
+
+  List<DiscoverCommunity> _communities = const <DiscoverCommunity>[
     DiscoverCommunity(
       imageAsset: AppImages.queer,
       name: 'Queer',
@@ -545,6 +568,8 @@ class DiscoverProvider extends ChangeNotifier {
       isJoined: false,
     ),
   ];
+
+  List<DiscoverCommunity> get communities => _communities;
 
   // ── Toggle Following ─────────────────────────────────────────────────────────
   final Map<String, bool> _followStates = <String, bool>{};

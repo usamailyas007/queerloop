@@ -33,6 +33,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final MessagesProvider provider = context.read<MessagesProvider>();
+        provider.startPolling();
         provider.loadConversations();
         provider.loadMessageRequests();
       }
@@ -530,6 +531,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               child: ConversationTile(
                                 conversation: conv,
                                 onTap: () {
+                                  provider.markAllMessagesAsRead(conv.id);
+                                  provider.setActiveChat(conv.id);
                                   Navigator.push<void>(
                                     context,
                                     MaterialPageRoute<void>(
@@ -539,7 +542,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                         child: ChatScreen(conversation: conv),
                                       ),
                                     ),
-                                  );
+                                  ).then((_) {
+                                    if (mounted) {
+                                      provider.setActiveChat(null);
+                                      provider.markAllMessagesAsRead(conv.id);
+                                      provider.refreshConversationsSilently();
+                                    }
+                                  });
                                 },
                               ),
                             ),

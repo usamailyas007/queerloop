@@ -81,6 +81,35 @@ class DiscoverService {
     }
   }
 
+  // ── Communities ────────────────────────────────────────────────────────────
+  /// GET /communities
+  Future<List<DiscoverCommunity>> getCommunities() async {
+    try {
+      debugPrint('🚀 [DiscoverService] Fetching communities...');
+      final dynamic res = await _client.get(
+        ApiEndpoints.communities,
+        useCache: false,
+      );
+
+      final List<dynamic> list = _extractList(res, keys: <String>[
+        'data',
+        'communities',
+        'items',
+      ]);
+
+      return list
+          .whereType<Map<String, dynamic>>()
+          .map(DiscoverCommunity.fromJson)
+          .toList();
+    } on ApiException catch (e) {
+      debugPrint('❌ [DiscoverService] getCommunities error: $e');
+      return <DiscoverCommunity>[];
+    } catch (e, stack) {
+      debugPrint('❌ [DiscoverService] getCommunities unexpected: $e\n$stack');
+      return <DiscoverCommunity>[];
+    }
+  }
+
   static final Map<String, Map<String, String>> _mediaStatusCache =
       <String, Map<String, String>>{};
 

@@ -1,8 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/api/api_exception.dart';
 import '../../core/cache/cache_manager.dart';
 import '../../core/config/api_endpoints.dart';
 import '../../core/config/app_config.dart';
@@ -63,6 +66,118 @@ class AuthService {
       return _inMemoryRefreshToken;
     }
     return _storage.read(key: _StorageKey.refreshToken);
+  }
+
+  // ── Social Sign-In: Google ────────────────────────────────────────────
+  // Triggers Google Sign-In SDK, gets idToken, posts to /auth/google.
+  // Returns AuthSession on success.
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: <String>['email', 'profile'],
+  );
+
+  Future<SocialSignInResult> signInWithGoogle() async {
+    if (AppConfig.useMockApi) {
+      debugPrint('ℹ️ [AuthService] Mock Google sign-in.');
+      final AuthSession session = _mockSession('mockgoogle@gmail.com');
+      await _persistTokens(session);
+      return SocialSignInResult.success(session);
+    }
+
+    try {
+      // Force fresh account picker every time
+      await _googleSignIn.signOut();
+      final GoogleSignInAccount? account = await _googleSignIn.signIn();
+      if (account == null) {
+        debugPrint('⚠️ [AuthService] Google sign-in cancelled by user.');
+        return SocialSignInResult.cancelled();
+      }
+
+      final GoogleSignInAuthentication auth = await account.authentication;
+      final String? idToken = auth.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        debugPrint('❌ [AuthService] Google sign-in: idToken is null.');
+        return SocialSignInResult.error('Failed to get Google ID token.');
+      }
+
+      debugPrint('🚀 [AuthService] Posting Google idToken to ${ApiEndpoints.googleSignIn}');
+      final dynamic data = await _client.post(
+        ApiEndpoints.googleSignIn,
+        body: <String, dynamic>{'idToken': idToken},
+      );
+      debugPrint('📥 [AuthService] Google sign-in response: $data');
+      final AuthSession session =
+          AuthSession.fromJson(data as Map<String, dynamic>);
+      _client.authToken = session.accessToken;
+      await _persistTokens(session);
+      return SocialSignInResult.success(session);
+    } catch (e) {
+      debugPrint('❌ [AuthService] Google sign-in error: $e');
+      return SocialSignInResult.error(e.toString());
+    }
+  }
+
+  // ── Social Sign-In: Apple ────────────────────────────────────────────
+  // Triggers Apple Sign-In (iOS only), gets identityToken + email,
+  // posts to /auth/apple. Returns AuthSession on success.
+
+  Future<SocialSignInResult> signInWithApple() async {
+    if (AppConfig.useMockApi) {
+      debugPrint('ℹ️ [AuthService] Mock Apple sign-in.');
+      final AuthSession session = _mockSession('mockapple@icloud.com');
+      await _persistTokens(session);
+      return SocialSignInResult.success(session);
+    }
+
+    try {
+      final AuthorizationCredentialAppleID credential =
+          await SignInWithApple.getAppleIDCredential(
+        scopes: <AppleIDAuthorizationScopes>[
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final String? identityToken = credential.identityToken;
+      if (identityToken == null || identityToken.isEmpty) {
+        debugPrint('❌ [AuthService] Apple sign-in: identityToken is null.');
+        return SocialSignInResult.error('Failed to get Apple identity token.');
+      }
+
+      // Apple only sends email on first sign-in; subsequent sign-ins may be null.
+      final String? email = credential.email;
+      final String? firstName = credential.givenName;
+      final String? lastName = credential.familyName;
+
+      debugPrint('🚀 [AuthService] Posting Apple identityToken to ${ApiEndpoints.appleSignIn}');
+      final Map<String, dynamic> body = <String, dynamic>{
+        'identityToken': identityToken,
+      };
+      if (email != null && email.isNotEmpty) body['email'] = email;
+      if (firstName != null && firstName.isNotEmpty) body['firstName'] = firstName;
+      if (lastName != null && lastName.isNotEmpty) body['lastName'] = lastName;
+
+      final dynamic data = await _client.post(
+        ApiEndpoints.appleSignIn,
+        body: body,
+      );
+      debugPrint('📥 [AuthService] Apple sign-in response: $data');
+      final AuthSession session =
+          AuthSession.fromJson(data as Map<String, dynamic>);
+      _client.authToken = session.accessToken;
+      await _persistTokens(session);
+      return SocialSignInResult.success(session);
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        debugPrint('⚠️ [AuthService] Apple sign-in cancelled by user.');
+        return SocialSignInResult.cancelled();
+      }
+      debugPrint('❌ [AuthService] Apple sign-in error: ${e.message}');
+      return SocialSignInResult.error(e.message);
+    } catch (e) {
+      debugPrint('❌ [AuthService] Apple sign-in error: $e');
+      return SocialSignInResult.error(e.toString());
+    }
   }
 
   // ── Register ──────────────────────────────────────────────────────────────
@@ -173,6 +288,25 @@ class AuthService {
       body: <String, dynamic>{'email': email, 'password': password},
     );
     debugPrint('📥 [AuthService] Login Response: $data');
+    if (data is Map<String, dynamic>) {
+      final bool isPendingDeletion = data['accountPendingDeletion'] == true ||
+          data['code'] == 'ACCOUNT_PENDING_DELETION' ||
+          (data['data'] is Map &&
+              (data['data']['accountPendingDeletion'] == true ||
+                  data['data']['code'] == 'ACCOUNT_PENDING_DELETION'));
+
+      if (isPendingDeletion) {
+        debugPrint(
+            '⚠️ [AuthService] Account is pending deletion. Intercepting login response.');
+        throw ApiException(
+          data['message']?.toString() ??
+              'Your account is currently scheduled for deletion.',
+          statusCode: 200,
+          code: 'ACCOUNT_PENDING_DELETION',
+          data: data,
+        );
+      }
+    }
     final AuthSession session =
         AuthSession.fromJson(data as Map<String, dynamic>);
     _client.authToken = session.accessToken;
@@ -431,6 +565,102 @@ class AuthService {
     await clearAllLocalData();
   }
 
+  // ── Request Account Deletion ──────────────────────────────────────────────
+  // POST /users/me/delete
+  // Body: { password, reason, feedback? }
+  // Returns: { message, restorationToken?, scheduledFor? }
+  // After calling: session is invalidated server-side. Clear local data.
+
+  Future<AccountDeletionResult> requestAccountDeletion({
+    required String password,
+    required String reason,
+    String? feedback,
+  }) async {
+    if (AppConfig.useMockApi) {
+      debugPrint('ℹ️ [AuthService] Mock requestAccountDeletion.');
+      await clearAllLocalData();
+      return AccountDeletionResult(
+        message: 'Your account is scheduled for deletion.',
+        restorationToken: 'mock-restoration-token',
+      );
+    }
+
+    debugPrint('🚀 [AuthService] Requesting account deletion...');
+    final Map<String, dynamic> body = <String, dynamic>{
+      'password': password,
+      'reason': reason,
+    };
+    if (feedback != null && feedback.trim().isNotEmpty) {
+      body['feedback'] = feedback.trim();
+    }
+
+    final dynamic data = await _client.post(
+      ApiEndpoints.requestAccountDeletion,
+      body: body,
+    );
+    debugPrint('📥 [AuthService] Account Deletion Response: $data');
+
+    final Map<String, dynamic> payload =
+        (data is Map<String, dynamic>) ? data : <String, dynamic>{};
+    final Map<String, dynamic> inner =
+        (payload['data'] is Map<String, dynamic>)
+            ? payload['data'] as Map<String, dynamic>
+            : payload;
+
+    await clearAllLocalData();
+
+    return AccountDeletionResult(
+      message: inner['message']?.toString() ??
+          'Your account is scheduled for deletion.',
+      restorationToken: inner['restorationToken']?.toString(),
+      scheduledFor: inner['scheduledFor']?.toString(),
+    );
+  }
+
+  // ── Cancel Account Deletion ────────────────────────────────────────────────
+  // POST /auth/cancel-deletion
+  // Body: { restorationToken }
+  // Returns: { accessToken, refreshToken, user } — restores session.
+
+  Future<AuthSession> cancelAccountDeletion({
+    required String restorationToken,
+  }) async {
+    if (AppConfig.useMockApi) {
+      debugPrint('ℹ️ [AuthService] Mock cancelAccountDeletion.');
+      return _mockSession('restored@example.com');
+    }
+
+    debugPrint('🚀 [AuthService] Cancelling account deletion...');
+    _client.authToken = null;
+    final dynamic data = await _client.post(
+      ApiEndpoints.cancelDeletion,
+      body: <String, dynamic>{'restorationToken': restorationToken},
+    );
+    debugPrint('📥 [AuthService] Cancel Deletion Response: $data');
+    final AuthSession session =
+        AuthSession.fromJson(data as Map<String, dynamic>);
+    _client.authToken = session.accessToken;
+    await _persistTokens(session);
+    return session;
+  }
+
+  // ── Get Account Deletion Status ───────────────────────────────────────────
+  // GET /users/me/deletion-status
+  Future<Map<String, dynamic>> getDeletionStatus() async {
+    if (AppConfig.useMockApi) {
+      debugPrint('ℹ️ [AuthService] Mock getDeletionStatus.');
+      return <String, dynamic>{'accountPendingDeletion': false};
+    }
+
+    debugPrint('🚀 [AuthService] Fetching account deletion status...');
+    final dynamic data = await _client.get(ApiEndpoints.deletionStatus);
+    debugPrint('📥 [AuthService] Deletion Status Response: $data');
+    if (data is Map<String, dynamic>) {
+      return data;
+    }
+    return <String, dynamic>{};
+  }
+
   // ── Restore from secure storage ───────────────────────────────────────────
   Future<AuthSession?> restoreSession() async {
     if (AppConfig.useMockApi) {
@@ -555,4 +785,56 @@ class RegisterResponse {
   final bool verificationRequired;
   final String email;
   final String message;
+}
+
+// ── Social Sign-In Result ─────────────────────────────────────────────────────
+
+enum SocialSignInStatus { success, cancelled, error }
+
+class SocialSignInResult {
+  const SocialSignInResult._({
+    required this.status,
+    this.session,
+    this.errorMessage,
+  });
+
+  factory SocialSignInResult.success(AuthSession session) => SocialSignInResult._(
+        status: SocialSignInStatus.success,
+        session: session,
+      );
+
+  factory SocialSignInResult.cancelled() => const SocialSignInResult._(
+        status: SocialSignInStatus.cancelled,
+      );
+
+  factory SocialSignInResult.error(String message) => SocialSignInResult._(
+        status: SocialSignInStatus.error,
+        errorMessage: message,
+      );
+
+  final SocialSignInStatus status;
+  final AuthSession? session;
+  final String? errorMessage;
+
+  bool get isSuccess => status == SocialSignInStatus.success && session != null;
+  bool get isCancelled => status == SocialSignInStatus.cancelled;
+  bool get isError => status == SocialSignInStatus.error;
+}
+
+// ── Account Deletion Result ───────────────────────────────────────────────────
+
+class AccountDeletionResult {
+  const AccountDeletionResult({
+    required this.message,
+    this.restorationToken,
+    this.scheduledFor,
+  });
+
+  final String message;
+
+  /// Token used to cancel deletion within the grace period.
+  final String? restorationToken;
+
+  /// ISO-8601 date string indicating when the account will be permanently deleted.
+  final String? scheduledFor;
 }

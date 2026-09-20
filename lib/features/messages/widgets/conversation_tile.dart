@@ -161,7 +161,9 @@ class ConversationTile extends StatelessWidget {
                     style: AppTextStyles.bodySmall.copyWith(
                       color: conversation.isTyping
                           ? AppColors.gradientCyan
-                          : context.themeTextMuted,
+                          : (conversation.unreadCount > 0
+                              ? context.themeTextPrimary
+                              : context.themeTextMuted),
                       fontWeight: conversation.unreadCount > 0
                           ? FontWeight.w600
                           : FontWeight.w400,
@@ -174,45 +176,50 @@ class ConversationTile extends StatelessWidget {
 
             const SizedBox(width: AppSpacing.md),
 
-            // Time + Unread Badge / Checkmark Icon
+            // Time + Unread Badge
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: <Widget>[
                 Text(
                   conversation.timeAgo,
                   style: AppTextStyles.caption.copyWith(
-                    color: context.themeTextMuted,
+                    color: conversation.unreadCount > 0
+                        ? AppColors.gradientPink
+                        : context.themeTextMuted,
+                    fontWeight: conversation.unreadCount > 0
+                        ? FontWeight.w600
+                        : FontWeight.w400,
                     fontSize: 11,
                   ),
                 ),
                 const SizedBox(height: 4),
                 if (conversation.unreadCount > 0)
                   Container(
-                    width: 20,
-                    height: 20,
-                    decoration: const BoxDecoration(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    constraints: const BoxConstraints(
+                      minWidth: 20,
+                      minHeight: 20,
+                    ),
+                    decoration: BoxDecoration(
                       color: AppColors.gradientPink,
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Center(
                       child: Text(
-                        '${conversation.unreadCount}',
+                        conversation.unreadCount > 99
+                            ? '99+'
+                            : '${conversation.unreadCount}',
                         style: AppTextStyles.caption.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
                           fontSize: 11,
+                          height: 1.1,
                         ),
                       ),
                     ),
                   )
-                else if (conversation.username == 'rowankeeps')
-                  const Icon(
-                    Icons.check_rounded,
-                    color: AppColors.gradientCyan,
-                    size: 16,
-                  )
                 else
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
               ],
             ),
           ],

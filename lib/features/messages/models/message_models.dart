@@ -163,6 +163,54 @@ class ChatMessageModel {
       mType = MessageType.gradientText;
     }
 
+    final dynamic readByRaw =
+        json['readBy'] ?? json['read_by'] ?? json['seenBy'] ?? json['seen_by'];
+
+    final bool readByMe = readByRaw is List &&
+        currentUserId != null &&
+        readByRaw.any((dynamic item) =>
+            item.toString() == currentUserId ||
+            (item is Map &&
+                ((item['id'] ?? item['_id'] ?? item['userId'] ?? item['user_id'] ?? item['user'])?.toString() == currentUserId ||
+                 (item['user'] is Map && (item['user']['id'] ?? item['user']['_id'])?.toString() == currentUserId))));
+
+    final bool readByOther = readByRaw is List &&
+        readByRaw.any((dynamic item) {
+          final String? id = item is Map
+              ? (item['id'] ??
+                      item['_id'] ??
+                      item['userId'] ??
+                      item['user_id'] ??
+                      item['user'] ??
+                      (item['user'] is Map ? (item['user']['id'] ?? item['user']['_id']) : null))
+                  ?.toString()
+              : item.toString();
+          return id != null && id.isNotEmpty && id != currentUserId;
+        });
+
+    final bool hasExplicitReadIndicator = json['readAt'] != null ||
+        json['read_at'] != null ||
+        json['seenAt'] != null ||
+        json['seen_at'] != null ||
+        json['status'] == 'read' ||
+        json['status'] == 'seen';
+
+    final bool serverConfirmedRead = json['read'] == true ||
+        json['read'] == 'true' ||
+        json['read'] == 1 ||
+        json['isRead'] == true ||
+        json['isRead'] == 'true' ||
+        json['isRead'] == 1 ||
+        json['is_read'] == true ||
+        json['is_read'] == 'true' ||
+        json['is_read'] == 1;
+
+    final bool isMsgRead = me
+        // For messages sent by ME (outgoing): read when recipient read it (confirmed by server, readByOther, or explicit indicator)
+        ? (readByOther || hasExplicitReadIndicator || serverConfirmedRead)
+        // For messages sent to ME (incoming): read when I have read it or backend confirms read
+        : (readByMe || hasExplicitReadIndicator || serverConfirmedRead);
+
     return ChatMessageModel(
       id: msgId,
       conversationId: convId.isNotEmpty ? convId : null,
@@ -175,9 +223,7 @@ class ChatMessageModel {
       reactionEmoji: singleEmoji,
       reactionCount: count,
       reactions: parsedReactions,
-      isRead: json['read'] == true ||
-          json['isRead'] == true ||
-          json['readAt'] != null,
+      isRead: isMsgRead,
       createdAt: created,
       type: mType,
     );
@@ -245,6 +291,7 @@ class ConversationModel {
     this.hasStoryRing = false,
     this.lastMessageSenderId,
     this.messages = const <ChatMessageModel>[],
+    this.lastMessageAt,
   });
 
   final String id;
@@ -262,6 +309,7 @@ class ConversationModel {
   final bool hasStoryRing;
   final String? lastMessageSenderId;
   final List<ChatMessageModel> messages;
+  final DateTime? lastMessageAt;
 
   factory ConversationModel.fromJson(
     Map<String, dynamic> rawJson, {
@@ -354,25 +402,85 @@ class ConversationModel {
     String? lastSender;
     DateTime? lastMsgTime;
 
-    final dynamic lastMsgRaw = json['lastMessage'];
+    final dynamic lastMsgRaw = json['lastMessage'] ??
+        json['last_message'] ??
+        json['latestMessage'] ??
+        json['latest_message'] ??
+        json['recentMessage'] ??
+        json['recent_message'] ??
+        json['message'];
+
     if (lastMsgRaw is Map<String, dynamic>) {
-      lastMsgText = (lastMsgRaw['body'] ??
+      final String rawBody = (lastMsgRaw['body'] ??
               lastMsgRaw['text'] ??
               lastMsgRaw['content'] ??
-              'No messages yet')
+              lastMsgRaw['message'] ??
+              '')
           .toString();
-      lastSender = (lastMsgRaw['senderId'] ?? lastMsgRaw['sender']?['id'])
+      lastSender = (lastMsgRaw['senderId'] ??
+              lastMsgRaw['sender_id'] ??
+              lastMsgRaw['sender']?['id'] ??
+              lastMsgRaw['sender']?['_id'])
           ?.toString();
-      lastMsgTime =
-          DateTime.tryParse(lastMsgRaw['createdAt']?.toString() ?? '');
-    } else if (lastMsgRaw is String && lastMsgRaw.isNotEmpty) {
-      lastMsgText = lastMsgRaw;
+      lastMsgTime = DateTime.tryParse(
+          (lastMsgRaw['createdAt'] ?? lastMsgRaw['created_at'])?.toString() ?? '');
+
+      if (rawBody.trim().isNotEmpty) {
+        lastMsgText = rawBody.trim();
+      } else if (lastMsgRaw['mediaUrl'] != null ||
+          lastMsgRaw['imageUrl'] != null ||
+          lastMsgRaw['attachmentUrl'] != null ||
+          lastMsgRaw['image'] != null) {
+        lastMsgText = '📷 Photo';
+      }
+    } else if (lastMsgRaw is String && lastMsgRaw.trim().isNotEmpty) {
+      lastMsgText = lastMsgRaw.trim();
+    }
+
+    // Fallback: check embedded messages array if lastMessage was not directly provided
+    if ((lastMsgText == 'No messages yet' || lastMsgText.isEmpty) &&
+        json['messages'] is List &&
+        (json['messages'] as List).isNotEmpty) {
+      final dynamic lastItem = (json['messages'] as List).last;
+      if (lastItem is Map<String, dynamic>) {
+        final String rawBody = (lastItem['body'] ??
+                lastItem['text'] ??
+                lastItem['content'] ??
+                lastItem['message'] ??
+                '')
+            .toString();
+        lastSender = (lastItem['senderId'] ??
+                lastItem['sender_id'] ??
+                lastItem['sender']?['id'] ??
+                lastItem['sender']?['_id'])
+            ?.toString();
+        lastMsgTime = DateTime.tryParse(
+            (lastItem['createdAt'] ?? lastItem['created_at'])?.toString() ?? '');
+
+        if (rawBody.trim().isNotEmpty) {
+          lastMsgText = rawBody.trim();
+        } else if (lastItem['mediaUrl'] != null ||
+            lastItem['imageUrl'] != null ||
+            lastItem['attachmentUrl'] != null) {
+          lastMsgText = '📷 Photo';
+        }
+      }
+    }
+
+    // Format last message with 'You: ' prefix if sent by current user
+    if (lastMsgText != 'No messages yet' &&
+        lastSender != null &&
+        currentUserId != null &&
+        lastSender == currentUserId &&
+        !lastMsgText.startsWith('You: ')) {
+      lastMsgText = 'You: $lastMsgText';
     }
 
     // Fallback time to updatedAt
-    lastMsgTime ??= DateTime.tryParse(json['updatedAt']?.toString() ?? '');
+    lastMsgTime ??= DateTime.tryParse(
+        (json['updatedAt'] ?? json['updated_at'])?.toString() ?? '');
 
-    String timeStr = json['timeAgo']?.toString() ?? '';
+    String timeStr = (json['timeAgo'] ?? json['time_ago'])?.toString() ?? '';
     if (timeStr.isEmpty && lastMsgTime != null) {
       final Duration diff = DateTime.now().difference(lastMsgTime);
       if (diff.inMinutes < 1) {
@@ -392,9 +500,49 @@ class ConversationModel {
         json['isMuted'] == true ||
         json['mutedUntil'] != null;
 
-    final int unread = json['unreadCount'] is num
-        ? (json['unreadCount'] as num).toInt()
-        : 0;
+    final dynamic rawUnread = json['unreadCount'] ??
+        json['unread_count'] ??
+        json['unreadMessagesCount'] ??
+        json['unread_messages_count'] ??
+        json['unread'];
+
+    int unread = 0;
+    if (rawUnread != null && rawUnread is num) {
+      unread = rawUnread.toInt();
+    } else if (rawUnread == null && json['messages'] is List) {
+      // Only fallback to counting if backend did not provide any unreadCount field at all
+      final List<dynamic> msgList = json['messages'] as List<dynamic>;
+      unread = msgList.where((dynamic m) {
+        if (m is Map<String, dynamic>) {
+          final String mSender = (m['senderId'] ??
+                  m['sender_id'] ??
+                  (m['sender'] is Map ? (m['sender']['id'] ?? m['sender']['_id']) : null))
+              ?.toString() ??
+              '';
+          final bool isMe = currentUserId != null && mSender == currentUserId;
+          final dynamic readByRaw = m['readBy'] ?? m['read_by'] ?? m['seenBy'] ?? m['seen_by'];
+          final bool readByMe = readByRaw is List &&
+              currentUserId != null &&
+              readByRaw.any((dynamic item) =>
+                  item.toString() == currentUserId ||
+                  (item is Map &&
+                      ((item['id'] ?? item['_id'] ?? item['userId'] ?? item['user_id'] ?? item['user'])?.toString() == currentUserId ||
+                       (item['user'] is Map && (item['user']['id'] ?? item['user']['_id'])?.toString() == currentUserId))));
+          final bool isRead = m['read'] == true ||
+              m['isRead'] == true ||
+              m['is_read'] == true ||
+              m['readAt'] != null ||
+              m['read_at'] != null ||
+              m['seenAt'] != null ||
+              m['seen_at'] != null ||
+              m['status'] == 'read' ||
+              m['status'] == 'seen' ||
+              readByMe;
+          return !isMe && !isRead;
+        }
+        return false;
+      }).length;
+    }
 
     return ConversationModel(
       id: convId,
@@ -412,6 +560,7 @@ class ConversationModel {
       mutedUntil: json['mutedUntil']?.toString(),
       hasStoryRing: json['hasStoryRing'] == true,
       lastMessageSenderId: lastSender,
+      lastMessageAt: lastMsgTime,
     );
   }
 
@@ -431,6 +580,7 @@ class ConversationModel {
     bool? hasStoryRing,
     String? lastMessageSenderId,
     List<ChatMessageModel>? messages,
+    DateTime? lastMessageAt,
   }) {
     return ConversationModel(
       id: id ?? this.id,
@@ -448,6 +598,7 @@ class ConversationModel {
       hasStoryRing: hasStoryRing ?? this.hasStoryRing,
       lastMessageSenderId: lastMessageSenderId ?? this.lastMessageSenderId,
       messages: messages ?? this.messages,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
     );
   }
 }

@@ -57,21 +57,34 @@ class ReelsFeedView extends StatefulWidget {
 class _ReelsFeedViewState extends State<ReelsFeedView> {
   late final PageController _pageController;
   late int _activePage;
+  List<ReelItemModel> _localReels = <ReelItemModel>[];
 
   @override
   void initState() {
     super.initState();
     _activePage = widget.initialPage;
     _pageController = PageController(initialPage: widget.initialPage);
+    if (widget.customReels != null) {
+      _localReels = List<ReelItemModel>.from(widget.customReels!);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final HomeFeedProvider provider = context.read<HomeFeedProvider>();
-        final List<ReelItemModel> reels = widget.customReels ?? provider.reels;
+        final List<ReelItemModel> reels =
+            widget.customReels != null ? _localReels : provider.reels;
         if (reels.isNotEmpty) {
           ReelVideoPreloader.instance.preloadSurrounding(reels, _activePage);
         }
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(ReelsFeedView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.customReels != null && widget.customReels != oldWidget.customReels) {
+      _localReels = List<ReelItemModel>.from(widget.customReels!);
+    }
   }
 
   @override
@@ -229,7 +242,8 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
   @override
   Widget build(BuildContext context) {
     final HomeFeedProvider provider = context.watch<HomeFeedProvider>();
-    final List<ReelItemModel> reels = widget.customReels ?? provider.reels;
+    final List<ReelItemModel> reels =
+        widget.customReels != null ? _localReels : provider.reels;
     final double topInset = MediaQuery.of(context).padding.top + 50;
 
     if (provider.isLoadingFeed && reels.isEmpty) {
@@ -382,7 +396,29 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
               if (provider.isGuest) {
                 widget.onGuestActionTriggered?.call();
               } else {
-                provider.toggleLikeReel(item.id);
+                if (widget.customReels != null) {
+                  final int idx = _localReels.indexWhere((r) => r.id == item.id);
+                  if (idx != -1) {
+                    final bool newLiked = !_localReels[idx].isLiked;
+                    final int newCount = newLiked
+                        ? _localReels[idx].likesCount + 1
+                        : (_localReels[idx].likesCount > 0 ? _localReels[idx].likesCount - 1 : 0);
+                    setState(() {
+                      _localReels[idx] = _localReels[idx].copyWith(
+                        isLiked: newLiked,
+                        likesCount: newCount,
+                      );
+                    });
+                    try {
+                      context.read<ProfileProvider>().updateLikedReel(
+                        item.id,
+                        isLiked: newLiked,
+                        likesCount: newCount,
+                      );
+                    } catch (_) {}
+                  }
+                }
+                provider.toggleLikeReel(item.id, fallbackReel: item);
               }
             },
             onSaveToggle: () {

@@ -215,14 +215,24 @@ class _SearchIdleBody extends StatelessWidget {
           const DiscoverSectionLabel(label: 'BROWSE COMMUNITIES'),
           const SizedBox(height: AppSpacing.md),
           ...provider.communities.take(2).map(
-                (DiscoverCommunity c) => Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: DiscoverCommunityTile(
-                    community: c,
-                    isJoined: provider.isJoined(c.name),
-                    onJoin: () => provider.toggleJoin(c.name),
-                  ),
-                ),
+                (DiscoverCommunity c) {
+                  final ProfileProvider profile = context.watch<ProfileProvider>();
+                  final bool isJoined = profile.isCommunityJoined(id: c.id, name: c.name);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: DiscoverCommunityTile(
+                      community: c,
+                      isJoined: isJoined,
+                      onJoin: () async {
+                        if (isJoined) {
+                          await profile.leaveCommunity(c.id ?? '', name: c.name);
+                        } else {
+                          await profile.joinCommunity(c.id ?? '', name: c.name);
+                        }
+                      },
+                    ),
+                  );
+                },
               ),
           const SizedBox(height: AppSpacing.xl),
         ],
@@ -305,21 +315,7 @@ class _SearchResultsBody extends StatelessWidget {
             children: <Widget>[
               // ── Tab 0: All (Comprehensive Overview) ────────────────────────
               if (provider.selectedSearchTab == 0) ...<Widget>[
-                // 1. TOP POSTS Section
-                if (provider.postsResults.isNotEmpty) ...<Widget>[
-                  _buildSectionHeader(
-                    context: context,
-                    title: 'TOP POSTS',
-                    onSeeAll: () => provider.setSelectedSearchTab(1),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  SearchPostsGrid(
-                    results: provider.postsResults.take(6).toList(),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                ],
-
-                // 1b. TOP REELS Section
+                // 1. TOP REELS Section
                 if (provider.reelsResults.isNotEmpty) ...<Widget>[
                   _buildSectionHeader(
                     context: context,
@@ -329,6 +325,89 @@ class _SearchResultsBody extends StatelessWidget {
                   const SizedBox(height: AppSpacing.md),
                   SearchPostsGrid(
                     results: provider.reelsResults.take(6).toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+
+                // 2. TOP POSTS Section
+                if (provider.postsResults.isNotEmpty) ...<Widget>[
+                  _buildSectionHeader(
+                    context: context,
+                    title: 'TOP POSTS',
+                    onSeeAll: () => provider.setSelectedSearchTab(1),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  ...provider.postsResults.take(2).map(
+                    (DiscoverSearchResult res) {
+                      final String img = (res.imageAsset.isNotEmpty
+                              ? res.imageAsset
+                              : (res.thumbnailUrl ?? ''))
+                          .trim();
+                      final bool isHttp =
+                          img.startsWith('http://') || img.startsWith('https://');
+                      final bool isAsset = img.startsWith('assets/');
+
+                      final String fallbackImg = <String>[
+                        AppImages.searchResult1,
+                        AppImages.searchResult2,
+                        AppImages.searchResult3,
+                        AppImages.searchResult4,
+                        AppImages.searchResult5,
+                        AppImages.searchResult6,
+                      ][(res.id ?? '').hashCode.abs() % 6];
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: PostFeedCard(
+                          post: PostItemModel(
+                            id: res.id ?? 'search_${res.caption.hashCode}',
+                            authorId: res.authorId,
+                            username: (res.authorUsername != null &&
+                                    res.authorUsername!.trim().isNotEmpty)
+                                ? res.authorUsername!.trim()
+                                : '@queer_creator',
+                            pronounsTime: 'they/them · recent',
+                            avatarAsset: (res.authorAvatar != null &&
+                                    res.authorAvatar!.trim().isNotEmpty)
+                                ? res.authorAvatar!.trim()
+                                : AppImages.user1,
+                            content: (res.caption != null &&
+                                    res.caption!.trim().isNotEmpty)
+                                ? res.caption!
+                                : 'Shared post',
+                            likesCount: res.likesCount ?? 0,
+                            commentsCount: res.commentsCount ?? 0,
+                            postImageUrl: isHttp ? img : null,
+                            postImageAsset: isAsset
+                                ? img
+                                : (!isHttp ? fallbackImg : null),
+                            postType: 'PHOTO',
+                            communityId: res.communityId,
+                            isLiked: res.isLiked,
+                          ),
+                          onLikeToggle: () {
+                            context
+                                .read<HomeFeedProvider>()
+                                .toggleLikePost(res.id ?? '');
+                          },
+                          onSaveToggle: () {
+                            context
+                                .read<HomeFeedProvider>()
+                                .toggleSavePost(res.id ?? '');
+                          },
+                          onOpenComments: () {
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => CommentsBottomSheet(
+                                totalComments: res.commentsCount ?? 0,
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: AppSpacing.xl),
                 ],
@@ -411,15 +490,25 @@ class _SearchResultsBody extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   ...provider.communityResults.take(4).map(
-                        (DiscoverCommunity c) => Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                          child: DiscoverCommunityTile(
-                            community: c,
-                            isJoined: provider.isJoined(c.name),
-                            onJoin: () => provider.toggleJoin(c.name),
-                          ),
+                    (DiscoverCommunity c) {
+                      final ProfileProvider profile = context.watch<ProfileProvider>();
+                      final bool isJoined = profile.isCommunityJoined(id: c.id, name: c.name);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: DiscoverCommunityTile(
+                          community: c,
+                          isJoined: isJoined,
+                          onJoin: () async {
+                            if (isJoined) {
+                              await profile.leaveCommunity(c.id ?? '', name: c.name);
+                            } else {
+                              await profile.joinCommunity(c.id ?? '', name: c.name);
+                            }
+                          },
                         ),
-                      ),
+                      );
+                    },
+                  ),
                   const SizedBox(height: AppSpacing.xl),
                 ],
               ],
@@ -507,8 +596,16 @@ class _SearchResultsBody extends StatelessWidget {
                             communityId: res.communityId,
                             isLiked: res.isLiked,
                           ),
-                          onLikeToggle: () {},
-                          onSaveToggle: () {},
+                          onLikeToggle: () {
+                            context
+                                .read<HomeFeedProvider>()
+                                .toggleLikePost(res.id ?? '');
+                          },
+                          onSaveToggle: () {
+                            context
+                                .read<HomeFeedProvider>()
+                                .toggleSavePost(res.id ?? '');
+                          },
                           onOpenComments: () {
                             showModalBottomSheet<void>(
                               context: context,
@@ -621,14 +718,24 @@ class _SearchResultsBody extends StatelessWidget {
               // ── Tab 5: Communities ─────────────────────────────────────────
               if (provider.selectedSearchTab == 5)
                 ...provider.communityResults.map(
-                  (DiscoverCommunity c) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: DiscoverCommunityTile(
-                      community: c,
-                      isJoined: provider.isJoined(c.name),
-                      onJoin: () => provider.toggleJoin(c.name),
-                    ),
-                  ),
+                  (DiscoverCommunity c) {
+                    final ProfileProvider profile = context.watch<ProfileProvider>();
+                    final bool isJoined = profile.isCommunityJoined(id: c.id, name: c.name);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: DiscoverCommunityTile(
+                        community: c,
+                        isJoined: isJoined,
+                        onJoin: () async {
+                          if (isJoined) {
+                            await profile.leaveCommunity(c.id ?? '', name: c.name);
+                          } else {
+                            await profile.joinCommunity(c.id ?? '', name: c.name);
+                          }
+                        },
+                      ),
+                    );
+                  },
                 ),
             ],
           ),

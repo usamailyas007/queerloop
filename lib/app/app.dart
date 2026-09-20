@@ -20,6 +20,8 @@ import '../features/discover/services/discover_service.dart';
 import '../features/home/provider/home_feed_provider.dart';
 import '../features/messages/provider/messages_provider.dart';
 import '../features/messages/services/conversations_service.dart';
+import '../features/notifications/provider/notifications_provider.dart';
+import '../features/notifications/services/notifications_service.dart';
 import '../features/profile/provider/profile_provider.dart';
 import '../features/profile/services/user_relationship_service.dart';
 import '../features/profile_setup/profile_setup_service.dart';
@@ -155,6 +157,32 @@ class App extends StatelessWidget {
         ChangeNotifierProvider<SpotlightsProvider>(
           create: (BuildContext ctx) =>
               SpotlightsProvider(client: ctx.read<ApiClient>()),
+        ),
+        Provider<NotificationsService>(
+          create: (BuildContext ctx) =>
+              NotificationsService(ctx.read<ApiClient>()),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, NotificationsProvider>(
+          create: (BuildContext ctx) => NotificationsProvider(
+            service: ctx.read<NotificationsService>(),
+            relationshipService: ctx.read<UserRelationshipService>(),
+          ),
+          update: (BuildContext ctx, AuthProvider auth,
+              NotificationsProvider? existing) {
+            final NotificationsProvider provider = existing ??
+                NotificationsProvider(
+                  service: ctx.read<NotificationsService>(),
+                  relationshipService: ctx.read<UserRelationshipService>(),
+                  currentUserId: auth.userId,
+                );
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              provider.syncAuth(
+                userId: auth.userId,
+                relationshipService: ctx.read<UserRelationshipService>(),
+              );
+            });
+            return provider;
+          },
         ),
       ],
       child: Consumer<ThemeProvider>(

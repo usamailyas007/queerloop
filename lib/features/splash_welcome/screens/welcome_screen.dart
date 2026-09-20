@@ -122,34 +122,41 @@ class _WelcomeScreenContent extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  if (!provider.isLastPage)
-                    GestureDetector(
-                      onTap: onFinish,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF2B2534).withValues(alpha: 0.8)
-                              : const Color(0xFFEDEDF2),
-                          border: Border.all(
-                            color: isDark
-                                ? Colors.white24
-                                : context.themeBorder,
-                            width: 1.1,
+                  AnimatedOpacity(
+                    opacity: provider.isLastPage ? 0.0 : 1.0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    child: IgnorePointer(
+                      ignoring: provider.isLastPage,
+                      child: GestureDetector(
+                        onTap: onFinish,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 8,
                           ),
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                        ),
-                        child: Text(
-                          l10n.onboardingSkip,
-                          style: AppTextStyles.onboardingSkipText.copyWith(
-                            color: context.themeTextPrimary,
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF2B2534).withValues(alpha: 0.8)
+                                : const Color(0xFFEDEDF2),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.white24
+                                  : context.themeBorder,
+                              width: 1.1,
+                            ),
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                          child: Text(
+                            l10n.onboardingSkip,
+                            style: AppTextStyles.onboardingSkipText.copyWith(
+                              color: context.themeTextPrimary,
+                            ),
                           ),
                         ),
                       ),
                     ),
+                  ),
                 ],
               ),
             ),

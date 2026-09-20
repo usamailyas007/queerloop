@@ -12,6 +12,7 @@ import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../auth/auth_provider.dart';
 import '../../home/provider/home_feed_provider.dart';
+import '../../notifications/provider/notifications_provider.dart';
 import '../provider/profile_provider.dart';
 
 import '../widgets/logout_confirmation_modal_dialog.dart';
@@ -457,9 +458,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       LogoutConfirmationModalDialog.show(
                         context,
                         username: handle,
+                        avatarAsset: currentAvatar,
                         onConfirmLogout: () async {
-                          context.read<HomeFeedProvider>().resetToHome();
-                          await context.read<AuthProvider>().signOut();
+                          try {
+                            await context.read<NotificationsProvider>().unregisterDeviceToken();
+                          } catch (_) {}
+                          if (context.mounted) {
+                            context.read<HomeFeedProvider>().resetToHome();
+                            await context.read<AuthProvider>().signOut();
+                          }
                           if (context.mounted) {
                             AppSnackBar.showSuccess(
                               context,

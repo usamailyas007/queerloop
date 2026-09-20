@@ -70,30 +70,43 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
         String convId = widget.conversation.id;
 
         // If conversation ID is missing or equal to participantId, start/resolve conversation
-        if (convId == widget.conversation.participantId || !convId.contains('-')) {
-          final String? pId = widget.conversation.participantId ??
-              (convId.contains('-') ? convId : null);
+        if (convId.isEmpty || convId == widget.conversation.participantId) {
+          final String? pId = widget.conversation.participantId;
           if (pId != null && pId.trim().isNotEmpty) {
             try {
               final ConversationModel? started =
                   await p.startConversation(pId.trim());
-              if (started != null) {
+              if (started != null && started.id.isNotEmpty) {
                 convId = started.id;
               }
             } catch (_) {}
           }
         }
 
-        // If we have a conversation UUID, load messages from backend
-        if (convId.contains('-') && convId != widget.conversation.participantId) {
+        // Set active chat and start polling so new messages stream live
+        p.setActiveChat(convId.isNotEmpty ? convId : widget.conversation.id);
+        p.startPolling();
+
+        // If we have an active conversation ID, load messages from backend
+        if (convId.isNotEmpty && convId != widget.conversation.participantId) {
           await p.loadMessages(convId);
         }
 
-        if (mounted) {
-          p.markAllMessagesAsRead(convId);
+        if (mounted && convId.isNotEmpty) {
+          await p.markAllMessagesAsRead(convId);
         }
       }
     });
+  }
+
+  @override
+  void deactivate() {
+    try {
+      final MessagesProvider p = context.read<MessagesProvider>();
+      p.markAllMessagesAsRead(widget.conversation.id);
+      p.setActiveChat(null);
+    } catch (_) {}
+    super.deactivate();
   }
 
   @override
@@ -114,7 +127,9 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
       orElse: () => widget.conversation,
     );
 
-    final bool isMuted = provider.isMuted(activeConv.username);
+    final bool isMuted = provider.isMuted(activeConv.username) ||
+        provider.isMuted(activeConv.id) ||
+        activeConv.isMuted;
     final bool isRestricted = provider.isRestricted(activeConv.username);
     final bool isBlocked = provider.isBlocked(activeConv.username);
     final String cleanUsername = activeConv.username.startsWith('@')
@@ -275,9 +290,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                           ? 'Restricted'
                                           : (isMuted
                                               ? 'Muted'
-                                              : (handleText != null
-                                                  ? '$handleText • Active now'
-                                                  : 'Active now'))),
+                                              : (handleText ?? ''))),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTextStyles.caption.copyWith(
@@ -297,21 +310,6 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                       ),
                     ),
                   ),
-
-                  // Safety Badge SVG Icon
-                  if (!isBlocked)
-                    Padding(
-                      padding: const EdgeInsets.only(right: AppSpacing.md),
-                      child: SvgPicture.asset(
-                        AppIcons.safety,
-                        width: 18,
-                        height: 18,
-                        colorFilter: const ColorFilter.mode(
-                          AppColors.gradientCyan,
-                          BlendMode.srcIn,
-                        ),
-                      ),
-                    ),
 
                   // Options 3-dots Menu -> Opens ChatOptionsBottomSheet
                   GestureDetector(
@@ -460,7 +458,12 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       GestureDetector(
-                        onTap: () => provider.toggleMute(activeConv.username),
+                        onTap: () {
+                          final String targetId = activeConv.id.isNotEmpty
+                              ? activeConv.id
+                              : widget.conversation.id;
+                          provider.unmuteConversation(targetId);
+                        },
                         child: Text(
                           'Unmute',
                           style: AppTextStyles.bodySmall.copyWith(

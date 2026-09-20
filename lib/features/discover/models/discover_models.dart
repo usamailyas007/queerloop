@@ -417,21 +417,57 @@ class DiscoverCommunity {
   final int? membersCount;
 
   factory DiscoverCommunity.fromJson(Map<String, dynamic> json) {
+    final String name = (json['name'] ?? json['title'] ?? '').toString();
+    final String rawImage = (json['imageUrl'] ??
+            json['iconUrl'] ??
+            json['avatarUrl'] ??
+            json['avatarAsset'] ??
+            json['image'] ??
+            '')
+        .toString();
+    final String image = rawImage.isNotEmpty ? rawImage : _matchAvatarAsset(name);
+
     return DiscoverCommunity(
       id: json['id']?.toString() ?? json['_id']?.toString(),
-      name: (json['name'] ?? json['title'] ?? '').toString(),
+      name: name,
       description: (json['description'] ?? json['desc'] ?? '').toString(),
-      imageAsset: (json['imageUrl'] ??
-              json['iconUrl'] ??
-              json['avatarUrl'] ??
-              json['image'] ??
-              '')
-          .toString(),
+      imageAsset: image,
       isJoined: json['isJoined'] == true || json['joined'] == true,
       membersCount: json['membersCount'] is num
           ? (json['membersCount'] as num).toInt()
           : int.tryParse(json['membersCount']?.toString() ?? ''),
     );
+  }
+
+  static String _matchAvatarAsset(String name) {
+    final String lower = name.toLowerCase().trim();
+    if (lower.contains('lesbian')) return AppImages.lesbian;
+    if (lower.contains('gay')) return AppImages.gay;
+    if (lower.contains('bi')) return AppImages.bisexual;
+    if (lower.contains('transgender') || lower == 'trans') {
+      return AppImages.transgender;
+    }
+    if (lower.contains('non-binary') || lower.contains('nonbinary')) {
+      return AppImages.nonBinary;
+    }
+    if (lower.contains('queer')) return AppImages.queer;
+    if (lower.contains('pansexual') || lower.contains('pan')) {
+      return AppImages.pansexual;
+    }
+    if (lower.contains('asexual') || lower.contains('ace')) {
+      return AppImages.asexual;
+    }
+    if (lower.contains('aromantic') || lower.contains('aro')) {
+      return AppImages.aromantic;
+    }
+    if (lower.contains('intersex')) return AppImages.intersex;
+    if (lower.contains('genderfluid')) return AppImages.genderfluid;
+    if (lower.contains('transmasc')) return AppImages.transmasc;
+    if (lower.contains('transfemme')) return AppImages.transfemme;
+    if (lower.contains('allies') || lower.contains('ally')) {
+      return AppImages.allies;
+    }
+    return AppImages.queer;
   }
 }
 
