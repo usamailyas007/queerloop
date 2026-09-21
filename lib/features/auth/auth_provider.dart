@@ -294,36 +294,37 @@ class AuthProvider extends ChangeNotifier {
 
   // ── Social Sign-In: Google ────────────────────────────────────────────
 
-  Future<bool> signInWithGoogle() async {
-    if (_isBusy) return false;
+  Future<SocialSignInResult> signInWithGoogle() async {
+    if (_isBusy) return SocialSignInResult.cancelled();
     _setBusy(true);
     try {
       final SocialSignInResult result = await _service.signInWithGoogle();
       if (result.isCancelled) {
-        // User closed the picker — not an error, just stay on auth screen.
-        return false;
+        return result;
       }
       if (result.isError) {
         _error = result.errorMessage ?? 'Google sign-in failed. Please try again.';
         _errorCode = null;
         _retryAfterSeconds = null;
         notifyListeners();
-        return false;
+        return result;
       }
-      _applySession(result.session!);
-      return true;
+      if (result.session != null) {
+        _applySession(result.session!);
+      }
+      return result;
     } on ApiException catch (failure) {
       _error = failure.message;
       _errorCode = failure.code;
       _retryAfterSeconds = failure.retryAfterSeconds;
       notifyListeners();
-      return false;
+      return SocialSignInResult.error(failure.message);
     } catch (e) {
       _error = 'Google sign-in failed. Please try again.';
       _errorCode = null;
       _retryAfterSeconds = null;
       notifyListeners();
-      return false;
+      return SocialSignInResult.error(e.toString());
     } finally {
       _setBusy(false);
     }

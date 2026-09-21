@@ -16,7 +16,9 @@ import '../../home/provider/home_feed_provider.dart';
 import '../../home/screens/home_screen.dart';
 import '../../home/services/reel_video_preloader.dart';
 import '../../profile/provider/profile_provider.dart';
+import '../../profile_setup/provider/profile_setup_provider.dart';
 import '../auth_provider.dart';
+import '../auth_service.dart';
 import '../widgets/auth_divider.dart';
 import '../widgets/auth_footer_link.dart';
 import '../widgets/auth_header.dart';
@@ -167,6 +169,106 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ── Social Sign-In helpers ─────────────────────────────────────────────────
+
+  Future<void> _handleGoogleSignIn() async {
+    final AuthProvider authProvider = context.read<AuthProvider>();
+    if (authProvider.isBusy) return;
+
+    final SocialSignInResult result = await authProvider.signInWithGoogle();
+
+    if (!mounted) return;
+
+    if (result.isCancelled) {
+      return;
+    }
+
+    if (result.isError) {
+      final String? errorMsg = result.errorMessage ?? authProvider.error;
+      if (errorMsg != null && errorMsg.isNotEmpty) {
+        AppSnackBar.showError(
+          context,
+          title: 'Sign In Failed',
+          subtitle: errorMsg,
+        );
+        authProvider.clearError();
+      }
+      return;
+    }
+
+    // Pre-fill profile setup provider if Google metadata exists
+    if (result.displayName != null || result.photoUrl != null) {
+      context.read<ProfileSetupProvider>().prefillSocialData(
+        displayName: result.displayName,
+        avatarUrl: result.photoUrl,
+      );
+    }
+
+    // Case 1: Newly registered via Google -> Navigate to email OTP verification
+    if (result.needsVerification) {
+      if (result.errorMessage != null && result.errorMessage!.isNotEmpty) {
+        AppSnackBar.showInfo(
+          context,
+          title: 'Verification Code Sent',
+          subtitle: result.errorMessage!,
+        );
+      }
+      Navigator.pushNamed(
+        context,
+        AppRoutes.verifyEmailOtp,
+        arguments: result.email,
+      );
+      return;
+    }
+
+    // Case 2: User logged in but profile not setup yet -> Navigate to profile setup
+    if (result.needsProfileSetup) {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.profileSetup,
+        (Route<dynamic> route) => false,
+      );
+      return;
+    }
+
+    // Case 3: Already registered and profile completed -> Preload feed and Go Home
+    if (result.isSuccess) {
+      final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+      homeFeed.resetToHome();
+      final String? uid = authProvider.userId;
+      final List<Future<dynamic>> warmUpTasks = <Future<dynamic>>[];
+      if (uid != null && uid.isNotEmpty) {
+        warmUpTasks.add(
+          context.read<ProfileProvider>().fetchProfile(uid).catchError((_) {}),
+        );
+      }
+      warmUpTasks.add(() async {
+        try {
+          await homeFeed.loadFeed();
+          if (homeFeed.reels.isNotEmpty) {
+            final firstReel = homeFeed.reels.first;
+            final controller =
+                await ReelVideoPreloader.instance.getOrCreate(firstReel);
+            if (controller != null && !controller.value.isInitialized) {
+              await controller.initialize().timeout(
+                    const Duration(seconds: 4),
+                    onTimeout: () => controller,
+                  );
+            }
+            ReelVideoPreloader.instance.preloadSurrounding(homeFeed.reels, 0);
+          }
+        } catch (e) {
+          debugPrint('⚠️ [Login] Social pre-fetching feed failed: $e');
+        }
+      }());
+      await Future.wait(warmUpTasks).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => <dynamic>[],
+      );
+
+      if (!mounted) return;
+      _goHome(context);
+    }
+  }
 
   Future<void> _signInWithSocial(
     Future<bool> Function() socialMethod,
@@ -419,13 +521,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               builder: (_, bool busy, _) => AppSocialButton(
                                 text: l10n.authGoogle,
                                 iconPath: AppIcons.google,
-                                onPressed: busy
-                                    ? () {}
-                                    : () => _signInWithSocial(
-                                          () => context
-                                              .read<AuthProvider>()
-                                              .signInWithGoogle(),
-                                        ),
+                                onPressed: busy ? () {} : _handleGoogleSignIn,
                               ),
                             ),
                           ),

@@ -99,26 +99,86 @@ class AuthService {
         return SocialSignInResult.cancelled();
       }
 
-      final GoogleSignInAuthentication auth = await account.authentication;
-      final String? idToken = auth.idToken;
-      if (idToken == null || idToken.isEmpty) {
-        debugPrint('❌ [AuthService] Google sign-in: idToken is null.');
-        return SocialSignInResult.error('Failed to get Google ID token.');
-      }
+      final String email = account.email.trim();
+      final String? displayName = account.displayName;
+      final String? photoUrl = account.photoUrl;
+      final String googleId = account.id;
 
-      debugPrint('🚀 [AuthService] Posting Google idToken to ${ApiEndpoints.googleSignIn}');
-      final dynamic data = await _client.post(
-        ApiEndpoints.googleSignIn,
-        body: <String, dynamic>{'idToken': idToken},
-      );
-      debugPrint('📥 [AuthService] Google sign-in response: $data');
-      final AuthSession session =
-          AuthSession.fromJson(data as Map<String, dynamic>);
-      _client.authToken = session.accessToken;
-      await _persistTokens(session);
-      return SocialSignInResult.success(session);
+      debugPrint('🔑 [AuthService] Google account selected: $email (Name: $displayName)');
+
+      // Generate strong deterministic password for this Google account
+      final String googleAuthPassword = 'GoogleAuth_${googleId}_!Aa9';
+
+      // 1. Check if email exists by attempting login first
+      try {
+        debugPrint('🚀 [AuthService] Attempting Login with Google credentials for: $email');
+        final AuthSession session = await signIn(
+          email: email,
+          password: googleAuthPassword,
+        );
+        debugPrint('✅ [AuthService] Google login successful for: $email');
+        // Existing user logged in — go straight to home.
+        // Profile setup is only needed for brand-new registrations.
+        return SocialSignInResult.success(session);
+      } catch (loginError) {
+        debugPrint('ℹ️ [AuthService] Google login attempt failed: $loginError');
+
+        // Case 1: Email not verified yet
+        if (loginError is ApiException && loginError.code == 'EMAIL_NOT_VERIFIED') {
+          debugPrint('⚠️ [AuthService] Email not verified. Resending OTP for: $email');
+          try {
+            await resendEmailOtp(email);
+          } catch (_) {}
+          return SocialSignInResult.needsVerification(
+            email: email,
+            displayName: displayName,
+            photoUrl: photoUrl,
+            message: 'Please verify your email address. A verification code has been sent.',
+          );
+        }
+
+        // Case 2: User does not exist (or wrong password) -> Call Register API!
+        debugPrint('🚀 [AuthService] Email does not exist or login failed. Attempting Register for: $email');
+        try {
+          final RegisterResponse reg = await register(
+            email: email,
+            password: googleAuthPassword,
+          );
+          debugPrint('✅ [AuthService] Google registration initiated for: $email');
+          return SocialSignInResult.needsVerification(
+            email: email,
+            displayName: displayName,
+            photoUrl: photoUrl,
+            message: reg.message,
+          );
+        } catch (regError) {
+          debugPrint('❌ [AuthService] Google register failed: $regError');
+
+          if (regError is ApiException) {
+            if (regError.code == 'OTP_COOLDOWN') {
+              return SocialSignInResult.needsVerification(
+                email: email,
+                displayName: displayName,
+                photoUrl: photoUrl,
+                message: regError.message,
+              );
+            }
+            if (regError.statusCode == 409 ||
+                regError.message.toLowerCase().contains('already exists')) {
+              debugPrint(
+                  '⚠️ [AuthService] Email $email exists with a password account. Redirecting to password login.');
+              return SocialSignInResult.accountExistsWithPassword(
+                email: email,
+                displayName: displayName,
+              );
+            }
+            return SocialSignInResult.error(regError.message);
+          }
+          return SocialSignInResult.error(regError.toString());
+        }
+      }
     } catch (e) {
-      debugPrint('❌ [AuthService] Google sign-in error: $e');
+      debugPrint('❌ [AuthService] Google sign-in general error: $e');
       return SocialSignInResult.error(e.toString());
     }
   }
@@ -795,18 +855,56 @@ class RegisterResponse {
 
 // ── Social Sign-In Result ─────────────────────────────────────────────────────
 
-enum SocialSignInStatus { success, cancelled, error }
+enum SocialSignInStatus {
+  success,
+  needsProfileSetup,
+  needsVerification,
+  cancelled,
+  error,
+  /// Email is registered with a password — user must log in via email/password.
+  accountExistsWithPassword,
+}
 
 class SocialSignInResult {
   const SocialSignInResult._({
     required this.status,
     this.session,
+    this.email,
+    this.displayName,
+    this.photoUrl,
     this.errorMessage,
   });
 
-  factory SocialSignInResult.success(AuthSession session) => SocialSignInResult._(
+  factory SocialSignInResult.success(AuthSession session) =>
+      SocialSignInResult._(
         status: SocialSignInStatus.success,
         session: session,
+      );
+
+  factory SocialSignInResult.needsProfileSetup(
+    AuthSession session, {
+    String? displayName,
+    String? photoUrl,
+  }) =>
+      SocialSignInResult._(
+        status: SocialSignInStatus.needsProfileSetup,
+        session: session,
+        displayName: displayName,
+        photoUrl: photoUrl,
+      );
+
+  factory SocialSignInResult.needsVerification({
+    required String email,
+    String? displayName,
+    String? photoUrl,
+    String? message,
+  }) =>
+      SocialSignInResult._(
+        status: SocialSignInStatus.needsVerification,
+        email: email,
+        displayName: displayName,
+        photoUrl: photoUrl,
+        errorMessage: message,
       );
 
   factory SocialSignInResult.cancelled() => const SocialSignInResult._(
@@ -818,13 +916,34 @@ class SocialSignInResult {
         errorMessage: message,
       );
 
+  /// Use when the email is already registered with email/password (HTTP 409 during
+  /// Google sign-in). The UI should redirect to the login screen with [email] prefilled.
+  factory SocialSignInResult.accountExistsWithPassword({
+    required String email,
+    String? displayName,
+  }) =>
+      SocialSignInResult._(
+        status: SocialSignInStatus.accountExistsWithPassword,
+        email: email,
+        displayName: displayName,
+        errorMessage:
+            'This email is already registered with a password. Please log in with your email and password.',
+      );
+
   final SocialSignInStatus status;
   final AuthSession? session;
+  final String? email;
+  final String? displayName;
+  final String? photoUrl;
   final String? errorMessage;
 
   bool get isSuccess => status == SocialSignInStatus.success && session != null;
+  bool get needsProfileSetup => status == SocialSignInStatus.needsProfileSetup;
+  bool get needsVerification => status == SocialSignInStatus.needsVerification;
   bool get isCancelled => status == SocialSignInStatus.cancelled;
   bool get isError => status == SocialSignInStatus.error;
+  bool get accountExistsWithPassword =>
+      status == SocialSignInStatus.accountExistsWithPassword;
 }
 
 // ── Account Deletion Result ───────────────────────────────────────────────────
