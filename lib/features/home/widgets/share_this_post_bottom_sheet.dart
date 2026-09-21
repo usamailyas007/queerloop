@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
@@ -7,20 +8,116 @@ import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../messages/models/message_models.dart';
+import '../../messages/provider/messages_provider.dart';
+import '../../profile/models/user_relationship_models.dart';
+import '../../profile/provider/profile_provider.dart';
+import '../models/reel_item_model.dart';
 
-class ShareThisPostBottomSheet extends StatelessWidget {
+class ShareContactItem {
+  const ShareContactItem({
+    required this.username,
+    required this.displayName,
+    this.conversationId,
+    this.userId,
+    this.avatarUrl,
+  });
+
+  final String username;
+  final String displayName;
+  final String? conversationId;
+  final String? userId;
+  final String? avatarUrl;
+}
+
+class ShareThisPostBottomSheet extends StatefulWidget {
   const ShareThisPostBottomSheet({
     required this.onOpenMoreSendTo,
     required this.onOpenReportSafety,
+    this.reel,
+    this.postId,
+    this.postAuthor,
+    this.postThumbnail,
     super.key,
   });
 
   final VoidCallback onOpenMoreSendTo;
   final VoidCallback onOpenReportSafety;
+  final ReelItemModel? reel;
+  final String? postId;
+  final String? postAuthor;
+  final String? postThumbnail;
+
+  @override
+  State<ShareThisPostBottomSheet> createState() =>
+      _ShareThisPostBottomSheetState();
+}
+
+class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final MessagesProvider mp = context.read<MessagesProvider>();
+        if (mp.conversations.isEmpty) {
+          mp.loadConversations();
+        }
+        final ProfileProvider pp = context.read<ProfileProvider>();
+        if (pp.followers.isEmpty) {
+          pp.loadFollowers();
+        }
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final MessagesProvider msgProvider = context.watch<MessagesProvider>();
+    final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+
+    // ── Build Dynamic Contacts (Conversations + Followers) ───────────────────
+    final List<ShareContactItem> contacts = <ShareContactItem>[];
+    final Set<String> seenUsernames = <String>{};
+
+    // 1. First add users with active conversations
+    for (final ConversationModel c in msgProvider.conversations) {
+      final String u = c.username.replaceAll('@', '').trim();
+      final String effectiveUsername =
+          u.isNotEmpty ? u : (c.displayName?.isNotEmpty == true ? c.displayName! : 'User');
+      final String key = effectiveUsername.toLowerCase();
+      if (!seenUsernames.contains(key)) {
+        seenUsernames.add(key);
+        contacts.add(ShareContactItem(
+          conversationId: c.id,
+          userId: c.participantId,
+          username: effectiveUsername,
+          displayName: c.displayName?.isNotEmpty == true ? c.displayName! : effectiveUsername,
+          avatarUrl: (c.avatarUrl != null && c.avatarUrl!.isNotEmpty)
+              ? c.avatarUrl
+              : (c.avatarAsset.isNotEmpty ? c.avatarAsset : null),
+        ));
+      }
+    }
+
+    // 2. Add followers who aren't already in conversation list
+    for (final UserRelationItem f in profileProvider.followers) {
+      final String u = f.username.replaceAll('@', '').trim();
+      final String key = u.toLowerCase();
+      if (u.isNotEmpty && !seenUsernames.contains(key)) {
+        seenUsernames.add(key);
+        contacts.add(ShareContactItem(
+          conversationId: null,
+          userId: f.userId,
+          username: u,
+          displayName: f.displayName.isNotEmpty ? f.displayName : u,
+          avatarUrl: f.avatarUrl,
+        ));
+      }
+    }
+
+    final String shareTargetId = widget.reel?.id ?? widget.postId ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -78,61 +175,81 @@ class ShareThisPostBottomSheet extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.md),
 
-            // ── Top Connections Row (jules, rowan, moss, theo, + More) ──────
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: <Widget>[
-                _UserAvatarItem(
-                  avatarAsset: AppImages.user1,
-                  name: 'jules',
-                  onTap: () {},
-                ),
-                _UserAvatarItem(
-                  avatarAsset: AppImages.user2,
-                  name: 'rowan',
-                  onTap: () {},
-                ),
-                _UserAvatarItem(
-                  avatarAsset: AppImages.user3,
-                  name: 'moss',
-                  onTap: () {},
-                ),
-                _UserAvatarItem(
-                  avatarAsset: AppImages.user4,
-                  name: 'theo',
-                  onTap: () {},
-                ),
-                // More Circle Button (Opens SendToBottomSheet)
-                GestureDetector(
-                  onTap: onOpenMoreSendTo,
-                  child: Column(
-                    children: <Widget>[
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: context.themeCardBackground,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: context.themeBorder),
-                        ),
-                        child: Icon(
-                          Icons.add_rounded,
-                          color: context.themeIconMuted,
-                          size: 24,
-                        ),
+            // ── Top Connections Row (Dynamic users + More button) ───────────
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: <Widget>[
+                  for (final ShareContactItem c in contacts.take(5)) ...<Widget>[
+                    Padding(
+                      padding: const EdgeInsets.only(right: 18),
+                      child: _UserAvatarItem(
+                        avatarAsset: (c.avatarUrl != null && c.avatarUrl!.isNotEmpty)
+                            ? c.avatarUrl!
+                            : AppImages.user1,
+                        name: c.username,
+                        onTap: () async {
+                          Navigator.pop(context);
+                          if (shareTargetId.isNotEmpty) {
+                            if (c.conversationId != null &&
+                                c.conversationId!.isNotEmpty) {
+                              await msgProvider.sharePost(
+                                sharedPostId: shareTargetId,
+                                conversationIds: <String>[c.conversationId!],
+                                contentType: 'reel_share',
+                              );
+                            } else if (c.userId != null &&
+                                c.userId!.isNotEmpty) {
+                              await msgProvider.sharePost(
+                                sharedPostId: shareTargetId,
+                                recipientUserIds: <String>[c.userId!],
+                                contentType: 'reel_share',
+                              );
+                            }
+                          }
+                          if (!context.mounted) return;
+                          AppSnackBar.showSuccess(
+                            context,
+                            title: 'Sent',
+                            subtitle: 'Shared to @${c.username}!',
+                          );
+                        },
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        l10n.shareMore,
-                        style: TextStyle(
-                          color: context.themeTextSecondary,
-                          fontSize: 12,
+                    ),
+                  ],
+
+                  // More Circle Button (Opens SendToBottomSheet)
+                  GestureDetector(
+                    onTap: widget.onOpenMoreSendTo,
+                    child: Column(
+                      children: <Widget>[
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: context.themeCardBackground,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: context.themeBorder),
+                          ),
+                          child: Icon(
+                            Icons.add_rounded,
+                            color: context.themeIconMuted,
+                            size: 24,
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 6),
+                        Text(
+                          l10n.shareMore,
+                          style: TextStyle(
+                            color: context.themeTextSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
 
             const SizedBox(height: AppSpacing.lg),
@@ -178,7 +295,7 @@ class ShareThisPostBottomSheet extends StatelessWidget {
                   label: l10n.shareReport,
                   iconColor: const Color(0xFFFF4B8B),
                   labelColor: const Color(0xFFFF4B8B),
-                  onTap: onOpenReportSafety,
+                  onTap: widget.onOpenReportSafety,
                 ),
               ],
             ),

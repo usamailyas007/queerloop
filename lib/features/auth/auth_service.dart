@@ -74,6 +74,12 @@ class AuthService {
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: <String>['email', 'profile'],
+    clientId: defaultTargetPlatform == TargetPlatform.iOS
+        ? '494655940899-k47o7aedu4ggbq1bdabeinl69vma8vok.apps.googleusercontent.com'
+        : null,
+    serverClientId: AppConfig.googleServerClientId.isNotEmpty
+        ? AppConfig.googleServerClientId
+        : null,
   );
 
   Future<SocialSignInResult> signInWithGoogle() async {

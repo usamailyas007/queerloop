@@ -8,6 +8,9 @@ import '../config/app_config.dart';
 import 'api_exception.dart';
 
 class ApiClient {
+  /// Toggle HTTP API logging. Kept false per user request to only show socket logs.
+  static const bool enableApiLogging = false;
+
   ApiClient({String? baseUrl, Dio? dio})
       : _dio = dio ?? Dio() {
     final String url = baseUrl ?? AppConfig.baseUrl;
@@ -47,26 +50,61 @@ class ApiClient {
               options.headers['Authorization'] = 'Bearer $token';
             }
           }
-          debugPrint('┌──────────────────────────────────────────────────────────');
-          debugPrint('🌐 [API Request] ${options.method} ${options.uri}');
-          if (options.data != null) {
-            debugPrint('📦 Payload:\n${_prettyJson(options.data)}');
+          final String path = options.path.toLowerCase();
+          final bool isTargetApi = enableApiLogging ||
+              path.contains('/restrict') ||
+              path.contains('/conversations/share') ||
+              path.contains('/share') ||
+              path.contains('/messages') ||
+              path.contains('/block');
+
+          if (isTargetApi) {
+            debugPrint('┌──────────────────────────────────────────────────────────');
+            debugPrint('🌐 [API Request] ${options.method} ${options.uri}');
+            debugPrint('🔑 Headers: Authorization: ${options.headers['Authorization'] != null ? "Bearer ..." : "None"}');
+            if (options.data != null) {
+              debugPrint('📦 Payload:\n${_prettyJson(options.data)}');
+            } else {
+              debugPrint('📦 Payload: null (no body)');
+            }
+            debugPrint('└──────────────────────────────────────────────────────────');
           }
-          debugPrint('└──────────────────────────────────────────────────────────');
           handler.next(options);
         },
         onResponse: (Response<dynamic> response, ResponseInterceptorHandler handler) {
-          debugPrint('┌──────────────────────────────────────────────────────────');
-          debugPrint('✅ [API Response] ${response.requestOptions.method} ${response.requestOptions.path} [Status ${response.statusCode}]');
-          debugPrint('📥 Response Body:\n${_prettyJson(response.data)}');
-          debugPrint('└──────────────────────────────────────────────────────────');
+          final String path =
+              response.requestOptions.path.toLowerCase();
+          final bool isTargetApi = enableApiLogging ||
+              path.contains('/restrict') ||
+              path.contains('/conversations/share') ||
+              path.contains('/share') ||
+              path.contains('/messages') ||
+              path.contains('/block');
+
+          if (isTargetApi) {
+            debugPrint('┌──────────────────────────────────────────────────────────');
+            debugPrint('✅ [API Response] ${response.requestOptions.method} ${response.requestOptions.path} [Status ${response.statusCode}]');
+            debugPrint('📥 Response Body:\n${_prettyJson(response.data)}');
+            debugPrint('└──────────────────────────────────────────────────────────');
+          }
           handler.next(response);
         },
         onError: (DioException error, ErrorInterceptorHandler handler) async {
-          debugPrint('┌──────────────────────────────────────────────────────────');
-          debugPrint('❌ [API Error] ${error.requestOptions.method} ${error.requestOptions.path} [Status ${error.response?.statusCode}]');
-          debugPrint('⚠️ Error Response Body:\n${_prettyJson(error.response?.data)}');
-          debugPrint('└──────────────────────────────────────────────────────────');
+          final String path =
+              error.requestOptions.path.toLowerCase();
+          final bool isTargetApi = enableApiLogging ||
+              path.contains('/restrict') ||
+              path.contains('/conversations/share') ||
+              path.contains('/share') ||
+              path.contains('/messages') ||
+              path.contains('/block');
+
+          if (isTargetApi) {
+            debugPrint('┌──────────────────────────────────────────────────────────');
+            debugPrint('❌ [API Error] ${error.requestOptions.method} ${error.requestOptions.path} [Status ${error.response?.statusCode}]');
+            debugPrint('⚠️ Error Response Body:\n${_prettyJson(error.response?.data)}');
+            debugPrint('└──────────────────────────────────────────────────────────');
+          }
 
           final RequestOptions req = error.requestOptions;
           final int? statusCode = error.response?.statusCode;

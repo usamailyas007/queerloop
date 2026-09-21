@@ -1,8 +1,11 @@
+import 'dart:async' show Timer;
 import 'package:flutter/material.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
@@ -12,11 +15,12 @@ import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../models/message_models.dart';
 import '../provider/messages_provider.dart';
+import '../services/chat_socket_service.dart';
+import '../services/conversations_service.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/chat_message_action_sheet.dart';
 import '../widgets/chat_options_bottom_sheet.dart';
 import '../../auth/auth_provider.dart';
-import '../services/conversations_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
 
 class ChatScreen extends StatelessWidget {
@@ -41,7 +45,9 @@ class ChatScreen extends StatelessWidget {
     return ChangeNotifierProvider<MessagesProvider>(
       create: (BuildContext ctx) => MessagesProvider(
         service: ctx.read<ConversationsService>(),
+        socketService: ctx.read<ChatSocketService>(),
         currentUserId: ctx.read<AuthProvider>().userId,
+        token: ctx.read<ApiClient>().authToken,
       ),
       child: _ChatScreenContent(conversation: conversation),
     );
@@ -59,11 +65,65 @@ class _ChatScreenContent extends StatefulWidget {
 
 class _ChatScreenContentState extends State<_ChatScreenContent> {
   late final TextEditingController _messageController;
+  late final ScrollController _scrollController;
+  Timer? _typingTimer;
+  bool _isTypingSent = false;
+  int _lastMessageCount = 0;
+
+  void _scrollToBottom({bool animated = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      try {
+        final double maxScroll = _scrollController.position.maxScrollExtent;
+        if (animated) {
+          _scrollController.animateTo(
+            maxScroll,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        } else {
+          _scrollController.jumpTo(maxScroll);
+        }
+      } catch (_) {}
+    });
+  }
+
+  void _handleTypingChange() {
+    final String text = _messageController.text;
+    if (!mounted) return;
+    final MessagesProvider p = context.read<MessagesProvider>();
+    final String convId = p.activeChatConvId ?? widget.conversation.id;
+    if (convId.isEmpty) return;
+
+    if (text.isEmpty) {
+      if (_isTypingSent) {
+        _isTypingSent = false;
+        _typingTimer?.cancel();
+        p.sendTyping(convId, false);
+      }
+      return;
+    }
+
+    if (!_isTypingSent) {
+      _isTypingSent = true;
+      p.sendTyping(convId, true);
+    }
+
+    _typingTimer?.cancel();
+    _typingTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (_isTypingSent && mounted) {
+        _isTypingSent = false;
+        p.sendTyping(convId, false);
+      }
+    });
+  }
 
   @override
   void initState() {
     super.initState();
     _messageController = TextEditingController();
+    _scrollController = ScrollController();
+    _messageController.addListener(_handleTypingChange);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
         final MessagesProvider p = context.read<MessagesProvider>();
@@ -83,9 +143,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
           }
         }
 
-        // Set active chat and start polling so new messages stream live
+        // Set active chat so new socket messages stream live
         p.setActiveChat(convId.isNotEmpty ? convId : widget.conversation.id);
-        p.startPolling();
 
         // If we have an active conversation ID, load messages from backend
         if (convId.isNotEmpty && convId != widget.conversation.participantId) {
@@ -94,6 +153,14 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
 
         if (mounted && convId.isNotEmpty) {
           await p.markAllMessagesAsRead(convId);
+        }
+
+        // Scroll directly to the bottom (latest message) on opening chat
+        if (mounted) {
+          _scrollToBottom(animated: false);
+          Future<void>.delayed(const Duration(milliseconds: 120), () {
+            if (mounted) _scrollToBottom(animated: false);
+          });
         }
       }
     });
@@ -111,7 +178,17 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
 
   @override
   void dispose() {
+    _typingTimer?.cancel();
+    if (_isTypingSent) {
+      try {
+        final MessagesProvider p = context.read<MessagesProvider>();
+        final String convId = p.activeChatConvId ?? widget.conversation.id;
+        p.sendTyping(convId, false);
+      } catch (_) {}
+    }
+    _messageController.removeListener(_handleTypingChange);
     _messageController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -210,34 +287,56 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                               ),
                             )
                           else
-                            ClipOval(
-                              child: activeConv.avatarAsset.startsWith('http')
-                                  ? Image.network(
-                                      activeConv.avatarAsset,
-                                      width: 36,
-                                      height: 36,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, _, _) => Image.asset(
-                                        AppImages.user1,
-                                        width: 36,
-                                        height: 36,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                  : Image.asset(
-                                      activeConv.avatarAsset.isNotEmpty
-                                          ? activeConv.avatarAsset
-                                          : AppImages.user1,
-                                      width: 36,
-                                      height: 36,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, _, _) => Image.asset(
-                                        AppImages.user1,
-                                        width: 36,
-                                        height: 36,
-                                        fit: BoxFit.cover,
+                            Stack(
+                              clipBehavior: Clip.none,
+                              children: <Widget>[
+                                ClipOval(
+                                  child: activeConv.avatarAsset.startsWith('http')
+                                      ? Image.network(
+                                          activeConv.avatarAsset,
+                                          width: 36,
+                                          height: 36,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => Image.asset(
+                                            AppImages.user1,
+                                            width: 36,
+                                            height: 36,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        )
+                                      : Image.asset(
+                                          activeConv.avatarAsset.isNotEmpty
+                                              ? activeConv.avatarAsset
+                                              : AppImages.user1,
+                                          width: 36,
+                                          height: 36,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => Image.asset(
+                                            AppImages.user1,
+                                            width: 36,
+                                            height: 36,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                ),
+                                if (provider.isUserOnline(activeConv.participantId, activeConv))
+                                  Positioned(
+                                    right: 0,
+                                    bottom: 0,
+                                    child: Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF10B981),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: context.themeBackground,
+                                          width: 1.8,
+                                        ),
                                       ),
                                     ),
+                                  ),
+                              ],
                             ),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
@@ -283,25 +382,61 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                     ],
                                   ],
                                 ),
-                                Text(
-                                  isBlocked
-                                      ? 'Blocked'
-                                      : (isRestricted
-                                          ? 'Restricted'
-                                          : (isMuted
-                                              ? 'Muted'
-                                              : (handleText ?? ''))),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.caption.copyWith(
-                                    color: (isBlocked || isRestricted)
-                                        ? AppColors.gradientCyan
-                                        : (isMuted
-                                            ? context.themeTextMuted
-                                            : AppColors.gradientCyan),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 11,
-                                  ),
+                                Builder(
+                                  builder: (BuildContext _) {
+                                     final bool isTypingAllowed =
+                                         provider.isTypingIndicatorEnabled(activeConv.username) &&
+                                         provider.isTypingIndicatorEnabled(activeConv.id) &&
+                                         (activeConv.participantId == null ||
+                                             provider.isTypingIndicatorEnabled(activeConv.participantId!));
+                                     final bool isOtherTyping = isTypingAllowed &&
+                                         (activeConv.isTyping ||
+                                             provider.isConversationTyping(activeConv.id) ||
+                                             (activeConv.participantId != null &&
+                                                 provider.isConversationTyping(activeConv.participantId!)) ||
+                                             provider.isConversationTyping(activeConv.username));
+                                    final bool isOnline =
+                                        provider.isUserOnline(activeConv.participantId, activeConv);
+                                    final String? lastActiveStr =
+                                        provider.getUserLastActiveText(activeConv.participantId, activeConv);
+
+                                    String statusText;
+                                    Color statusColor;
+
+                                    if (isBlocked) {
+                                      statusText = 'Blocked';
+                                      statusColor = AppColors.gradientCyan;
+                                    } else if (isRestricted) {
+                                      statusText = 'Restricted';
+                                      statusColor = AppColors.gradientCyan;
+                                    } else if (isMuted) {
+                                      statusText = 'Muted';
+                                      statusColor = context.themeTextMuted;
+                                    } else if (isOtherTyping) {
+                                      statusText = 'typing...';
+                                      statusColor = AppColors.gradientCyan;
+                                    } else if (isOnline) {
+                                      statusText = 'Active now';
+                                      statusColor = const Color(0xFF10B981);
+                                    } else if (lastActiveStr != null && lastActiveStr.isNotEmpty) {
+                                      statusText = lastActiveStr;
+                                      statusColor = context.themeTextMuted;
+                                    } else {
+                                      statusText = handleText ?? '';
+                                      statusColor = AppColors.gradientCyan;
+                                    }
+
+                                    return Text(
+                                      statusText,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTextStyles.caption.copyWith(
+                                        color: statusColor,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 11,
+                                      ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),
@@ -483,6 +618,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
               child: GestureDetector(
                 onTap: () => FocusScope.of(context).unfocus(),
                 child: ListView(
+                  controller: _scrollController,
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.lg,
                     vertical: AppSpacing.md,
@@ -528,13 +664,11 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                     ? fallbackMessages
                                     : activeConv.messages);
 
-                        final bool hasUnread = effectiveMessages
-                            .any((ChatMessageModel m) => !m.isMe && !m.isRead);
-                        if (hasUnread) {
+                        if (effectiveMessages.length != _lastMessageCount) {
+                          final bool isInitial = _lastMessageCount == 0;
+                          _lastMessageCount = effectiveMessages.length;
                           WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted) {
-                              provider.markAllMessagesAsRead(activeConv.id);
-                            }
+                            _scrollToBottom(animated: !isInitial);
                           });
                         }
 
@@ -575,45 +709,77 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                     ),
 
                     // Typing indicator (if active & not blocked/restricted)
-                    if (activeConv.isTyping &&
-                        !isBlocked &&
-                        !isMuted &&
-                        !isRestricted) ...<Widget>[
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        '${activeConv.username} is typing...',
-                        style: AppTextStyles.caption.copyWith(
-                          color: context.themeTextMuted,
-                          fontSize: 11,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md,
-                            vertical: AppSpacing.sm,
+                    Builder(
+                      builder: (BuildContext _) {
+                        final bool isTypingAllowed =
+                            provider.isTypingIndicatorEnabled(activeConv.username) &&
+                            provider.isTypingIndicatorEnabled(activeConv.id) &&
+                            (activeConv.participantId == null ||
+                                provider.isTypingIndicatorEnabled(activeConv.participantId!));
+                        final bool isOtherTyping = isTypingAllowed &&
+                            (activeConv.isTyping ||
+                                provider.isConversationTyping(activeConv.id) ||
+                                (activeConv.participantId != null &&
+                                    provider.isConversationTyping(
+                                        activeConv.participantId!)) ||
+                                provider.isConversationTyping(activeConv.username));
+
+                        if (!isOtherTyping ||
+                            isBlocked ||
+                            isMuted ||
+                            isRestricted) {
+                          return const SizedBox.shrink();
+                        }
+
+                        return Padding(
+                          padding: const EdgeInsets.only(
+                            top: AppSpacing.xs,
+                            bottom: AppSpacing.md,
                           ),
-                          decoration: BoxDecoration(
-                            color: context.themeCardBackground,
-                            borderRadius: BorderRadius.circular(AppRadius.pill),
-                            border: Border.all(
-                              color: context.themeBorder,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: Text(
+                                  '${activeConv.username} is typing...',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: context.themeTextMuted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: context.themeCardBackground,
+                                    borderRadius: const BorderRadius.only(
+                                      topLeft: Radius.circular(18),
+                                      topRight: Radius.circular(18),
+                                      bottomRight: Radius.circular(18),
+                                      bottomLeft: Radius.circular(4),
+                                    ),
+                                    border: Border.all(
+                                      color: context.themeBorder,
+                                    ),
+                                  ),
+                                  child: const SpinKitThreeBounce(
+                                    color: AppColors.gradientCyan,
+                                    size: 16.0,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          child: SvgPicture.asset(
-                            AppIcons.typing,
-                            height: 14,
-                            colorFilter: ColorFilter.mode(
-                              context.themeIconMuted,
-                              BlendMode.srcIn,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                    ],
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -767,8 +933,14 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                       onTap: () {
                         final String text = _messageController.text.trim();
                         if (text.isNotEmpty) {
+                          _typingTimer?.cancel();
+                          if (_isTypingSent) {
+                            _isTypingSent = false;
+                            provider.sendTyping(activeConv.id, false);
+                          }
                           provider.sendMessage(activeConv.id, text);
                           _messageController.clear();
+                          _scrollToBottom(animated: true);
                         }
                       },
                       child: Container(

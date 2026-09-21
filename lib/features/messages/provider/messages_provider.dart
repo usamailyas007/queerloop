@@ -1,4 +1,4 @@
-import 'dart:async' show Timer;
+import 'dart:async' show StreamSubscription, Timer;
 import 'dart:convert' show jsonDecode, jsonEncode;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -6,27 +6,158 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../models/message_models.dart';
+import '../services/chat_socket_service.dart';
 import '../services/conversations_service.dart';
 
 class MessagesProvider extends ChangeNotifier {
   MessagesProvider({
     ConversationsService? service,
+    ChatSocketService? socketService,
     String? currentUserId,
+    String? token,
   })  : _service = service,
+        _socketService = socketService,
         _currentUserId = currentUserId {
     _loadPersistedReadStates();
-    if (_currentUserId != null && _currentUserId!.isNotEmpty) {
-      startPolling();
+    _attachSocketListeners();
+    if (token != null && token.isNotEmpty) {
+      _token = token;
+      _socketService?.connect(token: token, currentUserId: currentUserId);
+      if (currentUserId != null && currentUserId.isNotEmpty) {
+        _socketService?.joinUserRoom(currentUserId);
+      }
     }
   }
 
   ConversationsService? _service;
+  ChatSocketService? _socketService;
   String? _currentUserId;
+  String? _token;
+  String? get token => _token;
   bool _isDisposed = false;
   Timer? _pollTimer;
   String? _activeChatConvId;
 
+  // Socket event subscriptions
+  StreamSubscription<bool>? _subConnection;
+  StreamSubscription<SocketNewMessageEvent>? _subNewMessage;
+  StreamSubscription<SocketMessageReadEvent>? _subMessageRead;
+  StreamSubscription<SocketReactionEvent>? _subReaction;
+  StreamSubscription<SocketUserPresenceEvent>? _subPresence;
+  StreamSubscription<SocketTypingEvent>? _subTyping;
+
+  // Presence & Typing State
+  final Map<String, String> _userPresenceMap = <String, String>{};
+  final Map<String, dynamic> _userLastActiveMap = <String, dynamic>{};
+  final Map<String, bool> _typingByConvId = <String, bool>{};
+  final Map<String, Timer> _typingResetTimers = <String, Timer>{};
+
+  bool isUserOnline(String? userId, [ConversationModel? conv]) {
+    if (userId != null && userId.isNotEmpty) {
+      if (userId == _currentUserId) return false;
+      final String? status = _userPresenceMap[userId];
+      if (status != null) {
+        final String s = status.toLowerCase().trim();
+        return s == 'online' || s == 'active';
+      }
+      final String clean = userId.startsWith('@') ? userId.substring(1) : userId;
+      final String? statusClean = _userPresenceMap[clean] ?? _userPresenceMap['@$clean'];
+      if (statusClean != null) {
+        final String s = statusClean.toLowerCase().trim();
+        return s == 'online' || s == 'active';
+      }
+    }
+    if (conv != null) {
+      if (conv.participantId != null && conv.participantId == _currentUserId) {
+        return false;
+      }
+      if (conv.participantId != null && _userPresenceMap.containsKey(conv.participantId!)) {
+        final String s = _userPresenceMap[conv.participantId!]!.toLowerCase().trim();
+        return s == 'online' || s == 'active';
+      }
+      if (_userPresenceMap.containsKey(conv.id)) {
+        final String s = _userPresenceMap[conv.id]!.toLowerCase().trim();
+        return s == 'online' || s == 'active';
+      }
+      final String cleanU = conv.username.startsWith('@') ? conv.username.substring(1) : conv.username;
+      if (_userPresenceMap.containsKey(cleanU)) {
+        final String s = _userPresenceMap[cleanU]!.toLowerCase().trim();
+        return s == 'online' || s == 'active';
+      }
+      return conv.isOnline;
+    }
+    return false;
+  }
+
+  String? getUserPresence(String? userId) =>
+      userId != null ? _userPresenceMap[userId] : null;
+
+  String? getUserLastActiveText(String? userId, [ConversationModel? conv]) {
+    dynamic lastActive;
+    if (userId != null && userId.isNotEmpty) {
+      lastActive = _userLastActiveMap[userId];
+    }
+    if (lastActive == null && conv != null) {
+      lastActive = conv.lastActive;
+    }
+    if (lastActive == null) return null;
+
+    DateTime? dt;
+    if (lastActive is DateTime) {
+      dt = lastActive;
+    } else if (lastActive is String) {
+      dt = DateTime.tryParse(lastActive);
+    } else if (lastActive is num) {
+      dt = DateTime.fromMillisecondsSinceEpoch(lastActive.toInt());
+    }
+
+    if (dt != null) {
+      final Duration diff = DateTime.now().difference(dt);
+      final int diffMins = diff.inMinutes;
+      if (diffMins.abs() < 1) {
+        return 'Active just now';
+      } else if (diffMins > 0 && diffMins < 60) {
+        return 'Active ${diffMins}m ago';
+      } else if (diff.inHours > 0 && diff.inHours < 24) {
+        return 'Active ${diff.inHours}h ago';
+      } else if (diff.inDays == 1) {
+        return 'Active yesterday';
+      } else if (diff.inDays > 1 && diff.inDays < 7) {
+        return 'Active ${diff.inDays}d ago';
+      } else if (diff.inDays >= 7) {
+        return 'Active ${(diff.inDays / 7).floor()}w ago';
+      }
+    }
+
+    final String str = lastActive.toString().trim();
+    if (str.isEmpty ||
+        str.toLowerCase() == 'active' ||
+        str.toLowerCase() == 'online' ||
+        str.toLowerCase() == 'offline') {
+      return null;
+    }
+    return str.toLowerCase().startsWith('active') ? str : 'Active $str';
+  }
+
+  bool isConversationTyping(String? convId) {
+    if (convId == null || convId.isEmpty) return false;
+    if (_typingByConvId[convId] == true) return true;
+    for (final ConversationModel c in _conversations) {
+      if (c.id == convId || c.participantId == convId) {
+        if (c.isTyping) return true;
+        if (c.participantId != null &&
+            _typingByConvId[c.participantId!] == true) {
+          return true;
+        }
+        if (_typingByConvId[c.id] == true) return true;
+      }
+    }
+    return false;
+  }
+
   final Set<String> _locallyReadMessageIds = <String>{};
+  final Set<String> _readSentMessageIds = <String>{};
+  final Map<String, String> _localReactionMap = <String, String>{};
   final Map<String, DateTime> _lastReadTimeByConv = <String, DateTime>{};
 
   Future<void> _loadPersistedReadStates() async {
@@ -83,20 +214,39 @@ class MessagesProvider extends ChangeNotifier {
     if (rawMessages.isEmpty) return rawMessages;
     final DateTime? lastReadTime = _lastReadTimeByConv[conversationId];
     return rawMessages.map((ChatMessageModel m) {
-      if (m.isRead) return m;
-      // CRITICAL: Local read states only apply to INCOMING messages (!m.isMe).
-      // A message sent by me (m.isMe) can ONLY be marked as read when the recipient reads it on the server!
-      if (!m.isMe) {
-        if (_locallyReadMessageIds.contains(m.id)) {
-          return m.copyWith(isRead: true);
+      ChatMessageModel processed = m;
+
+      // 1. Preserve optimistic or local reaction so it never vanishes on poll/refresh
+      final String? cachedEmoji = _localReactionMap[m.id];
+      if (cachedEmoji != null &&
+          (processed.reactionEmoji == null || processed.reactionEmoji!.isEmpty)) {
+        processed = processed.copyWith(
+          reactionEmoji: cachedEmoji,
+          reactionCount: (processed.reactionCount ?? 0) > 0
+              ? processed.reactionCount
+              : 1,
+        );
+      }
+
+      if (processed.isRead) return processed;
+
+      // 2. Local read states for INCOMING messages (!m.isMe)
+      if (!processed.isMe) {
+        if (_locallyReadMessageIds.contains(processed.id)) {
+          return processed.copyWith(isRead: true);
         }
         if (lastReadTime != null &&
-            m.createdAt != null &&
-            !m.createdAt!.isAfter(lastReadTime)) {
-          return m.copyWith(isRead: true);
+            processed.createdAt != null &&
+            !processed.createdAt!.isAfter(lastReadTime)) {
+          return processed.copyWith(isRead: true);
+        }
+      } else {
+        // 3. Sent messages read by recipient
+        if (_readSentMessageIds.contains(processed.id)) {
+          return processed.copyWith(isRead: true);
         }
       }
-      return m;
+      return processed;
     }).toList();
   }
 
@@ -126,27 +276,471 @@ class MessagesProvider extends ChangeNotifier {
 
   void setActiveChat(String? conversationId) {
     _activeChatConvId = conversationId;
+    if (conversationId != null && conversationId.isNotEmpty) {
+      joinConversation(conversationId);
+      final int idx = _conversations.indexWhere((ConversationModel c) =>
+          c.id == conversationId || c.participantId == conversationId);
+      if (idx != -1) {
+        final String? pId = _conversations[idx].participantId;
+        if (pId != null && pId.isNotEmpty && pId != conversationId) {
+          joinConversation(pId);
+        }
+      }
+    }
+  }
+
+  void joinConversation(String conversationId) {
+    _socketService?.joinConversation(conversationId);
+  }
+
+  void sendTyping(String conversationId, bool isTyping) {
+    if (conversationId.isEmpty) return;
+    final int idx = _conversations.indexWhere((ConversationModel c) =>
+        c.id == conversationId || c.participantId == conversationId);
+    if (idx != -1) {
+      final ConversationModel c = _conversations[idx];
+      // If user disabled typing indicator for this chat, don't broadcast typing start
+      if (isTyping &&
+          (!isTypingIndicatorEnabled(c.username) ||
+              !isTypingIndicatorEnabled(c.id) ||
+              (c.participantId != null &&
+                  !isTypingIndicatorEnabled(c.participantId!)))) {
+        return;
+      }
+    }
+
+    _socketService?.sendTyping(
+      conversationId: conversationId,
+      isTyping: isTyping,
+      userId: _currentUserId,
+    );
+    if (idx != -1) {
+      final String? pId = _conversations[idx].participantId;
+      if (pId != null && pId.isNotEmpty && pId != conversationId) {
+        _socketService?.sendTyping(
+          conversationId: pId,
+          isTyping: isTyping,
+          userId: _currentUserId,
+        );
+      }
+    }
+  }
+
+  void _attachSocketListeners() {
+    _cancelSocketSubscriptions();
+    if (_socketService == null) return;
+
+    _subConnection =
+        _socketService!.onConnectionChanged.listen((bool isConnected) {
+      if (!isConnected &&
+          _currentUserId != null &&
+          _currentUserId!.isNotEmpty) {
+        final String? fresh = _service?.client.authToken;
+        if (fresh != null &&
+            fresh.isNotEmpty &&
+            fresh != _token &&
+            fresh != _socketService?.token) {
+          debugPrint(
+              '🔄 [MessagesProvider] Found newer token from ApiClient. Reconnecting socket...');
+          _token = fresh;
+          _socketService?.connect(
+            token: fresh,
+            currentUserId: _currentUserId,
+          );
+        }
+      }
+    });
+
+    _subNewMessage =
+        _socketService!.onNewMessage.listen(_handleSocketNewMessage);
+    _subMessageRead =
+        _socketService!.onMessageRead.listen(_handleSocketMessageRead);
+    _subReaction =
+        _socketService!.onReactionAdded.listen(_handleSocketReaction);
+    _subPresence =
+        _socketService!.onUserPresence.listen(_handleSocketPresence);
+    _subTyping = _socketService!.onTyping.listen(_handleSocketTyping);
+  }
+
+  void _cancelSocketSubscriptions() {
+    _subConnection?.cancel();
+    _subConnection = null;
+    _subNewMessage?.cancel();
+    _subNewMessage = null;
+    _subMessageRead?.cancel();
+    _subMessageRead = null;
+    _subReaction?.cancel();
+    _subReaction = null;
+    _subPresence?.cancel();
+    _subPresence = null;
+    _subTyping?.cancel();
+    _subTyping = null;
+  }
+
+  void _handleSocketNewMessage(SocketNewMessageEvent event) {
+    if (event.conversationId.isEmpty || event.messageId.isEmpty) return;
+
+    final String convId = event.conversationId;
+    final List<ChatMessageModel> msgs = List<ChatMessageModel>.from(
+        _messagesByConvId[convId] ?? <ChatMessageModel>[]);
+
+    // 1. Deduplicate if this message ID was already added
+    final bool alreadyExists =
+        msgs.any((ChatMessageModel m) => m.id == event.messageId);
+    if (alreadyExists) return;
+
+    final bool isFromMe = (event.senderId.isNotEmpty &&
+        event.senderId == _currentUserId);
+
+    // 2. Reconcile with optimistic message if sent by me
+    if (isFromMe) {
+      final int tempIdx = msgs.indexWhere((ChatMessageModel m) =>
+          m.id.startsWith('temp_') &&
+          (m.text == event.body || event.body.isEmpty));
+      if (tempIdx != -1) {
+        msgs[tempIdx] = msgs[tempIdx].copyWith(id: event.messageId);
+        _messagesByConvId[convId] = msgs;
+        notifyListeners();
+        return;
+      }
+    }
+
+    // 3. Construct new chat message
+    final bool isRead = isFromMe || _activeChatConvId == convId;
+    final ChatMessageModel newMsg = ChatMessageModel(
+      id: event.messageId,
+      conversationId: convId,
+      senderId: event.senderId,
+      senderUsername: isFromMe ? 'me' : 'User',
+      isMe: isFromMe,
+      timestamp: 'Just now',
+      text: event.body,
+      isRead: isRead,
+      createdAt: DateTime.now(),
+      type: MessageType.text,
+    );
+
+    msgs.add(newMsg);
+    _messagesByConvId[convId] = msgs;
+
+    // 4. If user is currently in this conversation, mark read immediately
+    if (!isFromMe && _activeChatConvId == convId) {
+      _locallyReadMessageIds.add(event.messageId);
+      _lastReadTimeByConv[convId] = DateTime.now();
+      _persistReadStates();
+      _socketService?.markMessageRead(
+        conversationId: convId,
+        messageId: event.messageId,
+      );
+    }
+
+    // 5. Update conversation tile in inbox
+    final int convIdx = _conversations.indexWhere(
+        (ConversationModel c) => c.id == convId || c.participantId == convId);
+    final String prefix = isFromMe ? 'You: ' : '';
+    if (convIdx != -1) {
+      final ConversationModel current = _conversations[convIdx];
+      final int unread = (!isFromMe && _activeChatConvId != convId)
+          ? (current.unreadCount + 1)
+          : 0;
+      _conversations[convIdx] = current.copyWith(
+        lastMessage: '$prefix${event.body}',
+        lastMessageAt: DateTime.now(),
+        timeAgo: 'Just now',
+        unreadCount: unread,
+        messages: msgs,
+        isTyping: false,
+      );
+      final ConversationModel moved = _conversations.removeAt(convIdx);
+      _conversations.insert(0, moved);
+    }
+
+    _sortConversations();
+    notifyListeners();
+  }
+
+  void _handleSocketMessageRead(SocketMessageReadEvent event) {
+    if (event.conversationId.isEmpty) return;
+
+    // Collect all candidate keys that could identify this conversation
+    final Set<String> matchingKeys = <String>{event.conversationId};
+    for (final ConversationModel c in _conversations) {
+      if (c.id == event.conversationId || c.participantId == event.conversationId) {
+        matchingKeys.add(c.id);
+        if (c.participantId != null && c.participantId!.isNotEmpty) {
+          matchingKeys.add(c.participantId!);
+        }
+      }
+    }
+
+    bool anyChanged = false;
+    for (final String key in matchingKeys) {
+      final List<ChatMessageModel>? msgs = _messagesByConvId[key];
+      if (msgs != null && msgs.isNotEmpty) {
+        for (int i = 0; i < msgs.length; i++) {
+          final ChatMessageModel m = msgs[i];
+          // Mark sent messages as read
+          if (m.isMe) {
+            if (event.messageId.isEmpty || m.id == event.messageId) {
+              _readSentMessageIds.add(m.id);
+              if (!m.isRead) {
+                msgs[i] = m.copyWith(isRead: true);
+                anyChanged = true;
+              }
+            }
+          }
+        }
+        if (anyChanged) {
+          _messagesByConvId[key] = List<ChatMessageModel>.from(msgs);
+        }
+      }
+    }
+
+    if (anyChanged) {
+      // Also update conversations list
+      for (int i = 0; i < _conversations.length; i++) {
+        if (matchingKeys.contains(_conversations[i].id) ||
+            matchingKeys.contains(_conversations[i].participantId)) {
+          final List<ChatMessageModel>? updatedMsgs =
+              _messagesByConvId[_conversations[i].id];
+          if (updatedMsgs != null) {
+            _conversations[i] =
+                _conversations[i].copyWith(messages: updatedMsgs);
+          }
+        }
+      }
+      notifyListeners();
+    }
+  }
+
+  void _handleSocketReaction(SocketReactionEvent event) {
+    if (event.messageId.isEmpty) return;
+
+    final Set<String> matchingKeys = <String>{};
+    if (event.conversationId.isNotEmpty) {
+      matchingKeys.add(event.conversationId);
+    }
+    for (final MapEntry<String, List<ChatMessageModel>> entry in _messagesByConvId.entries) {
+      if (entry.value.any((ChatMessageModel m) => m.id == event.messageId)) {
+        matchingKeys.add(entry.key);
+      }
+    }
+    for (final ConversationModel c in _conversations) {
+      if (c.id == event.conversationId ||
+          c.participantId == event.conversationId ||
+          c.messages.any((ChatMessageModel m) => m.id == event.messageId)) {
+        matchingKeys.add(c.id);
+        if (c.participantId != null && c.participantId!.isNotEmpty) {
+          matchingKeys.add(c.participantId!);
+        }
+      }
+    }
+
+    bool anyChanged = false;
+    for (final String key in matchingKeys) {
+      final List<ChatMessageModel>? msgs = _messagesByConvId[key];
+      if (msgs != null && msgs.isNotEmpty) {
+        final int idx = msgs.indexWhere((ChatMessageModel m) => m.id == event.messageId);
+        if (idx != -1) {
+          final List<MessageReactionModel> reactionsList =
+              <MessageReactionModel>[];
+          String? resolvedEmoji;
+
+          if (event.reactions != null) {
+            if (event.reactions is List) {
+              for (final dynamic r in event.reactions as List) {
+                if (r is String && r.trim().isNotEmpty) {
+                  reactionsList.add(MessageReactionModel(emoji: r.trim()));
+                  resolvedEmoji ??= r.trim();
+                } else if (r is Map) {
+                  final MessageReactionModel m = MessageReactionModel.fromJson(r);
+                  reactionsList.add(m);
+                  resolvedEmoji ??= m.emoji;
+                }
+              }
+            } else if (event.reactions is String &&
+                (event.reactions as String).trim().isNotEmpty) {
+              resolvedEmoji = (event.reactions as String).trim();
+              reactionsList.add(
+                  MessageReactionModel(emoji: resolvedEmoji, userId: event.userId));
+            } else if (event.reactions is Map) {
+              final Map map = event.reactions as Map;
+              final String? e =
+                  map['emoji']?.toString() ?? map['reaction']?.toString();
+              if (e != null && e.isNotEmpty) {
+                resolvedEmoji = e;
+                reactionsList.add(MessageReactionModel.fromJson(map));
+              }
+            }
+          }
+
+          if (event.emoji != null && event.emoji!.isNotEmpty) {
+            resolvedEmoji ??= event.emoji;
+            if (!reactionsList
+                .any((MessageReactionModel r) => r.emoji == event.emoji)) {
+              reactionsList.add(MessageReactionModel(
+                  emoji: event.emoji!, userId: event.userId));
+            }
+          }
+
+          final bool isCleared = event.isRemoved;
+
+          if (isCleared) {
+            _localReactionMap.remove(event.messageId);
+            msgs[idx] = msgs[idx].copyWith(clearReaction: true);
+            _messagesByConvId[key] = List<ChatMessageModel>.from(msgs);
+            anyChanged = true;
+          } else {
+            final String? effectiveEmoji = resolvedEmoji ??
+                (reactionsList.isNotEmpty ? reactionsList.first.emoji : null) ??
+                _localReactionMap[event.messageId] ??
+                msgs[idx].reactionEmoji;
+
+            if (effectiveEmoji != null && effectiveEmoji.isNotEmpty) {
+              _localReactionMap[event.messageId] = effectiveEmoji;
+              msgs[idx] = msgs[idx].copyWith(
+                reactions:
+                    reactionsList.isNotEmpty ? reactionsList : msgs[idx].reactions,
+                reactionEmoji: effectiveEmoji,
+                reactionCount: reactionsList.isNotEmpty
+                    ? reactionsList.length
+                    : (msgs[idx].reactionCount ?? 1),
+              );
+              _messagesByConvId[key] = List<ChatMessageModel>.from(msgs);
+              anyChanged = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (anyChanged) {
+      for (int i = 0; i < _conversations.length; i++) {
+        if (matchingKeys.contains(_conversations[i].id) ||
+            matchingKeys.contains(_conversations[i].participantId)) {
+          final List<ChatMessageModel>? updatedMsgs =
+              _messagesByConvId[_conversations[i].id];
+          if (updatedMsgs != null) {
+            _conversations[i] =
+                _conversations[i].copyWith(messages: updatedMsgs);
+          }
+        }
+      }
+      notifyListeners();
+    }
+  }
+
+  void _handleSocketPresence(SocketUserPresenceEvent event) {
+    if (event.userId.isEmpty) return;
+    if (event.userId == _currentUserId) return;
+
+    final String presenceVal = event.isOnline ? 'online' : 'offline';
+    _userPresenceMap[event.userId] = presenceVal;
+    if (event.lastActive != null) {
+      _userLastActiveMap[event.userId] = event.lastActive;
+    }
+
+    final String cleanUserId = event.userId.startsWith('@')
+        ? event.userId.substring(1)
+        : event.userId;
+    _userPresenceMap[cleanUserId] = presenceVal;
+    _userPresenceMap['@$cleanUserId'] = presenceVal;
+
+    for (int i = 0; i < _conversations.length; i++) {
+      final ConversationModel c = _conversations[i];
+      final String cleanU =
+          c.username.startsWith('@') ? c.username.substring(1) : c.username;
+      if (c.participantId == event.userId ||
+          c.id == event.userId ||
+          cleanU.toLowerCase() == cleanUserId.toLowerCase()) {
+        _conversations[i] = c.copyWith(
+          isOnline: event.isOnline,
+          lastActive: event.lastActive ?? c.lastActive,
+        );
+        if (c.participantId != null && c.participantId!.isNotEmpty) {
+          _userPresenceMap[c.participantId!] = presenceVal;
+        }
+        _userPresenceMap[c.id] = presenceVal;
+      }
+    }
+    notifyListeners();
+  }
+
+  void _handleSocketTyping(SocketTypingEvent event) {
+    if (event.conversationId.isEmpty && event.userId.isEmpty) return;
+    if (event.userId.isNotEmpty && event.userId == _currentUserId) return;
+
+    final String convKey = event.conversationId;
+    if (convKey.isNotEmpty) {
+      _typingByConvId[convKey] = event.isTyping;
+    }
+    if (event.userId.isNotEmpty) {
+      _typingByConvId[event.userId] = event.isTyping;
+      final String cleanU = event.userId.startsWith('@')
+          ? event.userId.substring(1)
+          : event.userId;
+      _typingByConvId[cleanU] = event.isTyping;
+      _typingByConvId['@$cleanU'] = event.isTyping;
+    }
+
+    final int idx = _conversations.indexWhere((ConversationModel c) =>
+        (convKey.isNotEmpty &&
+            (c.id == convKey || c.participantId == convKey)) ||
+        (event.userId.isNotEmpty &&
+            (c.participantId == event.userId ||
+                c.id == event.userId ||
+                c.username == event.userId ||
+                c.username == '@${event.userId}')));
+
+    if (idx != -1) {
+      final ConversationModel target = _conversations[idx];
+      _conversations[idx] = target.copyWith(isTyping: event.isTyping);
+      _typingByConvId[target.id] = event.isTyping;
+      if (target.participantId != null && target.participantId!.isNotEmpty) {
+        _typingByConvId[target.participantId!] = event.isTyping;
+      }
+      if (target.username.isNotEmpty) {
+        _typingByConvId[target.username] = event.isTyping;
+      }
+      notifyListeners();
+    } else {
+      notifyListeners();
+    }
+
+    if (event.isTyping) {
+      final String timerKey = convKey.isNotEmpty ? convKey : event.userId;
+      _typingResetTimers[timerKey]?.cancel();
+      _typingResetTimers[timerKey] =
+          Timer(const Duration(milliseconds: 3500), () {
+        if (convKey.isNotEmpty) {
+          _typingByConvId[convKey] = false;
+        }
+        if (event.userId.isNotEmpty) {
+          _typingByConvId[event.userId] = false;
+        }
+        final int targetIdx = _conversations.indexWhere((ConversationModel c) =>
+            (convKey.isNotEmpty &&
+                (c.id == convKey || c.participantId == convKey)) ||
+            (event.userId.isNotEmpty &&
+                (c.participantId == event.userId || c.id == event.userId)));
+        if (targetIdx != -1) {
+          final ConversationModel target = _conversations[targetIdx];
+          _conversations[targetIdx] = target.copyWith(isTyping: false);
+          _typingByConvId[target.id] = false;
+          if (target.participantId != null &&
+              target.participantId!.isNotEmpty) {
+            _typingByConvId[target.participantId!] = false;
+          }
+        }
+        notifyListeners();
+      });
+    }
   }
 
   void startPolling() {
-    if (_pollTimer != null && _pollTimer!.isActive) return;
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
-      if (_isDisposed) return;
-      if (_currentUserId == null || _currentUserId!.isEmpty) return;
-
-      // 1. If user is currently in a chat, poll newest messages for this chat
-      if (_activeChatConvId != null && _activeChatConvId!.isNotEmpty) {
-        try {
-          await loadMessages(_activeChatConvId!, silent: true);
-        } catch (_) {}
-      }
-
-      // 2. Poll and sync all conversations and their latest messages
-      try {
-        await refreshConversationsSilently();
-      } catch (_) {}
-    });
+    // Disabled: Real-time messaging, presence, reactions, and typing are all handled via Socket.IO.
+    // Periodic HTTP polling is completely turned off to eliminate redundant background API calls.
+    stopPolling();
   }
 
   void stopPolling() {
@@ -158,6 +752,11 @@ class MessagesProvider extends ChangeNotifier {
   void dispose() {
     _isDisposed = true;
     stopPolling();
+    _cancelSocketSubscriptions();
+    for (final Timer t in _typingResetTimers.values) {
+      t.cancel();
+    }
+    _typingResetTimers.clear();
     super.dispose();
   }
 
@@ -177,22 +776,46 @@ class MessagesProvider extends ChangeNotifier {
     }
   }
 
-  void updateAuth({String? userId, ConversationsService? service}) {
+  void updateAuth({
+    String? userId,
+    ConversationsService? service,
+    ChatSocketService? socketService,
+    String? token,
+  }) {
     bool shouldReload = false;
     if (userId != null && userId != _currentUserId) {
       _currentUserId = userId;
       shouldReload = true;
       _loadPersistedReadStates();
+      _socketService?.joinUserRoom(userId);
     }
     if (service != null && service != _service) {
       _service = service;
       shouldReload = true;
+    }
+    if (socketService != null && socketService != _socketService) {
+      _socketService = socketService;
+      _attachSocketListeners();
+    }
+    final String? effectiveToken = (token != null && token.isNotEmpty)
+        ? token
+        : _service?.client.authToken;
+    if (effectiveToken != null && effectiveToken.isNotEmpty) {
+      if (effectiveToken != _token || !(_socketService?.isConnected ?? false)) {
+        _token = effectiveToken;
+        _socketService?.connect(
+            token: effectiveToken, currentUserId: _currentUserId);
+      }
+      if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+        _socketService?.joinUserRoom(_currentUserId!);
+      }
     }
     if (userId == null || userId.isEmpty) {
       _currentUserId = null;
       _conversations.clear();
       _messagesByConvId.clear();
       _messageRequests.clear();
+      _socketService?.disconnect();
       stopPolling();
       notifyListeners();
     } else {
@@ -229,8 +852,6 @@ class MessagesProvider extends ChangeNotifier {
   }
   bool isRestricted(String username) => _restrictedUsers[username] ?? false;
   bool isBlocked(String username) => _blockedUsers[username] ?? false;
-  bool isTypingIndicatorEnabled(String username) =>
-      _typingIndicatorEnabled[username] ?? true;
 
   void toggleMute(String username) {
     final bool current = isMuted(username);
@@ -257,8 +878,26 @@ class MessagesProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleTypingIndicator(String username, bool enabled) {
-    _typingIndicatorEnabled[username] = enabled;
+  bool isTypingIndicatorEnabled(String? key) {
+    if (key == null || key.isEmpty) return true;
+    if (_typingIndicatorEnabled.containsKey(key)) {
+      return _typingIndicatorEnabled[key]!;
+    }
+    final String clean = key.startsWith('@') ? key.substring(1) : key;
+    if (_typingIndicatorEnabled.containsKey(clean)) {
+      return _typingIndicatorEnabled[clean]!;
+    }
+    if (_typingIndicatorEnabled.containsKey('@$clean')) {
+      return _typingIndicatorEnabled['@$clean']!;
+    }
+    return true;
+  }
+
+  void toggleTypingIndicator(String key, bool enabled) {
+    _typingIndicatorEnabled[key] = enabled;
+    final String clean = key.startsWith('@') ? key.substring(1) : key;
+    _typingIndicatorEnabled[clean] = enabled;
+    _typingIndicatorEnabled['@$clean'] = enabled;
     notifyListeners();
   }
 
@@ -473,11 +1112,19 @@ class MessagesProvider extends ChangeNotifier {
           await _service!.getConversations(currentUserId: _currentUserId);
       _conversations.clear();
       _conversations.addAll(items);
-      // Sync muted map
+      // Sync muted map, socket rooms, and presence
       for (final ConversationModel c in items) {
         if (c.isMuted) {
           _mutedUsers[c.username] = true;
           _mutedUsers[c.id] = true;
+        }
+        if (c.id.isNotEmpty) {
+          _socketService?.joinConversation(c.id);
+        }
+        if (c.participantId != null && c.participantId!.isNotEmpty) {
+          if (c.lastActive != null) {
+            _userLastActiveMap[c.participantId!] = c.lastActive;
+          }
         }
       }
 
@@ -995,31 +1642,12 @@ class MessagesProvider extends ChangeNotifier {
           }
         }
 
-        final ChatMessageModel? serverMsg = await _service!.sendMessage(
+        // Emit through socket gateway (pure socket per backend spec)
+        _socketService?.sendMessage(
           conversationId: targetConvId,
+          text: trimmed,
           body: trimmed,
-          currentUserId: _currentUserId,
         );
-
-        if (serverMsg != null) {
-          final List<ChatMessageModel> targetMsgs =
-              _messagesByConvId[targetConvId] ?? currentMsgs;
-          final int msgIdx =
-              targetMsgs.indexWhere((ChatMessageModel m) => m.id == tempId);
-          if (msgIdx != -1) {
-            targetMsgs[msgIdx] = serverMsg;
-            _messagesByConvId[targetConvId] =
-                List<ChatMessageModel>.from(targetMsgs);
-            final int cIdx = _conversations.indexWhere((c) => c.id == targetConvId);
-            if (cIdx != -1) {
-              _conversations[cIdx] = _conversations[cIdx].copyWith(
-                lastMessageAt: serverMsg.createdAt ?? DateTime.now(),
-              );
-              _sortConversations();
-            }
-            notifyListeners();
-          }
-        }
       } catch (e) {
         debugPrint('Error sending message: $e');
       } finally {
@@ -1040,12 +1668,10 @@ class MessagesProvider extends ChangeNotifier {
       }
     }
 
-    if (_service != null) {
-      await _service!.markMessageRead(
-        conversationId: conversationId,
-        messageId: messageId,
-      );
-    }
+    _socketService?.markMessageRead(
+      conversationId: conversationId,
+      messageId: messageId,
+    );
   }
 
   // ── Mark All Messages Read In Conversation ─────────────────────────────────
@@ -1081,57 +1707,12 @@ class MessagesProvider extends ChangeNotifier {
     _persistReadStates();
     notifyListeners();
 
-    // 3. Sync read status with backend
-    if (_service != null &&
-        conversationId.isNotEmpty &&
-        !conversationId.startsWith('temp_')) {
-      _service!.markConversationRead(conversationId);
-      await Future.wait(
-        unreadIds
-            .where((String id) => !id.startsWith('temp_') && !id.startsWith('m_'))
-            .map((String msgId) => _service!.markMessageRead(
-                  conversationId: conversationId,
-                  messageId: msgId,
-                )),
+    // 3. Emit message_read on socket for each unread message
+    for (final String msgId in unreadIds) {
+      _socketService?.markMessageRead(
+        conversationId: conversationId,
+        messageId: msgId,
       );
-
-      // If messages weren't loaded in memory yet, fetch and mark unread items
-      if (msgs == null || msgs.isEmpty) {
-        try {
-          final List<ChatMessageModel> fetched = await _service!.getMessages(
-            conversationId: conversationId,
-            currentUserId: _currentUserId,
-          );
-          if (fetched.isNotEmpty) {
-            final List<ChatMessageModel> updatedList = <ChatMessageModel>[];
-            final List<Future<bool>> markTasks = <Future<bool>>[];
-            for (final ChatMessageModel m in fetched) {
-              if (!m.isMe) {
-                _locallyReadMessageIds.add(m.id);
-                if (!m.isRead && !m.id.startsWith('temp_') && !m.id.startsWith('m_')) {
-                  markTasks.add(_service!.markMessageRead(
-                    conversationId: conversationId,
-                    messageId: m.id,
-                  ));
-                }
-                updatedList.add(m.copyWith(isRead: true));
-              } else {
-                updatedList.add(m);
-              }
-            }
-            if (markTasks.isNotEmpty) {
-              await Future.wait(markTasks);
-            }
-            _messagesByConvId[conversationId] = updatedList;
-            _persistReadStates();
-            if (convIdx != -1) {
-              _conversations[convIdx] =
-                  _conversations[convIdx].copyWith(messages: updatedList, unreadCount: 0);
-              notifyListeners();
-            }
-          }
-        } catch (_) {}
-      }
     }
   }
 
@@ -1158,13 +1739,11 @@ class MessagesProvider extends ChangeNotifier {
       notifyListeners();
     }
 
-    // 2. API Sync
-    if (_service != null) {
-      await _service!.unsendMessage(
-        conversationId: conversationId,
-        messageId: messageId,
-      );
-    }
+    // 2. Socket emit
+    _socketService?.unsendMessage(
+      conversationId: conversationId,
+      messageId: messageId,
+    );
   }
 
   void deleteMessage(String conversationId, String messageId) {
@@ -1177,47 +1756,132 @@ class MessagesProvider extends ChangeNotifier {
     String messageId,
     String emoji,
   ) async {
-    final List<ChatMessageModel>? msgs = _messagesByConvId[conversationId];
-    if (msgs == null) return;
+    // 1. Locate all conversation keys where this message is present
+    final Set<String> targetKeys = <String>{};
+    if (conversationId.isNotEmpty) {
+      targetKeys.add(conversationId);
+    }
+    for (final MapEntry<String, List<ChatMessageModel>> entry in _messagesByConvId.entries) {
+      if (entry.value.any((ChatMessageModel m) => m.id == messageId)) {
+        targetKeys.add(entry.key);
+      }
+    }
+    for (final ConversationModel c in _conversations) {
+      if (c.id == conversationId ||
+          c.participantId == conversationId ||
+          c.messages.any((ChatMessageModel m) => m.id == messageId)) {
+        targetKeys.add(c.id);
+        if (c.participantId != null && c.participantId!.isNotEmpty) {
+          targetKeys.add(c.participantId!);
+        }
+      }
+    }
 
-    final int idx = msgs.indexWhere((ChatMessageModel m) => m.id == messageId);
-    if (idx == -1) return;
+    // Find target message
+    ChatMessageModel? targetMessage;
+    for (final String key in targetKeys) {
+      final List<ChatMessageModel>? msgs = _messagesByConvId[key];
+      if (msgs != null) {
+        final int idx = msgs.indexWhere((ChatMessageModel m) => m.id == messageId);
+        if (idx != -1) {
+          targetMessage = msgs[idx];
+          break;
+        }
+      }
+    }
 
-    final ChatMessageModel target = msgs[idx];
-    final bool alreadyReactedWithEmoji = target.reactionEmoji == emoji;
+    if (targetMessage == null) {
+      for (final ConversationModel c in _conversations) {
+        final int idx = c.messages.indexWhere((ChatMessageModel m) => m.id == messageId);
+        if (idx != -1) {
+          targetMessage = c.messages[idx];
+          _messagesByConvId[c.id] = List<ChatMessageModel>.from(c.messages);
+          targetKeys.add(c.id);
+          break;
+        }
+      }
+    }
 
-    // 1. Optimistic update
+    if (targetMessage == null) {
+      debugPrint('⚠️ [MessagesProvider] toggleReaction: message $messageId not found.');
+      return;
+    }
+
+    final bool alreadyReactedWithEmoji = targetMessage.reactionEmoji == emoji;
+
     final ChatMessageModel updated;
     if (alreadyReactedWithEmoji) {
-      updated = target.copyWith(
-        reactionEmoji: null,
-        reactionCount: (target.reactionCount ?? 1) > 1
-            ? (target.reactionCount! - 1)
-            : null,
+      updated = targetMessage.copyWith(
+        clearReaction: true,
       );
+      _localReactionMap.remove(messageId);
     } else {
-      updated = target.copyWith(
+      updated = targetMessage.copyWith(
         reactionEmoji: emoji,
-        reactionCount: (target.reactionCount ?? 0) + 1,
+        reactionCount: (targetMessage.reactionCount ?? 0) + 1,
       );
+      _localReactionMap[messageId] = emoji;
     }
-    msgs[idx] = updated;
-    _messagesByConvId[conversationId] = List<ChatMessageModel>.from(msgs);
+
+    // Apply to all candidate keys in memory
+    for (final String key in targetKeys) {
+      final List<ChatMessageModel>? msgs = _messagesByConvId[key];
+      if (msgs != null) {
+        final int idx = msgs.indexWhere((ChatMessageModel m) => m.id == messageId);
+        if (idx != -1) {
+          msgs[idx] = updated;
+          _messagesByConvId[key] = List<ChatMessageModel>.from(msgs);
+        }
+      }
+    }
+
+    // Update in _conversations
+    for (int i = 0; i < _conversations.length; i++) {
+      if (targetKeys.contains(_conversations[i].id) ||
+          targetKeys.contains(_conversations[i].participantId) ||
+          _conversations[i].messages.any((ChatMessageModel m) => m.id == messageId)) {
+        final List<ChatMessageModel> convMsgs =
+            List<ChatMessageModel>.from(_conversations[i].messages);
+        final int mIdx = convMsgs.indexWhere((ChatMessageModel m) => m.id == messageId);
+        if (mIdx != -1) {
+          convMsgs[mIdx] = updated;
+        }
+        _conversations[i] = _conversations[i].copyWith(
+          messages: _messagesByConvId[_conversations[i].id] ?? convMsgs,
+        );
+      }
+    }
+
     notifyListeners();
 
-    // 2. API Sync
-    if (_service != null) {
+    // 2. Resolve best backend conversationId
+    String backendConvId = conversationId;
+    final int foundIdx = _conversations.indexWhere((ConversationModel c) =>
+        c.id == conversationId ||
+        c.participantId == conversationId ||
+        c.messages.any((ChatMessageModel m) => m.id == messageId));
+    if (foundIdx != -1) {
+      final String candId = _conversations[foundIdx].id;
+      if (candId.isNotEmpty && !candId.startsWith('temp_')) {
+        backendConvId = candId;
+      }
+    }
+
+    // 3. Socket emit (reactions strictly via socket per backend spec)
+    if (backendConvId.isNotEmpty) {
       if (alreadyReactedWithEmoji) {
-        await _service!.removeReaction(
-          conversationId: conversationId,
+        _socketService?.removeReaction(
+          conversationId: backendConvId,
           messageId: messageId,
           emoji: emoji,
+          userId: _currentUserId,
         );
       } else {
-        await _service!.addReaction(
-          conversationId: conversationId,
+        _socketService?.addReaction(
+          conversationId: backendConvId,
           messageId: messageId,
           emoji: emoji,
+          userId: _currentUserId,
         );
       }
     }
@@ -1225,6 +1889,77 @@ class MessagesProvider extends ChangeNotifier {
 
   void addReaction(String conversationId, String messageId, String emoji) {
     toggleReaction(conversationId, messageId, emoji);
+  }
+
+  // ── Share Post / Reel ──────────────────────────────────────────────────────
+  Future<bool> sharePost({
+    required String sharedPostId,
+    List<String>? conversationIds,
+    List<String>? recipientUserIds,
+    String? message,
+    String? contentType,
+  }) async {
+    try {
+      final Set<String> targetConvs = <String>{};
+      if (conversationIds != null) {
+        targetConvs.addAll(conversationIds.where((String id) => id.isNotEmpty));
+      }
+      if (recipientUserIds != null) {
+        for (final String uId in recipientUserIds) {
+          if (uId.isEmpty) continue;
+          final int cIdx = _conversations.indexWhere((ConversationModel c) =>
+              c.participantId == uId || c.id == uId);
+          if (cIdx != -1 &&
+              _conversations[cIdx].id.isNotEmpty &&
+              !_conversations[cIdx].id.startsWith('temp_')) {
+            targetConvs.add(_conversations[cIdx].id);
+          } else if (_service != null) {
+            try {
+              final ConversationModel? created =
+                  await _service!.startConversation(
+                participantId: uId,
+                currentUserId: _currentUserId,
+              );
+              if (created != null && created.id.isNotEmpty) {
+                targetConvs.add(created.id);
+                final int exist = _conversations
+                    .indexWhere((ConversationModel c) => c.id == created.id);
+                if (exist != -1) {
+                  _conversations[exist] = created;
+                } else {
+                  _conversations.insert(0, created);
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      for (final String cId in targetConvs) {
+        _socketService?.sendMessage(
+          conversationId: cId,
+          sharedPostId: sharedPostId,
+          text: message,
+          body: message,
+        );
+
+        final int idx =
+            _conversations.indexWhere((ConversationModel c) => c.id == cId);
+        if (idx != -1) {
+          _conversations[idx] = _conversations[idx].copyWith(
+            lastMessage: 'Shared a post',
+            lastMessageAt: DateTime.now(),
+            timeAgo: 'Just now',
+          );
+        }
+      }
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('❌ [MessagesProvider] Error in sharePost via socket: $e');
+      return false;
+    }
   }
 
   // ── Mute / Unmute Conversation ─────────────────────────────────────────────
@@ -1253,13 +1988,11 @@ class MessagesProvider extends ChangeNotifier {
     _mutedUsers[conversationId] = true;
     notifyListeners();
 
-    // 2. API Sync
-    if (_service != null && targetId.isNotEmpty && !targetId.startsWith('temp_')) {
-      await _service!.muteConversation(
-        conversationId: targetId,
-        duration: duration,
-      );
-    }
+    // 2. Socket emit
+    _socketService?.muteConversation(
+      conversationId: targetId,
+      duration: duration,
+    );
   }
 
   Future<void> unmuteConversation(String conversationId) async {
@@ -1288,10 +2021,8 @@ class MessagesProvider extends ChangeNotifier {
     _mutedUsers.remove('@$cleanConv');
     notifyListeners();
 
-    // 2. API Sync
-    if (_service != null && targetId.isNotEmpty && !targetId.startsWith('temp_')) {
-      await _service!.unmuteConversation(targetId);
-    }
+    // 2. Socket emit
+    _socketService?.unmuteConversation(targetId);
   }
 
   // ── Delete Conversation For Self ───────────────────────────────────────────
@@ -1388,5 +2119,13 @@ class MessagesProvider extends ChangeNotifier {
     }
     _sortConversations();
     notifyListeners();
+
+    // Socket emit
+    _socketService?.sendMessage(
+      conversationId: conversationId,
+      mediaRef: imageFilePath ?? imageAsset,
+      text: '',
+      body: '',
+    );
   }
 }

@@ -265,6 +265,63 @@ class UserRelationshipService {
     }
   }
 
+  // ── Restrict & Unrestrict ──────────────────────────────────────────────────
+
+  /// Restrict User (A restricts B): POST /users/:id/restrict
+  Future<bool> restrictUser(String userId) async {
+    if (userId.isEmpty) return false;
+    try {
+      debugPrint('🚀 [UserRelationshipService] Restrict user: POST ${ApiEndpoints.userRestrict(userId)}');
+      await _client.post(ApiEndpoints.userRestrict(userId));
+      return true;
+    } on ApiException catch (e) {
+      debugPrint('❌ [UserRelationshipService] Restrict user API error: ${e.message}');
+      rethrow;
+    } catch (e) {
+      debugPrint('❌ [UserRelationshipService] Restrict user error: $e');
+      rethrow;
+    }
+  }
+
+  /// Unrestrict User (A unrestricts B): DELETE /users/:id/restrict
+  Future<bool> unrestrictUser(String userId) async {
+    if (userId.isEmpty) return false;
+    try {
+      debugPrint('🚀 [UserRelationshipService] Unrestrict user: DELETE ${ApiEndpoints.userRestrict(userId)}');
+      await _client.delete(ApiEndpoints.userRestrict(userId));
+      return true;
+    } on ApiException catch (e) {
+      debugPrint('❌ [UserRelationshipService] Unrestrict user API error: ${e.message}');
+      rethrow;
+    } catch (e) {
+      debugPrint('❌ [UserRelationshipService] Unrestrict user error: $e');
+      rethrow;
+    }
+  }
+
+  /// List current user's restricted accounts: GET /users/me/restricted
+  Future<List<RestrictedAccountItem>> getRestrictedAccounts() async {
+    try {
+      debugPrint('🚀 [UserRelationshipService] Get restricted: GET ${ApiEndpoints.userRestricted}');
+      final dynamic data = await _client.get(ApiEndpoints.userRestricted);
+      final List<dynamic> list = _extractList(data, <String>[
+        'restricted',
+        'restrictedUsers',
+        'users',
+        'items',
+        'accounts',
+        'data',
+      ]);
+      return list
+          .whereType<Map<String, dynamic>>()
+          .map(RestrictedAccountItem.fromJson)
+          .toList();
+    } catch (e) {
+      debugPrint('⚠️ [UserRelationshipService] Get restricted accounts error: $e');
+      return <RestrictedAccountItem>[];
+    }
+  }
+
   // ── Mute & Unmute ─────────────────────────────────────────────────────────
 
   /// Mute User (A mutes B, posts scope, duration): POST /users/:id/mute

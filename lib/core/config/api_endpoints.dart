@@ -47,6 +47,12 @@ abstract final class ApiEndpoints {
   /// Block user: POST /users/:id/block · Unblock: DELETE /users/:id/block
   static String userBlock(String userId) => '/users/$userId/block';
 
+  /// Restrict user: POST /users/:id/restrict · Unrestrict: DELETE /users/:id/restrict
+  static String userRestrict(String userId) => '/users/$userId/restrict';
+
+  /// List current user's restricted accounts: GET /users/me/restricted
+  static const String userRestricted = '/users/me/restricted';
+
   /// Mute user: POST /users/:id/mute · Unmute: DELETE /users/:id/mute
   static String userMute(String userId) => '/users/$userId/mute';
 
@@ -195,6 +201,28 @@ abstract final class ApiEndpoints {
   /// List / create communities. GET / POST /communities
   static const String communities = '/communities';
 
+  /// Communities to Explore: GET /communities/explore
+  static String communitiesExplore({
+    bool excludeJoined = true,
+    String sort = 'trending',
+    String? category,
+    int page = 1,
+    int limit = 10,
+  }) {
+    final Map<String, String> query = <String, String>{
+      'excludeJoined': excludeJoined.toString(),
+      'sort': sort,
+      'page': page.toString(),
+      'limit': limit.toString(),
+    };
+    if (category != null && category.isNotEmpty) {
+      query['category'] = category;
+    }
+    final String queryStr =
+        query.entries.map((MapEntry<String, String> e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&');
+    return '/communities/explore?$queryStr';
+  }
+
   /// Batch join communities. POST /communities/join
   static const String joinCommunities = '/communities/join';
 
@@ -293,6 +321,9 @@ abstract final class ApiEndpoints {
   // ── Conversations & Messages ───────────────────────────────────────────────
   /// List conversations or Start conversation: GET / POST /conversations
   static const String conversations = '/conversations';
+
+  /// Fan-out share post/reel across conversations or recipients: POST /conversations/share
+  static const String conversationShare = '/conversations/share';
 
   /// Clear/delete conversation for self: DELETE /conversations/:id
   static String conversation(String id) => '/conversations/$id';

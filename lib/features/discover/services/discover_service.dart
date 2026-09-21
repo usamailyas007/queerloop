@@ -110,6 +110,45 @@ class DiscoverService {
     }
   }
 
+  // ── Explore Communities ───────────────────────────────────────────────────
+  /// GET /communities/explore?excludeJoined=true&sort=trending&page=1&limit=10
+  Future<List<DiscoverCommunity>> getExploreCommunities({
+    bool excludeJoined = true,
+    String sort = 'trending',
+    String? category,
+    int page = 1,
+    int limit = 10,
+  }) async {
+    try {
+      final String url = ApiEndpoints.communitiesExplore(
+        excludeJoined: excludeJoined,
+        sort: sort,
+        category: category,
+        page: page,
+        limit: limit,
+      );
+      debugPrint('🚀 [DiscoverService] Fetching explore communities: GET $url');
+      final dynamic res = await _client.get(url, useCache: false);
+      final List<dynamic> list = _extractList(res, keys: <String>[
+        'data',
+        'communities',
+        'items',
+        'results',
+      ]);
+      return list
+          .whereType<Map<String, dynamic>>()
+          .map(DiscoverCommunity.fromJson)
+          .toList();
+    } on ApiException catch (e) {
+      debugPrint('❌ [DiscoverService] getExploreCommunities error: $e');
+      // Fallback to getCommunities if explore endpoint is not yet active
+      return getCommunities();
+    } catch (e, stack) {
+      debugPrint('❌ [DiscoverService] getExploreCommunities unexpected: $e\n$stack');
+      return getCommunities();
+    }
+  }
+
   static final Map<String, Map<String, String>> _mediaStatusCache =
       <String, Map<String, String>>{};
 

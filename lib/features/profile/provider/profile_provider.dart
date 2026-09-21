@@ -51,6 +51,9 @@ class ProfileProvider extends ChangeNotifier {
   List<BlockedAccountItem> _blockedAccounts = <BlockedAccountItem>[];
   bool _isLoadingBlocked = false;
 
+  List<RestrictedAccountItem> _restrictedAccounts = <RestrictedAccountItem>[];
+  bool _isLoadingRestricted = false;
+
   List<MutedAccountItem> _mutedAccounts = <MutedAccountItem>[];
   bool _isLoadingMuted = false;
 
@@ -121,6 +124,9 @@ class ProfileProvider extends ChangeNotifier {
 
   List<BlockedAccountItem> get blockedAccounts => _blockedAccounts;
   bool get isLoadingBlocked => _isLoadingBlocked;
+
+  List<RestrictedAccountItem> get restrictedAccounts => _restrictedAccounts;
+  bool get isLoadingRestricted => _isLoadingRestricted;
 
   List<MutedAccountItem> get mutedAccounts => _mutedAccounts;
   bool get isLoadingMuted => _isLoadingMuted;
@@ -914,6 +920,66 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
+  // ── Restricted Accounts Management ─────────────────────────────────────────
+
+  Future<void> loadRestrictedAccounts({bool forceRefresh = false}) async {
+    _isLoadingRestricted = true;
+    notifyListeners();
+    try {
+      _restrictedAccounts = await _relationshipService.getRestrictedAccounts();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to load restricted accounts: $e');
+    } finally {
+      _isLoadingRestricted = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> restrictUser(
+    String userId, {
+    String? username,
+    String? displayName,
+    String? avatarUrl,
+  }) async {
+    try {
+      final bool success = await _relationshipService.restrictUser(userId);
+      if (success) {
+        final String effectiveUsername = username ?? 'user';
+        if (!_restrictedAccounts.any((RestrictedAccountItem a) => a.userId == userId)) {
+          _restrictedAccounts.insert(
+            0,
+            RestrictedAccountItem(
+              userId: userId,
+              username: effectiveUsername,
+              displayName: displayName ?? effectiveUsername,
+              avatarUrl: avatarUrl,
+              restrictedAt: DateTime.now(),
+            ),
+          );
+        }
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to restrict user $userId: $e');
+      return false;
+    }
+  }
+
+  Future<bool> unrestrictUser(String userId) async {
+    try {
+      final bool success = await _relationshipService.unrestrictUser(userId);
+      if (success) {
+        _restrictedAccounts.removeWhere((RestrictedAccountItem a) => a.userId == userId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to unrestrict user $userId: $e');
+      return false;
+    }
+  }
+
   // ── Muted Accounts Management ─────────────────────────────────────────────
 
   Future<void> loadMutedAccounts({bool forceRefresh = false}) async {
@@ -1026,21 +1092,26 @@ class ProfileProvider extends ChangeNotifier {
 
   // ── Followers & Following Operations ──────────────────────────────────────
 
-  Future<List<UserRelationItem>> loadFollowers(String userId) async {
+  Future<List<UserRelationItem>> loadFollowers([String? userId]) async {
+    final String targetId = (userId != null && userId.isNotEmpty)
+        ? userId
+        : (_profile?.id ?? _cachedUserId ?? '');
+    if (targetId.isEmpty) return _followers;
+
     _isLoadingRelations = true;
     notifyListeners();
     try {
       final List<UserRelationItem> items =
-          await _relationshipService.getFollowers(userId);
+          await _relationshipService.getFollowers(targetId);
       _followers = items;
-      if (_profile != null) {
+      if (_profile != null && (userId == null || userId == _profile!.id)) {
         final int current = _profile!.followersCount ?? 0;
         final int updated = items.length > current ? items.length : current;
         _profile = _profile!.copyWith(followersCount: updated);
       }
       return items;
     } catch (e) {
-      debugPrint('⚠️ [ProfileProvider] Failed to load followers for $userId: $e');
+      debugPrint('⚠️ [ProfileProvider] Failed to load followers for $targetId: $e');
       return <UserRelationItem>[];
     } finally {
       _isLoadingRelations = false;
@@ -1048,12 +1119,17 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
-  Future<List<UserRelationItem>> loadFollowing(String userId) async {
+  Future<List<UserRelationItem>> loadFollowing([String? userId]) async {
+    final String targetId = (userId != null && userId.isNotEmpty)
+        ? userId
+        : (_profile?.id ?? _cachedUserId ?? '');
+    if (targetId.isEmpty) return _following;
+
     _isLoadingRelations = true;
     notifyListeners();
     try {
       final List<UserRelationItem> items =
-          await _relationshipService.getFollowing(userId);
+          await _relationshipService.getFollowing(targetId);
       _following = items;
       for (final UserRelationItem u in items) {
         if (u.userId.trim().isNotEmpty) {

@@ -499,14 +499,21 @@ class DiscoverProvider extends ChangeNotifier {
   bool _isLoadingCommunities = false;
   bool get isLoadingCommunities => _isLoadingCommunities;
 
-  Future<void> fetchCommunities() async {
+  Future<void> fetchCommunities({
+    bool excludeJoined = true,
+    String sort = 'trending',
+  }) async {
     if (_discoverService == null) return;
     _isLoadingCommunities = true;
     notifyListeners();
 
     try {
       final List<DiscoverCommunity> fetched =
-          await _discoverService.getCommunities();
+          await _discoverService.getExploreCommunities(
+        excludeJoined: excludeJoined,
+        sort: sort,
+        limit: 10,
+      );
       if (fetched.isNotEmpty) {
         _communities = fetched;
       }

@@ -170,9 +170,10 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
       backgroundColor: Colors.transparent,
       builder: (context) {
         return ShareThisPostBottomSheet(
+          reel: reel,
           onOpenMoreSendTo: () {
             Navigator.pop(context);
-            _showSendToSheet(context);
+            _showSendToSheet(context, reel);
           },
           onOpenReportSafety: () {
             Navigator.pop(context);
@@ -183,13 +184,13 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     );
   }
 
-  void _showSendToSheet(BuildContext context) {
+  void _showSendToSheet(BuildContext context, [ReelItemModel? reel]) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return const SendToBottomSheet();
+        return SendToBottomSheet(reel: reel);
       },
     );
   }

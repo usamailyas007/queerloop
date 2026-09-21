@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
@@ -8,6 +9,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../models/message_models.dart';
+import '../provider/messages_provider.dart';
 
 class ConversationTile extends StatelessWidget {
   const ConversationTile({
@@ -21,6 +23,17 @@ class ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final MessagesProvider? msgProvider = context.watch<MessagesProvider?>();
+    final bool isOnline = (msgProvider != null)
+        ? msgProvider.isUserOnline(conversation.participantId, conversation)
+        : conversation.isOnline;
+    final bool isTyping = (msgProvider != null)
+        ? (conversation.isTyping ||
+            msgProvider.isConversationTyping(conversation.id) ||
+            (conversation.participantId != null &&
+                msgProvider.isConversationTyping(conversation.participantId!)))
+        : conversation.isTyping;
+
     final String titleText = (conversation.displayName != null &&
             conversation.displayName!.trim().isNotEmpty)
         ? conversation.displayName!.trim()
@@ -44,64 +57,87 @@ class ConversationTile extends StatelessWidget {
         color: Colors.transparent,
         child: Row(
           children: <Widget>[
-            // Avatar with optional Story Gradient Ring
-            GestureDetector(
-              onTap: () {
-                Navigator.push<void>(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => UserProfileScreen(
-                      userId: conversation.participantId,
-                      username: conversation.username.replaceAll('@', ''),
-                      name: (conversation.displayName != null &&
-                              conversation.displayName!.isNotEmpty)
-                          ? conversation.displayName!
-                          : conversation.username
-                              .replaceAll('@', '')
-                              .split('.')
-                              .first,
-                      avatarAsset: conversation.avatarAsset,
+            // Avatar with optional Story Gradient Ring and Online Badge
+            Stack(
+              clipBehavior: Clip.none,
+              children: <Widget>[
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push<void>(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => UserProfileScreen(
+                          userId: conversation.participantId,
+                          username: conversation.username.replaceAll('@', ''),
+                          name: (conversation.displayName != null &&
+                                  conversation.displayName!.isNotEmpty)
+                              ? conversation.displayName!
+                              : conversation.username
+                                  .replaceAll('@', '')
+                                  .split('.')
+                                  .first,
+                          avatarAsset: conversation.avatarAsset,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: EdgeInsets.all(conversation.hasStoryRing ? 2.5 : 0),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: conversation.hasStoryRing
+                          ? AppColors.primaryGradientButton
+                          : null,
+                    ),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: context.themeBackground,
+                      ),
+                      padding:
+                          EdgeInsets.all(conversation.hasStoryRing ? 2.0 : 0),
+                      child: ClipOval(
+                        child: conversation.avatarAsset.startsWith('http')
+                            ? Image.network(
+                                conversation.avatarAsset,
+                                width: 44,
+                                height: 44,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) =>
+                                    const Icon(Icons.person, size: 44),
+                              )
+                            : Image.asset(
+                                conversation.avatarAsset.isNotEmpty
+                                    ? conversation.avatarAsset
+                                    : AppImages.user1,
+                                width: 44,
+                                height: 44,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) =>
+                                    const Icon(Icons.person, size: 44),
+                              ),
+                      ),
                     ),
                   ),
-                );
-              },
-              child: Container(
-                padding: EdgeInsets.all(conversation.hasStoryRing ? 2.5 : 0),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: conversation.hasStoryRing
-                      ? AppColors.primaryGradientButton
-                      : null,
                 ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: context.themeBackground,
+                if (isOnline)
+                  Positioned(
+                    right: 1,
+                    bottom: 1,
+                    child: Container(
+                      width: 13,
+                      height: 13,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: context.themeBackground,
+                          width: 2.2,
+                        ),
+                      ),
+                    ),
                   ),
-                  padding: EdgeInsets.all(conversation.hasStoryRing ? 2.0 : 0),
-                  child: ClipOval(
-                    child: conversation.avatarAsset.startsWith('http')
-                        ? Image.network(
-                            conversation.avatarAsset,
-                            width: 44,
-                            height: 44,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) =>
-                                const Icon(Icons.person, size: 44),
-                          )
-                        : Image.asset(
-                            conversation.avatarAsset.isNotEmpty
-                                ? conversation.avatarAsset
-                                : AppImages.user1,
-                            width: 44,
-                            height: 44,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) =>
-                                const Icon(Icons.person, size: 44),
-                          ),
-                  ),
-                ),
-              ),
+              ],
             ),
 
             const SizedBox(width: AppSpacing.md),
@@ -155,16 +191,18 @@ class ConversationTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    conversation.lastMessage,
+                    isTyping ? 'Typing...' : conversation.lastMessage,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: conversation.isTyping
+                      color: isTyping
                           ? AppColors.gradientCyan
                           : (conversation.unreadCount > 0
                               ? context.themeTextPrimary
                               : context.themeTextMuted),
-                      fontWeight: conversation.unreadCount > 0
+                      fontStyle:
+                          isTyping ? FontStyle.italic : FontStyle.normal,
+                      fontWeight: (isTyping || conversation.unreadCount > 0)
                           ? FontWeight.w600
                           : FontWeight.w400,
                       fontSize: 13,

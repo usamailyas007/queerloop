@@ -280,11 +280,23 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                   size: 20,
                 ),
                 onTap: () {
+                  final ApiClient client = context.read<ApiClient>();
+                  final UserRelationshipService relService =
+                      UserRelationshipService(client);
                   Navigator.pop(context);
                   RestrictUserModalDialog.show(
                     context,
                     username: username,
-                    onConfirmRestrict: () => provider.toggleRestrict(username),
+                    onConfirmRestrict: () async {
+                      provider.toggleRestrict(username);
+                      String? targetId = userId;
+                      if (targetId == null || targetId.isEmpty) {
+                        targetId = await relService.resolveUserId(username);
+                      }
+                      if (targetId != null && targetId.isNotEmpty) {
+                        await relService.restrictUser(targetId);
+                      }
+                    },
                   );
                 },
               ),
@@ -367,9 +379,20 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                 title: 'Typing Indicator',
                 subtitle: "Let others see when you're typing a message.",
                 trailing: CustomGradientSwitch(
-                  value: provider.isTypingIndicatorEnabled(username),
-                  onChanged: (bool val) =>
-                      provider.toggleTypingIndicator(username, val),
+                  value: provider.isTypingIndicatorEnabled(username) &&
+                      (conversationId == null ||
+                          provider.isTypingIndicatorEnabled(conversationId!)) &&
+                      (userId == null ||
+                          provider.isTypingIndicatorEnabled(userId!)),
+                  onChanged: (bool val) {
+                    provider.toggleTypingIndicator(username, val);
+                    if (conversationId != null) {
+                      provider.toggleTypingIndicator(conversationId!, val);
+                    }
+                    if (userId != null) {
+                      provider.toggleTypingIndicator(userId!, val);
+                    }
+                  },
                 ),
               ),
 

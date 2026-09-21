@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
@@ -8,20 +9,38 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../messages/models/message_models.dart';
+import '../../messages/provider/messages_provider.dart';
+import '../../profile/models/user_relationship_models.dart';
+import '../../profile/provider/profile_provider.dart';
+import '../models/reel_item_model.dart';
+import 'share_this_post_bottom_sheet.dart';
 
 class SendToBottomSheet extends StatefulWidget {
-  const SendToBottomSheet({super.key});
+  const SendToBottomSheet({
+    this.reel,
+    this.postId,
+    this.postAuthor,
+    this.postThumbnail,
+    this.postCaption,
+    super.key,
+  });
+
+  final ReelItemModel? reel;
+  final String? postId;
+  final String? postAuthor;
+  final String? postThumbnail;
+  final String? postCaption;
 
   @override
   State<SendToBottomSheet> createState() => _SendToBottomSheetState();
 }
 
 class _SendToBottomSheetState extends State<SendToBottomSheet> {
-  final TextEditingController _searchController =
-      TextEditingController(text: 'jul');
+  final TextEditingController _searchController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
 
-  final Set<String> _selectedUserIds = <String>{'jules'};
+  final Set<String> _selectedUserIds = <String>{};
 
   void _toggleUser(String id) {
     setState(() {
@@ -29,6 +48,23 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
         _selectedUserIds.remove(id);
       } else {
         _selectedUserIds.add(id);
+      }
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final MessagesProvider mp = context.read<MessagesProvider>();
+        if (mp.conversations.isEmpty) {
+          mp.loadConversations();
+        }
+        final ProfileProvider pp = context.read<ProfileProvider>();
+        if (pp.followers.isEmpty) {
+          pp.loadFollowers();
+        }
       }
     });
   }
@@ -43,6 +79,61 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final MessagesProvider msgProvider = context.watch<MessagesProvider>();
+    final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+
+    // ── Build Dynamic Contacts (Conversations + Followers) ───────────────────
+    final List<ShareContactItem> allContacts = <ShareContactItem>[];
+    final Set<String> seenUsernames = <String>{};
+
+    for (final ConversationModel c in msgProvider.conversations) {
+      final String u = c.username.replaceAll('@', '').trim();
+      final String effectiveUsername =
+          u.isNotEmpty ? u : (c.displayName?.isNotEmpty == true ? c.displayName! : 'User');
+      final String key = effectiveUsername.toLowerCase();
+      if (!seenUsernames.contains(key)) {
+        seenUsernames.add(key);
+        allContacts.add(ShareContactItem(
+          conversationId: c.id,
+          userId: c.participantId,
+          username: effectiveUsername,
+          displayName: c.displayName?.isNotEmpty == true ? c.displayName! : effectiveUsername,
+          avatarUrl: (c.avatarUrl != null && c.avatarUrl!.isNotEmpty)
+              ? c.avatarUrl
+              : (c.avatarAsset.isNotEmpty ? c.avatarAsset : null),
+        ));
+      }
+    }
+
+    for (final UserRelationItem f in profileProvider.followers) {
+      final String u = f.username.replaceAll('@', '').trim();
+      final String key = u.toLowerCase();
+      if (u.isNotEmpty && !seenUsernames.contains(key)) {
+        seenUsernames.add(key);
+        allContacts.add(ShareContactItem(
+          conversationId: null,
+          userId: f.userId,
+          username: u,
+          displayName: f.displayName.isNotEmpty ? f.displayName : u,
+          avatarUrl: f.avatarUrl,
+        ));
+      }
+    }
+
+    final String query = _searchController.text.trim().toLowerCase();
+    final List<ShareContactItem> filteredContacts = query.isEmpty
+        ? allContacts
+        : allContacts.where((ShareContactItem c) {
+            return c.username.toLowerCase().contains(query) ||
+                c.displayName.toLowerCase().contains(query);
+          }).toList();
+
+    final String shareTargetId = widget.reel?.id ?? widget.postId ?? '';
+    final String postAuthorDisplay = widget.reel?.username ?? widget.postAuthor ?? 'Creator';
+    final String postDescDisplay = widget.reel != null
+        ? (widget.reel!.caption.isNotEmpty ? widget.reel!.caption : 'Reel')
+        : (widget.postCaption ?? 'Post');
+    final String? postThumb = widget.reel?.thumbnailUrl ?? widget.postThumbnail;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.82,
@@ -72,7 +163,7 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
 
             const SizedBox(height: AppSpacing.md),
 
-            // ── Header (Back Arrow + "Send to" + "1 selected") ───────────────
+            // ── Header (Back Arrow + "Send to" + "X selected") ───────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: Row(
@@ -95,7 +186,9 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                   ),
                   const Spacer(),
                   Text(
-                    l10n.sendToSelected,
+                    _selectedUserIds.isEmpty
+                        ? '0 selected'
+                        : '${_selectedUserIds.length} selected',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: context.themeTextMuted,
                     ),
@@ -125,12 +218,25 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                       children: <Widget>[
                         ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: Image.asset(
-                            AppImages.forYouImg,
-                            width: 44,
-                            height: 44,
-                            fit: BoxFit.cover,
-                          ),
+                          child: (postThumb != null && postThumb.startsWith('http'))
+                              ? Image.network(
+                                  postThumb,
+                                  width: 44,
+                                  height: 44,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Image.asset(
+                                    AppImages.forYouImg,
+                                    width: 44,
+                                    height: 44,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Image.asset(
+                                  AppImages.forYouImg,
+                                  width: 44,
+                                  height: 44,
+                                  fit: BoxFit.cover,
+                                ),
                         ),
                         const SizedBox(width: AppSpacing.md),
                         Expanded(
@@ -138,7 +244,7 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Text(
-                                "@ashinorbit's post",
+                                "@$postAuthorDisplay's ${widget.reel != null ? 'reel' : 'post'}",
                                 style: TextStyle(
                                   color: context.themeTextPrimary,
                                   fontSize: 14,
@@ -147,7 +253,9 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Binder fit check · 12.4K views',
+                                postDescDisplay,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: context.themeTextMuted,
                                   fontSize: 12,
@@ -167,13 +275,14 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                     controller: _searchController,
                     hintText: l10n.sendToSearchHint,
                     prefixIconPath: AppIcons.search,
+                    onChanged: (_) => setState(() {}),
                   ),
 
                   const SizedBox(height: AppSpacing.lg),
 
                   // ── TOP CONNECTIONS Subheader ──────────────────────────────
                   Text(
-                    l10n.sendToTopConnections,
+                    'CONNECTIONS',
                     style: AppTextStyles.labelSmall.copyWith(
                       color: context.themeTextMuted,
                       letterSpacing: 1.2,
@@ -182,95 +291,35 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
 
                   const SizedBox(height: AppSpacing.md),
 
-                  // ── Contact Item 1: jules.does (Checked) ───────────────────
-                  _ContactListTile(
-                    avatarAsset: AppImages.user1,
-                    handle: 'jules.does',
-                    subText: 'Jules · you talk often',
-                    isSelected: _selectedUserIds.contains('jules'),
-                    onTap: () => _toggleUser('jules'),
-                  ),
-
-                  const SizedBox(height: AppSpacing.sm),
-
-                  // ── Contact Item 2: rowankeeps ─────────────────────────────
-                  _ContactListTile(
-                    avatarAsset: AppImages.user2,
-                    handle: 'rowankeeps',
-                    subText: 'Rowan',
-                    isSelected: _selectedUserIds.contains('rowan'),
-                    onTap: () => _toggleUser('rowan'),
-                  ),
-
-                  const SizedBox(height: AppSpacing.sm),
-
-                  // ── Contact Item 3: moss.and.oat ───────────────────────────
-                  _ContactListTile(
-                    avatarAsset: AppImages.user3,
-                    handle: 'moss.and.oat',
-                    subText: 'Moss',
-                    isSelected: _selectedUserIds.contains('moss'),
-                    onTap: () => _toggleUser('moss'),
-                  ),
-
-                  const SizedBox(height: AppSpacing.sm),
-
-                  // ── Contact Item 4: theo.vance ─────────────────────────────
-                  _ContactListTile(
-                    avatarAsset: AppImages.user4,
-                    handle: 'theo.vance',
-                    subText: 'Theo',
-                    isSelected: _selectedUserIds.contains('theo'),
-                    onTap: () => _toggleUser('theo'),
-                  ),
-
-                  const SizedBox(height: AppSpacing.sm),
-
-                  // ── Contact Item 5: kit.lumen (Disabled / Lock Icon) ──────
-                  Opacity(
-                    opacity: 0.4,
-                    child: Row(
-                      children: <Widget>[
-                        ClipOval(
-                          child: Image.asset(
-                            AppImages.user1,
-                            width: 40,
-                            height: 40,
-                            fit: BoxFit.cover,
+                  if (filteredContacts.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 32),
+                      child: Center(
+                        child: Text(
+                          query.isEmpty
+                              ? 'No active conversations yet'
+                              : 'No matching people found',
+                          style: TextStyle(
+                            color: context.themeTextMuted,
+                            fontSize: 13,
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                'kit.lumen',
-                                style: TextStyle(
-                                  color: context.themeTextPrimary,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                "Private account · can't receive posts",
-                                style: TextStyle(
-                                  color: context.themeTextMuted,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(
-                          Icons.lock_outline_rounded,
-                          color: context.themeIconMuted,
-                          size: AppSizes.iconSm,
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    )
+                  else
+                    for (final ShareContactItem contact in filteredContacts) ...<Widget>[
+                      _ContactListTile(
+                        avatarAsset: (contact.avatarUrl != null &&
+                                contact.avatarUrl!.isNotEmpty)
+                            ? contact.avatarUrl!
+                            : AppImages.user1,
+                        handle: contact.username,
+                        subText: contact.displayName,
+                        isSelected: _selectedUserIds.contains(contact.username),
+                        onTap: () => _toggleUser(contact.username),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
 
                   const SizedBox(height: AppSpacing.lg),
                 ],
@@ -291,12 +340,50 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                   ),
                   const SizedBox(width: 10),
                   GestureDetector(
-                    onTap: () {
+                    onTap: () async {
+                      if (_selectedUserIds.isEmpty) {
+                        AppSnackBar.showError(
+                          context,
+                          title: 'Select recipient',
+                          subtitle: 'Please select at least one person to send to.',
+                        );
+                        return;
+                      }
+
+                      final List<String> targetConvIds = <String>[];
+                      final List<String> targetUserIds = <String>[];
+
+                      for (final String u in _selectedUserIds) {
+                        final ShareContactItem match = allContacts.firstWhere(
+                          (c) => c.username == u,
+                          orElse: () => ShareContactItem(username: u, displayName: u),
+                        );
+                        if (match.conversationId != null && match.conversationId!.isNotEmpty) {
+                          targetConvIds.add(match.conversationId!);
+                        } else if (match.userId != null && match.userId!.isNotEmpty) {
+                          targetUserIds.add(match.userId!);
+                        }
+                      }
+
                       Navigator.pop(context);
+
+                      if (shareTargetId.isNotEmpty) {
+                        await msgProvider.sharePost(
+                          sharedPostId: shareTargetId,
+                          conversationIds: targetConvIds.isNotEmpty ? targetConvIds : null,
+                          recipientUserIds: targetUserIds.isNotEmpty ? targetUserIds : null,
+                          message: _messageController.text.trim().isNotEmpty
+                              ? _messageController.text.trim()
+                              : null,
+                          contentType: widget.reel != null ? 'reel_share' : 'post_share',
+                        );
+                      }
+
+                      if (!context.mounted) return;
                       AppSnackBar.showSuccess(
                         context,
                         title: 'Sent',
-                        subtitle: 'Message sent successfully!',
+                        subtitle: 'Shared with ${_selectedUserIds.length} recipient(s)!',
                       );
                     },
                     child: Container(

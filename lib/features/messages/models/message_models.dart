@@ -126,6 +126,9 @@ class ChatMessageModel {
     }
 
     String? singleEmoji = json['reactionEmoji']?.toString();
+    if (singleEmoji != null && singleEmoji.trim().isEmpty) {
+      singleEmoji = null;
+    }
     int? count = json['reactionCount'] is num
         ? (json['reactionCount'] as num).toInt()
         : null;
@@ -246,6 +249,7 @@ class ChatMessageModel {
     String? reactionEmoji,
     int? reactionCount,
     List<MessageReactionModel>? reactions,
+    bool clearReaction = false,
     bool? isRead,
     DateTime? createdAt,
     MessageType? type,
@@ -264,9 +268,9 @@ class ChatMessageModel {
       postThumbnailAsset: postThumbnailAsset ?? this.postThumbnailAsset,
       postAuthor: postAuthor ?? this.postAuthor,
       postViews: postViews ?? this.postViews,
-      reactionEmoji: reactionEmoji ?? this.reactionEmoji,
-      reactionCount: reactionCount ?? this.reactionCount,
-      reactions: reactions ?? this.reactions,
+      reactionEmoji: clearReaction ? null : (reactionEmoji ?? this.reactionEmoji),
+      reactionCount: clearReaction ? null : (reactionCount ?? this.reactionCount),
+      reactions: clearReaction ? const <MessageReactionModel>[] : (reactions ?? this.reactions),
       isRead: isRead ?? this.isRead,
       createdAt: createdAt ?? this.createdAt,
       type: type ?? this.type,
@@ -286,6 +290,8 @@ class ConversationModel {
     this.avatarUrl,
     this.unreadCount = 0,
     this.isTyping = false,
+    this.isOnline = false,
+    this.lastActive,
     this.isMuted = false,
     this.mutedUntil,
     this.hasStoryRing = false,
@@ -304,6 +310,8 @@ class ConversationModel {
   final String timeAgo;
   final int unreadCount;
   final bool isTyping;
+  final bool isOnline;
+  final dynamic lastActive;
   final bool isMuted;
   final String? mutedUntil;
   final bool hasStoryRing;
@@ -544,6 +552,27 @@ class ConversationModel {
       }).length;
     }
 
+    final dynamic otherRaw = json['otherParticipant'] ?? json['participant'];
+    final Map<String, dynamic>? otherMap =
+        otherRaw is Map<String, dynamic> ? otherRaw : null;
+
+    final bool online = json['isOnline'] == true ||
+        json['online'] == true ||
+        (otherMap != null &&
+            (otherMap['isOnline'] == true ||
+                otherMap['online'] == true));
+
+    final dynamic lastActiveVal = json['lastActive'] ??
+        json['last_active'] ??
+        json['lastSeen'] ??
+        json['last_seen'] ??
+        (otherMap != null
+            ? (otherMap['lastActive'] ??
+                otherMap['last_active'] ??
+                otherMap['lastSeen'] ??
+                otherMap['last_seen'])
+            : null);
+
     return ConversationModel(
       id: convId,
       participantId: pId,
@@ -556,6 +585,8 @@ class ConversationModel {
       lastMessage: lastMsgText,
       timeAgo: timeStr,
       unreadCount: unread,
+      isOnline: online,
+      lastActive: lastActiveVal,
       isMuted: muted,
       mutedUntil: json['mutedUntil']?.toString(),
       hasStoryRing: json['hasStoryRing'] == true,
@@ -575,6 +606,8 @@ class ConversationModel {
     String? timeAgo,
     int? unreadCount,
     bool? isTyping,
+    bool? isOnline,
+    dynamic lastActive,
     bool? isMuted,
     String? mutedUntil,
     bool? hasStoryRing,
@@ -593,6 +626,8 @@ class ConversationModel {
       timeAgo: timeAgo ?? this.timeAgo,
       unreadCount: unreadCount ?? this.unreadCount,
       isTyping: isTyping ?? this.isTyping,
+      isOnline: isOnline ?? this.isOnline,
+      lastActive: lastActive ?? this.lastActive,
       isMuted: isMuted ?? this.isMuted,
       mutedUntil: mutedUntil ?? this.mutedUntil,
       hasStoryRing: hasStoryRing ?? this.hasStoryRing,

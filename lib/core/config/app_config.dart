@@ -10,9 +10,20 @@ abstract final class AppConfig {
 
   static const String baseUrl = String.fromEnvironment('BASE_URL');
 
+  static String get socketUrl {
+    const String customSocket = String.fromEnvironment('SOCKET_URL');
+    if (customSocket.isNotEmpty) return customSocket;
+    return baseUrl;
+  }
+
   static const bool useMockApi = bool.fromEnvironment(
     'USE_MOCK_API',
     defaultValue: false,
+  );
+
+  static const String googleServerClientId = String.fromEnvironment(
+    'GOOGLE_SERVER_CLIENT_ID',
+    defaultValue: '',
   );
 
   static Env get env => _envName == 'prod' ? Env.prod : Env.staging;

@@ -34,6 +34,7 @@ class AuthProvider extends ChangeNotifier {
       if (result.refreshToken != null && result.refreshToken!.isNotEmpty) {
         _refreshToken = result.refreshToken;
       }
+      notifyListeners();
       return result.accessToken;
     }
 

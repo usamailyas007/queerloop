@@ -197,17 +197,30 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
               onTap: () {
                 final ScaffoldMessengerState messenger =
                     ScaffoldMessenger.of(context);
+                final ProfileProvider profileProvider =
+                    context.read<ProfileProvider>();
+                final ApiClient apiClient = context.read<ApiClient>();
                 Navigator.pop(context);
                 RestrictUserModalDialog.show(
                   context,
                   username: username,
-                  onConfirmRestrict: () {
+                  onConfirmRestrict: () async {
+                    String? targetId = userId;
+                    if (targetId == null || targetId.isEmpty) {
+                      final UserRelationshipService service =
+                          UserRelationshipService(apiClient);
+                      targetId = await service.resolveUserId(username);
+                    }
+                    if (targetId != null && targetId.isNotEmpty) {
+                      await profileProvider.restrictUser(targetId, username: username);
+                    }
+                    if (!context.mounted) return;
                     AppSnackBar.show(
                       context,
                       messenger: messenger,
-                      title: '$cleanHandle restrict',
+                      title: '$cleanHandle restricted',
                       subtitle:
-                          'Their comments only shows to them, DMs sent to the requests',
+                          'Their comments only show to them, DMs sent to requests',
                       icon: SvgPicture.asset(
                         AppIcons.hide,
                         width: 18,
@@ -218,6 +231,11 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                         ),
                       ),
                       actionLabel: 'Undo',
+                      onAction: () async {
+                        if (targetId != null && targetId.isNotEmpty) {
+                          await profileProvider.unrestrictUser(targetId);
+                        }
+                      },
                     );
                   },
                 );

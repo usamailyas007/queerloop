@@ -9,6 +9,7 @@ class ConversationsService {
   const ConversationsService(this._client);
 
   final ApiClient _client;
+  ApiClient get client => _client;
 
   // ── Helper: Extract List from raw or enveloped JSON ────────────────────────
   List<dynamic> _extractList(dynamic res, {List<String> keys = const <String>[]}) {
@@ -222,19 +223,26 @@ class ConversationsService {
 
   // ── 7. Send Message ────────────────────────────────────────────────────────
   /// POST /conversations/:id/messages
-  /// body: { "body": ":text" }
+  /// body: { "body": ":text", "sharedPostId"?: ":id", "contentType"?: ":type" }
   Future<ChatMessageModel?> sendMessage({
     required String conversationId,
     required String body,
+    String? sharedPostId,
+    String? contentType,
     String? currentUserId,
   }) async {
     try {
       debugPrint('🚀 [ConversationsService] Sending message to $conversationId');
+      final Map<String, dynamic> payload = <String, dynamic>{
+        'body': body,
+        if (sharedPostId != null && sharedPostId.isNotEmpty)
+          'sharedPostId': sharedPostId,
+        if (contentType != null && contentType.isNotEmpty)
+          'contentType': contentType,
+      };
       final dynamic res = await _client.post(
         ApiEndpoints.conversationMessages(conversationId),
-        body: <String, dynamic>{
-          'body': body,
-        },
+        body: payload,
       );
 
       final Map<String, dynamic>? map = _extractMap(res);
@@ -248,6 +256,78 @@ class ConversationsService {
     } catch (e, stack) {
       debugPrint('❌ [ConversationsService] sendMessage unexpected: $e\n$stack');
       return null;
+    }
+  }
+
+  // ── 7b. Fan-Out Share Post/Reel ─────────────────────────────────────────────
+  /// POST /conversations/share
+  /// body: { "sharedPostId": ":id", "conversationIds": [...], "recipientUserIds": [...], "message"?: ":text" }
+  Future<bool> sharePost({
+    required String sharedPostId,
+    List<String>? conversationIds,
+    List<String>? recipientUserIds,
+    String? message,
+    String? contentType,
+  }) async {
+    try {
+      debugPrint(
+          '🚀 [ConversationsService] (API) Sharing post $sharedPostId to convs: $conversationIds, users: $recipientUserIds');
+      final Map<String, dynamic> payload = <String, dynamic>{
+        'sharedPostId': sharedPostId,
+        if (conversationIds != null && conversationIds.isNotEmpty)
+          'conversationIds': conversationIds,
+        if (recipientUserIds != null && recipientUserIds.isNotEmpty)
+          'recipientUserIds': recipientUserIds,
+        if (message != null && message.trim().isNotEmpty)
+          'message': message.trim(),
+        if (contentType != null && contentType.isNotEmpty)
+          'contentType': contentType,
+      };
+      await _client.post(
+        ApiEndpoints.conversationShare,
+        body: payload,
+      );
+      debugPrint(
+          '✅ [ConversationsService] (API) Post $sharedPostId successfully shared via POST /conversations/share');
+      return true;
+    } on ApiException catch (e) {
+      debugPrint('❌ [ConversationsService] (API) /conversations/share error: $e. Retrying per-recipient via API...');
+      // If fan-out endpoint fails, try sending to each conversation or recipient directly via API
+      bool anySuccess = false;
+      if (conversationIds != null && conversationIds.isNotEmpty) {
+        for (final String cId in conversationIds) {
+          try {
+            await sendMessage(
+              conversationId: cId,
+              body: message ?? 'Shared a post',
+              sharedPostId: sharedPostId,
+              contentType: contentType ?? 'post_share',
+            );
+            anySuccess = true;
+          } catch (_) {}
+        }
+      }
+      if (recipientUserIds != null && recipientUserIds.isNotEmpty) {
+        for (final String uId in recipientUserIds) {
+          try {
+            final ConversationModel? conv =
+                await startConversation(participantId: uId);
+            if (conv != null && conv.id.isNotEmpty) {
+              await sendMessage(
+                conversationId: conv.id,
+                body: message ?? 'Shared a post',
+                sharedPostId: sharedPostId,
+                contentType: contentType ?? 'post_share',
+              );
+              anySuccess = true;
+            }
+          } catch (_) {}
+        }
+      }
+      return anySuccess;
+    } catch (e, stack) {
+      debugPrint('❌ [ConversationsService] (API) sharePost unexpected: $e\n$stack');
+      return false;
     }
   }
 

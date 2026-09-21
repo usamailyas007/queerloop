@@ -39,6 +39,7 @@ class UserProfile {
     this.isPending,
     this.isBlocked,
     this.isMuted,
+    this.isRestricted,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> rawJson) {
@@ -151,6 +152,11 @@ class UserProfile {
       isMuted: json['isMuted'] == true ||
           rawJson['isMuted'] == true ||
           (json['relationship'] == 'muted'),
+      isRestricted: json['isRestricted'] == true ||
+          rawJson['isRestricted'] == true ||
+          json['restricted'] == true ||
+          rawJson['restricted'] == true ||
+          (json['relationship'] == 'restricted'),
     );
   }
 
@@ -189,12 +195,13 @@ class UserProfile {
   final bool? isPending;
   final bool? isBlocked;
   final bool? isMuted;
+  final bool? isRestricted;
 
   String get formattedPronouns {
     if (pronounsPrivate == true || pronouns == null || pronouns!.isEmpty) {
       return '';
     }
-    return pronouns!.join(' · ');
+    return pronouns!.join(' / ');
   }
 
   UserProfile copyWith({
@@ -233,6 +240,7 @@ class UserProfile {
     bool? isPending,
     bool? isBlocked,
     bool? isMuted,
+    bool? isRestricted,
   }) {
     return UserProfile(
       id: id ?? this.id,
@@ -262,9 +270,8 @@ class UserProfile {
           notifyOnCommunityPosts ?? this.notifyOnCommunityPosts,
       notifyOnAnnouncementsFeatures:
           notifyOnAnnouncementsFeatures ?? this.notifyOnAnnouncementsFeatures,
-      notifyOnSafetyModerationUpdates:
-          notifyOnSafetyModerationUpdates ??
-              this.notifyOnSafetyModerationUpdates,
+      notifyOnSafetyModerationUpdates: notifyOnSafetyModerationUpdates ??
+          this.notifyOnSafetyModerationUpdates,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       followersCount: followersCount ?? this.followersCount,
@@ -274,7 +281,7 @@ class UserProfile {
       isFollowing: isFollowing ?? this.isFollowing,
       isPending: isPending ?? this.isPending,
       isBlocked: isBlocked ?? this.isBlocked,
-      isMuted: isMuted ?? this.isMuted,
+      isRestricted: isRestricted ?? this.isRestricted,
     );
   }
 

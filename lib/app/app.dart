@@ -19,6 +19,7 @@ import '../features/discover/services/cotd_service.dart';
 import '../features/discover/services/discover_service.dart';
 import '../features/home/provider/home_feed_provider.dart';
 import '../features/messages/provider/messages_provider.dart';
+import '../features/messages/services/chat_socket_service.dart';
 import '../features/messages/services/conversations_service.dart';
 import '../features/notifications/provider/notifications_provider.dart';
 import '../features/notifications/services/notifications_service.dart';
@@ -108,21 +109,32 @@ class App extends StatelessWidget {
           create: (BuildContext ctx) =>
               ConversationsService(ctx.read<ApiClient>()),
         ),
+        Provider<ChatSocketService>(
+          create: (_) => ChatSocketService(),
+          dispose: (_, ChatSocketService service) => service.dispose(),
+        ),
         ChangeNotifierProxyProvider<AuthProvider, MessagesProvider>(
           create: (BuildContext ctx) => MessagesProvider(
-            service: ConversationsService(ctx.read<ApiClient>()),
+            service: ctx.read<ConversationsService>(),
+            socketService: ctx.read<ChatSocketService>(),
+            token: ctx.read<ApiClient>().authToken,
           ),
           update: (BuildContext ctx, AuthProvider auth,
               MessagesProvider? existing) {
+            final String? token = ctx.read<ApiClient>().authToken;
             final MessagesProvider provider = existing ??
                 MessagesProvider(
                   service: ctx.read<ConversationsService>(),
+                  socketService: ctx.read<ChatSocketService>(),
                   currentUserId: auth.userId,
+                  token: token,
                 );
             WidgetsBinding.instance.addPostFrameCallback((_) {
               provider.updateAuth(
                 userId: auth.userId,
                 service: ctx.read<ConversationsService>(),
+                socketService: ctx.read<ChatSocketService>(),
+                token: token,
               );
             });
             return provider;

@@ -253,6 +253,73 @@ class BlockedAccountItem {
   final DateTime? blockedAt;
 }
 
+class RestrictedAccountItem {
+  const RestrictedAccountItem({
+    required this.userId,
+    required this.username,
+    this.displayName,
+    this.avatarUrl,
+    this.restrictedAt,
+  });
+
+  factory RestrictedAccountItem.fromJson(Map<String, dynamic> rawJson) {
+    final Map<String, dynamic> userMap =
+        (rawJson['restrictedUser'] is Map<String, dynamic>)
+            ? rawJson['restrictedUser'] as Map<String, dynamic>
+            : (rawJson['user'] is Map<String, dynamic>)
+                ? rawJson['user'] as Map<String, dynamic>
+                : rawJson;
+
+    final String userId = (userMap['userId'] ??
+            userMap['id'] ??
+            userMap['_id'] ??
+            rawJson['restrictedUserId'] ??
+            rawJson['userId'] ??
+            rawJson['id'] ??
+            '')
+        .toString();
+
+    final String username =
+        (userMap['username'] ?? userMap['handle'] ?? rawJson['username'] ?? 'user')
+            .toString()
+            .replaceAll('@', '');
+
+    final String? displayName = (userMap['displayName'] ??
+            userMap['name'] ??
+            rawJson['displayName'])
+        ?.toString();
+
+    final String? avatar = (userMap['avatarUrl'] ??
+            userMap['avatar'] ??
+            rawJson['avatarUrl'] ??
+            rawJson['avatar'])
+        ?.toString();
+
+    DateTime? restrictedAt;
+    final dynamic rawDate = rawJson['restrictedAt'] ??
+        rawJson['createdAt'] ??
+        userMap['restrictedAt'] ??
+        userMap['createdAt'];
+    if (rawDate != null) {
+      restrictedAt = DateTime.tryParse(rawDate.toString());
+    }
+
+    return RestrictedAccountItem(
+      userId: userId,
+      username: username,
+      displayName: displayName ?? username,
+      avatarUrl: avatar,
+      restrictedAt: restrictedAt,
+    );
+  }
+
+  final String userId;
+  final String username;
+  final String? displayName;
+  final String? avatarUrl;
+  final DateTime? restrictedAt;
+}
+
 class MutedAccountItem {
   const MutedAccountItem({
     required this.userId,
