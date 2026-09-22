@@ -516,7 +516,16 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
   void _handleSocketPresenceQuery() {
     if (_currentUserId == null || _currentUserId!.isEmpty) return;
     if (!_showActivityStatus) return;
+    // Broadcast our presence globally
     _socketService?.sendPresence(isOnline: true);
+    // Also send targeted presence to each conversation participant so
+    // they receive our status even if server routing is limited by rooms
+    for (final ConversationModel c in _conversations) {
+      final String? pId = c.participantId;
+      if (pId != null && pId.isNotEmpty && pId != _currentUserId) {
+        _socketService?.sendPresence(isOnline: true, targetUserId: pId);
+      }
+    }
   }
 
   // ── App Lifecycle Observer ─────────────────────────────────────────────────
@@ -1256,7 +1265,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
   void startPresenceHeartbeat() {
     _presenceHeartbeatTimer?.cancel();
     _presenceHeartbeatTimer =
-        Timer.periodic(const Duration(seconds: 20), (_) {
+        Timer.periodic(const Duration(seconds: 10), (_) {
       if (!_isDisposed &&
           _showActivityStatus &&
           _currentUserId != null &&
@@ -2396,10 +2405,24 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
 
+      // Join participant personal rooms so presence events reach us regardless of login order
+      for (final ConversationModel c in items) {
+        if (c.participantId != null && c.participantId!.isNotEmpty) {
+          _socketService?.joinUserRoom(c.participantId!);
+        }
+      }
+
       // Announce our presence now that all conversation rooms have been joined
       if (_showActivityStatus && _currentUserId != null && _currentUserId!.isNotEmpty) {
         _socketService?.sendPresence(isOnline: true);
+        // Also emit a presence query so any already-connected users reply with their status
+        _socketService?.requestPresenceFromAll();
         Timer(const Duration(milliseconds: 1000), () {
+          if (!_isDisposed && _showActivityStatus) {
+            _socketService?.sendPresence(isOnline: true);
+          }
+        });
+        Timer(const Duration(milliseconds: 3000), () {
           if (!_isDisposed && _showActivityStatus) {
             _socketService?.sendPresence(isOnline: true);
           }

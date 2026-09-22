@@ -971,6 +971,26 @@ class ChatSocketService {
     }
   }
 
+  /// Ask all connected peers to announce their current online status.
+  /// Called after joining conversation rooms so already-online users reply back
+  /// with their presence even if they logged in before us.
+  void requestPresenceFromAll() {
+    if (_socket == null || !_socket!.connected) return;
+    final String? cleanUid =
+        _currentUserId != null ? cleanUserId(_currentUserId!) : null;
+    final int nowEpoch = DateTime.now().millisecondsSinceEpoch;
+    final Map<String, dynamic> queryPayload = <String, dynamic>{
+      if (cleanUid != null && cleanUid.isNotEmpty) 'userId': cleanUid,
+      'timestamp': nowEpoch,
+    };
+    _logEmit('presence:query', queryPayload);
+    _socket?.emit('presence:query', queryPayload);
+    _socket?.emit('user_presence:query', queryPayload);
+    _socket?.emit('get_presence', queryPayload);
+    _socket?.emit('presence:ping', queryPayload);
+    _socket?.emit('who_is_online', queryPayload);
+  }
+
   /// 3. send_message
   /// payload: { conversationId, text?, body?, mediaRef?, sharedPostId? }
   /// purpose: send a message through the backend gateway

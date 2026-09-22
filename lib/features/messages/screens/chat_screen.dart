@@ -785,12 +785,12 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                   alignment: Alignment.centerLeft,
                                   child: Container(
                                     constraints: const BoxConstraints(
-                                      minWidth: 64,
-                                      minHeight: 40,
+                                      minWidth: 46,
+                                      minHeight: 28,
                                     ),
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: AppSpacing.lg,
-                                      vertical: AppSpacing.md,
+                                      horizontal: 12,
+                                      vertical: 5,
                                     ),
                                     decoration: BoxDecoration(
                                       color: context.themeCardBackground,
@@ -820,12 +820,12 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                       ],
                                     ),
                                     child: const SizedBox(
-                                      width: 36,
-                                      height: 18,
+                                      width: 26,
+                                      height: 12,
                                       child: Center(
                                         child: SpinKitThreeBounce(
                                           color: AppColors.gradientCyan,
-                                          size: 16.0,
+                                          size: 11.0,
                                         ),
                                       ),
                                     ),
@@ -892,7 +892,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
 
                     // Description text
                     Text(
-                      "You can't message each other. Nothing new arrives here. They were not told, and your old messages stay visible to you only.",
+                      "You can't send or receive new messages. Your previous chat history remains visible. They were not told you blocked them.",
                       textAlign: TextAlign.center,
                       style: AppTextStyles.bodySmall.copyWith(
                         color: context.themeTextSecondary,

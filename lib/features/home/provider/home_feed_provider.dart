@@ -193,13 +193,22 @@ class HomeFeedProvider extends ChangeNotifier {
     switch (_activeTopTab) {
       case TopTab.following:
         return List<PostItemModel>.unmodifiable(
-            _followingPosts.where((p) => p.postType.toUpperCase().trim() != 'VIDEO'));
+            _followingPosts.where((p) {
+              final String t = p.postType.toUpperCase().trim();
+              return t != 'VIDEO' && t != 'REEL';
+            }));
       case TopTab.communities:
         return List<PostItemModel>.unmodifiable(
-            _communityPosts.where((p) => p.postType.toUpperCase().trim() != 'VIDEO'));
+            _communityPosts.where((p) {
+              final String t = p.postType.toUpperCase().trim();
+              return t != 'VIDEO' && t != 'REEL';
+            }));
       case TopTab.forYou:
         return List<PostItemModel>.unmodifiable(
-            _forYouPosts.where((p) => p.postType.toUpperCase().trim() != 'VIDEO'));
+            _forYouPosts.where((p) {
+              final String t = p.postType.toUpperCase().trim();
+              return t != 'VIDEO' && t != 'REEL';
+            }));
     }
   }
 
@@ -328,6 +337,7 @@ class HomeFeedProvider extends ChangeNotifier {
     for (final PostResponseModel post in rawPosts) {
       final String postType = post.type.toUpperCase().trim();
       final bool isVideo = postType == 'VIDEO' ||
+          postType == 'REEL' ||
           (post.duration != null && post.duration!.isNotEmpty);
 
       if (isVideo) {
@@ -389,9 +399,12 @@ class HomeFeedProvider extends ChangeNotifier {
       for (final PostResponseModel post in feedPosts) {
         try {
           final String postType = post.type.toUpperCase().trim();
+          final bool isVideoOrReel = postType == 'VIDEO' ||
+              postType == 'REEL' ||
+              (post.duration != null && post.duration!.isNotEmpty);
 
-          // Video posts belong exclusively to Reels
-          if (postType == 'VIDEO') {
+          // Video/Reel posts belong exclusively to Reels
+          if (isVideoOrReel) {
             if (!liveReels.any((r) => r.id == post.id)) {
               liveReels.add(await _buildReelItem(post));
             }
