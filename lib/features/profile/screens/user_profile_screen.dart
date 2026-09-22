@@ -85,6 +85,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<MessagesProvider>().loadBlockedUsers();
+        context.read<ProfileProvider>().loadBlockedAccounts();
+      }
+    });
     if (widget.userId != null && widget.userId!.trim().isNotEmpty) {
       _fetchUserProfile(widget.userId!.trim());
     } else if (widget.username.trim().isNotEmpty) {
@@ -479,6 +485,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     final AuthProvider auth = context.watch<AuthProvider>();
     final ProfileProvider profile = context.watch<ProfileProvider>();
+    final MessagesProvider msgProvider = context.watch<MessagesProvider>();
     final String? myId = auth.userId;
     final String? myName = auth.user?.displayName;
     final bool isOwnProfile = (myId != null &&
@@ -488,6 +495,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             myName.isNotEmpty &&
             widget.username.replaceAll('@', '').toLowerCase() ==
                 myName.replaceAll('@', '').toLowerCase());
+
+    final bool isUserBlocked = msgProvider.isBlocked(_effectiveUserId) ||
+        msgProvider.isBlocked(currentUsername) ||
+        profile.blockedAccounts.any((BlockedAccountItem b) =>
+            (b.userId.isNotEmpty && b.userId == _effectiveUserId) ||
+            b.username.toLowerCase() ==
+                currentUsername.replaceAll('@', '').toLowerCase());
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -659,8 +673,35 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               ),
                             ],
                           )
-                        : Row(
-                      children: <Widget>[
+                        : (isUserBlocked
+                            ? Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: AppOutlineButton(
+                                      text: 'Unblock',
+                                      onPressed: () async {
+                                        final String? tId = _effectiveUserId;
+                                        if (tId != null && tId.isNotEmpty) {
+                                          await profile.unblockUser(tId);
+                                          await msgProvider.unblockUser(tId, username: currentUsername);
+                                        } else {
+                                          await msgProvider.unblockUser(currentUsername, username: currentUsername);
+                                        }
+                                        if (!mounted) return;
+                                        setState(() {});
+                                        AppSnackBar.showSuccess(
+                                          this.context,
+                                          title: 'Unblocked',
+                                          subtitle:
+                                              '@${currentUsername.replaceAll('@', '')} has been unblocked.',
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                children: <Widget>[
                         Expanded(
                           child: isPrivateAccount
                               ? (_isRequested
@@ -884,7 +925,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ),
                         ),
                       ],
-                    ),
+                    )),
                   ),
 
                   const SizedBox(height: AppSpacing.xl),

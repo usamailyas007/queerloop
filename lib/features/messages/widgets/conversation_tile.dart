@@ -24,15 +24,18 @@ class ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final MessagesProvider? msgProvider = context.watch<MessagesProvider?>();
-    final bool isOnline = (msgProvider != null)
+    final bool isBlocked = (msgProvider != null) &&
+        (msgProvider.isBlocked(conversation.participantId) ||
+            msgProvider.isBlocked(conversation.username));
+    final bool isOnline = (msgProvider != null && !isBlocked)
         ? msgProvider.isUserOnline(conversation.participantId, conversation)
-        : conversation.isOnline;
-    final bool isTyping = (msgProvider != null)
+        : (isBlocked ? false : conversation.isOnline);
+    final bool isTyping = (msgProvider != null && !isBlocked)
         ? (conversation.isTyping ||
             msgProvider.isConversationTyping(conversation.id) ||
             (conversation.participantId != null &&
                 msgProvider.isConversationTyping(conversation.participantId!)))
-        : conversation.isTyping;
+        : (isBlocked ? false : conversation.isTyping);
 
     final String titleText = (conversation.displayName != null &&
             conversation.displayName!.trim().isNotEmpty)
@@ -190,24 +193,37 @@ class ConversationTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    isTyping ? 'Typing...' : conversation.lastMessage,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: isTyping
-                          ? AppColors.gradientCyan
-                          : (conversation.unreadCount > 0
-                              ? context.themeTextPrimary
-                              : context.themeTextMuted),
-                      fontStyle:
-                          isTyping ? FontStyle.italic : FontStyle.normal,
-                      fontWeight: (isTyping || conversation.unreadCount > 0)
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                      fontSize: 13,
+                  if (isBlocked)
+                    Text(
+                      'Blocked',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: Colors.redAccent.shade200,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    )
+                  else
+                    Text(
+                      isTyping ? 'Typing...' : conversation.lastMessage,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: isTyping
+                            ? AppColors.gradientCyan
+                            : (conversation.unreadCount > 0
+                                ? context.themeTextPrimary
+                                : context.themeTextMuted),
+                        fontStyle:
+                            isTyping ? FontStyle.italic : FontStyle.normal,
+                        fontWeight: (isTyping || conversation.unreadCount > 0)
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                        fontSize: 13,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

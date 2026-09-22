@@ -10,6 +10,7 @@ import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../auth/auth_provider.dart';
 import '../../discover/models/discover_models.dart';
@@ -241,6 +242,19 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
           messenger.showSnackBar(
             const SnackBar(
               content: Text('You cannot start a conversation with yourself.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      // 4. Blocked user check
+      if (provider.isBlocked(resolvedTargetId) || provider.isBlocked(username)) {
+        if (mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('This user is blocked. Unblock them to send messages.'),
               duration: Duration(seconds: 2),
             ),
           );
@@ -496,6 +510,8 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
       itemBuilder: (BuildContext context, int index) {
         final DiscoverPerson person = _searchResults[index];
         final String rawId = person.id ?? '';
+        final MessagesProvider msgProvider = context.watch<MessagesProvider>();
+        final bool isBlocked = msgProvider.isBlocked(rawId) || msgProvider.isBlocked(person.username);
         final String cleanUsername = person.username.startsWith('@')
             ? person.username
             : '@${person.username}';
@@ -584,19 +600,32 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
 
               const SizedBox(width: AppSpacing.md),
 
-              // Message Action Button
-              AppGradientButton(
-                text: isStartingChat ? 'Loading...' : 'Message',
-                height: 34,
-                width: 88,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                onPressed: () => _handleStartMessage(
-                  targetId: rawId,
-                  username: person.username,
-                  avatarAsset: person.avatarAsset,
-                  displayName: displayName,
+              // Message / Unblock Action Button
+              if (isBlocked)
+                AppOutlineButton(
+                  text: 'Unblock',
+                  height: 34,
+                  width: 88,
+                  onPressed: () async {
+                    await context.read<MessagesProvider>().unblockUser(
+                          rawId,
+                          username: person.username,
+                        );
+                  },
+                )
+              else
+                AppGradientButton(
+                  text: isStartingChat ? 'Loading...' : 'Message',
+                  height: 34,
+                  width: 88,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  onPressed: () => _handleStartMessage(
+                    targetId: rawId,
+                    username: person.username,
+                    avatarAsset: person.avatarAsset,
+                    displayName: displayName,
+                  ),
                 ),
-              ),
             ],
           ),
         );
@@ -655,6 +684,8 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
       itemBuilder: (BuildContext context, int index) {
         final DiscoverCreator creator = _suggestedPeople[index];
         final String rawId = creator.id ?? '';
+        final MessagesProvider msgProvider = context.watch<MessagesProvider>();
+        final bool isBlocked = msgProvider.isBlocked(rawId) || msgProvider.isBlocked(creator.username);
         final String cleanUsername = creator.username.startsWith('@')
             ? creator.username
             : '@${creator.username}';
@@ -744,19 +775,32 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
 
               const SizedBox(width: AppSpacing.md),
 
-              // Message Action Button
-              AppGradientButton(
-                text: isStartingChat ? 'Loading...' : 'Message',
-                height: 34,
-                width: 88,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                onPressed: () => _handleStartMessage(
-                  targetId: rawId,
-                  username: creator.username,
-                  avatarAsset: creator.avatarAsset,
-                  displayName: displayName,
+              // Message / Unblock Action Button
+              if (isBlocked)
+                AppOutlineButton(
+                  text: 'Unblock',
+                  height: 34,
+                  width: 88,
+                  onPressed: () async {
+                    await context.read<MessagesProvider>().unblockUser(
+                          rawId,
+                          username: creator.username,
+                        );
+                  },
+                )
+              else
+                AppGradientButton(
+                  text: isStartingChat ? 'Loading...' : 'Message',
+                  height: 34,
+                  width: 88,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  onPressed: () => _handleStartMessage(
+                    targetId: rawId,
+                    username: creator.username,
+                    avatarAsset: creator.avatarAsset,
+                    displayName: displayName,
+                  ),
                 ),
-              ),
             ],
           ),
         );

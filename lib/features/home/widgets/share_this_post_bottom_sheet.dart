@@ -83,6 +83,9 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
 
     // 1. First add users with active conversations
     for (final ConversationModel c in msgProvider.conversations) {
+      if (msgProvider.isBlocked(c.participantId) || msgProvider.isBlocked(c.username)) {
+        continue;
+      }
       final String u = c.username.replaceAll('@', '').trim();
       final String effectiveUsername =
           u.isNotEmpty ? u : (c.displayName?.isNotEmpty == true ? c.displayName! : 'User');
@@ -103,6 +106,9 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
 
     // 2. Add followers who aren't already in conversation list
     for (final UserRelationItem f in profileProvider.followers) {
+      if (msgProvider.isBlocked(f.userId) || msgProvider.isBlocked(f.username)) {
+        continue;
+      }
       final String u = f.username.replaceAll('@', '').trim();
       final String key = u.toLowerCase();
       if (u.isNotEmpty && !seenUsernames.contains(key)) {
@@ -196,14 +202,14 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                               await msgProvider.sharePost(
                                 sharedPostId: shareTargetId,
                                 conversationIds: <String>[c.conversationId!],
-                                contentType: 'reel_share',
+                                contentType: widget.reel != null ? 'reel' : 'post',
                               );
                             } else if (c.userId != null &&
                                 c.userId!.isNotEmpty) {
                               await msgProvider.sharePost(
                                 sharedPostId: shareTargetId,
                                 recipientUserIds: <String>[c.userId!],
-                                contentType: 'reel_share',
+                                contentType: widget.reel != null ? 'reel' : 'post',
                               );
                             }
                           }

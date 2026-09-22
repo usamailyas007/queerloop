@@ -1,5 +1,6 @@
 {
   "ENV": "staging",
   "BASE_URL": "http://3.208.100.236:3001",
+  "SOCKET_URL": "http://3.208.100.236:3018",
   "USE_MOCK_API": false
 }

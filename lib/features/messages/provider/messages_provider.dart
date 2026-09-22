@@ -5,6 +5,9 @@ import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../create_post/models/create_post_models.dart';
+import '../../create_post/services/media_upload_service.dart';
+import '../../create_post/services/post_content_service.dart';
 import '../models/message_models.dart';
 import '../services/chat_socket_service.dart';
 import '../services/conversations_service.dart';
@@ -20,6 +23,7 @@ class MessagesProvider extends ChangeNotifier {
         _currentUserId = currentUserId {
     _loadPersistedReadStates();
     _attachSocketListeners();
+    loadBlockedUsers();
     if (token != null && token.isNotEmpty) {
       _token = token;
       _socketService?.connect(token: token, currentUserId: currentUserId);
@@ -32,6 +36,7 @@ class MessagesProvider extends ChangeNotifier {
   ConversationsService? _service;
   ChatSocketService? _socketService;
   String? _currentUserId;
+  String? get currentUserId => _currentUserId;
   String? _token;
   String? get token => _token;
   bool _isDisposed = false;
@@ -58,13 +63,32 @@ class MessagesProvider extends ChangeNotifier {
       final String? status = _userPresenceMap[userId];
       if (status != null) {
         final String s = status.toLowerCase().trim();
-        return s == 'online' || s == 'active';
+        if (s == 'online' || s == 'active') return true;
+        if (s == 'offline') return false;
       }
       final String clean = userId.startsWith('@') ? userId.substring(1) : userId;
       final String? statusClean = _userPresenceMap[clean] ?? _userPresenceMap['@$clean'];
       if (statusClean != null) {
         final String s = statusClean.toLowerCase().trim();
-        return s == 'online' || s == 'active';
+        if (s == 'online' || s == 'active') return true;
+        if (s == 'offline') return false;
+      }
+
+      final dynamic la = _userLastActiveMap[userId] ??
+          _userLastActiveMap[clean] ??
+          _userLastActiveMap['@$clean'];
+      if (la != null) {
+        if (la is String &&
+            (la.toLowerCase() == 'active now' ||
+                la.toLowerCase() == 'online' ||
+                la.toLowerCase() == 'active')) {
+          return true;
+        }
+        final DateTime? dt =
+            la is DateTime ? la : (la is String ? DateTime.tryParse(la) : null);
+        if (dt != null && DateTime.now().difference(dt).inMinutes.abs() <= 3) {
+          return true;
+        }
       }
     }
     if (conv != null) {
@@ -73,18 +97,36 @@ class MessagesProvider extends ChangeNotifier {
       }
       if (conv.participantId != null && _userPresenceMap.containsKey(conv.participantId!)) {
         final String s = _userPresenceMap[conv.participantId!]!.toLowerCase().trim();
-        return s == 'online' || s == 'active';
+        if (s == 'online' || s == 'active') return true;
+        if (s == 'offline') return false;
       }
       if (_userPresenceMap.containsKey(conv.id)) {
         final String s = _userPresenceMap[conv.id]!.toLowerCase().trim();
-        return s == 'online' || s == 'active';
+        if (s == 'online' || s == 'active') return true;
+        if (s == 'offline') return false;
       }
       final String cleanU = conv.username.startsWith('@') ? conv.username.substring(1) : conv.username;
       if (_userPresenceMap.containsKey(cleanU)) {
         final String s = _userPresenceMap[cleanU]!.toLowerCase().trim();
-        return s == 'online' || s == 'active';
+        if (s == 'online' || s == 'active') return true;
+        if (s == 'offline') return false;
       }
-      return conv.isOnline;
+      if (conv.isOnline) return true;
+
+      final dynamic la = conv.lastActive;
+      if (la != null) {
+        if (la is String &&
+            (la.toLowerCase() == 'active now' ||
+                la.toLowerCase() == 'online' ||
+                la.toLowerCase() == 'active')) {
+          return true;
+        }
+        final DateTime? dt =
+            la is DateTime ? la : (la is String ? DateTime.tryParse(la) : null);
+        if (dt != null && DateTime.now().difference(dt).inMinutes.abs() <= 3) {
+          return true;
+        }
+      }
     }
     return false;
   }
@@ -93,6 +135,9 @@ class MessagesProvider extends ChangeNotifier {
       userId != null ? _userPresenceMap[userId] : null;
 
   String? getUserLastActiveText(String? userId, [ConversationModel? conv]) {
+    if (isUserOnline(userId, conv)) {
+      return 'Active now';
+    }
     dynamic lastActive;
     if (userId != null && userId.isNotEmpty) {
       lastActive = _userLastActiveMap[userId];
@@ -142,14 +187,22 @@ class MessagesProvider extends ChangeNotifier {
   bool isConversationTyping(String? convId) {
     if (convId == null || convId.isEmpty) return false;
     if (_typingByConvId[convId] == true) return true;
+    final String clean = convId.startsWith('@') ? convId.substring(1) : convId;
+    if (_typingByConvId[clean] == true) return true;
+    if (_typingByConvId['@$clean'] == true) return true;
     for (final ConversationModel c in _conversations) {
-      if (c.id == convId || c.participantId == convId) {
+      if (c.id == convId ||
+          c.participantId == convId ||
+          c.username == convId ||
+          c.username == clean ||
+          c.username == '@$clean') {
         if (c.isTyping) return true;
         if (c.participantId != null &&
             _typingByConvId[c.participantId!] == true) {
           return true;
         }
         if (_typingByConvId[c.id] == true) return true;
+        if (_typingByConvId[c.username] == true) return true;
       }
     }
     return false;
@@ -157,8 +210,34 @@ class MessagesProvider extends ChangeNotifier {
 
   final Set<String> _locallyReadMessageIds = <String>{};
   final Set<String> _readSentMessageIds = <String>{};
+  final Map<String, String> _readSentMessageTime = <String, String>{};
   final Map<String, String> _localReactionMap = <String, String>{};
   final Map<String, DateTime> _lastReadTimeByConv = <String, DateTime>{};
+
+  bool isMessageSentRead(String messageId) =>
+      _readSentMessageIds.contains(messageId);
+
+  String? getReadTime(String messageId) => _readSentMessageTime[messageId];
+
+  /// Returns the latest stored timestamp string for [messageId] across all
+  /// conversation message maps. Used so ChatBubble can reactively show the
+  /// updated "Read HH:mm" time without needing the user to navigate away.
+  String? getMessageTimestamp(String messageId) {
+    if (_readSentMessageTime.containsKey(messageId)) {
+      return _readSentMessageTime[messageId];
+    }
+    for (final List<ChatMessageModel> msgs in _messagesByConvId.values) {
+      for (final ChatMessageModel m in msgs) {
+        if (m.id == messageId) {
+          if (_readSentMessageTime.containsKey(m.id)) {
+            return _readSentMessageTime[m.id];
+          }
+          return m.timestamp;
+        }
+      }
+    }
+    return null;
+  }
 
   Future<void> _loadPersistedReadStates() async {
     try {
@@ -278,14 +357,18 @@ class MessagesProvider extends ChangeNotifier {
     _activeChatConvId = conversationId;
     if (conversationId != null && conversationId.isNotEmpty) {
       joinConversation(conversationId);
+      _socketService?.sendPresence(isOnline: true, conversationId: conversationId);
       final int idx = _conversations.indexWhere((ConversationModel c) =>
           c.id == conversationId || c.participantId == conversationId);
       if (idx != -1) {
         final String? pId = _conversations[idx].participantId;
         if (pId != null && pId.isNotEmpty && pId != conversationId) {
           joinConversation(pId);
+          _socketService?.sendPresence(isOnline: true, conversationId: pId);
         }
       }
+    } else {
+      _socketService?.sendPresence(isOnline: true);
     }
   }
 
@@ -381,6 +464,24 @@ class MessagesProvider extends ChangeNotifier {
     if (event.conversationId.isEmpty || event.messageId.isEmpty) return;
 
     final String convId = event.conversationId;
+    _typingByConvId[convId] = false;
+    if (event.senderId.isNotEmpty) {
+      _typingByConvId[event.senderId] = false;
+      final String cleanU = event.senderId.startsWith('@')
+          ? event.senderId.substring(1)
+          : event.senderId;
+      _typingByConvId[cleanU] = false;
+      _typingByConvId['@$cleanU'] = false;
+    }
+    final int typingConvIdx = _conversations.indexWhere((ConversationModel c) =>
+        c.id == convId ||
+        c.participantId == convId ||
+        c.participantId == event.senderId);
+    if (typingConvIdx != -1) {
+      _conversations[typingConvIdx] =
+          _conversations[typingConvIdx].copyWith(isTyping: false);
+    }
+
     final List<ChatMessageModel> msgs = List<ChatMessageModel>.from(
         _messagesByConvId[convId] ?? <ChatMessageModel>[]);
 
@@ -407,21 +508,40 @@ class MessagesProvider extends ChangeNotifier {
 
     // 3. Construct new chat message
     final bool isRead = isFromMe || _activeChatConvId == convId;
-    final ChatMessageModel newMsg = ChatMessageModel(
-      id: event.messageId,
-      conversationId: convId,
-      senderId: event.senderId,
-      senderUsername: isFromMe ? 'me' : 'User',
-      isMe: isFromMe,
-      timestamp: 'Just now',
-      text: event.body,
-      isRead: isRead,
-      createdAt: DateTime.now(),
-      type: MessageType.text,
-    );
+    final ChatMessageModel newMsg;
+    if (event.raw.isNotEmpty) {
+      newMsg = ChatMessageModel.fromJson(
+        event.raw,
+        currentUserId: _currentUserId,
+      ).copyWith(
+        id: event.messageId,
+        conversationId: convId,
+        isRead: isRead,
+        isMe: isFromMe,
+      );
+    } else {
+      newMsg = ChatMessageModel(
+        id: event.messageId,
+        conversationId: convId,
+        senderId: event.senderId,
+        senderUsername: isFromMe ? 'me' : 'User',
+        isMe: isFromMe,
+        timestamp: 'Just now',
+        text: event.body,
+        isRead: isRead,
+        createdAt: DateTime.now(),
+        type: MessageType.text,
+      );
+    }
 
     msgs.add(newMsg);
     _messagesByConvId[convId] = msgs;
+
+    if (newMsg.sharedPostId != null &&
+        newMsg.sharedPostId!.isNotEmpty &&
+        (newMsg.postThumbnailAsset == null || !newMsg.postThumbnailAsset!.startsWith('http'))) {
+      resolveSharedPost(newMsg.sharedPostId!);
+    }
 
     // 4. If user is currently in this conversation, mark read immediately
     if (!isFromMe && _activeChatConvId == convId) {
@@ -438,13 +558,18 @@ class MessagesProvider extends ChangeNotifier {
     final int convIdx = _conversations.indexWhere(
         (ConversationModel c) => c.id == convId || c.participantId == convId);
     final String prefix = isFromMe ? 'You: ' : '';
+    final String snippet = newMsg.type == MessageType.postShare
+        ? (newMsg.text != null && newMsg.text!.isNotEmpty
+            ? newMsg.text!
+            : 'Shared a post')
+        : (event.body.isNotEmpty ? event.body : 'Sent a message');
     if (convIdx != -1) {
       final ConversationModel current = _conversations[convIdx];
       final int unread = (!isFromMe && _activeChatConvId != convId)
           ? (current.unreadCount + 1)
           : 0;
       _conversations[convIdx] = current.copyWith(
-        lastMessage: '$prefix${event.body}',
+        lastMessage: '$prefix$snippet',
         lastMessageAt: DateTime.now(),
         timeAgo: 'Just now',
         unreadCount: unread,
@@ -460,12 +585,20 @@ class MessagesProvider extends ChangeNotifier {
   }
 
   void _handleSocketMessageRead(SocketMessageReadEvent event) {
-    if (event.conversationId.isEmpty) return;
+    if (event.conversationId.isEmpty && event.messageId.isEmpty) return;
 
-    // Collect all candidate keys that could identify this conversation
-    final Set<String> matchingKeys = <String>{event.conversationId};
+    final Set<String> matchingKeys = <String>{};
+    if (event.conversationId.isNotEmpty) {
+      matchingKeys.add(event.conversationId);
+    }
+    if (_activeChatConvId != null && _activeChatConvId!.isNotEmpty) {
+      matchingKeys.add(_activeChatConvId!);
+    }
     for (final ConversationModel c in _conversations) {
-      if (c.id == event.conversationId || c.participantId == event.conversationId) {
+      if (c.id == event.conversationId ||
+          c.participantId == event.conversationId ||
+          (event.messageId.isNotEmpty &&
+              c.messages.any((ChatMessageModel m) => m.id == event.messageId))) {
         matchingKeys.add(c.id);
         if (c.participantId != null && c.participantId!.isNotEmpty) {
           matchingKeys.add(c.participantId!);
@@ -473,20 +606,54 @@ class MessagesProvider extends ChangeNotifier {
       }
     }
 
+    if (event.messageId.isNotEmpty) {
+      for (final MapEntry<String, List<ChatMessageModel>> entry in _messagesByConvId.entries) {
+        if (entry.value.any((ChatMessageModel m) => m.id == event.messageId)) {
+          matchingKeys.add(entry.key);
+        }
+      }
+    }
+
+    if (matchingKeys.isEmpty && _activeChatConvId != null) {
+      matchingKeys.add(_activeChatConvId!);
+    }
+
     bool anyChanged = false;
     for (final String key in matchingKeys) {
       final List<ChatMessageModel>? msgs = _messagesByConvId[key];
       if (msgs != null && msgs.isNotEmpty) {
+        final int targetIdx = event.messageId.isNotEmpty
+            ? msgs.indexWhere((ChatMessageModel m) => m.id == event.messageId)
+            : -1;
+
         for (int i = 0; i < msgs.length; i++) {
           final ChatMessageModel m = msgs[i];
-          // Mark sent messages as read
           if (m.isMe) {
-            if (event.messageId.isEmpty || m.id == event.messageId) {
+            bool shouldMark = false;
+            if (event.messageId.isEmpty) {
+              shouldMark = true;
+            } else if (m.id == event.messageId) {
+              shouldMark = true;
+            } else if (targetIdx != -1 && i <= targetIdx) {
+              shouldMark = true;
+            } else if (m.id.startsWith('temp_') || m.id.startsWith('m_')) {
+              shouldMark = true;
+            }
+
+            if (shouldMark) {
               _readSentMessageIds.add(m.id);
-              if (!m.isRead) {
-                msgs[i] = m.copyWith(isRead: true);
-                anyChanged = true;
+              if (event.messageId.isNotEmpty) {
+                _readSentMessageIds.add(event.messageId);
               }
+              final DateTime now = DateTime.now();
+              final String readTime =
+                  '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+              _readSentMessageTime[m.id] = readTime;
+              if (event.messageId.isNotEmpty) {
+                _readSentMessageTime[event.messageId] = readTime;
+              }
+              msgs[i] = m.copyWith(isRead: true, timestamp: readTime);
+              anyChanged = true;
             }
           }
         }
@@ -497,15 +664,13 @@ class MessagesProvider extends ChangeNotifier {
     }
 
     if (anyChanged) {
-      // Also update conversations list
       for (int i = 0; i < _conversations.length; i++) {
-        if (matchingKeys.contains(_conversations[i].id) ||
-            matchingKeys.contains(_conversations[i].participantId)) {
-          final List<ChatMessageModel>? updatedMsgs =
-              _messagesByConvId[_conversations[i].id];
+        final String convId = _conversations[i].id;
+        final String? partId = _conversations[i].participantId;
+        if (matchingKeys.contains(convId) || (partId != null && matchingKeys.contains(partId))) {
+          final List<ChatMessageModel>? updatedMsgs = _messagesByConvId[convId];
           if (updatedMsgs != null) {
-            _conversations[i] =
-                _conversations[i].copyWith(messages: updatedMsgs);
+            _conversations[i] = _conversations[i].copyWith(messages: updatedMsgs);
           }
         }
       }
@@ -519,6 +684,9 @@ class MessagesProvider extends ChangeNotifier {
     final Set<String> matchingKeys = <String>{};
     if (event.conversationId.isNotEmpty) {
       matchingKeys.add(event.conversationId);
+    }
+    if (_activeChatConvId != null && _activeChatConvId!.isNotEmpty) {
+      matchingKeys.add(_activeChatConvId!);
     }
     for (final MapEntry<String, List<ChatMessageModel>> entry in _messagesByConvId.entries) {
       if (entry.value.any((ChatMessageModel m) => m.id == event.messageId)) {
@@ -536,11 +704,19 @@ class MessagesProvider extends ChangeNotifier {
       }
     }
 
+    if (matchingKeys.isEmpty && _activeChatConvId != null) {
+      matchingKeys.add(_activeChatConvId!);
+    }
+
     bool anyChanged = false;
     for (final String key in matchingKeys) {
       final List<ChatMessageModel>? msgs = _messagesByConvId[key];
       if (msgs != null && msgs.isNotEmpty) {
-        final int idx = msgs.indexWhere((ChatMessageModel m) => m.id == event.messageId);
+        int idx = msgs.indexWhere((ChatMessageModel m) => m.id == event.messageId);
+        if (idx == -1 && msgs.isNotEmpty) {
+          idx = msgs.lastIndexWhere((ChatMessageModel m) =>
+              m.id.startsWith('temp_') || m.id.startsWith('m_'));
+        }
         if (idx != -1) {
           final List<MessageReactionModel> reactionsList =
               <MessageReactionModel>[];
@@ -564,12 +740,31 @@ class MessagesProvider extends ChangeNotifier {
               reactionsList.add(
                   MessageReactionModel(emoji: resolvedEmoji, userId: event.userId));
             } else if (event.reactions is Map) {
-              final Map map = event.reactions as Map;
+              final Map<dynamic, dynamic> map = event.reactions as Map<dynamic, dynamic>;
+              // Check for standard emoji/reaction key first
               final String? e =
                   map['emoji']?.toString() ?? map['reaction']?.toString();
               if (e != null && e.isNotEmpty) {
                 resolvedEmoji = e;
                 reactionsList.add(MessageReactionModel.fromJson(map));
+              } else {
+                // Backend sends { "😂": ["userId1", ...] } — key IS the emoji
+                for (final dynamic emojiKey in map.keys) {
+                  final String ek = emojiKey.toString().trim();
+                  if (ek.isEmpty) continue;
+                  resolvedEmoji ??= ek;
+                  final dynamic userList = map[emojiKey];
+                  if (userList is List) {
+                    for (final dynamic uid in userList) {
+                      reactionsList.add(MessageReactionModel(
+                        emoji: ek,
+                        userId: uid?.toString(),
+                      ));
+                    }
+                  } else {
+                    reactionsList.add(MessageReactionModel(emoji: ek));
+                  }
+                }
               }
             }
           }
@@ -635,9 +830,14 @@ class MessagesProvider extends ChangeNotifier {
     if (event.userId == _currentUserId) return;
 
     final String presenceVal = event.isOnline ? 'online' : 'offline';
+    final String nowIso = DateTime.now().toUtc().toIso8601String();
     _userPresenceMap[event.userId] = presenceVal;
-    if (event.lastActive != null) {
+    if (event.isOnline) {
+      _userLastActiveMap[event.userId] = nowIso;
+    } else if (event.lastActive != null) {
       _userLastActiveMap[event.userId] = event.lastActive;
+    } else {
+      _userLastActiveMap[event.userId] = nowIso;
     }
 
     final String cleanUserId = event.userId.startsWith('@')
@@ -645,20 +845,35 @@ class MessagesProvider extends ChangeNotifier {
         : event.userId;
     _userPresenceMap[cleanUserId] = presenceVal;
     _userPresenceMap['@$cleanUserId'] = presenceVal;
+    if (event.isOnline) {
+      _userLastActiveMap[cleanUserId] = nowIso;
+      _userLastActiveMap['@$cleanUserId'] = nowIso;
+    } else {
+      final dynamic la = _userLastActiveMap[event.userId];
+      _userLastActiveMap[cleanUserId] = la;
+      _userLastActiveMap['@$cleanUserId'] = la;
+    }
 
     for (int i = 0; i < _conversations.length; i++) {
       final ConversationModel c = _conversations[i];
       final String cleanU =
           c.username.startsWith('@') ? c.username.substring(1) : c.username;
-      if (c.participantId == event.userId ||
+      final bool matches = c.participantId == event.userId ||
+          c.participantId == cleanUserId ||
           c.id == event.userId ||
-          cleanU.toLowerCase() == cleanUserId.toLowerCase()) {
+          c.id == cleanUserId ||
+          cleanU.toLowerCase() == cleanUserId.toLowerCase() ||
+          c.username.toLowerCase() == event.userId.toLowerCase();
+      if (matches) {
         _conversations[i] = c.copyWith(
           isOnline: event.isOnline,
-          lastActive: event.lastActive ?? c.lastActive,
+          lastActive: event.isOnline
+              ? 'Active now'
+              : (_userLastActiveMap[event.userId] ?? c.lastActive),
         );
         if (c.participantId != null && c.participantId!.isNotEmpty) {
           _userPresenceMap[c.participantId!] = presenceVal;
+          _userPresenceMap[cleanUserId] = presenceVal;
         }
         _userPresenceMap[c.id] = presenceVal;
       }
@@ -824,6 +1039,7 @@ class MessagesProvider extends ChangeNotifier {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           loadConversations();
           loadMessageRequests();
+          loadBlockedUsers();
         });
       }
     }
@@ -842,7 +1058,11 @@ class MessagesProvider extends ChangeNotifier {
   final Map<String, bool> _mutedUsers = <String, bool>{};
   final Map<String, bool> _restrictedUsers = <String, bool>{};
   final Map<String, bool> _blockedUsers = <String, bool>{};
+  final Set<String> _blockedUserIds = <String>{};
+  final Set<String> _blockedUsernames = <String>{};
   final Map<String, bool> _typingIndicatorEnabled = <String, bool>{};
+  bool _isLoadingBlocked = false;
+  bool get isLoadingBlocked => _isLoadingBlocked;
 
   bool isMuted(String key) {
     if (_mutedUsers[key] == true) return true;
@@ -851,7 +1071,152 @@ class MessagesProvider extends ChangeNotifier {
     return false;
   }
   bool isRestricted(String username) => _restrictedUsers[username] ?? false;
-  bool isBlocked(String username) => _blockedUsers[username] ?? false;
+
+  bool isBlocked(String? key) {
+    if (key == null || key.trim().isEmpty) return false;
+    final String raw = key.trim();
+    if (_blockedUsers[raw] == true) return true;
+    final String clean = raw.replaceAll('@', '').toLowerCase();
+    if (_blockedUsers[clean] == true || _blockedUsers['@$clean'] == true) return true;
+    if (_blockedUserIds.contains(clean)) return true;
+    if (_blockedUsernames.contains(clean)) return true;
+    return false;
+  }
+
+  Set<String> get blockedUserIds => Set<String>.unmodifiable(_blockedUserIds);
+  Set<String> get blockedUsernames => Set<String>.unmodifiable(_blockedUsernames);
+
+  /// Fetch blocked users from backend: GET /users/me/blocked
+  Future<void> loadBlockedUsers({bool force = false}) async {
+    if (_service == null) return;
+    _isLoadingBlocked = true;
+    try {
+      final List<Map<String, dynamic>> items = await _service!.getBlockedUsers();
+      _blockedUsers.clear();
+      _blockedUserIds.clear();
+      _blockedUsernames.clear();
+
+      for (final Map<String, dynamic> raw in items) {
+        final Map<String, dynamic> userMap =
+            (raw['blockedUser'] is Map<String, dynamic>)
+                ? raw['blockedUser'] as Map<String, dynamic>
+                : (raw['user'] is Map<String, dynamic>)
+                    ? raw['user'] as Map<String, dynamic>
+                    : raw;
+
+        final String uId = (userMap['userId'] ??
+                userMap['id'] ??
+                userMap['_id'] ??
+                raw['blockedUserId'] ??
+                raw['userId'] ??
+                raw['id'] ??
+                '')
+            .toString()
+            .trim()
+            .toLowerCase();
+
+        final String uname = (userMap['username'] ??
+                userMap['handle'] ??
+                raw['username'] ??
+                '')
+            .toString()
+            .replaceAll('@', '')
+            .trim()
+            .toLowerCase();
+
+        if (uId.isNotEmpty) {
+          _blockedUserIds.add(uId);
+          _blockedUsers[uId] = true;
+        }
+        if (uname.isNotEmpty) {
+          _blockedUsernames.add(uname);
+          _blockedUsers[uname] = true;
+          _blockedUsers['@$uname'] = true;
+        }
+      }
+      debugPrint('✅ [MessagesProvider] Loaded ${_blockedUserIds.length} blocked user(s)');
+    } catch (e) {
+      debugPrint('⚠️ [MessagesProvider] Failed to load blocked users: $e');
+    } finally {
+      _isLoadingBlocked = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> blockUser(String userId, {String? username}) async {
+    if (userId.trim().isEmpty) return false;
+    final String cleanId = userId.trim().toLowerCase();
+    final String cleanUname = (username ?? '').replaceAll('@', '').trim().toLowerCase();
+
+    _blockedUserIds.add(cleanId);
+    _blockedUsers[cleanId] = true;
+    _blockedUsers[userId] = true;
+    if (cleanUname.isNotEmpty) {
+      _blockedUsernames.add(cleanUname);
+      _blockedUsers[cleanUname] = true;
+      _blockedUsers['@$cleanUname'] = true;
+    }
+    notifyListeners();
+
+    if (_service != null) {
+      final bool ok = await _service!.blockUser(userId);
+      if (!ok) {
+        _blockedUserIds.remove(cleanId);
+        _blockedUsers.remove(cleanId);
+        _blockedUsers.remove(userId);
+        if (cleanUname.isNotEmpty) {
+          _blockedUsernames.remove(cleanUname);
+          _blockedUsers.remove(cleanUname);
+          _blockedUsers.remove('@$cleanUname');
+        }
+        notifyListeners();
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<bool> unblockUser(String userId, {String? username}) async {
+    if (userId.trim().isEmpty) return false;
+    final String cleanId = userId.trim().toLowerCase();
+    final String cleanUname = (username ?? '').replaceAll('@', '').trim().toLowerCase();
+
+    _blockedUserIds.remove(cleanId);
+    _blockedUsers.remove(cleanId);
+    _blockedUsers.remove(userId);
+    if (cleanUname.isNotEmpty) {
+      _blockedUsernames.remove(cleanUname);
+      _blockedUsers.remove(cleanUname);
+      _blockedUsers.remove('@$cleanUname');
+    }
+    notifyListeners();
+
+    if (_service != null) {
+      final bool ok = await _service!.unblockUser(userId);
+      if (!ok) {
+        _blockedUserIds.add(cleanId);
+        _blockedUsers[cleanId] = true;
+        _blockedUsers[userId] = true;
+        if (cleanUname.isNotEmpty) {
+          _blockedUsernames.add(cleanUname);
+          _blockedUsers[cleanUname] = true;
+        }
+        notifyListeners();
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<void> toggleBlock(String username, {String? userId}) async {
+    final bool current = isBlocked(username) || (userId != null && isBlocked(userId));
+    final String targetId = (userId != null && userId.isNotEmpty) ? userId : username;
+    if (current) {
+      await unblockUser(targetId, username: username);
+    } else {
+      await blockUser(targetId, username: username);
+    }
+  }
 
   void toggleMute(String username) {
     final bool current = isMuted(username);
@@ -873,9 +1238,87 @@ class MessagesProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleBlock(String username) {
-    _blockedUsers[username] = !isBlocked(username);
-    notifyListeners();
+  // ── Shared Post & Media Resolution ──────────────────────────────────────
+  final Map<String, PostResponseModel> _resolvedPosts = <String, PostResponseModel>{};
+  final Set<String> _resolvingPostIds = <String>{};
+
+  PostResponseModel? getCachedPost(String postId) => _resolvedPosts[postId.trim()];
+
+  Future<PostResponseModel?> resolveSharedPost(String postId) async {
+    final String cleanPostId = postId.trim();
+    if (cleanPostId.isEmpty) return null;
+    if (_resolvedPosts.containsKey(cleanPostId)) {
+      return _resolvedPosts[cleanPostId];
+    }
+    if (_resolvingPostIds.contains(cleanPostId)) return null;
+    _resolvingPostIds.add(cleanPostId);
+
+    try {
+      if (_service == null) return null;
+      final PostContentService postService = PostContentService(_service!.client);
+      final MediaUploadService mediaService = MediaUploadService(_service!.client);
+
+      final PostResponseModel post = await postService.getPost(cleanPostId);
+      _resolvedPosts[cleanPostId] = post;
+
+      String? mediaUrl;
+      String? thumbUrl;
+      if (post.mediaRefs.isNotEmpty) {
+        final String firstRef = post.mediaRefs.first.trim();
+        if (firstRef.startsWith('http://') || firstRef.startsWith('https://')) {
+          mediaUrl = firstRef;
+          thumbUrl = firstRef;
+        } else {
+          try {
+            final MediaUploadResult status = await mediaService.getMediaStatus(firstRef);
+            mediaUrl = status.url ?? status.downloadUrl;
+            thumbUrl = status.thumbnailUrl ?? mediaUrl;
+          } catch (_) {
+            mediaUrl = firstRef;
+            thumbUrl = firstRef;
+          }
+        }
+      }
+
+      final String effectiveThumb = thumbUrl ?? mediaUrl ?? '';
+      final String rawType = post.type.trim().toUpperCase();
+      final String pType = (rawType == 'VIDEO' || rawType == 'REEL') ? 'reel' : 'post';
+      final String resolvedAuthor = (post.authorName != null && post.authorName!.isNotEmpty)
+          ? (post.authorName!.startsWith('@') ? post.authorName! : '@${post.authorName!}')
+          : '@creator';
+
+      bool anyUpdated = false;
+      for (final MapEntry<String, List<ChatMessageModel>> entry in _messagesByConvId.entries) {
+        final List<ChatMessageModel> list = entry.value;
+        for (int i = 0; i < list.length; i++) {
+          if (list[i].sharedPostId == cleanPostId) {
+            list[i] = list[i].copyWith(
+              postThumbnailAsset: effectiveThumb.isNotEmpty ? effectiveThumb : list[i].postThumbnailAsset,
+              postCaption: post.caption.isNotEmpty ? post.caption : list[i].postCaption,
+              postAuthor: resolvedAuthor,
+              postAuthorAvatarUrl: post.authorAvatar ?? list[i].postAuthorAvatarUrl,
+              postType: pType,
+              postLikes: post.likesCount > 0 ? post.likesCount : list[i].postLikes,
+              postComments: post.commentsCount > 0 ? post.commentsCount : list[i].postComments,
+            );
+            anyUpdated = true;
+          }
+        }
+        if (anyUpdated) {
+          _messagesByConvId[entry.key] = List<ChatMessageModel>.from(list);
+        }
+      }
+
+      if (anyUpdated) {
+        notifyListeners();
+      }
+      return post;
+    } catch (e) {
+      debugPrint('⚠️ [MessagesProvider] Error resolving shared post $cleanPostId: $e');
+      return null;
+    } finally {
+      _resolvingPostIds.remove(cleanPostId);
+    }
   }
 
   bool isTypingIndicatorEnabled(String? key) {
@@ -1102,6 +1545,7 @@ class MessagesProvider extends ChangeNotifier {
 
   Future<void> loadConversations({bool force = false}) async {
     if (_service == null) return;
+    loadBlockedUsers();
     if (_conversations.isEmpty) {
       _isLoadingConversations = true;
       notifyListeners();
@@ -1448,14 +1892,27 @@ class MessagesProvider extends ChangeNotifier {
           _applyReadStatesToMessages(conversationId, fetched);
       _messagesByConvId[conversationId] = msgs;
 
+      for (final ChatMessageModel m in fetched) {
+        if (m.sharedPostId != null &&
+            m.sharedPostId!.isNotEmpty &&
+            (m.postThumbnailAsset == null || !m.postThumbnailAsset!.startsWith('http'))) {
+          resolveSharedPost(m.sharedPostId!);
+        }
+      }
+
       // If active chat is currently this conversation, mark unread messages as read
       if (_activeChatConvId == conversationId) {
         _lastReadTimeByConv[conversationId] = DateTime.now();
         if (_service != null && !conversationId.startsWith('temp_')) {
-          _service!.markConversationRead(conversationId);
+          _service!.markConversationRead(conversationId).catchError((_) => false);
+          _socketService?.markConversationRead(conversationId: conversationId);
           for (final ChatMessageModel raw in fetched) {
             if (!raw.isMe && !raw.isRead && !raw.id.startsWith('temp_') && !raw.id.startsWith('m_')) {
               _service!.markMessageRead(
+                conversationId: conversationId,
+                messageId: raw.id,
+              ).catchError((_) => false);
+              _socketService?.markMessageRead(
                 conversationId: conversationId,
                 messageId: raw.id,
               );
@@ -1535,6 +1992,18 @@ class MessagesProvider extends ChangeNotifier {
   Future<void> sendMessage(String conversationId, String text) async {
     final String trimmed = text.trim();
     if (trimmed.isEmpty) return;
+
+    final int convIdx =
+        _conversations.indexWhere((ConversationModel c) => c.id == conversationId);
+    final ConversationModel? targetConv =
+        convIdx != -1 ? _conversations[convIdx] : null;
+    final String? pId = targetConv?.participantId;
+    final String uname = targetConv?.username ?? '';
+
+    if (isBlocked(conversationId) || isBlocked(pId) || isBlocked(uname)) {
+      debugPrint('⚠️ [MessagesProvider] Cannot send message: recipient is blocked.');
+      return;
+    }
 
     final String tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
     final ChatMessageModel optimisticMsg = ChatMessageModel(
@@ -1707,12 +2176,16 @@ class MessagesProvider extends ChangeNotifier {
     _persistReadStates();
     notifyListeners();
 
-    // 3. Emit message_read on socket for each unread message
+    // 3. Emit message_read and conversation:read on socket
+    _socketService?.markConversationRead(conversationId: conversationId);
     for (final String msgId in unreadIds) {
       _socketService?.markMessageRead(
         conversationId: conversationId,
         messageId: msgId,
       );
+    }
+    if (_service != null && !conversationId.startsWith('temp_')) {
+      _service!.markConversationRead(conversationId).catchError((_) => false);
     }
   }
 
@@ -1807,18 +2280,49 @@ class MessagesProvider extends ChangeNotifier {
       return;
     }
 
-    final bool alreadyReactedWithEmoji = targetMessage.reactionEmoji == emoji;
+    // Check if current user already has a reaction on this message
+    final String? myCurrentEmoji = _currentUserId != null
+        ? targetMessage.reactions
+            .cast<MessageReactionModel?>()
+            .firstWhere(
+              (MessageReactionModel? r) => r?.userId == _currentUserId,
+              orElse: () => null,
+            )
+            ?.emoji
+        : null;
+
+    // alreadyReacted with the SAME emoji => remove. Different emoji => update.
+    final bool alreadyReactedWithEmoji =
+        myCurrentEmoji == emoji || targetMessage.reactionEmoji == emoji;
+    final bool isUpdatingReaction =
+        myCurrentEmoji != null && myCurrentEmoji != emoji;
+
+    // Build updated reactions list (one entry per userId)
+    List<MessageReactionModel> updatedReactions =
+        List<MessageReactionModel>.from(targetMessage.reactions);
+    // Remove existing entry for this user
+    updatedReactions.removeWhere(
+        (MessageReactionModel r) => r.userId == _currentUserId);
 
     final ChatMessageModel updated;
-    if (alreadyReactedWithEmoji) {
+    if (alreadyReactedWithEmoji && !isUpdatingReaction) {
+      // Remove reaction entirely
       updated = targetMessage.copyWith(
-        clearReaction: true,
+        clearReaction: updatedReactions.isEmpty,
+        reactions: updatedReactions,
+        reactionEmoji: updatedReactions.isEmpty
+            ? null
+            : updatedReactions.first.emoji,
+        reactionCount: updatedReactions.isEmpty ? null : updatedReactions.length,
       );
       _localReactionMap.remove(messageId);
     } else {
+      // Add or update reaction
+      updatedReactions.add(MessageReactionModel(emoji: emoji, userId: _currentUserId));
       updated = targetMessage.copyWith(
+        reactions: updatedReactions,
         reactionEmoji: emoji,
-        reactionCount: (targetMessage.reactionCount ?? 0) + 1,
+        reactionCount: updatedReactions.length,
       );
       _localReactionMap[messageId] = emoji;
     }
@@ -1867,22 +2371,47 @@ class MessagesProvider extends ChangeNotifier {
       }
     }
 
-    // 3. Socket emit (reactions strictly via socket per backend spec)
+    // 3. Socket emit and REST API sync
     if (backendConvId.isNotEmpty) {
-      if (alreadyReactedWithEmoji) {
+      if (alreadyReactedWithEmoji && !isUpdatingReaction) {
+        // Remove reaction
         _socketService?.removeReaction(
           conversationId: backendConvId,
           messageId: messageId,
           emoji: emoji,
           userId: _currentUserId,
         );
+        if (_service != null && !backendConvId.startsWith('temp_') && !messageId.startsWith('temp_')) {
+          _service!.removeReaction(
+            conversationId: backendConvId,
+            messageId: messageId,
+            emoji: emoji,
+          ).catchError((_) => false);
+        }
       } else {
+        // Add or update (backend accepts add_reaction; previous is replaced server-side per user)
+        if (isUpdatingReaction) {
+          // Optionally remove old emoji first
+          _socketService?.removeReaction(
+            conversationId: backendConvId,
+            messageId: messageId,
+            emoji: myCurrentEmoji,
+            userId: _currentUserId,
+          );
+        }
         _socketService?.addReaction(
           conversationId: backendConvId,
           messageId: messageId,
           emoji: emoji,
           userId: _currentUserId,
         );
+        if (_service != null && !backendConvId.startsWith('temp_') && !messageId.startsWith('temp_')) {
+          _service!.addReaction(
+            conversationId: backendConvId,
+            messageId: messageId,
+            emoji: emoji,
+          ).catchError((_) => false);
+        }
       }
     }
   }
@@ -1892,6 +2421,14 @@ class MessagesProvider extends ChangeNotifier {
   }
 
   // ── Share Post / Reel ──────────────────────────────────────────────────────
+  /// Shares a post/reel via REST API (`POST /conversations/share`) for
+  /// persistence, then also emits a socket event for real-time delivery.
+  ///
+  /// - [sharedPostId]     : ID of the post or reel to share.
+  /// - [conversationIds]  : Existing conversation IDs to share into.
+  /// - [recipientUserIds] : User IDs to share to (creates conversation if needed).
+  /// - [message]          : Optional text alongside the share.
+  /// - [contentType]      : `"post"` / `"reel_share"` / `"post_share"` etc.
   Future<bool> sharePost({
     required String sharedPostId,
     List<String>? conversationIds,
@@ -1899,67 +2436,101 @@ class MessagesProvider extends ChangeNotifier {
     String? message,
     String? contentType,
   }) async {
-    try {
-      final Set<String> targetConvs = <String>{};
-      if (conversationIds != null) {
-        targetConvs.addAll(conversationIds.where((String id) => id.isNotEmpty));
-      }
-      if (recipientUserIds != null) {
-        for (final String uId in recipientUserIds) {
-          if (uId.isEmpty) continue;
-          final int cIdx = _conversations.indexWhere((ConversationModel c) =>
-              c.participantId == uId || c.id == uId);
-          if (cIdx != -1 &&
-              _conversations[cIdx].id.isNotEmpty &&
-              !_conversations[cIdx].id.startsWith('temp_')) {
-            targetConvs.add(_conversations[cIdx].id);
-          } else if (_service != null) {
-            try {
-              final ConversationModel? created =
-                  await _service!.startConversation(
-                participantId: uId,
-                currentUserId: _currentUserId,
-              );
-              if (created != null && created.id.isNotEmpty) {
-                targetConvs.add(created.id);
-                final int exist = _conversations
-                    .indexWhere((ConversationModel c) => c.id == created.id);
-                if (exist != -1) {
-                  _conversations[exist] = created;
-                } else {
-                  _conversations.insert(0, created);
-                }
-              }
-            } catch (_) {}
-          }
-        }
-      }
-
-      for (final String cId in targetConvs) {
-        _socketService?.sendMessage(
-          conversationId: cId,
-          sharedPostId: sharedPostId,
-          text: message,
-          body: message,
-        );
-
-        final int idx =
-            _conversations.indexWhere((ConversationModel c) => c.id == cId);
-        if (idx != -1) {
-          _conversations[idx] = _conversations[idx].copyWith(
-            lastMessage: 'Shared a post',
-            lastMessageAt: DateTime.now(),
-            timeAgo: 'Just now',
-          );
-        }
-      }
-
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint('❌ [MessagesProvider] Error in sharePost via socket: $e');
+    if (sharedPostId.trim().isEmpty) {
+      debugPrint('⚠️ [MessagesProvider] sharePost: sharedPostId is empty.');
       return false;
     }
+
+    // ── 1. Resolve recipient user IDs → conversation IDs ────────────────────
+    final Set<String> targetConvIds = <String>{};
+    if (conversationIds != null) {
+      targetConvIds.addAll(conversationIds.where((String id) => id.isNotEmpty));
+    }
+
+    final List<String> unresolvedUserIds = <String>[];
+    if (recipientUserIds != null) {
+      for (final String uId in recipientUserIds) {
+        if (uId.isEmpty) continue;
+        final int cIdx = _conversations.indexWhere(
+            (ConversationModel c) => c.participantId == uId || c.id == uId);
+        if (cIdx != -1 &&
+            _conversations[cIdx].id.isNotEmpty &&
+            !_conversations[cIdx].id.startsWith('temp_')) {
+          targetConvIds.add(_conversations[cIdx].id);
+        } else {
+          unresolvedUserIds.add(uId);
+        }
+      }
+    }
+
+    // Filter out blocked users from sharing
+    targetConvIds.removeWhere((String cId) {
+      final int cIdx = _conversations.indexWhere((ConversationModel c) => c.id == cId);
+      if (cIdx != -1) {
+        return isBlocked(_conversations[cIdx].participantId) ||
+            isBlocked(_conversations[cIdx].username) ||
+            isBlocked(cId);
+      }
+      return isBlocked(cId);
+    });
+    unresolvedUserIds.removeWhere((String uId) => isBlocked(uId));
+
+    if (targetConvIds.isEmpty && unresolvedUserIds.isEmpty) {
+      debugPrint('⚠️ [MessagesProvider] sharePost: all recipients are blocked.');
+      return false;
+    }
+
+    // ── 2. API call — preferred path ─────────────────────────────────────────
+    bool apiOk = false;
+    if (_service != null) {
+      try {
+        debugPrint(
+            '🚀 [MessagesProvider] sharePost (API): postId=$sharedPostId, convs=$targetConvIds, users=$unresolvedUserIds');
+        apiOk = await _service!.sharePost(
+          sharedPostId: sharedPostId,
+          conversationIds: targetConvIds.isNotEmpty ? targetConvIds.toList() : null,
+          recipientUserIds: unresolvedUserIds.isNotEmpty ? unresolvedUserIds : null,
+          message: message,
+          contentType: contentType,
+        );
+        if (apiOk) {
+          debugPrint('✅ [MessagesProvider] sharePost API succeeded.');
+        }
+      } catch (e) {
+        debugPrint('⚠️ [MessagesProvider] sharePost API failed, falling back to socket: $e');
+      }
+    }
+
+    // ── 3. Socket emit — real-time delivery to already-resolved conv IDs ─────
+    for (final String cId in targetConvIds) {
+      _socketService?.sendMessage(
+        conversationId: cId,
+        sharedPostId: sharedPostId,
+        text: message,
+        body: message,
+      );
+    }
+
+    // ── 4. Optimistic UI update ───────────────────────────────────────────────
+    for (final String cId in targetConvIds) {
+      final int idx =
+          _conversations.indexWhere((ConversationModel c) => c.id == cId);
+      if (idx != -1) {
+        _conversations[idx] = _conversations[idx].copyWith(
+          lastMessage: 'You: Shared a post',
+          lastMessageAt: DateTime.now(),
+          timeAgo: 'Just now',
+        );
+      }
+    }
+    notifyListeners();
+
+    // ── 5. Refresh conversations after a short delay so inbox is up to date ──
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      loadConversations();
+    });
+
+    return apiOk;
   }
 
   // ── Mute / Unmute Conversation ─────────────────────────────────────────────
@@ -2071,6 +2642,18 @@ class MessagesProvider extends ChangeNotifier {
     String? imageFilePath,
     String? imageAsset,
   }) {
+    final int convIdx =
+        _conversations.indexWhere((ConversationModel c) => c.id == conversationId);
+    final ConversationModel? targetConv =
+        convIdx != -1 ? _conversations[convIdx] : null;
+    final String? pId = targetConv?.participantId;
+    final String uname = targetConv?.username ?? '';
+
+    if (isBlocked(conversationId) || isBlocked(pId) || isBlocked(uname)) {
+      debugPrint('⚠️ [MessagesProvider] Cannot send image: recipient is blocked.');
+      return;
+    }
+
     final List<ChatMessageModel> currentMsgs = List<ChatMessageModel>.from(
         _messagesByConvId[conversationId] ?? <ChatMessageModel>[])
       ..add(

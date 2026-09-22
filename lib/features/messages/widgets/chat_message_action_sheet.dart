@@ -12,7 +12,9 @@ class ChatMessageActionSheet extends StatefulWidget {
   const ChatMessageActionSheet({
     required this.messageText,
     this.isMe = false,
+    this.currentReactionEmoji,
     this.onEmojiReaction,
+    this.onRemoveReaction,
     this.onReply,
     this.onCopy,
     this.onDeleteForMe,
@@ -22,7 +24,10 @@ class ChatMessageActionSheet extends StatefulWidget {
 
   final String messageText;
   final bool isMe;
+  /// The emoji the current user has already reacted with (null = no reaction).
+  final String? currentReactionEmoji;
   final ValueChanged<String>? onEmojiReaction;
+  final VoidCallback? onRemoveReaction;
   final VoidCallback? onReply;
   final VoidCallback? onCopy;
   final VoidCallback? onDeleteForMe;
@@ -32,7 +37,9 @@ class ChatMessageActionSheet extends StatefulWidget {
     BuildContext context, {
     required String messageText,
     bool isMe = false,
+    String? currentReactionEmoji,
     ValueChanged<String>? onEmojiReaction,
+    VoidCallback? onRemoveReaction,
     VoidCallback? onReply,
     VoidCallback? onCopy,
     VoidCallback? onDeleteForMe,
@@ -45,7 +52,9 @@ class ChatMessageActionSheet extends StatefulWidget {
       builder: (_) => ChatMessageActionSheet(
         messageText: messageText,
         isMe: isMe,
+        currentReactionEmoji: currentReactionEmoji,
         onEmojiReaction: onEmojiReaction,
+        onRemoveReaction: onRemoveReaction,
         onReply: onReply,
         onCopy: onCopy,
         onDeleteForMe: onDeleteForMe,
@@ -102,6 +111,8 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
     final List<String> extraEmojis = <String>['👍', '💙', '✨', '🎉', '💯', '🥰'];
     final List<String> displayEmojis =
         _showAllEmojis ? <String>[...baseEmojis, ...extraEmojis] : baseEmojis;
+    final bool hasMyReaction = widget.currentReactionEmoji != null &&
+        widget.currentReactionEmoji!.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -131,6 +142,8 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     ...displayEmojis.map((String e) {
+                      final bool isMyCurrentReaction =
+                          e == widget.currentReactionEmoji;
                       return GestureDetector(
                         onTap: () {
                           Navigator.pop(context);
@@ -143,9 +156,28 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
                             horizontal: AppSpacing.xs,
                             vertical: 4,
                           ),
-                          child: Text(
-                            e,
-                            style: const TextStyle(fontSize: 20),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: <Widget>[
+                              Text(
+                                e,
+                                style: const TextStyle(fontSize: 20),
+                              ),
+                              // Highlight dot for the current user's reaction
+                              if (isMyCurrentReaction)
+                                Positioned(
+                                  bottom: -2,
+                                  right: -2,
+                                  child: Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.gradientCyan,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       );
@@ -248,7 +280,7 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
 
                   const SizedBox(height: AppSpacing.xs),
 
-                  // 3. Delete for me (available on both received & sent msgs, using AppIcons.hide)
+                  // 3. Delete for me
                   _buildActionItem(
                     context,
                     iconWidget: SvgPicture.asset(
@@ -268,6 +300,25 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
                       }
                     },
                   ),
+
+                  // 3b. Remove reaction (only when user has already reacted)
+                  if (hasMyReaction) ...<Widget>[
+                    const SizedBox(height: AppSpacing.xs),
+                    _buildActionItem(
+                      context,
+                      iconWidget: Text(
+                        widget.currentReactionEmoji!,
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      label: 'Remove reaction',
+                      onTap: () {
+                        Navigator.pop(context);
+                        if (widget.onRemoveReaction != null) {
+                          widget.onRemoveReaction!();
+                        }
+                      },
+                    ),
+                  ],
 
                   // 4. Unsend (available ONLY on sent messages, using AppIcons.delete with Cyan Highlight)
                   if (widget.isMe) ...<Widget>[

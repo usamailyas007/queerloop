@@ -87,6 +87,9 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
     final Set<String> seenUsernames = <String>{};
 
     for (final ConversationModel c in msgProvider.conversations) {
+      if (msgProvider.isBlocked(c.participantId) || msgProvider.isBlocked(c.username)) {
+        continue;
+      }
       final String u = c.username.replaceAll('@', '').trim();
       final String effectiveUsername =
           u.isNotEmpty ? u : (c.displayName?.isNotEmpty == true ? c.displayName! : 'User');
@@ -106,6 +109,9 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
     }
 
     for (final UserRelationItem f in profileProvider.followers) {
+      if (msgProvider.isBlocked(f.userId) || msgProvider.isBlocked(f.username)) {
+        continue;
+      }
       final String u = f.username.replaceAll('@', '').trim();
       final String key = u.toLowerCase();
       if (u.isNotEmpty && !seenUsernames.contains(key)) {
@@ -375,7 +381,7 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                           message: _messageController.text.trim().isNotEmpty
                               ? _messageController.text.trim()
                               : null,
-                          contentType: widget.reel != null ? 'reel_share' : 'post_share',
+                          contentType: widget.reel != null ? 'reel' : 'post',
                         );
                       }
 

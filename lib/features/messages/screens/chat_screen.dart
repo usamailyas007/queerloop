@@ -69,6 +69,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
   Timer? _typingTimer;
   bool _isTypingSent = false;
   int _lastMessageCount = 0;
+  bool _lastWasTyping = false;
 
   void _scrollToBottom({bool animated = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -127,6 +128,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
         final MessagesProvider p = context.read<MessagesProvider>();
+        p.loadBlockedUsers();
         String convId = widget.conversation.id;
 
         // If conversation ID is missing or equal to participantId, start/resolve conversation
@@ -208,7 +210,10 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
         provider.isMuted(activeConv.id) ||
         activeConv.isMuted;
     final bool isRestricted = provider.isRestricted(activeConv.username);
-    final bool isBlocked = provider.isBlocked(activeConv.username);
+    final bool isBlocked = provider.isBlocked(activeConv.username) ||
+        (activeConv.participantId != null &&
+            provider.isBlocked(activeConv.participantId!)) ||
+        provider.isBlocked(activeConv.id);
     final String cleanUsername = activeConv.username.startsWith('@')
         ? activeConv.username
         : '@${activeConv.username}';
@@ -648,7 +653,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
 
                     const SizedBox(height: AppSpacing.lg),
 
-                    // Render Chat Bubbles
+                    // Render Chat Bubbles & Live Typing Indicator
                     Builder(
                       builder: (BuildContext _) {
                         final List<ChatMessageModel> chatMessages =
@@ -664,9 +669,27 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                     ? fallbackMessages
                                     : activeConv.messages);
 
-                        if (effectiveMessages.length != _lastMessageCount) {
+                        final bool isTypingAllowed =
+                            provider.isTypingIndicatorEnabled(activeConv.username) &&
+                            provider.isTypingIndicatorEnabled(activeConv.id) &&
+                            (activeConv.participantId == null ||
+                                provider.isTypingIndicatorEnabled(activeConv.participantId!));
+                        final bool isOtherTyping = isTypingAllowed &&
+                            !isBlocked &&
+                            !isMuted &&
+                            !isRestricted &&
+                            (activeConv.isTyping ||
+                                provider.isConversationTyping(activeConv.id) ||
+                                (activeConv.participantId != null &&
+                                    provider.isConversationTyping(
+                                        activeConv.participantId!)) ||
+                                provider.isConversationTyping(activeConv.username));
+
+                        if (effectiveMessages.length != _lastMessageCount ||
+                            isOtherTyping != _lastWasTyping) {
                           final bool isInitial = _lastMessageCount == 0;
                           _lastMessageCount = effectiveMessages.length;
+                          _lastWasTyping = isOtherTyping;
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             _scrollToBottom(animated: !isInitial);
                           });
@@ -677,13 +700,28 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                             for (final ChatMessageModel msg in effectiveMessages)
                               GestureDetector(
                                 onLongPress: () {
+                                  // Determine current user's existing reaction
+                                  final String? myId = provider.currentUserId;
+                                  String? myCurrentEmoji;
+                                  if (myId != null && msg.reactionEmoji != null && msg.reactionEmoji!.isNotEmpty) {
+                                    final bool iReacted = msg.reactions.any(
+                                        (MessageReactionModel r) => r.userId == myId);
+                                    if (iReacted) myCurrentEmoji = msg.reactionEmoji;
+                                  }
                                   ChatMessageActionSheet.show(
                                     context,
                                     messageText: msg.text ?? '',
                                     isMe: msg.isMe,
+                                    currentReactionEmoji: myCurrentEmoji,
                                     onEmojiReaction: (String emoji) {
                                       provider.toggleReaction(
                                           activeConv.id, msg.id, emoji);
+                                    },
+                                    onRemoveReaction: () {
+                                      if (myCurrentEmoji != null) {
+                                        provider.toggleReaction(
+                                            activeConv.id, msg.id, myCurrentEmoji);
+                                      }
                                     },
                                     onDeleteForMe: () {
                                       provider.unsendMessage(
@@ -700,83 +738,61 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                       bottom: AppSpacing.md),
                                   child: ChatBubble(
                                     message: msg,
+                                    myUserId: provider.currentUserId,
+                                    conversationId: activeConv.id,
+                                  ),
+                                ),
+                              ),
+
+                            // ── Live SpinKit Typing Indicator Bubble (Exact incoming message position) ──
+                            if (isOtherTyping)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                    bottom: AppSpacing.md),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Container(
+                                    constraints: const BoxConstraints(
+                                      minWidth: 64,
+                                      minHeight: 40,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppSpacing.lg,
+                                      vertical: AppSpacing.md,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: context.themeCardBackground,
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(AppRadius.card),
+                                        topRight: Radius.circular(AppRadius.card),
+                                        bottomRight: Radius.circular(AppRadius.card),
+                                        bottomLeft: Radius.circular(4),
+                                      ),
+                                      border: Border.all(
+                                        color: context.themeBorder,
+                                      ),
+                                      boxShadow: <BoxShadow>[
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.04),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const SizedBox(
+                                      width: 36,
+                                      height: 18,
+                                      child: Center(
+                                        child: SpinKitThreeBounce(
+                                          color: AppColors.gradientCyan,
+                                          size: 16.0,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
                           ],
-                        );
-                      },
-                    ),
-
-                    // Typing indicator (if active & not blocked/restricted)
-                    Builder(
-                      builder: (BuildContext _) {
-                        final bool isTypingAllowed =
-                            provider.isTypingIndicatorEnabled(activeConv.username) &&
-                            provider.isTypingIndicatorEnabled(activeConv.id) &&
-                            (activeConv.participantId == null ||
-                                provider.isTypingIndicatorEnabled(activeConv.participantId!));
-                        final bool isOtherTyping = isTypingAllowed &&
-                            (activeConv.isTyping ||
-                                provider.isConversationTyping(activeConv.id) ||
-                                (activeConv.participantId != null &&
-                                    provider.isConversationTyping(
-                                        activeConv.participantId!)) ||
-                                provider.isConversationTyping(activeConv.username));
-
-                        if (!isOtherTyping ||
-                            isBlocked ||
-                            isMuted ||
-                            isRestricted) {
-                          return const SizedBox.shrink();
-                        }
-
-                        return Padding(
-                          padding: const EdgeInsets.only(
-                            top: AppSpacing.xs,
-                            bottom: AppSpacing.md,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Padding(
-                                padding: const EdgeInsets.only(left: 4),
-                                child: Text(
-                                  '${activeConv.username} is typing...',
-                                  style: AppTextStyles.caption.copyWith(
-                                    color: context.themeTextMuted,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 5),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: context.themeCardBackground,
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(18),
-                                      topRight: Radius.circular(18),
-                                      bottomRight: Radius.circular(18),
-                                      bottomLeft: Radius.circular(4),
-                                    ),
-                                    border: Border.all(
-                                      color: context.themeBorder,
-                                    ),
-                                  ),
-                                  child: const SpinKitThreeBounce(
-                                    color: AppColors.gradientCyan,
-                                    size: 16.0,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
                         );
                       },
                     ),
@@ -850,7 +866,16 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                     // Reusable AppOutlineButton for Unblock
                     AppOutlineButton(
                       text: 'Unblock',
-                      onPressed: () => provider.toggleBlock(activeConv.username),
+                      onPressed: () async {
+                        final String targetId = (activeConv.participantId != null &&
+                                activeConv.participantId!.isNotEmpty)
+                            ? activeConv.participantId!
+                            : activeConv.username;
+                        await provider.unblockUser(
+                          targetId,
+                          username: activeConv.username,
+                        );
+                      },
                     ),
                   ],
                 ),

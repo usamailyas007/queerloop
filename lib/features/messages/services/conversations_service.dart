@@ -223,12 +223,11 @@ class ConversationsService {
 
   // ── 7. Send Message ────────────────────────────────────────────────────────
   /// POST /conversations/:id/messages
-  /// body: { "body": ":text", "sharedPostId"?: ":id", "contentType"?: ":type" }
+  /// body: { "body": ":text", "sharedPostId"?: ":id" }
   Future<ChatMessageModel?> sendMessage({
     required String conversationId,
     required String body,
     String? sharedPostId,
-    String? contentType,
     String? currentUserId,
   }) async {
     try {
@@ -237,8 +236,6 @@ class ConversationsService {
         'body': body,
         if (sharedPostId != null && sharedPostId.isNotEmpty)
           'sharedPostId': sharedPostId,
-        if (contentType != null && contentType.isNotEmpty)
-          'contentType': contentType,
       };
       final dynamic res = await _client.post(
         ApiEndpoints.conversationMessages(conversationId),
@@ -261,7 +258,8 @@ class ConversationsService {
 
   // ── 7b. Fan-Out Share Post/Reel ─────────────────────────────────────────────
   /// POST /conversations/share
-  /// body: { "sharedPostId": ":id", "conversationIds": [...], "recipientUserIds": [...], "message"?: ":text" }
+  /// Spec body: { "contentType": "post"|"reel", "contentId": ":id", "conversationIds"?: [...], "recipientUserIds"?: [...], "message"?: ":text" }
+  /// Note: "sharedPostId" must NOT be sent to this endpoint; backend strictly enforces "contentId".
   Future<bool> sharePost({
     required String sharedPostId,
     List<String>? conversationIds,
@@ -272,16 +270,16 @@ class ConversationsService {
     try {
       debugPrint(
           '🚀 [ConversationsService] (API) Sharing post $sharedPostId to convs: $conversationIds, users: $recipientUserIds');
+      final String normalizedContentType = _normalizeContentType(contentType);
       final Map<String, dynamic> payload = <String, dynamic>{
-        'sharedPostId': sharedPostId,
+        'contentType': normalizedContentType,
+        'contentId': sharedPostId,
         if (conversationIds != null && conversationIds.isNotEmpty)
           'conversationIds': conversationIds,
         if (recipientUserIds != null && recipientUserIds.isNotEmpty)
           'recipientUserIds': recipientUserIds,
         if (message != null && message.trim().isNotEmpty)
           'message': message.trim(),
-        if (contentType != null && contentType.isNotEmpty)
-          'contentType': contentType,
       };
       await _client.post(
         ApiEndpoints.conversationShare,
@@ -301,7 +299,6 @@ class ConversationsService {
               conversationId: cId,
               body: message ?? 'Shared a post',
               sharedPostId: sharedPostId,
-              contentType: contentType ?? 'post_share',
             );
             anySuccess = true;
           } catch (_) {}
@@ -317,7 +314,6 @@ class ConversationsService {
                 conversationId: conv.id,
                 body: message ?? 'Shared a post',
                 sharedPostId: sharedPostId,
-                contentType: contentType ?? 'post_share',
               );
               anySuccess = true;
             }
@@ -329,6 +325,13 @@ class ConversationsService {
       debugPrint('❌ [ConversationsService] (API) sharePost unexpected: $e\n$stack');
       return false;
     }
+  }
+
+  String _normalizeContentType(String? type) {
+    if (type == null) return 'post';
+    final String lower = type.toLowerCase().trim();
+    if (lower.contains('reel')) return 'reel';
+    return 'post';
   }
 
   // ── 8. Mark Message Read ───────────────────────────────────────────────────
@@ -502,6 +505,58 @@ class ConversationsService {
       return false;
     } catch (e, stack) {
       debugPrint('❌ [ConversationsService] deleteConversation unexpected: $e\n$stack');
+      return false;
+    }
+  }
+
+  // ── 15. Blocked Users ──────────────────────────────────────────────────────
+  /// List current user's blocked accounts: GET /users/me/blocked
+  Future<List<Map<String, dynamic>>> getBlockedUsers() async {
+    try {
+      debugPrint('🚀 [ConversationsService] Get blocked users: GET ${ApiEndpoints.userBlocked}');
+      final dynamic res = await _client.get(ApiEndpoints.userBlocked);
+      final List<dynamic> list = _extractList(
+        res,
+        keys: const <String>['blocked', 'blockedUsers', 'users', 'items', 'accounts'],
+      );
+      return list.whereType<Map<String, dynamic>>().toList();
+    } on ApiException catch (e) {
+      debugPrint('❌ [ConversationsService] getBlockedUsers error: $e');
+      return <Map<String, dynamic>>[];
+    } catch (e, stack) {
+      debugPrint('❌ [ConversationsService] getBlockedUsers unexpected: $e\n$stack');
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  /// Block user: POST /users/:id/block
+  Future<bool> blockUser(String userId) async {
+    if (userId.trim().isEmpty) return false;
+    try {
+      debugPrint('🚀 [ConversationsService] Block user: POST ${ApiEndpoints.userBlock(userId)}');
+      await _client.post(ApiEndpoints.userBlock(userId));
+      return true;
+    } on ApiException catch (e) {
+      debugPrint('❌ [ConversationsService] blockUser error: $e');
+      return false;
+    } catch (e, stack) {
+      debugPrint('❌ [ConversationsService] blockUser unexpected: $e\n$stack');
+      return false;
+    }
+  }
+
+  /// Unblock user: DELETE /users/:id/block
+  Future<bool> unblockUser(String userId) async {
+    if (userId.trim().isEmpty) return false;
+    try {
+      debugPrint('🚀 [ConversationsService] Unblock user: DELETE ${ApiEndpoints.userBlock(userId)}');
+      await _client.delete(ApiEndpoints.userBlock(userId));
+      return true;
+    } on ApiException catch (e) {
+      debugPrint('❌ [ConversationsService] unblockUser error: $e');
+      return false;
+    } catch (e, stack) {
+      debugPrint('❌ [ConversationsService] unblockUser unexpected: $e\n$stack');
       return false;
     }
   }

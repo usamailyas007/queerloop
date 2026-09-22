@@ -57,6 +57,12 @@ class ChatMessageModel {
     this.mediaUrl,
     this.postThumbnailAsset,
     this.postAuthor,
+    this.postAuthorAvatarUrl,
+    this.postCaption,
+    this.postType,
+    this.postLikes,
+    this.postComments,
+    this.sharedPostId,
     this.postViews,
     this.reactionEmoji,
     this.reactionCount,
@@ -78,6 +84,12 @@ class ChatMessageModel {
   final String? mediaUrl;
   final String? postThumbnailAsset;
   final String? postAuthor;
+  final String? postAuthorAvatarUrl;
+  final String? postCaption;
+  final String? postType;
+  final int? postLikes;
+  final int? postComments;
+  final String? sharedPostId;
   final String? postViews;
   final String? reactionEmoji;
   final int? reactionCount;
@@ -149,19 +161,149 @@ class ChatMessageModel {
         DateTime.tryParse(json['createdAt']?.toString() ?? '');
     String timeFormatted = json['timestamp']?.toString() ?? '';
     if (timeFormatted.isEmpty && created != null) {
+      final DateTime localCreated = created.toLocal();
       timeFormatted =
-          '${created.hour.toString().padLeft(2, '0')}:${created.minute.toString().padLeft(2, '0')}';
+          '${localCreated.hour.toString().padLeft(2, '0')}:${localCreated.minute.toString().padLeft(2, '0')}';
     }
     if (timeFormatted.isEmpty) {
       timeFormatted = 'Just now';
     }
 
+    final DateTime? readAtDt = DateTime.tryParse(
+        (json['readAt'] ?? json['read_at'] ?? json['seenAt'] ?? json['seen_at'])
+                ?.toString() ??
+            '');
+    String? readTimeFormatted;
+    if (readAtDt != null) {
+      final DateTime localRead = readAtDt.toLocal();
+      readTimeFormatted =
+          '${localRead.hour.toString().padLeft(2, '0')}:${localRead.minute.toString().padLeft(2, '0')}';
+    }
+
+    // Shared post / content parsing
+    final String? sharedPostId = (json['sharedPostId'] ??
+            json['contentId'] ??
+            (json['sharedContent'] is Map ? json['sharedContent']['id'] : null))
+        ?.toString();
+
+    final dynamic sharedContent = json['sharedContent'];
+
+    final bool isSharedPost = (sharedPostId != null && sharedPostId.isNotEmpty) ||
+        sharedContent != null ||
+        json['type'] == 'postShare' ||
+        json['postAuthor'] != null;
+
+    String? postThumbnail =
+        (json['postThumbnailAsset'] ?? json['thumbnailUrl'] ?? json['mediaUrl'])?.toString();
+    String? postAuthorName = json['postAuthor']?.toString();
+    String? postAuthorAvatar = json['postAuthorAvatar']?.toString();
+    String? postCaption = json['postCaption']?.toString();
+    String? postType = json['postType']?.toString();
+    String? postViews = json['postViews']?.toString();
+    int? postLikes;
+    int? postComments;
+
+    if (sharedContent is Map) {
+      final String rawType = (sharedContent['type'] ??
+              sharedContent['postType'] ??
+              sharedContent['contentType'] ??
+              'post')
+          .toString()
+          .toLowerCase();
+      postType = (rawType == 'video' || rawType == 'reel') ? 'reel' : 'post';
+      postCaption ??= (sharedContent['body'] ??
+              sharedContent['caption'] ??
+              sharedContent['text'] ??
+              sharedContent['content'])
+          ?.toString();
+
+      final dynamic rawMedia = sharedContent['mediaRefs'] ??
+          sharedContent['media'] ??
+          sharedContent['images'] ??
+          sharedContent['imageUrls'] ??
+          sharedContent['attachments'] ??
+          sharedContent['thumbnailUrl'] ??
+          sharedContent['imageUrl'] ??
+          sharedContent['mediaUrl'] ??
+          sharedContent['url'] ??
+          sharedContent['downloadUrl'] ??
+          sharedContent['videoUrl'];
+
+      if (rawMedia is List && rawMedia.isNotEmpty) {
+        final dynamic first = rawMedia.first;
+        if (first is String && first.trim().isNotEmpty) {
+          postThumbnail ??= first.trim();
+        } else if (first is Map) {
+          final dynamic u = first['thumbnailUrl'] ??
+              first['url'] ??
+              first['downloadUrl'] ??
+              first['mediaUrl'] ??
+              first['imageUrl'] ??
+              first['path'];
+          if (u != null && u.toString().trim().isNotEmpty) {
+            postThumbnail ??= u.toString().trim();
+          }
+        }
+      } else if (rawMedia is String && rawMedia.trim().isNotEmpty) {
+        postThumbnail ??= rawMedia.trim();
+      } else if (rawMedia is Map) {
+        final dynamic u = rawMedia['thumbnailUrl'] ??
+            rawMedia['url'] ??
+            rawMedia['downloadUrl'] ??
+            rawMedia['mediaUrl'] ??
+            rawMedia['imageUrl'];
+        if (u != null && u.toString().trim().isNotEmpty) {
+          postThumbnail ??= u.toString().trim();
+        }
+      }
+
+      final dynamic likesRaw = sharedContent['likeCount'] ??
+          sharedContent['likesCount'] ??
+          sharedContent['likes'] ??
+          (sharedContent['_count'] is Map ? sharedContent['_count']['likes'] : null);
+      if (likesRaw is num) postLikes = likesRaw.toInt();
+
+      final dynamic commentsRaw = sharedContent['commentCount'] ??
+          sharedContent['commentsCount'] ??
+          sharedContent['comments'] ??
+          (sharedContent['_count'] is Map ? sharedContent['_count']['comments'] : null);
+      if (commentsRaw is num) postComments = commentsRaw.toInt();
+
+      final dynamic author = sharedContent['author'] ?? sharedContent['user'];
+      if (author is Map) {
+        final String aUser = (author['username'] ?? '').toString().trim();
+        final String aName = (author['displayName'] ?? author['name'] ?? '').toString().trim();
+        if (aUser.isNotEmpty) {
+          postAuthorName = aUser.startsWith('@') ? aUser : '@$aUser';
+        } else if (aName.isNotEmpty) {
+          postAuthorName = aName;
+        }
+        postAuthorAvatar ??=
+            (author['avatarUrl'] ?? author['avatar'] ?? author['profilePicture'])?.toString();
+      } else if (sharedContent['authorName'] != null) {
+        final String an = sharedContent['authorName'].toString().trim();
+        postAuthorName = an.startsWith('@') ? an : '@$an';
+      }
+
+      if (postAuthorAvatar == null && sharedContent['authorAvatar'] != null) {
+        postAuthorAvatar = sharedContent['authorAvatar'].toString().trim();
+      }
+
+      if (postViews == null) {
+        if (postLikes != null && postLikes > 0) {
+          postViews = '$postLikes ${postLikes == 1 ? 'like' : 'likes'}';
+        } else if (postType == 'reel') {
+          postViews = 'Reel';
+        }
+      }
+    }
+
     // Message type
     MessageType mType = MessageType.text;
-    if (media != null && media.isNotEmpty) {
-      mType = MessageType.image;
-    } else if (json['type'] == 'postShare' || json['postAuthor'] != null) {
+    if (isSharedPost) {
       mType = MessageType.postShare;
+    } else if (media != null && media.isNotEmpty) {
+      mType = MessageType.image;
     } else if (me) {
       mType = MessageType.gradientText;
     }
@@ -220,9 +362,20 @@ class ChatMessageModel {
       senderId: sId.isNotEmpty ? sId : null,
       senderUsername: sUsername,
       isMe: me,
-      timestamp: timeFormatted,
+      timestamp: (isMsgRead && me && readTimeFormatted != null)
+          ? readTimeFormatted
+          : timeFormatted,
       text: body,
       mediaUrl: media,
+      postThumbnailAsset: postThumbnail,
+      postAuthor: postAuthorName,
+      postAuthorAvatarUrl: postAuthorAvatar,
+      postCaption: postCaption,
+      postType: postType,
+      postLikes: postLikes,
+      postComments: postComments,
+      sharedPostId: sharedPostId,
+      postViews: postViews,
       reactionEmoji: singleEmoji,
       reactionCount: count,
       reactions: parsedReactions,
@@ -245,6 +398,12 @@ class ChatMessageModel {
     String? mediaUrl,
     String? postThumbnailAsset,
     String? postAuthor,
+    String? postAuthorAvatarUrl,
+    String? postCaption,
+    String? postType,
+    int? postLikes,
+    int? postComments,
+    String? sharedPostId,
     String? postViews,
     String? reactionEmoji,
     int? reactionCount,
@@ -267,6 +426,12 @@ class ChatMessageModel {
       mediaUrl: mediaUrl ?? this.mediaUrl,
       postThumbnailAsset: postThumbnailAsset ?? this.postThumbnailAsset,
       postAuthor: postAuthor ?? this.postAuthor,
+      postAuthorAvatarUrl: postAuthorAvatarUrl ?? this.postAuthorAvatarUrl,
+      postCaption: postCaption ?? this.postCaption,
+      postType: postType ?? this.postType,
+      postLikes: postLikes ?? this.postLikes,
+      postComments: postComments ?? this.postComments,
+      sharedPostId: sharedPostId ?? this.sharedPostId,
       postViews: postViews ?? this.postViews,
       reactionEmoji: clearReaction ? null : (reactionEmoji ?? this.reactionEmoji),
       reactionCount: clearReaction ? null : (reactionCount ?? this.reactionCount),
@@ -435,6 +600,9 @@ class ConversationModel {
 
       if (rawBody.trim().isNotEmpty) {
         lastMsgText = rawBody.trim();
+      } else if (lastMsgRaw['sharedPostId'] != null ||
+          lastMsgRaw['sharedContent'] != null) {
+        lastMsgText = 'Shared a post';
       } else if (lastMsgRaw['mediaUrl'] != null ||
           lastMsgRaw['imageUrl'] != null ||
           lastMsgRaw['attachmentUrl'] != null ||
@@ -467,6 +635,9 @@ class ConversationModel {
 
         if (rawBody.trim().isNotEmpty) {
           lastMsgText = rawBody.trim();
+        } else if (lastItem['sharedPostId'] != null ||
+            lastItem['sharedContent'] != null) {
+          lastMsgText = 'Shared a post';
         } else if (lastItem['mediaUrl'] != null ||
             lastItem['imageUrl'] != null ||
             lastItem['attachmentUrl'] != null) {

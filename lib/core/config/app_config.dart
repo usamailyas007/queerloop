@@ -13,7 +13,13 @@ abstract final class AppConfig {
   static String get socketUrl {
     const String customSocket = String.fromEnvironment('SOCKET_URL');
     if (customSocket.isNotEmpty) return customSocket;
-    return baseUrl;
+    if (baseUrl.isNotEmpty) {
+      try {
+        final Uri uri = Uri.parse(baseUrl);
+        return uri.replace(port: 3018).toString();
+      } catch (_) {}
+    }
+    return 'http://3.208.100.236:3018';
   }
 
   static const bool useMockApi = bool.fromEnvironment(
