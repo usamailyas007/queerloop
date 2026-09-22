@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_images.dart';
 import '../../create_post/models/create_post_models.dart';
 import '../../create_post/services/media_upload_service.dart';
@@ -189,26 +190,52 @@ class HomeFeedProvider extends ChangeNotifier {
     }
   }
 
+  bool _isValidPostItem(PostItemModel p) {
+    final String t = p.postType.toUpperCase().trim();
+    if (t == 'VIDEO' || t == 'REEL') return false;
+    final String? img = p.postImageUrl?.toLowerCase();
+    if (img != null &&
+        (img.endsWith('.mp4') ||
+            img.endsWith('.mov') ||
+            img.endsWith('.webm') ||
+            img.endsWith('.mkv'))) {
+      return false;
+    }
+    final bool hasText = p.content.trim().isNotEmpty;
+    final bool hasImage = (p.postImageUrl != null && p.postImageUrl!.trim().isNotEmpty) ||
+        (p.postImageAsset != null && p.postImageAsset!.trim().isNotEmpty);
+    return hasText || hasImage;
+  }
+
+  bool _isReelOrVideo(PostResponseModel post) {
+    final String postType = post.type.toUpperCase().trim();
+    if (postType == 'VIDEO' || postType == 'REEL') return true;
+    if (post.duration != null && post.duration!.trim().isNotEmpty) return true;
+    for (final String ref in post.mediaRefs) {
+      final String lower = ref.toLowerCase();
+      if (lower.endsWith('.mp4') ||
+          lower.endsWith('.mov') ||
+          lower.endsWith('.webm') ||
+          lower.endsWith('.mkv') ||
+          lower.contains('/videos/') ||
+          lower.contains('/video/')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   List<PostItemModel> get posts {
     switch (_activeTopTab) {
       case TopTab.following:
         return List<PostItemModel>.unmodifiable(
-            _followingPosts.where((p) {
-              final String t = p.postType.toUpperCase().trim();
-              return t != 'VIDEO' && t != 'REEL';
-            }));
+            _followingPosts.where(_isValidPostItem));
       case TopTab.communities:
         return List<PostItemModel>.unmodifiable(
-            _communityPosts.where((p) {
-              final String t = p.postType.toUpperCase().trim();
-              return t != 'VIDEO' && t != 'REEL';
-            }));
+            _communityPosts.where(_isValidPostItem));
       case TopTab.forYou:
         return List<PostItemModel>.unmodifiable(
-            _forYouPosts.where((p) {
-              final String t = p.postType.toUpperCase().trim();
-              return t != 'VIDEO' && t != 'REEL';
-            }));
+            _forYouPosts.where(_isValidPostItem));
     }
   }
 
@@ -227,19 +254,23 @@ class HomeFeedProvider extends ChangeNotifier {
     String? videoUrl;
     String? thumbnailUrl;
 
-    if (post.mediaRefs.isNotEmpty && _mediaService != null) {
-      final String mediaId = post.mediaRefs.first;
-      MediaUploadResult? media = _mediaCache[mediaId];
-      if (media == null) {
-        try {
-          media = await _mediaService!.getMediaStatus(mediaId);
-          _mediaCache[mediaId] = media;
-        } catch (e) {
-          debugPrint('⚠️ [HomeFeed] Could not resolve reel media $mediaId: $e');
+    if (post.mediaRefs.isNotEmpty) {
+      final String mediaId = post.mediaRefs.first.trim();
+      if (mediaId.startsWith('http://') || mediaId.startsWith('https://')) {
+        videoUrl = mediaId;
+      } else if (_mediaService != null) {
+        MediaUploadResult? media = _mediaCache[mediaId];
+        if (media == null) {
+          try {
+            media = await _mediaService!.getMediaStatus(mediaId);
+            _mediaCache[mediaId] = media;
+          } catch (e) {
+            debugPrint('⚠️ [HomeFeed] Could not resolve reel media $mediaId: $e');
+          }
         }
+        videoUrl = media?.url ?? media?.downloadUrl;
+        thumbnailUrl = media?.thumbnailUrl;
       }
-      videoUrl = media?.url ?? media?.downloadUrl;
-      thumbnailUrl = media?.thumbnailUrl;
     }
 
     final bool isLiked = _currentUserId != null &&
@@ -281,20 +312,74 @@ class HomeFeedProvider extends ChangeNotifier {
   }
 
   Future<PostItemModel> _buildPostItem(PostResponseModel post) async {
-    String? imageUrl;
+    String? imageUrl = post.postImageUrl;
 
-    if (post.mediaRefs.isNotEmpty && _mediaService != null) {
-      final String mediaId = post.mediaRefs.first;
-      MediaUploadResult? media = _mediaCache[mediaId];
-      if (media == null) {
-        try {
-          media = await _mediaService!.getMediaStatus(mediaId);
-          _mediaCache[mediaId] = media;
-        } catch (e) {
-          debugPrint('⚠️ [HomeFeed] Could not resolve post media $mediaId: $e');
+    if (imageUrl == null || imageUrl.isEmpty) {
+      if (post.mediaRefs.isNotEmpty) {
+        for (final String rawRef in post.mediaRefs) {
+          final String ref = rawRef.trim();
+          if (ref.isEmpty) continue;
+          final String lower = ref.toLowerCase();
+          final bool isVideoFile = lower.endsWith('.mp4') ||
+              lower.endsWith('.mov') ||
+              lower.endsWith('.webm') ||
+              lower.endsWith('.mkv');
+          if (isVideoFile) continue;
+
+          if (ref.startsWith('http://') || ref.startsWith('https://')) {
+            imageUrl = ref;
+            break;
+          } else if (ref.startsWith('assets/')) {
+            imageUrl = ref;
+            break;
+          } else if (ref.startsWith('/') ||
+              lower.endsWith('.jpg') ||
+              lower.endsWith('.jpeg') ||
+              lower.endsWith('.png') ||
+              lower.endsWith('.webp') ||
+              lower.endsWith('.gif')) {
+            final String base = AppConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
+            final String path = ref.startsWith('/') ? ref : '/$ref';
+            imageUrl = '$base$path';
+            break;
+          } else if (_mediaService != null) {
+
+            MediaUploadResult? media = _mediaCache[ref];
+            if (media == null) {
+              try {
+                media = await _mediaService!.getMediaStatus(ref);
+                _mediaCache[ref] = media;
+              } catch (e) {
+                debugPrint('⚠️ [HomeFeed] Could not resolve post media $ref: $e');
+              }
+            }
+            final String? resolved =
+                media?.url ?? media?.downloadUrl ?? media?.thumbnailUrl;
+            if (resolved != null && resolved.isNotEmpty) {
+              final String resLower = resolved.toLowerCase();
+              if (!resLower.endsWith('.mp4') &&
+                  !resLower.endsWith('.mov') &&
+                  !resLower.endsWith('.webm') &&
+                  !resLower.endsWith('.mkv')) {
+                imageUrl = resolved;
+                break;
+              }
+            } else if (ref.length >= 24 && AppConfig.baseUrl.isNotEmpty) {
+              // Direct gateway media endpoint fallback
+              final String base = AppConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
+              imageUrl = '$base/media/$ref';
+              break;
+            }
+          } else {
+            // No mediaService — use gateway endpoint directly for opaque IDs
+            if (ref.length >= 24 && AppConfig.baseUrl.isNotEmpty) {
+              final String base = AppConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
+              imageUrl = '$base/media/$ref';
+              break;
+            }
+          }
         }
       }
-      imageUrl = media?.url ?? media?.downloadUrl ?? media?.thumbnailUrl;
     }
 
     final bool isLiked = _currentUserId != null &&
@@ -335,22 +420,22 @@ class HomeFeedProvider extends ChangeNotifier {
     final List<PostItemModel> parsedPosts = <PostItemModel>[];
 
     for (final PostResponseModel post in rawPosts) {
-      final String postType = post.type.toUpperCase().trim();
-      final bool isVideo = postType == 'VIDEO' ||
-          postType == 'REEL' ||
-          (post.duration != null && post.duration!.isNotEmpty);
+      final bool isVideo = _isReelOrVideo(post);
 
       if (isVideo) {
         parsedReels.add(await _buildReelItem(post));
       } else {
-        parsedPosts.add(await _buildPostItem(post));
+        final PostItemModel item = await _buildPostItem(post);
+        if (_isValidPostItem(item)) {
+          parsedPosts.add(item);
+        }
       }
     }
 
     return _FeedBatch(reels: parsedReels, posts: parsedPosts);
   }
 
-  // ── 1. Load For You Feed (Identical to Original Working Version) ───────────
+  // ── 1. Load For You Feed (Strict Separation of Posts & Reels) ──────────────
   Future<void> loadForYouFeed({bool force = false}) async {
     if (_contentService == null) {
       _isLoadingForYou = false;
@@ -370,7 +455,7 @@ class HomeFeedProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Fetch Trending Reels (From /posts/trending, all treated as reels exactly as in original version)
+      // 1. Fetch Trending Reels (From /posts/trending, all treated as reels)
       List<PostResponseModel> trendingPosts = <PostResponseModel>[];
       try {
         trendingPosts = await _contentService!.getTrendingPosts();
@@ -387,7 +472,7 @@ class HomeFeedProvider extends ChangeNotifier {
         }
       }
 
-      // 2. Fetch General Feed Posts (/posts)
+      // 2. Fetch General Feed Posts (/posts, /search, /feed/community)
       List<PostResponseModel> feedPosts = <PostResponseModel>[];
       try {
         feedPosts = await _contentService!.getFeedPosts();
@@ -398,10 +483,7 @@ class HomeFeedProvider extends ChangeNotifier {
       final List<PostItemModel> livePosts = <PostItemModel>[];
       for (final PostResponseModel post in feedPosts) {
         try {
-          final String postType = post.type.toUpperCase().trim();
-          final bool isVideoOrReel = postType == 'VIDEO' ||
-              postType == 'REEL' ||
-              (post.duration != null && post.duration!.isNotEmpty);
+          final bool isVideoOrReel = _isReelOrVideo(post);
 
           // Video/Reel posts belong exclusively to Reels
           if (isVideoOrReel) {
@@ -409,25 +491,17 @@ class HomeFeedProvider extends ChangeNotifier {
               liveReels.add(await _buildReelItem(post));
             }
           } else {
-            livePosts.add(await _buildPostItem(post));
+            final PostItemModel item = await _buildPostItem(post);
+            if (_isValidPostItem(item)) {
+              livePosts.add(item);
+            }
           }
         } catch (e) {
           debugPrint('⚠️ [HomeFeedProvider] Error building post: $e');
         }
       }
 
-      // 3. Fallback: If feedPosts (/posts) was empty or failed (e.g. 503), check trendingPosts for non-video posts
-      if (livePosts.isEmpty) {
-        for (final PostResponseModel post in trendingPosts) {
-          final String postType = post.type.toUpperCase().trim();
-          if (postType != 'VIDEO' &&
-              (post.duration == null || post.duration!.isEmpty)) {
-            try {
-              livePosts.add(await _buildPostItem(post));
-            } catch (_) {}
-          }
-        }
-      }
+      // Important: Never add trendingPosts to livePosts since trendingPosts are exclusively reels!
 
       if (liveReels.isNotEmpty || _forYouReels.isEmpty) {
         _forYouReels
@@ -439,8 +513,11 @@ class HomeFeedProvider extends ChangeNotifier {
         _forYouPosts
           ..clear()
           ..addAll(livePosts);
-      } else if (_forYouPosts.isEmpty) {
-        _forYouPosts.addAll(_defaultForYouPosts);
+      } else {
+        // Fallback to high quality default curated posts if no feed posts exist
+        _forYouPosts
+          ..clear()
+          ..addAll(_defaultForYouPosts);
       }
 
       if (_forYouReels.isNotEmpty && _activeTopTab == TopTab.forYou) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
@@ -201,97 +202,26 @@ class PostFeedCard extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: AppSpacing.md),
-
           // ── Content Body Text ─────────────────────────────────────────────
-          Text(
-            post.content,
-            style: TextStyle(
-              color: context.themeTextPrimary,
-              fontSize: 14,
-              height: 1.4,
+          if (post.content.trim().isNotEmpty) ...<Widget>[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              post.content,
+              style: TextStyle(
+                color: context.themeTextPrimary,
+                fontSize: 14,
+                height: 1.4,
+              ),
             ),
-          ),
+          ],
 
           // ── Optional Post Attached Image ──────────────────────────────────
           if (post.postImageUrl != null &&
-              post.postImageUrl!.trim().isNotEmpty &&
-              (post.postImageUrl!.startsWith('http://') ||
-                  post.postImageUrl!.startsWith('https://'))) ...<Widget>[
-            const SizedBox(height: AppSpacing.md),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.network(
-                post.postImageUrl!.trim(),
-                width: double.infinity,
-                height: 220,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    height: 220,
-                    width: double.infinity,
-                    color: context.isDarkMode ? Colors.white10 : Colors.black12,
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  );
-                },
-                errorBuilder: (_, _, _) => ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Image.asset(
-                    AppImages.searchResult1,
-                    width: double.infinity,
-                    height: 220,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            ),
+              post.postImageUrl!.trim().isNotEmpty) ...<Widget>[
+            _buildAttachedImage(context, post.postImageUrl!),
           ] else if (post.postImageAsset != null &&
               post.postImageAsset!.trim().isNotEmpty) ...<Widget>[
-            if (post.postImageAsset!.trim().startsWith('http://') ||
-                post.postImageAsset!.trim().startsWith('https://')) ...<Widget>[
-              const SizedBox(height: AppSpacing.md),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.network(
-                  post.postImageAsset!.trim(),
-                  width: double.infinity,
-                  height: 220,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      AppImages.searchResult1,
-                      width: double.infinity,
-                      height: 220,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-              ),
-            ] else if (post.postImageAsset!.trim().startsWith('assets/')) ...<Widget>[
-              const SizedBox(height: AppSpacing.md),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.asset(
-                  post.postImageAsset!.trim(),
-                  width: double.infinity,
-                  height: 180,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      AppImages.forYouImg,
-                      width: double.infinity,
-                      height: 180,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            _buildAttachedImage(context, post.postImageAsset!),
           ],
 
           const SizedBox(height: AppSpacing.lg),
@@ -498,5 +428,68 @@ class PostFeedCard extends StatelessWidget {
         }
       }
     }
+  }
+
+  Widget _buildAttachedImage(BuildContext context, String rawUrl) {
+    final String clean = rawUrl.trim();
+    if (clean.isEmpty) return const SizedBox.shrink();
+
+    final Widget imageWidget;
+    if (clean.startsWith('assets/')) {
+      imageWidget = Image.asset(
+        clean,
+        width: double.infinity,
+        height: 220,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => Image.asset(
+          AppImages.forYouImg,
+          width: double.infinity,
+          height: 220,
+          fit: BoxFit.cover,
+        ),
+      );
+    } else {
+      final String networkUrl =
+          (clean.startsWith('http://') || clean.startsWith('https://'))
+              ? clean
+              : (clean.startsWith('/')
+                  ? '${AppConfig.baseUrl}$clean'
+                  : '${AppConfig.baseUrl}/$clean');
+
+      imageWidget = Image.network(
+        networkUrl,
+        width: double.infinity,
+        height: 220,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: 220,
+            width: double.infinity,
+            color: context.isDarkMode ? Colors.white10 : Colors.black12,
+            child: const Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.gradientPink,
+              ),
+            ),
+          );
+        },
+        errorBuilder: (_, _, _) => Image.asset(
+          AppImages.searchResult1,
+          width: double.infinity,
+          height: 220,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: imageWidget,
+      ),
+    );
   }
 }

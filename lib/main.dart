@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +10,15 @@ import 'features/messages/services/shared_post_cache.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ── Silence all logs except Feed API response ──────────────────────────────
+  debugPrint = (String? message, {int? wrapWidth}) {
+    if (message != null && message.contains('[FeedAPI]')) {
+      // ignore: avoid_print
+      print(message);
+    }
+  };
+
   await FirebaseService.initialize();
   await CacheManager.instance.init();
   await SharedPostCache.init();

@@ -62,17 +62,44 @@ class MediaUploadResult {
 
   factory MediaUploadResult.fromJson(Map<String, dynamic> json) {
     final Map<String, dynamic> map =
-        (json['data'] is Map<String, dynamic>) ? json['data'] as Map<String, dynamic> : json;
+        (json['data'] is Map<String, dynamic>)
+            ? json['data'] as Map<String, dynamic>
+            : (json['media'] is Map<String, dynamic>)
+                ? json['media'] as Map<String, dynamic>
+                : json;
 
     final String extractedId = _extractId(map);
 
+    final dynamic rawUrl = map['url'] ??
+        map['downloadUrl'] ??
+        map['download_url'] ??
+        map['cdnUrl'] ??
+        map['cdn_url'] ??
+        map['mediaUrl'] ??
+        map['media_url'] ??
+        map['fileUrl'] ??
+        map['file_url'] ??
+        map['publicUrl'] ??
+        map['public_url'] ??
+        map['location'] ??
+        map['signedUrl'] ??
+        map['uploadUrl'] ??
+        map['path'];
+
+    final dynamic rawThumb = map['thumbnailUrl'] ??
+        map['thumbnail_url'] ??
+        map['thumbUrl'] ??
+        map['thumbnail'] ??
+        map['posterUrl'] ??
+        map['previewUrl'];
+
     return MediaUploadResult(
       id: extractedId,
-      uploadUrl: (map['uploadUrl'] ?? map['upload_url'] ?? map['signedUrl']) as String?,
+      uploadUrl: (map['uploadUrl'] ?? map['upload_url'] ?? map['signedUrl'])?.toString(),
       status: (map['status'] ?? 'pending').toString(),
-      downloadUrl: (map['url'] ?? map['downloadUrl'] ?? map['download_url']) as String?,
-      thumbnailUrl: (map['thumbnailUrl'] ?? map['thumbnail_url']) as String?,
-      key: (map['key'] ?? map['s3Key'] ?? map['s3_key'] ?? map['objectKey']) as String?,
+      downloadUrl: rawUrl?.toString(),
+      thumbnailUrl: rawThumb?.toString(),
+      key: (map['key'] ?? map['s3Key'] ?? map['s3_key'] ?? map['objectKey'])?.toString(),
     );
   }
 
@@ -164,6 +191,7 @@ class PostResponseModel {
     this.isLiked = false,
     this.isSaved = false,
     this.duration,
+    this.postImageUrl,
   });
 
   final String id;
@@ -186,6 +214,7 @@ class PostResponseModel {
   final bool isLiked;
   final bool isSaved;
   final String? duration;
+  final String? postImageUrl;
 
   String get body => caption;
 
@@ -194,48 +223,66 @@ class PostResponseModel {
         (json['data'] is Map<String, dynamic>) ? json['data'] as Map<String, dynamic> : json;
 
     final List<String> extractedMediaRefs = <String>[];
-    final dynamic rawMedia = map['mediaRefs'] ??
-        map['mediarefs'] ??
-        map['media'] ??
-        map['mediaUrls'] ??
-        map['images'] ??
-        map['imageUrls'] ??
-        map['attachments'] ??
-        map['imageUrl'] ??
-        map['photoUrl'] ??
-        map['mediaUrl'] ??
-        map['image'];
+    String? explicitImageUrl;
 
-    if (rawMedia is List) {
-      for (final dynamic item in rawMedia) {
-        if (item is String && item.isNotEmpty) {
-          extractedMediaRefs.add(item);
-        } else if (item is Map) {
-          final dynamic url = item['url'] ??
-              item['downloadUrl'] ??
-              item['mediaUrl'] ??
-              item['thumbnailUrl'] ??
-              item['path'] ??
-              item['id'] ??
-              item['_id'];
-          if (url != null && url.toString().isNotEmpty) {
-            extractedMediaRefs.add(url.toString());
+    void addMediaRef(dynamic val) {
+      if (val == null) return;
+      if (val is List) {
+        for (final dynamic item in val) {
+          addMediaRef(item);
+        }
+      } else if (val is String) {
+        final String s = val.trim();
+        if (s.isNotEmpty && !extractedMediaRefs.contains(s)) {
+          if (s.startsWith('http://') || s.startsWith('https://')) {
+            extractedMediaRefs.insert(0, s);
+            explicitImageUrl ??= s;
+          } else {
+            extractedMediaRefs.add(s);
           }
         }
-      }
-    } else if (rawMedia is String && rawMedia.isNotEmpty) {
-      extractedMediaRefs.add(rawMedia);
-    } else if (rawMedia is Map) {
-      final dynamic url = rawMedia['url'] ??
-          rawMedia['downloadUrl'] ??
-          rawMedia['mediaUrl'] ??
-          rawMedia['thumbnailUrl'] ??
-          rawMedia['path'] ??
-          rawMedia['id'];
-      if (url != null && url.toString().isNotEmpty) {
-        extractedMediaRefs.add(url.toString());
+      } else if (val is Map) {
+        final dynamic nestedUrl = val['url'] ??
+            val['downloadUrl'] ??
+            val['download_url'] ??
+            val['cdnUrl'] ??
+            val['mediaUrl'] ??
+            val['fileUrl'] ??
+            val['thumbnailUrl'] ??
+            val['path'] ??
+            val['id'] ??
+            val['_id'];
+        if (nestedUrl != null) {
+          addMediaRef(nestedUrl);
+        }
       }
     }
+
+    addMediaRef(map['mediaRefs']);
+    addMediaRef(map['mediarefs']);
+    addMediaRef(map['mediaUrls']);
+    addMediaRef(map['media_urls']);
+    addMediaRef(map['images']);
+    addMediaRef(map['imageUrls']);
+    addMediaRef(map['image_urls']);
+    addMediaRef(map['photos']);
+    addMediaRef(map['photoUrls']);
+    addMediaRef(map['attachments']);
+    addMediaRef(map['imageUrl']);
+    addMediaRef(map['image_url']);
+    addMediaRef(map['photoUrl']);
+    addMediaRef(map['photo_url']);
+    addMediaRef(map['mediaUrl']);
+    addMediaRef(map['media_url']);
+    addMediaRef(map['image']);
+    addMediaRef(map['photo']);
+    addMediaRef(map['picture']);
+    addMediaRef(map['pictures']);
+    addMediaRef(map['media']);
+    addMediaRef(map['files']);
+    addMediaRef(map['file']);
+    addMediaRef(map['postImage']);
+    addMediaRef(map['postImageUrl']);
 
     final List<dynamic>? rawTags = map['tags'] as List<dynamic>?;
 
@@ -369,7 +416,14 @@ class PostResponseModel {
 
     return PostResponseModel(
       id: (map['id'] ?? map['_id'] ?? '').toString(),
-      caption: (map['body'] ?? map['caption'] ?? '').toString(),
+      caption: (map['body'] ??
+              map['caption'] ??
+              map['content'] ??
+              map['text'] ??
+              map['title'] ??
+              map['description'] ??
+              '')
+          .toString(),
       type: (map['type'] ?? 'TEXT').toString(),
       authorId: finalAuthorId,
       authorName: resolvedAuthorName,
@@ -388,6 +442,12 @@ class PostResponseModel {
       isLiked: (map['isLiked'] ?? map['liked'] ?? false) == true,
       isSaved: (map['isSaved'] ?? map['saved'] ?? false) == true,
       duration: durationStr,
+      postImageUrl: explicitImageUrl ??
+          (extractedMediaRefs.isNotEmpty &&
+                  (extractedMediaRefs.first.startsWith('http://') ||
+                      extractedMediaRefs.first.startsWith('https://'))
+              ? extractedMediaRefs.first
+              : null),
     );
   }
 }

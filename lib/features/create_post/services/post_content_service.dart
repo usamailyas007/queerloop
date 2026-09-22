@@ -1,6 +1,8 @@
 // Post Content Service — manages post publishing and engagement actions.
 // Interfaces with Content Service on Port 3013.
 
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/api/api_client.dart';
@@ -108,42 +110,65 @@ class PostContentService {
   // GET /posts (Content Service, Port 3013)
   Future<List<PostResponseModel>> getFeedPosts() async {
     if (AppConfig.useMockApi) {
+      debugPrint('📡 [FeedAPI] Mock API is ON — skipping real call');
       return const <PostResponseModel>[];
     }
 
     try {
+      debugPrint('📡 [FeedAPI] Calling GET /posts ...');
       final dynamic response =
           await _client.get(ApiEndpoints.posts, useCache: false);
+      // Print full JSON in chunks so Flutter doesn't truncate
+      final String jsonStr = const JsonEncoder.withIndent('  ').convert(response);
+      const int chunkSize = 800;
+      for (int i = 0; i < jsonStr.length; i += chunkSize) {
+        final String chunk = jsonStr.substring(i, i + chunkSize > jsonStr.length ? jsonStr.length : i + chunkSize);
+        debugPrint('📡 [FeedAPI] /posts[$i]: $chunk');
+      }
       final List<PostResponseModel> parsed = _parsePostsList(response);
       if (parsed.isNotEmpty) return parsed;
+      debugPrint('📡 [FeedAPI] /posts returned 0 parsed items, trying fallbacks...');
     } catch (e) {
-      debugPrint('⚠️ [PostContent] Failed to fetch feed posts (/posts): $e');
+      debugPrint('📡 [FeedAPI] /posts FAILED: $e');
     }
 
     // Fallback 1: Dedicated Search Posts endpoint GET /search?q=&limit=20
     try {
+      debugPrint('📡 [FeedAPI] Trying fallback /search ...');
       final dynamic searchResponse = await _client.get(
         ApiEndpoints.searchPosts(query: '', limit: 20),
         useCache: false,
       );
+      debugPrint('📡 [FeedAPI] Raw /search response: $searchResponse');
       final List<PostResponseModel> searchParsed =
           _parsePostsList(searchResponse);
       if (searchParsed.isNotEmpty) return searchParsed;
     } catch (e) {
-      debugPrint('⚠️ [PostContent] Fallback /search failed: $e');
+      debugPrint('📡 [FeedAPI] /search FAILED: $e');
     }
 
     // Fallback 2: Discover Multi-Tab Search GET /discover/search?query=&tab=posts
     try {
+      debugPrint('📡 [FeedAPI] Trying fallback /discover/search ...');
       final dynamic discoverResponse = await _client.get(
         ApiEndpoints.discoverSearch(query: '', tab: 'posts'),
         useCache: false,
       );
+      debugPrint('📡 [FeedAPI] Raw /discover/search response: $discoverResponse');
       final List<PostResponseModel> discoverParsed =
           _parsePostsList(discoverResponse);
       if (discoverParsed.isNotEmpty) return discoverParsed;
     } catch (e) {
-      debugPrint('⚠️ [PostContent] Fallback /discover/search failed: $e');
+      debugPrint('📡 [FeedAPI] /discover/search FAILED: $e');
+    }
+
+    // Fallback 3: Community feed GET /feed/community
+    try {
+      debugPrint('📡 [FeedAPI] Trying fallback /feed/community ...');
+      final List<PostResponseModel> commPosts = await getCommunityFeed();
+      if (commPosts.isNotEmpty) return commPosts;
+    } catch (e) {
+      debugPrint('⚠️ [PostContent] Fallback /feed/community failed: $e');
     }
 
     return const <PostResponseModel>[];
