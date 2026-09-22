@@ -503,6 +503,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             b.username.toLowerCase() ==
                 currentUsername.replaceAll('@', '').toLowerCase());
 
+    final bool shouldShowPrivateScreen =
+        isPrivateAccount && !isOwnProfile && !_isFollowing;
+
     return Scaffold(
       backgroundColor: context.themeBackground,
       body: SafeArea(
@@ -703,8 +706,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             : Row(
                                 children: <Widget>[
                         Expanded(
-                          child: isPrivateAccount
-                              ? (_isRequested
+                          child: _isFollowing
+                              ? AppOutlineButton(
+                                  text: _isFollowActionBusy ? '...' : 'Following',
+                                  onPressed: () => _handleFollowToggle(
+                                    isPrivateAccount: isPrivateAccount,
+                                  ),
+                                )
+                              : (_isRequested
                                   ? GestureDetector(
                                       onTap: () => _handleFollowToggle(
                                         isPrivateAccount: isPrivateAccount,
@@ -740,19 +749,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                             ),
                                           ],
                                         ),
-                                      ),
-                                    )
-                                  : AppGradientButton(
-                                      text: _isFollowActionBusy ? '...' : 'Follow',
-                                      onPressed: () => _handleFollowToggle(
-                                        isPrivateAccount: isPrivateAccount,
-                                      ),
-                                    ))
-                              : (_isFollowing
-                                  ? AppOutlineButton(
-                                      text: _isFollowActionBusy ? '...' : 'Following',
-                                      onPressed: () => _handleFollowToggle(
-                                        isPrivateAccount: isPrivateAccount,
                                       ),
                                     )
                                   : AppGradientButton(
@@ -930,8 +926,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                   const SizedBox(height: AppSpacing.xl),
 
-                  // ── If Private Account -> Show Centered Private Placeholder (Image 1) ──
-                  if (isPrivateAccount) ...<Widget>[
+                  // ── If Private Account & Not Following -> Show Centered Private Placeholder ──
+                  if (shouldShowPrivateScreen) ...<Widget>[
                     const SizedBox(height: AppSpacing.xxl),
                     Center(
                       child: Column(
@@ -971,7 +967,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 24),
                             child: Text(
-                              "Kit approves followers one by one. You'll get a notification if your request is accepted.",
+                              "$currentName approves followers one by one. You'll get a notification if your request is accepted.",
                               textAlign: TextAlign.center,
                               style: AppTextStyles.bodySmall.copyWith(
                                 color: context.themeTextSecondary,
@@ -986,7 +982,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     const SizedBox(height: AppSpacing.xxl),
                   ]
 
-                  // ── If Public Account -> Show Feed Tabs & Media Grid ───────
+                  // ── If Public Account OR Already Following -> Show Feed Tabs & Media Grid ───────
                   else ...<Widget>[
                     ProfileFeedTabsWidget(
                       selectedIndex: _selectedTabIndex,
@@ -1192,19 +1188,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         emptySubtitle: 'This user has not shared any reels yet.',
                       ),
 
-                    // Tab 2: Saved Grid
-                    if (_selectedTabIndex == 2)
+                    // Tab 2: Saved Grid (Only on own profile)
+                    if (_selectedTabIndex == 2 && isOwnProfile)
                       const ProfileMediaGridWidget(showPlayCounts: false),
 
-                    // Tab 3: Liked Grid
-                    if (_selectedTabIndex == 3)
+                    // Tab 3: Liked Grid (Only on own profile)
+                    if (_selectedTabIndex == 3 && isOwnProfile)
                       ProfileMediaGridWidget(
                         showPlayCounts: false,
-                        customReels: isOwnProfile ? profile.likedReels : null,
+                        customReels: profile.likedReels,
                         emptyTitle: 'No liked reels yet',
-                        emptySubtitle: isOwnProfile
-                            ? 'Reels you like will appear here.'
-                            : 'Nobody sees what this user liked',
+                        emptySubtitle: 'Reels you like will appear here.',
                         emptyIcon: Icons.favorite_border_rounded,
                       ),
                   ],

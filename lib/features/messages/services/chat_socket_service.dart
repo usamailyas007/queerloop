@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 
@@ -109,7 +110,6 @@ class SocketMessageReadEvent {
       messageId: (payload['messageId'] ??
               payload['message_id'] ??
               payload['id'] ??
-              payload['_id'] ??
               '')
           .toString(),
       readerId: cleanUserId(
@@ -118,6 +118,55 @@ class SocketMessageReadEvent {
             payload['userId'] ??
             payload['user_id'],
       ),
+    );
+  }
+}
+
+class SocketMessageDeletedEvent {
+  const SocketMessageDeletedEvent({
+    required this.conversationId,
+    required this.messageId,
+  });
+
+  final String conversationId;
+  final String messageId;
+
+  factory SocketMessageDeletedEvent.fromJson(dynamic data) {
+    if (data is String) {
+      try {
+        final dynamic decoded = jsonDecode(data);
+        if (decoded is Map) {
+          return SocketMessageDeletedEvent.fromJson(decoded);
+        }
+      } catch (_) {
+        return SocketMessageDeletedEvent(conversationId: '', messageId: data.trim());
+      }
+    }
+    if (data is! Map) {
+      return const SocketMessageDeletedEvent(conversationId: '', messageId: '');
+    }
+    final Map<String, dynamic> map = Map<String, dynamic>.from(data);
+    final dynamic payload = map['data'] is Map ? map['data'] : map;
+    final dynamic rawMsg = payload['message'];
+    final String msgId = (payload['messageId'] ??
+            payload['message_id'] ??
+            (rawMsg is Map ? (rawMsg['id'] ?? rawMsg['messageId']) : null) ??
+            payload['id'] ??
+            payload['_id'] ??
+            '')
+        .toString()
+        .trim();
+
+    return SocketMessageDeletedEvent(
+      conversationId: cleanConversationId(
+        payload['conversationId'] ??
+            payload['conversation_id'] ??
+            (rawMsg is Map ? rawMsg['conversationId'] : null) ??
+            payload['convId'] ??
+            payload['room'] ??
+            payload['roomId'],
+      ),
+      messageId: msgId,
     );
   }
 }
@@ -149,7 +198,6 @@ class SocketReactionEvent {
     }
     final Map<String, dynamic> map = Map<String, dynamic>.from(data);
     final dynamic payload = map['data'] is Map ? map['data'] : map;
-    final dynamic emojiVal = payload['emoji'] ?? payload['reaction'];
     return SocketReactionEvent(
       conversationId: cleanConversationId(
         payload['conversationId'] ??
@@ -161,12 +209,11 @@ class SocketReactionEvent {
       messageId: (payload['messageId'] ??
               payload['message_id'] ??
               payload['id'] ??
-              payload['_id'] ??
               '')
           .toString(),
       reactions: payload['reactions'],
-      emoji: emojiVal?.toString(),
-      userId: cleanUserId(payload['userId'] ?? payload['user_id'] ?? payload['senderId']),
+      emoji: payload['emoji']?.toString(),
+      userId: cleanUserId(payload['userId'] ?? payload['user_id']),
       isRemoved: isRemoved,
     );
   }
@@ -176,11 +223,13 @@ class SocketUserPresenceEvent {
   const SocketUserPresenceEvent({
     required this.userId,
     required this.status,
+    this.username,
     this.lastActive,
   });
 
   final String userId;
   final String status;
+  final String? username;
   final dynamic lastActive;
 
   bool get isOnline =>
@@ -203,25 +252,33 @@ class SocketUserPresenceEvent {
     final Map<String, dynamic> map = Map<String, dynamic>.from(data);
     final dynamic payload = map['data'] is Map ? map['data'] : map;
 
-    final dynamic userObj = payload['user'];
-    final String uId = cleanUserId(
+    final dynamic rawUser = payload['user'];
+    String uId = cleanUserId(
       payload['userId'] ??
           payload['user_id'] ??
-          (userObj is Map ? (userObj['id'] ?? userObj['userId'] ?? userObj['_id']) : null) ??
           payload['senderId'] ??
+          payload['sender_id'] ??
           payload['participantId'] ??
-          payload['participant_id'] ??
+          (rawUser is Map ? (rawUser['id'] ?? rawUser['_id'] ?? rawUser['userId']) : null) ??
           payload['id'] ??
           payload['_id'] ??
-          payload['username'] ??
           '',
     );
 
+    final String rawUname = (payload['username'] ??
+            payload['handle'] ??
+            (rawUser is Map ? (rawUser['username'] ?? rawUser['handle']) : null) ??
+            '')
+        .toString()
+        .trim();
+    final String cleanUname = cleanUserId(rawUname);
+
+    if (uId.isEmpty && cleanUname.isNotEmpty) {
+      uId = cleanUname;
+    }
+
     String parsedStatus = defaultStatus ?? 'offline';
-    if (payload['isOnline'] == true ||
-        payload['online'] == true ||
-        payload['active'] == true ||
-        payload['isActive'] == true) {
+    if (payload['isOnline'] == true || payload['online'] == true) {
       parsedStatus = 'online';
     } else if (payload['isOnline'] == false || payload['online'] == false) {
       parsedStatus = 'offline';
@@ -232,8 +289,6 @@ class SocketUserPresenceEvent {
       } else {
         parsedStatus = 'offline';
       }
-    } else if (payload['lastActive'] != null || payload['timestamp'] != null) {
-      parsedStatus = 'online';
     }
 
     final dynamic lastActive = payload['lastActive'] ??
@@ -241,12 +296,12 @@ class SocketUserPresenceEvent {
         payload['lastSeen'] ??
         payload['last_seen'] ??
         payload['updatedAt'] ??
-        payload['updated_at'] ??
-        payload['timestamp'];
+        payload['updated_at'];
 
     return SocketUserPresenceEvent(
       userId: uId,
       status: parsedStatus,
+      username: cleanUname.isNotEmpty ? cleanUname : null,
       lastActive: lastActive,
     );
   }
@@ -345,7 +400,6 @@ class ChatSocketService {
   String? _currentUserId;
   String? _customUrl;
   bool _isConnected = false;
-  Timer? _presenceHeartbeatTimer;
 
   String? get token => _token;
   String? get currentUserId => _currentUserId;
@@ -365,6 +419,10 @@ class ChatSocketService {
       StreamController<SocketUserPresenceEvent>.broadcast();
   final StreamController<SocketTypingEvent> _typingController =
       StreamController<SocketTypingEvent>.broadcast();
+  final StreamController<void> _presenceQueryController =
+      StreamController<void>.broadcast();
+  final StreamController<SocketMessageDeletedEvent> _messageDeletedController =
+      StreamController<SocketMessageDeletedEvent>.broadcast();
 
   // Public Streams
   Stream<bool> get onConnectionChanged => _connectionStateController.stream;
@@ -377,6 +435,9 @@ class ChatSocketService {
   Stream<SocketUserPresenceEvent> get onUserPresence =>
       _userPresenceController.stream;
   Stream<SocketTypingEvent> get onTyping => _typingController.stream;
+  Stream<void> get onPresenceQuery => _presenceQueryController.stream;
+  Stream<SocketMessageDeletedEvent> get onMessageDeleted =>
+      _messageDeletedController.stream;
 
   bool get isConnected => (_socket != null && _socket!.connected) || _isConnected;
 
@@ -487,6 +548,13 @@ class ChatSocketService {
           'reaction:add',
           'reaction_remove',
           'reaction:remove',
+          'unsend_message',
+          'message:unsend',
+          'message_unsend',
+          'delete_message',
+          'message:delete',
+          'message_deleted',
+          'message:deleted',
           'user_presence',
           'user:presence',
           'presence',
@@ -566,22 +634,14 @@ class ChatSocketService {
         _socket!.emit('user:presence', activePayload);
         _socket!.emit('user_online', activePayload);
         _socket!.emit('user:online', activePayload);
-
-        // Start periodic presence heartbeat every 20s
-        _presenceHeartbeatTimer?.cancel();
-        _presenceHeartbeatTimer =
-            Timer.periodic(const Duration(seconds: 20), (_) {
-          if (_isConnected && _socket != null && _socket!.connected) {
-            sendPresence(isOnline: true);
-          }
-        });
+        _socket!.emit('presence:query', activePayload);
+        _socket!.emit('user_presence:query', activePayload);
+        _socket!.emit('get_presence', activePayload);
       } catch (_) {}
     });
 
     _socket!.onDisconnect((dynamic reason) {
       debugPrint('⚠️ [ChatSocketService] Socket disconnected: $reason');
-      _presenceHeartbeatTimer?.cancel();
-      _presenceHeartbeatTimer = null;
       _isConnected = false;
       _connectionStateController.add(false);
     });
@@ -616,7 +676,7 @@ class ChatSocketService {
       _logInbound(eventName, data);
       try {
         final SocketMessageReadEvent event = SocketMessageReadEvent.fromJson(data);
-        if (event.conversationId.isNotEmpty || event.messageId.isNotEmpty) {
+        if (event.conversationId.isNotEmpty) {
           _messageReadController.add(event);
         }
       } catch (e) {
@@ -625,24 +685,13 @@ class ChatSocketService {
     }
     _socket!.on('message_read', (dynamic d) => handleMessageRead(d, 'message_read'));
     _socket!.on('message:read', (dynamic d) => handleMessageRead(d, 'message:read'));
-    _socket!.on('conversation:read', (dynamic d) => handleMessageRead(d, 'conversation:read'));
-    _socket!.on('conversation_read', (dynamic d) => handleMessageRead(d, 'conversation_read'));
-    _socket!.on('messages:read', (dynamic d) => handleMessageRead(d, 'messages:read'));
-    _socket!.on('messages_read', (dynamic d) => handleMessageRead(d, 'messages_read'));
-    _socket!.on('message:seen', (dynamic d) => handleMessageRead(d, 'message:seen'));
-    _socket!.on('message_seen', (dynamic d) => handleMessageRead(d, 'message_seen'));
-    _socket!.on('read', (dynamic d) => handleMessageRead(d, 'read'));
-    _socket!.on('read_receipt', (dynamic d) => handleMessageRead(d, 'read_receipt'));
-    _socket!.on('read_receipts', (dynamic d) => handleMessageRead(d, 'read_receipts'));
-    _socket!.on('read:ack', (dynamic d) => handleMessageRead(d, 'read:ack'));
-    _socket!.on('message:read:ack', (dynamic d) => handleMessageRead(d, 'message:read:ack'));
 
     // 3. reaction_add / reaction:add -> { conversationId, messageId, reactions }
     void handleReactionAdd(dynamic data, String eventName) {
       _logInbound(eventName, data);
       try {
         final SocketReactionEvent event = SocketReactionEvent.fromJson(data);
-        if (event.conversationId.isNotEmpty || event.messageId.isNotEmpty) {
+        if (event.conversationId.isNotEmpty) {
           _reactionController.add(event);
         }
       } catch (e) {
@@ -651,19 +700,13 @@ class ChatSocketService {
     }
     _socket!.on('reaction_add', (dynamic d) => handleReactionAdd(d, 'reaction_add'));
     _socket!.on('reaction:add', (dynamic d) => handleReactionAdd(d, 'reaction:add'));
-    _socket!.on('reaction', (dynamic d) => handleReactionAdd(d, 'reaction'));
-    _socket!.on('message:reaction', (dynamic d) => handleReactionAdd(d, 'message:reaction'));
-    _socket!.on('message:react', (dynamic d) => handleReactionAdd(d, 'message:react'));
-    _socket!.on('reaction:update', (dynamic d) => handleReactionAdd(d, 'reaction:update'));
-    _socket!.on('message_reaction', (dynamic d) => handleReactionAdd(d, 'message_reaction'));
-    _socket!.on('reaction_update', (dynamic d) => handleReactionAdd(d, 'reaction_update'));
 
     // 3b. reaction_remove / reaction:remove -> { conversationId, messageId, emoji }
     void handleReactionRemove(dynamic data, String eventName) {
       _logInbound(eventName, data);
       try {
         final SocketReactionEvent event = SocketReactionEvent.fromJson(data, isRemoved: true);
-        if (event.conversationId.isNotEmpty || event.messageId.isNotEmpty) {
+        if (event.conversationId.isNotEmpty) {
           _reactionController.add(event);
         }
       } catch (e) {
@@ -671,10 +714,31 @@ class ChatSocketService {
       }
     }
     _socket!.on('reaction_remove', (dynamic d) => handleReactionRemove(d, 'reaction_remove'));
+
+    // 3c. unsend_message / delete_message -> { conversationId, messageId }
+    void handleMessageDeleted(dynamic data, String eventName) {
+      _logInbound(eventName, data);
+      try {
+        final SocketMessageDeletedEvent event = SocketMessageDeletedEvent.fromJson(data);
+        if (event.messageId.isNotEmpty) {
+          _messageDeletedController.add(event);
+        }
+      } catch (e) {
+        debugPrint('⚠️ [ChatSocketService] Error parsing "$eventName": $e');
+      }
+    }
+    _socket!.on('unsend_message', (dynamic d) => handleMessageDeleted(d, 'unsend_message'));
+    _socket!.on('message:unsend', (dynamic d) => handleMessageDeleted(d, 'message:unsend'));
+    _socket!.on('message_unsend', (dynamic d) => handleMessageDeleted(d, 'message_unsend'));
+    _socket!.on('message_unsent', (dynamic d) => handleMessageDeleted(d, 'message_unsent'));
+    _socket!.on('message:unsent', (dynamic d) => handleMessageDeleted(d, 'message:unsent'));
+    _socket!.on('unsend', (dynamic d) => handleMessageDeleted(d, 'unsend'));
+    _socket!.on('delete_message', (dynamic d) => handleMessageDeleted(d, 'delete_message'));
+    _socket!.on('message:delete', (dynamic d) => handleMessageDeleted(d, 'message:delete'));
+    _socket!.on('message_delete', (dynamic d) => handleMessageDeleted(d, 'message_delete'));
+    _socket!.on('message_deleted', (dynamic d) => handleMessageDeleted(d, 'message_deleted'));
+    _socket!.on('message:deleted', (dynamic d) => handleMessageDeleted(d, 'message:deleted'));
     _socket!.on('reaction:remove', (dynamic d) => handleReactionRemove(d, 'reaction:remove'));
-    _socket!.on('message:unreact', (dynamic d) => handleReactionRemove(d, 'message:unreact'));
-    _socket!.on('remove_reaction', (dynamic d) => handleReactionRemove(d, 'remove_reaction'));
-    _socket!.on('reaction:delete', (dynamic d) => handleReactionRemove(d, 'reaction:delete'));
 
     // 4. user_presence -> { userId, status, lastActive }
     void handlePresence(dynamic data, String eventName, {String? defaultStatus}) {
@@ -683,7 +747,7 @@ class ChatSocketService {
         if (data is List) {
           for (final dynamic item in data) {
             final SocketUserPresenceEvent event =
-                SocketUserPresenceEvent.fromJson(item, defaultStatus: defaultStatus ?? 'online');
+                SocketUserPresenceEvent.fromJson(item, defaultStatus: defaultStatus);
             if (event.userId.isNotEmpty) {
               _userPresenceController.add(event);
             }
@@ -693,7 +757,7 @@ class ChatSocketService {
         if (data is Map && data['users'] is List) {
           for (final dynamic item in data['users'] as List) {
             final SocketUserPresenceEvent event =
-                SocketUserPresenceEvent.fromJson(item, defaultStatus: defaultStatus ?? 'online');
+                SocketUserPresenceEvent.fromJson(item, defaultStatus: defaultStatus);
             if (event.userId.isNotEmpty) {
               _userPresenceController.add(event);
             }
@@ -714,19 +778,21 @@ class ChatSocketService {
     _socket!.on('user:presence', (dynamic d) => handlePresence(d, 'user:presence'));
     _socket!.on('presence', (dynamic d) => handlePresence(d, 'presence'));
     _socket!.on('presence:update', (dynamic d) => handlePresence(d, 'presence:update'));
-    _socket!.on('presence:status', (dynamic d) => handlePresence(d, 'presence:status'));
-    _socket!.on('presence_status', (dynamic d) => handlePresence(d, 'presence_status'));
-    _socket!.on('presence:sync', (dynamic d) => handlePresence(d, 'presence:sync'));
     _socket!.on('user_online', (dynamic d) => handlePresence(d, 'user_online', defaultStatus: 'online'));
     _socket!.on('user:online', (dynamic d) => handlePresence(d, 'user:online', defaultStatus: 'online'));
-    _socket!.on('user:status', (dynamic d) => handlePresence(d, 'user:status'));
-    _socket!.on('user_status', (dynamic d) => handlePresence(d, 'user_status'));
-    _socket!.on('user:active', (dynamic d) => handlePresence(d, 'user:active', defaultStatus: 'online'));
-    _socket!.on('user_active', (dynamic d) => handlePresence(d, 'user_active', defaultStatus: 'online'));
-    _socket!.on('online', (dynamic d) => handlePresence(d, 'online', defaultStatus: 'online'));
     _socket!.on('user_offline', (dynamic d) => handlePresence(d, 'user_offline', defaultStatus: 'offline'));
     _socket!.on('user:offline', (dynamic d) => handlePresence(d, 'user:offline', defaultStatus: 'offline'));
-    _socket!.on('offline', (dynamic d) => handlePresence(d, 'offline', defaultStatus: 'offline'));
+    _socket!.on('conversation:presence', (dynamic d) => handlePresence(d, 'conversation:presence'));
+    _socket!.on('conversation_presence', (dynamic d) => handlePresence(d, 'conversation_presence'));
+
+    // Presence queries from other peers asking who is online
+    void handlePresenceQuery(dynamic data, String eventName) {
+      _logInbound(eventName, data);
+      _presenceQueryController.add(null);
+    }
+    _socket!.on('presence:query', (dynamic d) => handlePresenceQuery(d, 'presence:query'));
+    _socket!.on('user_presence:query', (dynamic d) => handlePresenceQuery(d, 'user_presence:query'));
+    _socket!.on('get_presence', (dynamic d) => handlePresenceQuery(d, 'get_presence'));
 
     // 5. Typing events
     void handleTyping(dynamic data, String eventName, {bool? defaultTyping}) {
@@ -789,7 +855,7 @@ class ChatSocketService {
   }
 
   /// 1. conversation:join
-  /// payload: conversationId / { conversationId, room }
+  /// payload: conversationId
   /// purpose: join the room for that conversation (`conversation:<id>`)
   void joinConversation(String conversationId) {
     final String cleanId = cleanConversationId(conversationId);
@@ -799,18 +865,11 @@ class ChatSocketService {
     _joinedRooms.add(cleanId);
 
     _ensureConnected();
-    final Map<String, dynamic> joinPayload = <String, dynamic>{
-      'conversationId': cleanId,
-      'room': roomName,
-    };
     _logEmit('join', roomName);
     _socket?.emit('join', roomName);
     _socket?.emit('join', cleanId);
-    _socket?.emit('join', joinPayload);
     _socket?.emit('conversation:join', roomName);
     _socket?.emit('conversation:join', cleanId);
-    _socket?.emit('conversation:join', joinPayload);
-    _socket?.emit('join_room', joinPayload);
   }
 
   /// 2. conversation:typing & typing_indicator
@@ -862,40 +921,53 @@ class ChatSocketService {
   }
 
   /// Broadcast online/offline presence explicitly with current timestamp
-  void sendPresence({required bool isOnline, String? conversationId}) {
+  void sendPresence({
+    required bool isOnline,
+    String? targetUserId,
+    String? conversationId,
+  }) {
     if (_socket == null || !_socket!.connected) return;
     final String? cleanUid =
         _currentUserId != null ? cleanUserId(_currentUserId!) : null;
+    final String? cleanTarget =
+        targetUserId != null && targetUserId.isNotEmpty ? cleanUserId(targetUserId) : null;
     final String? cleanConv =
-        conversationId != null ? cleanConversationId(conversationId) : null;
+        conversationId != null && conversationId.isNotEmpty ? cleanConversationId(conversationId) : null;
     final String nowIso = DateTime.now().toUtc().toIso8601String();
     final int nowEpoch = DateTime.now().millisecondsSinceEpoch;
     final Map<String, dynamic> payload = <String, dynamic>{
       if (cleanUid != null && cleanUid.isNotEmpty) 'userId': cleanUid,
-      if (cleanConv != null && cleanConv.isNotEmpty) 'conversationId': cleanConv,
       'status': isOnline ? 'active' : 'offline',
       'isOnline': isOnline,
       'online': isOnline,
       'lastActive': nowIso,
       'timestamp': nowEpoch,
+      if (cleanTarget != null && cleanTarget.isNotEmpty) ...<String, dynamic>{
+        'targetUserId': cleanTarget,
+        'recipientId': cleanTarget,
+        'participantId': cleanTarget,
+      },
+      if (cleanConv != null && cleanConv.isNotEmpty) 'conversationId': cleanConv,
     };
     _logEmit('user_presence', payload);
     _socket?.emit('user_presence', payload);
     _socket?.emit('presence', payload);
     _socket?.emit('user:presence', payload);
-    if (cleanConv != null && cleanConv.isNotEmpty) {
-      _socket?.emit('conversation:presence', payload);
-    }
     if (isOnline) {
       _socket?.emit('presence:online', payload);
       _socket?.emit('user_online', payload);
       _socket?.emit('user:online', payload);
-      _socket?.emit('online', payload);
+      if (cleanConv != null && cleanConv.isNotEmpty) {
+        _socket?.emit('conversation:presence', payload);
+        _socket?.emit('conversation_presence', payload);
+      }
     } else {
       _socket?.emit('presence:offline', payload);
       _socket?.emit('user_offline', payload);
       _socket?.emit('user:offline', payload);
-      _socket?.emit('offline', payload);
+      if (cleanConv != null && cleanConv.isNotEmpty) {
+        _socket?.emit('conversation:offline', payload);
+      }
     }
   }
 
@@ -937,49 +1009,17 @@ class ChatSocketService {
   }) {
     final String cleanConv = cleanConversationId(conversationId);
     final String cleanMsg = messageId.trim();
-    if (cleanConv.isEmpty && cleanMsg.isEmpty) return;
+    if (cleanConv.isEmpty || cleanMsg.isEmpty) return;
 
     _ensureConnected();
 
-    final String? cleanUid =
-        _currentUserId != null ? cleanUserId(_currentUserId!) : null;
     final Map<String, dynamic> payload = <String, dynamic>{
-      if (cleanConv.isNotEmpty) 'conversationId': cleanConv,
-      if (cleanMsg.isNotEmpty) 'messageId': cleanMsg,
-      if (cleanMsg.isNotEmpty) 'id': cleanMsg,
-      if (cleanUid != null && cleanUid.isNotEmpty) 'readerId': cleanUid,
-      if (cleanUid != null && cleanUid.isNotEmpty) 'userId': cleanUid,
+      'conversationId': cleanConv,
+      'messageId': cleanMsg,
     };
     _logEmit('message_read', payload);
     _socket?.emit('message_read', payload);
     _socket?.emit('message:read', payload);
-    _socket?.emit('read_message', payload);
-    _socket?.emit('read', payload);
-    if (cleanConv.isNotEmpty) {
-      _socket?.emit('conversation:read', payload);
-    }
-  }
-
-  /// 4b. conversation:read (marks all messages in the conversation as read)
-  void markConversationRead({required String conversationId}) {
-    final String cleanConv = cleanConversationId(conversationId);
-    if (cleanConv.isEmpty) return;
-
-    _ensureConnected();
-
-    final String? cleanUid =
-        _currentUserId != null ? cleanUserId(_currentUserId!) : null;
-    final Map<String, dynamic> payload = <String, dynamic>{
-      'conversationId': cleanConv,
-      if (cleanUid != null && cleanUid.isNotEmpty) 'readerId': cleanUid,
-      if (cleanUid != null && cleanUid.isNotEmpty) 'userId': cleanUid,
-    };
-    _logEmit('conversation:read', payload);
-    _socket?.emit('conversation:read', payload);
-    _socket?.emit('conversation_read', payload);
-    _socket?.emit('message_read', payload);
-    _socket?.emit('message:read', payload);
-    _socket?.emit('read', payload);
   }
 
   /// 5. reaction_add
@@ -993,27 +1033,19 @@ class ChatSocketService {
     final String cleanConv = cleanConversationId(conversationId);
     final String cleanMsg = messageId.trim();
     final String cleanEmoji = emoji.trim();
-    if (cleanMsg.isEmpty || cleanEmoji.isEmpty) {
+    if (cleanConv.isEmpty || cleanMsg.isEmpty || cleanEmoji.isEmpty) {
       return;
     }
 
     _ensureConnected();
 
-    final String cleanUid = cleanUserId(userId ?? _currentUserId);
     final Map<String, dynamic> payload = <String, dynamic>{
-      if (cleanConv.isNotEmpty) 'conversationId': cleanConv,
+      'conversationId': cleanConv,
       'messageId': cleanMsg,
-      'id': cleanMsg,
       'emoji': cleanEmoji,
-      'reaction': cleanEmoji,
-      if (cleanUid.isNotEmpty) 'userId': cleanUid,
     };
     _logEmit('reaction_add', payload);
     _socket?.emit('reaction_add', payload);
-    _socket?.emit('reaction:add', payload);
-    _socket?.emit('reaction', payload);
-    _socket?.emit('message:reaction', payload);
-    _socket?.emit('message:react', payload);
   }
 
   /// 6. reaction_remove
@@ -1027,27 +1059,19 @@ class ChatSocketService {
     final String cleanConv = cleanConversationId(conversationId);
     final String cleanMsg = messageId.trim();
     final String cleanEmoji = emoji.trim();
-    if (cleanMsg.isEmpty || cleanEmoji.isEmpty) {
+    if (cleanConv.isEmpty || cleanMsg.isEmpty || cleanEmoji.isEmpty) {
       return;
     }
 
     _ensureConnected();
 
-    final String cleanUid = cleanUserId(userId ?? _currentUserId);
     final Map<String, dynamic> payload = <String, dynamic>{
-      if (cleanConv.isNotEmpty) 'conversationId': cleanConv,
+      'conversationId': cleanConv,
       'messageId': cleanMsg,
-      'id': cleanMsg,
       'emoji': cleanEmoji,
-      'reaction': cleanEmoji,
-      if (cleanUid.isNotEmpty) 'userId': cleanUid,
     };
     _logEmit('reaction_remove', payload);
     _socket?.emit('reaction_remove', payload);
-    _socket?.emit('reaction:remove', payload);
-    _socket?.emit('message:unreact', payload);
-    _socket?.emit('remove_reaction', payload);
-    _socket?.emit('reaction:delete', payload);
   }
 
   /// 7. unsend_message
@@ -1068,6 +1092,9 @@ class ChatSocketService {
     };
     _logEmit('unsend_message', payload);
     _socket?.emit('unsend_message', payload);
+    _socket?.emit('message:unsend', payload);
+    _socket?.emit('delete_message', payload);
+    _socket?.emit('message:delete', payload);
   }
 
   /// 8. mute_conversation
@@ -1106,13 +1133,26 @@ class ChatSocketService {
 
   /// Disconnect socket and clear state.
   void disconnect() {
-    _presenceHeartbeatTimer?.cancel();
-    _presenceHeartbeatTimer = null;
     if (_socket != null) {
       try {
-        sendPresence(isOnline: false);
-      } catch (_) {}
-      try {
+        // Best-effort: announce offline before closing connection
+        if (_socket!.connected) {
+          final String? cleanUid =
+              _currentUserId != null ? cleanUserId(_currentUserId!) : null;
+          final String nowIso = DateTime.now().toUtc().toIso8601String();
+          final Map<String, dynamic> offlinePayload = <String, dynamic>{
+            if (cleanUid != null && cleanUid.isNotEmpty) 'userId': cleanUid,
+            'status': 'offline',
+            'isOnline': false,
+            'online': false,
+            'lastActive': nowIso,
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          };
+          _socket!.emit('user_presence', offlinePayload);
+          _socket!.emit('user:presence', offlinePayload);
+          _socket!.emit('user_offline', offlinePayload);
+          _socket!.emit('user:offline', offlinePayload);
+        }
         _socket!.disconnect();
         _socket!.dispose();
       } catch (_) {}
@@ -1131,5 +1171,7 @@ class ChatSocketService {
     _reactionController.close();
     _userPresenceController.close();
     _typingController.close();
+    _presenceQueryController.close();
+    _messageDeletedController.close();
   }
 }

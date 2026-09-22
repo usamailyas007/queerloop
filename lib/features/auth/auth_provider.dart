@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_exception.dart';
+import '../../core/services/push_notification_service.dart';
 import 'auth_service.dart';
 import 'user.dart';
 
@@ -41,6 +42,10 @@ class AuthProvider extends ChangeNotifier {
     if (result.isInvalidToken) {
       debugPrint(
           '⛔ [AuthProvider] Refresh token is permanently invalid/expired (${result.errorMessage}). Evicting session.');
+      final String? token = _client.authToken;
+      if (token != null && token.isNotEmpty) {
+        PushNotificationService.unregisterDeviceToken(_client, authToken: token).ignore();
+      }
       _clearSession();
     } else {
       debugPrint(
@@ -50,6 +55,10 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void _handleUnauthorized() {
+    final String? token = _client.authToken;
+    if (token != null && token.isNotEmpty) {
+      PushNotificationService.unregisterDeviceToken(_client, authToken: token).ignore();
+    }
     _clearSession();
   }
 
@@ -464,10 +473,17 @@ class AuthProvider extends ChangeNotifier {
   // ── Sign out ──────────────────────────────────────────────────────────────
 
   Future<void> signOut() async {
+    final String? currentToken = _client.authToken;
     try {
+      // 1. Unregister push notification device token on backend while authenticated
+      if (currentToken != null && currentToken.isNotEmpty) {
+        await PushNotificationService.unregisterDeviceToken(_client, authToken: currentToken);
+      }
+      // 2. Invalidate refresh token on backend
       await _service.signOut(refreshToken: _refreshToken);
     } on ApiException catch (_) {
       // Best-effort logout — clear local state regardless.
+    } catch (_) {
     } finally {
       _clearSession();
     }
@@ -585,11 +601,16 @@ class AuthProvider extends ChangeNotifier {
     SharedPreferences.getInstance().then((SharedPreferences prefs) {
       prefs.setBool('onboarding_seen', true);
     }).catchError((_) {});
+    PushNotificationService.syncDeviceToken(_client).ignore();
     notifyListeners();
   }
 
   /// Clear all session state and notify listeners once.
   void _clearSession() {
+    final String? currentToken = _client.authToken;
+    if (currentToken != null && currentToken.isNotEmpty) {
+      PushNotificationService.unregisterDeviceToken(_client, authToken: currentToken).ignore();
+    }
     _client.authToken = null;
     _user = null;
     _refreshToken = null;

@@ -560,4 +560,113 @@ class ConversationsService {
       return false;
     }
   }
+
+  // ── 16. Restricted Users ───────────────────────────────────────────────────
+  /// List current user's restricted accounts: GET /users/me/restricted
+  Future<List<Map<String, dynamic>>> getRestrictedUsers() async {
+    try {
+      debugPrint('🚀 [ConversationsService] Get restricted users: GET ${ApiEndpoints.userRestricted}');
+      final dynamic res = await _client.get(ApiEndpoints.userRestricted);
+      final List<dynamic> list = _extractList(
+        res,
+        keys: const <String>['restricted', 'restrictedUsers', 'users', 'items', 'accounts'],
+      );
+      return list.whereType<Map<String, dynamic>>().toList();
+    } on ApiException catch (e) {
+      debugPrint('❌ [ConversationsService] getRestrictedUsers error: $e');
+      return <Map<String, dynamic>>[];
+    } catch (e, stack) {
+      debugPrint('❌ [ConversationsService] getRestrictedUsers unexpected: $e\n$stack');
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  /// Restrict user: POST /users/:id/restrict
+  Future<bool> restrictUser(String userId) async {
+    if (userId.trim().isEmpty) return false;
+    try {
+      debugPrint('🚀 [ConversationsService] Restrict user: POST ${ApiEndpoints.userRestrict(userId)}');
+      await _client.post(ApiEndpoints.userRestrict(userId));
+      return true;
+    } on ApiException catch (e) {
+      debugPrint('❌ [ConversationsService] restrictUser error: $e');
+      return false;
+    } catch (e, stack) {
+      debugPrint('❌ [ConversationsService] restrictUser unexpected: $e\n$stack');
+      return false;
+    }
+  }
+
+  /// Unrestrict user: DELETE /users/:id/restrict
+  Future<bool> unrestrictUser(String userId) async {
+    if (userId.trim().isEmpty) return false;
+    try {
+      debugPrint('🚀 [ConversationsService] Unrestrict user: DELETE ${ApiEndpoints.userRestrict(userId)}');
+      await _client.delete(ApiEndpoints.userRestrict(userId));
+      return true;
+    } on ApiException catch (e) {
+      debugPrint('❌ [ConversationsService] unrestrictUser error: $e');
+      return false;
+    } catch (e, stack) {
+      debugPrint('❌ [ConversationsService] unrestrictUser unexpected: $e\n$stack');
+      return false;
+    }
+  }
+
+  // ── 17. Muted Users ────────────────────────────────────────────────────────
+  /// List current user's muted accounts: GET /users/me/muted
+  Future<List<Map<String, dynamic>>> getMutedUsers() async {
+    try {
+      debugPrint('🚀 [ConversationsService] Get muted users: GET ${ApiEndpoints.userMuted}');
+      final dynamic res = await _client.get(ApiEndpoints.userMuted);
+      final List<dynamic> list = _extractList(
+        res,
+        keys: const <String>['muted', 'mutedUsers', 'users', 'items', 'accounts'],
+      );
+      return list.whereType<Map<String, dynamic>>().toList();
+    } on ApiException catch (e) {
+      debugPrint('❌ [ConversationsService] getMutedUsers error: $e');
+      return <Map<String, dynamic>>[];
+    } catch (e, stack) {
+      debugPrint('❌ [ConversationsService] getMutedUsers unexpected: $e\n$stack');
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  /// Mute user: POST /users/:id/mute
+  Future<bool> muteUser(String userId, {String scope = 'posts', int durationHours = 8}) async {
+    if (userId.trim().isEmpty) return false;
+    try {
+      debugPrint('🚀 [ConversationsService] Mute user: POST ${ApiEndpoints.userMute(userId)}');
+      final Map<String, dynamic> body = <String, dynamic>{
+        'scope': scope,
+        'durationHours': durationHours,
+        'duration': '${durationHours}_hours',
+      };
+      await _client.post(ApiEndpoints.userMute(userId), body: body);
+      return true;
+    } on ApiException catch (e) {
+      debugPrint('❌ [ConversationsService] muteUser error: $e');
+      return false;
+    } catch (e, stack) {
+      debugPrint('❌ [ConversationsService] muteUser unexpected: $e\n$stack');
+      return false;
+    }
+  }
+
+  /// Unmute user: DELETE /users/:id/mute
+  Future<bool> unmuteUser(String userId) async {
+    if (userId.trim().isEmpty) return false;
+    try {
+      debugPrint('🚀 [ConversationsService] Unmute user: DELETE ${ApiEndpoints.userMute(userId)}');
+      await _client.delete(ApiEndpoints.userMute(userId));
+      return true;
+    } on ApiException catch (e) {
+      debugPrint('❌ [ConversationsService] unmuteUser error: $e');
+      return false;
+    } catch (e, stack) {
+      debugPrint('❌ [ConversationsService] unmuteUser unexpected: $e\n$stack');
+      return false;
+    }
+  }
 }

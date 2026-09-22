@@ -9,6 +9,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../create_post/widgets/custom_gradient_switch.dart';
 import '../../profile/services/user_relationship_service.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../provider/messages_provider.dart';
 import 'block_user_modal_dialog.dart';
 import 'mute_duration_bottom_sheet.dart';
@@ -152,8 +153,14 @@ class ChatOptionsBottomSheet extends StatelessWidget {
     final String cleanUsername =
         username.startsWith('@') ? username : '@$username';
     final bool isCurrentlyMuted = conversationId != null
-        ? (provider.isMuted(conversationId!) || provider.isMuted(username))
-        : provider.isMuted(username);
+        ? (provider.isMuted(conversationId!) ||
+            provider.isMuted(userId) ||
+            provider.isMuted(username))
+        : (provider.isMuted(userId) || provider.isMuted(username));
+    final bool isCurrentlyRestricted =
+        provider.isRestricted(userId) || provider.isRestricted(username);
+    final bool isCurrentlyBlocked =
+        provider.isBlocked(userId) || provider.isBlocked(username);
 
     return Container(
       decoration: BoxDecoration(
@@ -228,7 +235,7 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                     if (conversationId != null) {
                       provider.unmuteConversation(conversationId!);
                     } else {
-                      provider.toggleMute(username);
+                      provider.unmuteUser(userId ?? username, username: username);
                     }
                   } else {
                     MuteDurationBottomSheet.show(
@@ -236,14 +243,19 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                       username: username,
                       onConfirmMute: (String duration) {
                         String apiDuration = '1_week';
+                        int hours = 168;
                         if (duration.contains('24')) {
                           apiDuration = '24_hours';
+                          hours = 24;
                         } else if (duration.contains('7')) {
                           apiDuration = '1_week';
+                          hours = 168;
                         } else if (duration.contains('30')) {
                           apiDuration = '1_month';
+                          hours = 720;
                         } else if (duration.toLowerCase().contains('undo')) {
                           apiDuration = 'indefinite';
+                          hours = 87600;
                         }
 
                         if (conversationId != null) {
@@ -252,7 +264,11 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                             duration: apiDuration,
                           );
                         } else {
-                          provider.toggleMute(username);
+                          provider.muteUser(
+                            userId ?? username,
+                            username: username,
+                            durationHours: hours,
+                          );
                         }
                       },
                     );
@@ -260,7 +276,7 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                 },
               ),
 
-              // 2. Restrict @username
+              // 2. Restrict / Unrestrict @username
               _buildOptionTile(
                 context: context,
                 icon: SvgPicture.asset(
@@ -268,79 +284,141 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                   width: 18,
                   height: 18,
                   colorFilter: ColorFilter.mode(
-                    context.themeTextSecondary,
+                    isCurrentlyRestricted
+                        ? AppColors.gradientCyan
+                        : context.themeTextSecondary,
                     BlendMode.srcIn,
                   ),
                 ),
-                title: 'Restrict $cleanUsername',
-                subtitle: 'Their messages move to requests automatically',
+                title: isCurrentlyRestricted
+                    ? 'Unrestrict $cleanUsername'
+                    : 'Restrict $cleanUsername',
+                subtitle: isCurrentlyRestricted
+                    ? 'Move their messages back to your main inbox'
+                    : 'Their messages move to requests automatically',
                 trailing: Icon(
                   Icons.chevron_right_rounded,
                   color: context.themeIconMuted,
                   size: 20,
                 ),
                 onTap: () {
+                  final ScaffoldMessengerState messenger =
+                      ScaffoldMessenger.of(context);
                   final ApiClient client = context.read<ApiClient>();
                   final UserRelationshipService relService =
                       UserRelationshipService(client);
                   Navigator.pop(context);
-                  RestrictUserModalDialog.show(
-                    context,
-                    username: username,
-                    onConfirmRestrict: () async {
-                      provider.toggleRestrict(username);
+
+                  if (isCurrentlyRestricted) {
+                    () async {
                       String? targetId = userId;
                       if (targetId == null || targetId.isEmpty) {
                         targetId = await relService.resolveUserId(username);
                       }
-                      if (targetId != null && targetId.isNotEmpty) {
-                        await relService.restrictUser(targetId);
-                      }
-                    },
-                  );
+                      final String effectiveId = (targetId != null && targetId.isNotEmpty)
+                          ? targetId
+                          : username;
+
+                      await provider.unrestrictUser(effectiveId, username: username);
+                      if (!context.mounted) return;
+                      AppSnackBar.show(
+                        context,
+                        messenger: messenger,
+                        title: '$cleanUsername unrestricted',
+                        subtitle: 'Their messages returned to your main inbox',
+                        actionLabel: 'Undo',
+                        onAction: () => provider.restrictUser(effectiveId, username: username),
+                      );
+                    }();
+                  } else {
+                    RestrictUserModalDialog.show(
+                      context,
+                      username: username,
+                      onConfirmRestrict: () async {
+                        String? targetId = userId;
+                        if (targetId == null || targetId.isEmpty) {
+                          targetId = await relService.resolveUserId(username);
+                        }
+                        final String effectiveId = (targetId != null && targetId.isNotEmpty)
+                            ? targetId
+                            : username;
+                        await provider.restrictUser(effectiveId, username: username);
+                      },
+                    );
+                  }
                 },
               ),
 
-              // 3. Block @username (Cyan highlight border!)
+              // 3. Block / Unblock @username
               _buildOptionTile(
                 context: context,
-                icon: const Icon(
-                  Icons.block_rounded,
+                icon: Icon(
+                  isCurrentlyBlocked ? Icons.lock_open_rounded : Icons.block_rounded,
                   color: AppColors.gradientCyan,
                   size: 18,
                 ),
-                title: 'Block $cleanUsername',
-                subtitle: 'Ends the conversation, removes all contact',
-                isCyanHighlight: true,
+                title: isCurrentlyBlocked
+                    ? 'Unblock $cleanUsername'
+                    : 'Block $cleanUsername',
+                subtitle: isCurrentlyBlocked
+                    ? 'Allow them to message you and view your profile'
+                    : 'Ends the conversation, removes all contact',
+                isCyanHighlight: !isCurrentlyBlocked,
                 onTap: () {
+                  final ScaffoldMessengerState messenger =
+                      ScaffoldMessenger.of(context);
                   final ApiClient client = context.read<ApiClient>();
                   final UserRelationshipService relService =
                       UserRelationshipService(client);
                   Navigator.pop(context);
-                  BlockUserModalDialog.show(
-                    context,
-                    username: username,
-                    onConfirmBlock: () async {
-                      provider.toggleBlock(username);
+
+                  if (isCurrentlyBlocked) {
+                    () async {
                       String? targetId = userId;
                       if (targetId == null || targetId.isEmpty) {
                         targetId = await relService.resolveUserId(username);
                       }
-                      if (targetId != null && targetId.isNotEmpty) {
-                        await relService.blockUser(targetId);
-                      }
-                    },
-                    onConfirmUnblock: () async {
-                      provider.toggleBlock(username);
-                      String? targetId = userId;
-                      if (targetId == null || targetId.isEmpty) {
-                        targetId = await relService.resolveUserId(username);
-                      }
-                      if (targetId != null && targetId.isNotEmpty) {
-                        await relService.unblockUser(targetId);
-                      }
-                    },
-                  );
+                      final String effectiveId = (targetId != null && targetId.isNotEmpty)
+                          ? targetId
+                          : username;
+
+                      await provider.unblockUser(effectiveId, username: username);
+                      if (!context.mounted) return;
+                      AppSnackBar.show(
+                        context,
+                        messenger: messenger,
+                        title: '$cleanUsername unblocked',
+                        subtitle: 'You can now message each other again',
+                        actionLabel: 'Undo',
+                        onAction: () => provider.blockUser(effectiveId, username: username),
+                      );
+                    }();
+                  } else {
+                    BlockUserModalDialog.show(
+                      context,
+                      username: username,
+                      onConfirmBlock: () async {
+                        String? targetId = userId;
+                        if (targetId == null || targetId.isEmpty) {
+                          targetId = await relService.resolveUserId(username);
+                        }
+                        final String effectiveId = (targetId != null && targetId.isNotEmpty)
+                            ? targetId
+                            : username;
+                        await provider.blockUser(effectiveId, username: username);
+                      },
+                      onConfirmUnblock: () async {
+                        String? targetId = userId;
+                        if (targetId == null || targetId.isEmpty) {
+                          targetId = await relService.resolveUserId(username);
+                        }
+                        final String effectiveId = (targetId != null && targetId.isNotEmpty)
+                            ? targetId
+                            : username;
+                        await provider.unblockUser(effectiveId, username: username);
+                      },
+                    );
+                  }
                 },
               ),
 

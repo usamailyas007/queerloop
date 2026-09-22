@@ -1,7 +1,9 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../firebase_options.dart';
+import 'push_notification_service.dart';
 
 /// Centralized service to manage Firebase initialization and configuration.
 abstract final class FirebaseService {
@@ -23,6 +25,14 @@ abstract final class FirebaseService {
       );
       _initialized = true;
       debugPrint('🔥 [FirebaseService] Firebase initialized successfully.');
+
+      // Initialize push notifications on supported platforms
+      if (!kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS)) {
+        FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+        await PushNotificationService.initialize();
+      }
     } on UnsupportedError catch (e) {
       debugPrint('⚠️ [FirebaseService] Firebase not configured for this platform: ${e.message}');
     } catch (e, stackTrace) {

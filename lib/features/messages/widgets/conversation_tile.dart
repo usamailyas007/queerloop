@@ -27,9 +27,21 @@ class ConversationTile extends StatelessWidget {
     final bool isBlocked = (msgProvider != null) &&
         (msgProvider.isBlocked(conversation.participantId) ||
             msgProvider.isBlocked(conversation.username));
+    final bool isMuted = (msgProvider != null)
+        ? (msgProvider.isMuted(conversation.username) ||
+            msgProvider.isMuted(conversation.id) ||
+            (conversation.participantId != null &&
+                msgProvider.isMuted(conversation.participantId!)) ||
+            (conversation.isMuted &&
+                !msgProvider.isExplicitlyUnmuted(conversation.id) &&
+                !msgProvider.isExplicitlyUnmuted(conversation.username) &&
+                (conversation.participantId == null ||
+                    !msgProvider.isExplicitlyUnmuted(conversation.participantId!))))
+        : conversation.isMuted;
     final bool isOnline = (msgProvider != null && !isBlocked)
-        ? msgProvider.isUserOnline(conversation.participantId, conversation)
-        : (isBlocked ? false : conversation.isOnline);
+        ? (msgProvider.showActivityStatus &&
+            msgProvider.isUserOnline(conversation.participantId, conversation))
+        : false;
     final bool isTyping = (msgProvider != null && !isBlocked)
         ? (conversation.isTyping ||
             msgProvider.isConversationTyping(conversation.id) ||
@@ -178,7 +190,7 @@ class ConversationTile extends StatelessWidget {
                           ),
                         ),
                       ],
-                      if (conversation.isMuted) ...<Widget>[
+                      if (isMuted) ...<Widget>[
                         const SizedBox(width: 6),
                         SvgPicture.asset(
                           AppIcons.mute,

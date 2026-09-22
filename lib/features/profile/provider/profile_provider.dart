@@ -1,6 +1,7 @@
 // Profile Provider — manages fetching and updating User Profile via GET/PATCH /users/:id.
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
@@ -261,13 +262,16 @@ class ProfileProvider extends ChangeNotifier {
     }
     _error = null;
 
-    // Batch call: fetch profile details, communities, user posts, followers, and following list concurrently
+    // Batch call: fetch profile details, communities, user posts, followers, following, and relationships concurrently
     await Future.wait(<Future<void>>[
       _fetchProfileDetails(userId),
       fetchUserCommunities(userId),
       fetchUserContent(userId),
       loadFollowers(userId),
       loadFollowing(userId),
+      loadBlockedAccounts(),
+      loadRestrictedAccounts(),
+      loadMutedAccounts(),
     ]);
   }
 
@@ -295,6 +299,18 @@ class ProfileProvider extends ChangeNotifier {
             ttl: const Duration(days: 7),
           );
           _profile = UserProfile.fromJson(data);
+          try {
+            if (data['showActivityStatus'] is bool) {
+              SharedPreferences.getInstance().then((SharedPreferences prefs) {
+                prefs.setBool('privacy_show_activity_$userId', data['showActivityStatus'] as bool);
+              });
+            }
+            if (data['sendReadReceipts'] is bool) {
+              SharedPreferences.getInstance().then((SharedPreferences prefs) {
+                prefs.setBool('privacy_read_receipts_$userId', data['sendReadReceipts'] as bool);
+              });
+            }
+          } catch (_) {}
         }
       }
       _error = null;
@@ -856,6 +872,30 @@ class ProfileProvider extends ChangeNotifier {
     if (_error == null) return;
     _error = null;
     notifyListeners();
+  }
+
+  bool isBlocked(String? key) {
+    if (key == null || key.trim().isEmpty) return false;
+    final String clean = key.trim().toLowerCase().replaceAll('@', '');
+    return _blockedAccounts.any((BlockedAccountItem a) =>
+        a.userId.toLowerCase() == clean ||
+        a.username.toLowerCase().replaceAll('@', '') == clean);
+  }
+
+  bool isRestricted(String? key) {
+    if (key == null || key.trim().isEmpty) return false;
+    final String clean = key.trim().toLowerCase().replaceAll('@', '');
+    return _restrictedAccounts.any((RestrictedAccountItem a) =>
+        a.userId.toLowerCase() == clean ||
+        a.username.toLowerCase().replaceAll('@', '') == clean);
+  }
+
+  bool isMuted(String? key) {
+    if (key == null || key.trim().isEmpty) return false;
+    final String clean = key.trim().toLowerCase().replaceAll('@', '');
+    return _mutedAccounts.any((MutedAccountItem a) =>
+        a.userId.toLowerCase() == clean ||
+        a.username.toLowerCase().replaceAll('@', '') == clean);
   }
 
   // ── Blocked Accounts Management ───────────────────────────────────────────

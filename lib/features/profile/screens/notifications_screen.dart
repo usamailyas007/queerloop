@@ -10,9 +10,14 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_snackbar.dart';
+import '../../home/provider/home_feed_provider.dart';
+import '../../messages/models/message_models.dart';
+import '../../messages/provider/messages_provider.dart';
+import '../../messages/screens/chat_screen.dart';
 import '../../notifications/models/notification_item_model.dart';
 import '../../notifications/provider/notifications_provider.dart';
 import '../provider/profile_provider.dart';
+import 'followers_following_screen.dart';
 import 'user_profile_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -400,6 +405,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         if (!item.isRead) {
           provider.markAsRead(item.id);
         }
+        _onNotificationTileTapped(context, item, followStatus);
       },
       borderRadius: BorderRadius.circular(12),
       child: Container(
@@ -739,5 +745,155 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               },
             ),
     );
+  }
+
+  void _onNotificationTileTapped(
+    BuildContext context,
+    NotificationItemModel item,
+    String followStatus,
+  ) {
+    // 1. Chat / Message Notification -> Navigate to conversation
+    if (item.isMessage) {
+      _openChat(context, item);
+      return;
+    }
+
+    // 2. Follow / Follow Request Notification
+    // If request was accepted: go straight to user profile. If not accepted: go to Requests page.
+    final bool isFollowRelated = item.isFollow ||
+        item.isFollowRequest ||
+        item.type.toUpperCase().contains('FOLLOW');
+
+    if (isFollowRelated) {
+      final bool isAccepted = followStatus == 'accepted' ||
+          followStatus == 'following' ||
+          item.followStatus == 'accepted' ||
+          item.type.toUpperCase().contains('ACCEPT') ||
+          item.type.toUpperCase().contains('APPROVED') ||
+          (item.isFollow && !item.isFollowRequest);
+
+      if (isAccepted && item.actorId != null && item.actorId!.isNotEmpty) {
+        Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => UserProfileScreen(
+              userId: item.actorId,
+              username: item.displayName,
+              name: item.displayName,
+              avatarAsset: item.safeAvatar,
+            ),
+          ),
+        );
+      } else {
+        // Not accepted yet -> go to Requests tab (index 2)
+        Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => const FollowersFollowingScreen(
+              initialTabIndex: 2,
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    // 3. Fallback: If actor is known, view profile
+    if (item.actorId != null && item.actorId!.isNotEmpty) {
+      Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => UserProfileScreen(
+            userId: item.actorId,
+            username: item.displayName,
+            name: item.displayName,
+            avatarAsset: item.safeAvatar,
+          ),
+        ),
+      );
+    }
+  }
+
+  void _openChat(BuildContext context, NotificationItemModel item) {
+    final String convId = (item.conversationId ??
+            item.extraData?['conversationId'] ??
+            item.extraData?['conversation_id'] ??
+            item.extraData?['convId'] ??
+            '')
+        .toString()
+        .trim();
+
+    final String senderId = (item.actorId ??
+            item.extraData?['senderId'] ??
+            item.extraData?['sender_id'] ??
+            item.extraData?['userId'] ??
+            '')
+        .toString()
+        .trim();
+
+    final String username = item.displayUsername.replaceAll('@', '');
+    final String displayName = item.displayName;
+    final String avatarUrl = item.safeAvatar;
+
+    try {
+      final MessagesProvider messagesProvider =
+          Provider.of<MessagesProvider>(context, listen: false);
+      ConversationModel? found;
+
+      if (convId.isNotEmpty) {
+        found = messagesProvider.conversations.firstWhere(
+          (ConversationModel c) => c.id == convId || c.participantId == convId,
+          orElse: () => const ConversationModel(
+            id: '',
+            username: '',
+            avatarAsset: '',
+            lastMessage: '',
+            timeAgo: '',
+          ),
+        );
+        if (found.id.isEmpty) found = null;
+      }
+      if (found == null && senderId.isNotEmpty) {
+        found = messagesProvider.conversations.firstWhere(
+          (ConversationModel c) =>
+              c.participantId == senderId ||
+              c.id == senderId ||
+              c.username.replaceAll('@', '') == username,
+          orElse: () => const ConversationModel(
+            id: '',
+            username: '',
+            avatarAsset: '',
+            lastMessage: '',
+            timeAgo: '',
+          ),
+        );
+        if (found.id.isEmpty) found = null;
+      }
+
+      final ConversationModel conv = found ??
+          ConversationModel(
+            id: convId.isNotEmpty ? convId : senderId,
+            participantId: senderId.isNotEmpty ? senderId : null,
+            username: username.isNotEmpty ? username : 'user',
+            displayName: displayName.isNotEmpty ? displayName : null,
+            avatarUrl: avatarUrl.isNotEmpty ? avatarUrl : null,
+            avatarAsset: '',
+            lastMessage: '',
+            timeAgo: '',
+          );
+
+      Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => ChatScreen(conversation: conv),
+        ),
+      );
+    } catch (e) {
+      debugPrint('⚠️ [NotificationsScreen] Error navigating to chat: $e');
+      try {
+        Provider.of<HomeFeedProvider>(context, listen: false).setBottomNavIndex(3);
+        Navigator.pop(context);
+      } catch (_) {}
+    }
   }
 }

@@ -16,6 +16,7 @@ class NotificationItemModel {
     this.commentId,
     this.followRequestId,
     this.followStatus,
+    this.conversationId,
     this.isRead = false,
     this.createdAt,
     this.extraData,
@@ -34,6 +35,7 @@ class NotificationItemModel {
   final String? commentId;
   final String? followRequestId;
   final String? followStatus;
+  final String? conversationId;
   final bool isRead;
   final DateTime? createdAt;
   final Map<String, dynamic>? extraData;
@@ -53,6 +55,17 @@ class NotificationItemModel {
   bool get isFollowRequest =>
       type.toUpperCase().contains('FOLLOW_REQUEST') ||
       (body?.toLowerCase().contains('requested to follow') ?? false);
+
+  bool get isMessage =>
+      type.toUpperCase().contains('MESSAGE') ||
+      type.toUpperCase().contains('CHAT') ||
+      (body?.toLowerCase().contains('sent you a message') ?? false) ||
+      (body?.toLowerCase().contains('message') ?? false) ||
+      conversationId != null ||
+      (extraData != null &&
+          (extraData!.containsKey('conversationId') ||
+              extraData!.containsKey('conversation_id') ||
+              extraData!.containsKey('convId')));
 
   bool get isSafety =>
       type.toUpperCase().contains('SAFETY') ||
@@ -264,6 +277,19 @@ class NotificationItemModel {
       resolvedFollowStatus = 'declined';
     }
 
+    // 9. Resolve Conversation ID
+    String? resolvedConversationId;
+    if (dataMap is Map<String, dynamic>) {
+      resolvedConversationId = (dataMap['conversationId'] ??
+              dataMap['conversation_id'] ??
+              dataMap['convId'])
+          ?.toString();
+    }
+    resolvedConversationId ??= (json['conversationId'] ??
+            json['conversation_id'] ??
+            json['convId'])
+        ?.toString();
+
     return NotificationItemModel(
       id: resolvedId,
       type: resolvedType,
@@ -278,6 +304,7 @@ class NotificationItemModel {
       commentId: resolvedCommentId,
       followRequestId: resolvedFollowRequestId,
       followStatus: resolvedFollowStatus,
+      conversationId: resolvedConversationId,
       isRead: resolvedIsRead,
       createdAt: resolvedCreatedAt,
       extraData: dataMap is Map<String, dynamic> ? dataMap : null,
@@ -298,6 +325,7 @@ class NotificationItemModel {
     String? commentId,
     String? followRequestId,
     String? followStatus,
+    String? conversationId,
     bool? isRead,
     DateTime? createdAt,
     Map<String, dynamic>? extraData,
@@ -316,6 +344,7 @@ class NotificationItemModel {
       commentId: commentId ?? this.commentId,
       followRequestId: followRequestId ?? this.followRequestId,
       followStatus: followStatus ?? this.followStatus,
+      conversationId: conversationId ?? this.conversationId,
       isRead: isRead ?? this.isRead,
       createdAt: createdAt ?? this.createdAt,
       extraData: extraData ?? this.extraData,

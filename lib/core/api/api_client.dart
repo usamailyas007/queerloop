@@ -315,13 +315,20 @@ class ApiClient {
                 : null,
           ));
 
-  Future<dynamic> delete(String path, {Object? body, Duration? timeout}) =>
+  Future<dynamic> delete(
+    String path, {
+    Object? body,
+    Duration? timeout,
+    Map<String, dynamic>? headers,
+  }) =>
       _send(() => _dio.delete<dynamic>(
             path,
             data: body,
-            options: timeout != null
-                ? Options(sendTimeout: timeout, receiveTimeout: timeout)
-                : null,
+            options: Options(
+              sendTimeout: timeout,
+              receiveTimeout: timeout,
+              headers: headers,
+            ),
           ));
 
   String _toCacheKey(String path, Map<String, dynamic>? query) {

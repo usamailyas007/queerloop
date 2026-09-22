@@ -8,6 +8,7 @@ import '../../auth/auth_provider.dart';
 import '../../create_post/widgets/custom_gradient_switch.dart';
 import '../../profile_setup/screens/allow_messages_from_screen.dart';
 import '../../profile_setup/screens/profile_visibility_screen.dart';
+import '../../messages/provider/messages_provider.dart';
 import '../provider/profile_provider.dart';
 import 'who_can_comment_screen.dart';
 
@@ -67,6 +68,12 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
           showActivityStatus: showActivityStatus,
           sendReadReceipts: sendReadReceipts,
         );
+    try {
+      context.read<MessagesProvider>().updatePrivacySettings(
+            showActivityStatus: showActivityStatus,
+            sendReadReceipts: sendReadReceipts,
+          );
+    } catch (_) {}
   }
 
   Widget _buildCardToggle({

@@ -12,89 +12,53 @@ import '../../home/screens/reels_feed_view.dart';
 import '../../home/screens/single_post_view_screen.dart';
 import '../models/message_models.dart';
 import '../provider/messages_provider.dart';
-import 'reaction_viewers_popup.dart';
+import '../services/shared_post_cache.dart';
 
 class ChatBubble extends StatelessWidget {
-  const ChatBubble({
-    required this.message,
-    this.myUserId,
-    this.conversationId,
-    super.key,
-  });
+  const ChatBubble({required this.message, super.key});
 
   final ChatMessageModel message;
-  final String? myUserId;
-  final String? conversationId;
 
   Widget _buildReactionPill(BuildContext context, String emoji, int count) {
-    final bool iReacted = myUserId != null &&
-        message.reactions
-            .any((MessageReactionModel r) => r.userId == myUserId);
-
-    return GestureDetector(
-      onTapUp: (TapUpDetails details) {
-        final Offset pos = details.globalPosition;
-        final String uid = myUserId ?? '';
-        final MessagesProvider p = context.read<MessagesProvider>();
-        ReactionViewersPopup.show(
-          context,
-          reactions: message.reactions.isNotEmpty
-              ? message.reactions
-              : <MessageReactionModel>[
-                  MessageReactionModel(emoji: emoji, userId: uid.isNotEmpty ? uid : null),
-                ],
-          tapPosition: pos,
-          myUserId: uid,
-          onRemoveReaction: () {
-            if (conversationId != null) {
-              p.toggleReaction(conversationId!, message.id, emoji);
-            }
-          },
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(top: 4),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: 3,
-        ),
-        decoration: BoxDecoration(
-          color: iReacted
-              ? AppColors.gradientCyan.withValues(alpha: 0.12)
-              : context.themeCardBackground,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(
-            color: iReacted ? AppColors.gradientCyan : context.themeBorder,
-            width: iReacted ? 1.4 : 1.0,
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 3,
+      ),
+      decoration: BoxDecoration(
+        color: context.themeCardBackground,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: context.themeBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(emoji, style: const TextStyle(fontSize: 12)),
+          const SizedBox(width: 4),
+          Text(
+            '$count',
+            style: AppTextStyles.caption.copyWith(
+              color: context.themeTextPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              emoji,
-              style: const TextStyle(fontSize: 12),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              '$count',
-              style: AppTextStyles.caption.copyWith(
-                color: iReacted ? AppColors.gradientCyan : context.themeTextPrimary,
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildSharedPostThumbnail(BuildContext context) {
-    final String? thumb = (message.postThumbnailAsset != null &&
-            message.postThumbnailAsset!.trim().isNotEmpty)
-        ? message.postThumbnailAsset!.trim()
-        : message.mediaUrl?.trim();
+    final SharedPostData? cached = SharedPostCache.get(message.sharedPostId);
+    final String? thumb = (cached != null &&
+            cached.thumbnailUrl != null &&
+            cached.thumbnailUrl!.isNotEmpty)
+        ? cached.thumbnailUrl
+        : ((message.postThumbnailAsset != null &&
+                message.postThumbnailAsset!.trim().isNotEmpty)
+            ? message.postThumbnailAsset!.trim()
+            : message.mediaUrl?.trim());
 
     if (thumb != null && thumb.startsWith('http')) {
       return Image.network(
@@ -134,20 +98,22 @@ class ChatBubble extends StatelessWidget {
       return Image.asset(
         thumb,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => Image.asset(
-          AppImages.forYouImg,
-          fit: BoxFit.cover,
-        ),
+        errorBuilder: (_, _, _) =>
+            Image.asset(AppImages.forYouImg, fit: BoxFit.cover),
       );
     }
 
-    // If thumbnail not resolved yet, trigger background resolution and show loading container
+    // If thumbnail not resolved yet and not in cache, trigger background resolution
     if (message.sharedPostId != null && message.sharedPostId!.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        try {
-          context.read<MessagesProvider>().resolveSharedPost(message.sharedPostId!);
-        } catch (_) {}
-      });
+      if (cached == null || cached.thumbnailUrl == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          try {
+            context.read<MessagesProvider>().resolveSharedPost(
+              message.sharedPostId!,
+            );
+          } catch (_) {}
+        });
+      }
     }
 
     return Container(
@@ -165,7 +131,9 @@ class ChatBubble extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              message.postType == 'reel' ? 'Loading reel...' : 'Loading post...',
+              message.postType == 'reel'
+                  ? 'Loading reel...'
+                  : 'Loading post...',
               style: AppTextStyles.caption.copyWith(
                 color: Colors.white60,
                 fontSize: 11,
@@ -186,8 +154,12 @@ class ChatBubble extends StatelessWidget {
         id: postId,
         authorId: message.senderId,
         username: message.postAuthor ?? '@creator',
-        pronounsTime: message.timestamp.isNotEmpty ? message.timestamp : 'just now',
-        avatarAsset: (message.postAuthorAvatarUrl != null && message.postAuthorAvatarUrl!.isNotEmpty)
+        pronounsTime: message.timestamp.isNotEmpty
+            ? message.timestamp
+            : 'just now',
+        avatarAsset:
+            (message.postAuthorAvatarUrl != null &&
+                message.postAuthorAvatarUrl!.isNotEmpty)
             ? message.postAuthorAvatarUrl!
             : AppImages.user1,
         videoAsset: '',
@@ -224,9 +196,7 @@ class ChatBubble extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.5),
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white24,
-                          ),
+                          border: Border.all(color: Colors.white24),
                         ),
                         child: const Icon(
                           Icons.chevron_left_rounded,
@@ -246,10 +216,8 @@ class ChatBubble extends StatelessWidget {
       Navigator.push<void>(
         context,
         MaterialPageRoute<void>(
-          builder: (_) => SinglePostViewScreen(
-            postId: postId,
-            chatMessage: message,
-          ),
+          builder: (_) =>
+              SinglePostViewScreen(postId: postId, chatMessage: message),
         ),
       );
     }
@@ -286,11 +254,60 @@ class ChatBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Column(
-        crossAxisAlignment:
-            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMe
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: <Widget>[
+          // ── Unsent Message Bubble (WhatsApp style) ─────────────────────────
+          if (message.isUnsent)
+            Align(
+              alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.75,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm + 2,
+                ),
+                decoration: BoxDecoration(
+                  color: context.themeCardBackground.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  border: Border.all(
+                    color: context.themeBorder.withValues(alpha: 0.7),
+                    width: 1.0,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(
+                      Icons.block_rounded,
+                      size: 15,
+                      color: context.themeTextMuted,
+                    ),
+                    const SizedBox(width: AppSpacing.xs + 2),
+                    Flexible(
+                      child: Text(
+                        message.text ??
+                            (isMe
+                                ? 'You unsent this message'
+                                : 'This message was unsent'),
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: context.themeTextMuted,
+                          fontStyle: FontStyle.italic,
+                          fontSize: 12.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           // ── Gradient Sent Text Bubble (Right) ─────────────────────────────
-          if (message.type == MessageType.gradientText)
+          if (!message.isUnsent && message.type == MessageType.gradientText)
             Align(
               alignment: Alignment.centerRight,
               child: Column(
@@ -325,7 +342,7 @@ class ChatBubble extends StatelessWidget {
             ),
 
           // ── Cyan Outlined Received Bubble (Left) ──────────────────────────
-          if (message.type == MessageType.cyanOutlinedText)
+          if (!message.isUnsent && message.type == MessageType.cyanOutlinedText)
             Align(
               alignment: Alignment.centerLeft,
               child: Column(
@@ -363,12 +380,13 @@ class ChatBubble extends StatelessWidget {
             ),
 
           // ── Standard Text Bubble (Left / Right) ───────────────────────────
-          if (message.type == MessageType.text)
+          if (!message.isUnsent && message.type == MessageType.text)
             Align(
               alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
               child: Column(
-                crossAxisAlignment:
-                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment: isMe
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
                 children: <Widget>[
                   Container(
                     constraints: BoxConstraints(
@@ -381,9 +399,7 @@ class ChatBubble extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: context.themeCardBackground,
                       borderRadius: BorderRadius.circular(AppRadius.card),
-                      border: Border.all(
-                        color: context.themeBorder,
-                      ),
+                      border: Border.all(color: context.themeBorder),
                     ),
                     child: Text(
                       message.text ?? '',
@@ -405,15 +421,17 @@ class ChatBubble extends StatelessWidget {
             ),
 
           // ── Image Bubble with Reaction Badge ─────────────────────────────
-          if (message.type == MessageType.image &&
+          if (!message.isUnsent &&
+              message.type == MessageType.image &&
               (message.imageFilePath != null ||
                   message.imageAsset != null ||
                   message.mediaUrl != null))
             Align(
               alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
               child: Column(
-                crossAxisAlignment:
-                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment: isMe
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
                 children: <Widget>[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(20),
@@ -425,45 +443,45 @@ class ChatBubble extends StatelessWidget {
                             fit: BoxFit.cover,
                           )
                         : (message.mediaUrl != null &&
-                                message.mediaUrl!.startsWith('http'))
-                            ? Image.network(
-                                message.mediaUrl!,
-                                width: 190,
-                                height: 190,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Image.asset(
-                                  AppImages.user1,
-                                  width: 190,
-                                  height: 190,
-                                  fit: BoxFit.cover,
-                                ),
-                              )
-                            : (message.imageAsset != null &&
-                                    message.imageAsset!.startsWith('http'))
-                                ? Image.network(
-                                    message.imageAsset!,
-                                    width: 190,
-                                    height: 190,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) => Image.asset(
-                                      AppImages.user1,
-                                      width: 190,
-                                      height: 190,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  )
-                                : Image.asset(
-                                    message.imageAsset ?? AppImages.user1,
-                                    width: 190,
-                                    height: 190,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) => Image.asset(
-                                      AppImages.user1,
-                                      width: 190,
-                                      height: 190,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
+                              message.mediaUrl!.startsWith('http'))
+                        ? Image.network(
+                            message.mediaUrl!,
+                            width: 190,
+                            height: 190,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => Image.asset(
+                              AppImages.user1,
+                              width: 190,
+                              height: 190,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : (message.imageAsset != null &&
+                              message.imageAsset!.startsWith('http'))
+                        ? Image.network(
+                            message.imageAsset!,
+                            width: 190,
+                            height: 190,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => Image.asset(
+                              AppImages.user1,
+                              width: 190,
+                              height: 190,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : Image.asset(
+                            message.imageAsset ?? AppImages.user1,
+                            width: 190,
+                            height: 190,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => Image.asset(
+                              AppImages.user1,
+                              width: 190,
+                              height: 190,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
                   ),
                   if (message.reactionEmoji != null)
                     _buildReactionPill(
@@ -476,12 +494,13 @@ class ChatBubble extends StatelessWidget {
             ),
 
           // ── Shared Post Card Bubble (Responsive Left/Right) ────────────────
-          if (message.type == MessageType.postShare)
+          if (!message.isUnsent && message.type == MessageType.postShare)
             Align(
               alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
               child: Column(
-                crossAxisAlignment:
-                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment: isMe
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
                 children: <Widget>[
                   // 1. Accompanying message text bubble (if any message was sent with the share)
                   if (message.text != null &&
@@ -507,7 +526,9 @@ class ChatBubble extends StatelessWidget {
                         border: isMe
                             ? null
                             : Border.all(
-                                color: context.themeBorder.withValues(alpha: 0.6),
+                                color: context.themeBorder.withValues(
+                                  alpha: 0.6,
+                                ),
                               ),
                       ),
                       child: Text(
@@ -559,10 +580,14 @@ class ChatBubble extends StatelessWidget {
                                         width: 44,
                                         height: 44,
                                         decoration: BoxDecoration(
-                                          color: Colors.black.withValues(alpha: 0.45),
+                                          color: Colors.black.withValues(
+                                            alpha: 0.45,
+                                          ),
                                           shape: BoxShape.circle,
                                           border: Border.all(
-                                            color: Colors.white.withValues(alpha: 0.8),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.8,
+                                            ),
                                             width: 1.5,
                                           ),
                                         ),
@@ -583,7 +608,9 @@ class ChatBubble extends StatelessWidget {
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.6),
+                                        color: Colors.black.withValues(
+                                          alpha: 0.6,
+                                        ),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Row(
@@ -602,11 +629,12 @@ class ChatBubble extends StatelessWidget {
                                                 (message.postLikes != null
                                                     ? '${message.postLikes}'
                                                     : '12.4K'),
-                                            style: AppTextStyles.caption.copyWith(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 11,
-                                            ),
+                                            style: AppTextStyles.caption
+                                                .copyWith(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 11,
+                                                ),
                                           ),
                                         ],
                                       ),
@@ -619,7 +647,8 @@ class ChatBubble extends StatelessWidget {
                             // Post Caption / Body if present in shared content
                             if (message.postCaption != null &&
                                 message.postCaption!.trim().isNotEmpty &&
-                                message.postCaption!.trim().toLowerCase() != 'null')
+                                message.postCaption!.trim().toLowerCase() !=
+                                    'null')
                               Padding(
                                 padding: const EdgeInsets.only(
                                   left: AppSpacing.md,
@@ -647,18 +676,19 @@ class ChatBubble extends StatelessWidget {
                               color: context.themeCardBackground,
                               child: Row(
                                 children: <Widget>[
-                                  ClipOval(
-                                    child: _buildPostAuthorAvatar(),
-                                  ),
+                                  ClipOval(child: _buildPostAuthorAvatar()),
                                   const SizedBox(width: AppSpacing.sm),
                                   Expanded(
                                     child: Text(
                                       message.postAuthor != null &&
                                               message.postAuthor!.isNotEmpty
-                                          ? (message.postAuthor!.endsWith("'s post") ||
-                                                  message.postAuthor!.endsWith("'s reel")
-                                              ? message.postAuthor!
-                                              : "${message.postAuthor}'s ${message.postType == 'reel' ? 'reel' : 'post'}")
+                                          ? (message.postAuthor!.endsWith(
+                                                      "'s post",
+                                                    ) ||
+                                                    message.postAuthor!
+                                                        .endsWith("'s reel")
+                                                ? message.postAuthor!
+                                                : "${message.postAuthor}'s ${message.postType == 'reel' ? 'reel' : 'post'}")
                                           : "@creator's post",
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -687,35 +717,14 @@ class ChatBubble extends StatelessWidget {
               ),
             ),
 
-          if (isMe) ...<Widget>[
+          if (isMe && !message.isUnsent) ...<Widget>[
             const SizedBox(height: 4),
-            Builder(
-              builder: (BuildContext ctx) {
-                // Select both read state AND the live message (for updated timestamp)
-                final (bool liveRead, String liveTimestamp) =
-                    ctx.select<MessagesProvider, (bool, String)>(
-                  (MessagesProvider p) {
-                    final bool read = p.isMessageSentRead(message.id);
-                    final String ts = p.getReadTime(message.id) ??
-                        p.getMessageTimestamp(message.id) ??
-                        message.timestamp;
-                    return (read, ts);
-                  },
-                );
-                final bool isRead = message.isRead || liveRead;
-                final String displayTime = isRead ? liveTimestamp : message.timestamp;
-                return Text(
-                  isRead
-                      ? (displayTime.isNotEmpty && displayTime != 'Just now'
-                          ? 'Read $displayTime'
-                          : 'Read')
-                      : 'Sent',
-                  style: AppTextStyles.caption.copyWith(
-                    color: ctx.themeTextMuted,
-                    fontSize: 11,
-                  ),
-                );
-              },
+            Text(
+              message.isRead ? 'Seen' : 'Sent',
+              style: AppTextStyles.caption.copyWith(
+                color: context.themeTextMuted,
+                fontSize: 11,
+              ),
             ),
           ],
         ],

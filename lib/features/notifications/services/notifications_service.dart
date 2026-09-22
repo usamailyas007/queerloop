@@ -143,13 +143,18 @@ class NotificationsService {
 
   // ── 6. Unregister Device Push Token ────────────────────────────────────────
   /// DELETE /users/me/device-tokens/:token
-  Future<bool> unregisterDeviceToken(String token) async {
+  Future<bool> unregisterDeviceToken(String token, {String? authToken}) async {
     final String cleanToken = token.trim();
     if (cleanToken.isEmpty) return false;
 
     try {
       debugPrint('🚀 [NotificationsService] DELETE ${ApiEndpoints.deviceToken(cleanToken)}');
-      await _client.delete(ApiEndpoints.deviceToken(cleanToken));
+      await _client.delete(
+        ApiEndpoints.deviceToken(cleanToken),
+        headers: (authToken != null && authToken.isNotEmpty)
+            ? <String, dynamic>{'Authorization': 'Bearer $authToken'}
+            : null,
+      );
       return true;
     } on ApiException catch (e) {
       debugPrint('❌ [NotificationsService] unregisterDeviceToken error: $e');

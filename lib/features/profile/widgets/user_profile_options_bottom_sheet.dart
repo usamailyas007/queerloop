@@ -126,8 +126,16 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ProfileProvider profileProvider = context.watch<ProfileProvider>();
     final String cleanHandle =
         username.startsWith('@') ? username : '@$username';
+
+    final bool isCurrentlyRestricted =
+        profileProvider.isRestricted(userId) || profileProvider.isRestricted(username);
+    final bool isCurrentlyMuted =
+        profileProvider.isMuted(userId) || profileProvider.isMuted(username);
+    final bool isCurrentlyBlocked =
+        profileProvider.isBlocked(userId) || profileProvider.isBlocked(username);
 
     return Container(
       decoration: BoxDecoration(
@@ -180,7 +188,7 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // 1. Restrict Option
+            // 1. Restrict / Unrestrict Option
             _buildOptionTile(
               context,
               iconWidget: SvgPicture.asset(
@@ -188,57 +196,66 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                 width: 18,
                 height: 18,
                 colorFilter: ColorFilter.mode(
-                  context.themeTextSecondary,
+                  isCurrentlyRestricted
+                      ? AppColors.gradientCyan
+                      : context.themeTextSecondary,
                   BlendMode.srcIn,
                 ),
               ),
-              title: 'Restrict $cleanHandle',
-              subtitle: 'Their comments only show to them, DMs move to requests',
+              title: isCurrentlyRestricted
+                  ? 'Unrestrict $cleanHandle'
+                  : 'Restrict $cleanHandle',
+              subtitle: isCurrentlyRestricted
+                  ? 'Their comments and messages show normally again'
+                  : 'Their comments only show to them, DMs move to requests',
               onTap: () {
                 final ScaffoldMessengerState messenger =
                     ScaffoldMessenger.of(context);
-                final ProfileProvider profileProvider =
-                    context.read<ProfileProvider>();
                 final ApiClient apiClient = context.read<ApiClient>();
                 Navigator.pop(context);
-                RestrictUserModalDialog.show(
-                  context,
-                  username: username,
-                  onConfirmRestrict: () async {
+
+                if (isCurrentlyRestricted) {
+                  () async {
                     String? targetId = userId;
                     if (targetId == null || targetId.isEmpty) {
                       final UserRelationshipService service =
                           UserRelationshipService(apiClient);
                       targetId = await service.resolveUserId(username);
                     }
-                    if (targetId != null && targetId.isNotEmpty) {
-                      await profileProvider.restrictUser(targetId, username: username);
-                    }
+                    final String effectiveId =
+                        (targetId != null && targetId.isNotEmpty) ? targetId : username;
+
+                    await profileProvider.unrestrictUser(effectiveId);
                     if (!context.mounted) return;
                     AppSnackBar.show(
                       context,
                       messenger: messenger,
-                      title: '$cleanHandle restricted',
-                      subtitle:
-                          'Their comments only show to them, DMs sent to requests',
-                      icon: SvgPicture.asset(
-                        AppIcons.hide,
-                        width: 18,
-                        height: 18,
-                        colorFilter: const ColorFilter.mode(
-                          AppColors.gradientCyan,
-                          BlendMode.srcIn,
-                        ),
-                      ),
+                      title: '$cleanHandle unrestricted',
+                      subtitle: 'Their comments and messages will appear normally',
                       actionLabel: 'Undo',
                       onAction: () async {
-                        if (targetId != null && targetId.isNotEmpty) {
-                          await profileProvider.unrestrictUser(targetId);
-                        }
+                        await profileProvider.restrictUser(effectiveId, username: username);
                       },
                     );
-                  },
-                );
+                  }();
+                } else {
+                  RestrictUserModalDialog.show(
+                    context,
+                    username: username,
+                    onConfirmRestrict: () async {
+                      String? targetId = userId;
+                      if (targetId == null || targetId.isEmpty) {
+                        final UserRelationshipService service =
+                            UserRelationshipService(apiClient);
+                        targetId = await service.resolveUserId(username);
+                      }
+                      final String effectiveId =
+                          (targetId != null && targetId.isNotEmpty) ? targetId : username;
+
+                      await profileProvider.restrictUser(effectiveId, username: username);
+                    },
+                  );
+                }
               },
             ),
 
@@ -270,7 +287,7 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
               },
             ),
 
-            // 3. Mute Option
+            // 3. Mute / Unmute Option
             _buildOptionTile(
               context,
               iconWidget: SvgPicture.asset(
@@ -278,89 +295,173 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                 width: 18,
                 height: 18,
                 colorFilter: ColorFilter.mode(
-                  context.themeTextSecondary,
+                  isCurrentlyMuted
+                      ? AppColors.gradientCyan
+                      : context.themeTextSecondary,
                   BlendMode.srcIn,
                 ),
               ),
-              title: 'Mute $cleanHandle',
-              subtitle: 'Stay following, stop seeing posts',
+              title: isCurrentlyMuted
+                  ? 'Unmute $cleanHandle'
+                  : 'Mute $cleanHandle',
+              subtitle: isCurrentlyMuted
+                  ? 'Resume seeing their posts in your feed'
+                  : 'Stay following, stop seeing posts',
               onTap: () {
-                final ProfileProvider profileProvider =
-                    context.read<ProfileProvider>();
+                final ScaffoldMessengerState messenger =
+                    ScaffoldMessenger.of(context);
                 final ApiClient apiClient = context.read<ApiClient>();
                 Navigator.pop(context);
-                MuteDurationBottomSheet.show(
-                  context,
-                  username: username,
-                  onConfirmMute: (String duration) async {
+
+                if (isCurrentlyMuted) {
+                  () async {
                     String? targetId = userId;
                     if (targetId == null || targetId.isEmpty) {
                       final UserRelationshipService service =
                           UserRelationshipService(apiClient);
                       targetId = await service.resolveUserId(username);
                     }
-                    if (targetId != null && targetId.isNotEmpty) {
+                    final String effectiveId =
+                        (targetId != null && targetId.isNotEmpty) ? targetId : username;
+
+                    await profileProvider.unmuteUser(effectiveId);
+                    if (!context.mounted) return;
+                    AppSnackBar.show(
+                      context,
+                      messenger: messenger,
+                      title: '$cleanHandle unmuted',
+                      subtitle: "Their posts will show in your feed again",
+                      actionLabel: 'Undo',
+                      onAction: () async {
+                        await profileProvider.muteUser(
+                          effectiveId,
+                          username: username,
+                          scope: 'posts',
+                          durationHours: 8,
+                        );
+                      },
+                    );
+                  }();
+                } else {
+                  MuteDurationBottomSheet.show(
+                    context,
+                    username: username,
+                    onConfirmMute: (String duration) async {
                       int hours = 8;
                       if (duration.contains('24')) hours = 24;
                       if (duration.contains('7')) hours = 168;
                       if (duration.contains('30')) hours = 720;
+
+                      String? targetId = userId;
+                      if (targetId == null || targetId.isEmpty) {
+                        final UserRelationshipService service =
+                            UserRelationshipService(apiClient);
+                        targetId = await service.resolveUserId(username);
+                      }
+                      final String effectiveId =
+                          (targetId != null && targetId.isNotEmpty) ? targetId : username;
+
                       await profileProvider.muteUser(
-                        targetId,
+                        effectiveId,
                         username: username,
                         scope: 'posts',
                         durationHours: hours,
                       );
-                    }
-                  },
-                );
+                      if (!context.mounted) return;
+                      AppSnackBar.show(
+                        context,
+                        messenger: messenger,
+                        title: '$cleanHandle muted',
+                        subtitle: "You won't see their posts in your feed",
+                        actionLabel: 'Undo',
+                        onAction: () async {
+                          await profileProvider.unmuteUser(effectiveId);
+                        },
+                      );
+                    },
+                  );
+                }
               },
             ),
 
-            // 4. Block Option
+            // 4. Block / Unblock Option
             _buildOptionTile(
               context,
-              iconWidget: const Icon(
-                Icons.block_rounded,
+              iconWidget: Icon(
+                isCurrentlyBlocked ? Icons.lock_open_rounded : Icons.block_rounded,
                 color: AppColors.gradientCyan,
                 size: 18,
               ),
-              title: 'Block $cleanHandle',
-              subtitle: 'They lose all contact with you',
+              title: isCurrentlyBlocked
+                  ? 'Unblock $cleanHandle'
+                  : 'Block $cleanHandle',
+              subtitle: isCurrentlyBlocked
+                  ? 'Allow them to interact with you and see your profile'
+                  : 'They lose all contact with you',
               titleColor: AppColors.gradientCyan,
               onTap: () {
-                final ProfileProvider profileProvider =
-                    context.read<ProfileProvider>();
+                final ScaffoldMessengerState messenger =
+                    ScaffoldMessenger.of(context);
                 final ApiClient apiClient = context.read<ApiClient>();
                 Navigator.pop(context);
-                BlockUserModalDialog.show(
-                  context,
-                  username: username,
-                  onConfirmBlock: () async {
+
+                if (isCurrentlyBlocked) {
+                  () async {
                     String? targetId = userId;
                     if (targetId == null || targetId.isEmpty) {
                       final UserRelationshipService service =
                           UserRelationshipService(apiClient);
                       targetId = await service.resolveUserId(username);
                     }
-                    if (targetId != null && targetId.isNotEmpty) {
+                    final String effectiveId =
+                        (targetId != null && targetId.isNotEmpty) ? targetId : username;
+
+                    await profileProvider.unblockUser(effectiveId);
+                    if (!context.mounted) return;
+                    AppSnackBar.show(
+                      context,
+                      messenger: messenger,
+                      title: '$cleanHandle unblocked',
+                      subtitle: 'They can now find your profile and follow you',
+                      actionLabel: 'Undo',
+                      onAction: () async {
+                        await profileProvider.blockUser(effectiveId, username: username);
+                      },
+                    );
+                  }();
+                } else {
+                  BlockUserModalDialog.show(
+                    context,
+                    username: username,
+                    onConfirmBlock: () async {
+                      String? targetId = userId;
+                      if (targetId == null || targetId.isEmpty) {
+                        final UserRelationshipService service =
+                            UserRelationshipService(apiClient);
+                        targetId = await service.resolveUserId(username);
+                      }
+                      final String effectiveId =
+                          (targetId != null && targetId.isNotEmpty) ? targetId : username;
+
                       await profileProvider.blockUser(
-                        targetId,
+                        effectiveId,
                         username: username,
                       );
-                    }
-                  },
-                  onConfirmUnblock: () async {
-                    String? targetId = userId;
-                    if (targetId == null || targetId.isEmpty) {
-                      final UserRelationshipService service =
-                          UserRelationshipService(apiClient);
-                      targetId = await service.resolveUserId(username);
-                    }
-                    if (targetId != null && targetId.isNotEmpty) {
-                      await profileProvider.unblockUser(targetId);
-                    }
-                  },
-                );
+                    },
+                    onConfirmUnblock: () async {
+                      String? targetId = userId;
+                      if (targetId == null || targetId.isEmpty) {
+                        final UserRelationshipService service =
+                            UserRelationshipService(apiClient);
+                        targetId = await service.resolveUserId(username);
+                      }
+                      final String effectiveId =
+                          (targetId != null && targetId.isNotEmpty) ? targetId : username;
+
+                      await profileProvider.unblockUser(effectiveId);
+                    },
+                  );
+                }
               },
             ),
 

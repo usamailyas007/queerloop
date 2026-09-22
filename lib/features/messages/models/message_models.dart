@@ -68,6 +68,8 @@ class ChatMessageModel {
     this.reactionCount,
     this.reactions = const <MessageReactionModel>[],
     this.isRead = false,
+    this.isUnsent = false,
+    this.unsentAt,
     this.createdAt,
     this.type = MessageType.text,
   });
@@ -95,6 +97,8 @@ class ChatMessageModel {
   final int? reactionCount;
   final List<MessageReactionModel> reactions;
   final bool isRead;
+  final bool isUnsent;
+  final DateTime? unsentAt;
   final DateTime? createdAt;
   final MessageType type;
 
@@ -123,11 +127,35 @@ class ChatMessageModel {
         ? (sId == currentUserId)
         : (json['isMe'] == true || sUsername.toLowerCase() == 'me');
 
+    final String? unsentRaw = json['unsentAt']?.toString() ??
+        json['unsent_at']?.toString() ??
+        json['deletedAt']?.toString() ??
+        json['deleted_at']?.toString();
+    final bool isUnsent = json['isUnsent'] == true ||
+        json['isDeleted'] == true ||
+        (unsentRaw != null && unsentRaw.isNotEmpty && unsentRaw != 'null');
+    final DateTime? unsentTime =
+        isUnsent && unsentRaw != null ? DateTime.tryParse(unsentRaw) : null;
+
+    final String rawU = (sUsername.isNotEmpty && sUsername != 'User')
+        ? sUsername
+        : (senderRaw is Map
+            ? (senderRaw['username'] ??
+                senderRaw['name'] ??
+                senderRaw['displayName'] ??
+                'User')
+            : 'User').toString();
+    final String cleanUsername =
+        rawU.startsWith('@') ? rawU.substring(1) : rawU;
+
     final String? body =
         (json['body'] ?? json['text'] ?? json['content'])?.toString();
-    final String? media =
-        (json['mediaUrl'] ?? json['imageUrl'] ?? json['attachmentUrl'])
-            ?.toString();
+    final String? parsedText = isUnsent
+        ? (me ? 'You unsent this message' : '$cleanUsername has unsent this message')
+        : body;
+    final String? media = isUnsent
+        ? null
+        : (json['mediaUrl'] ?? json['imageUrl'] ?? json['attachmentUrl'])?.toString();
 
     // Parse reactions
     final List<MessageReactionModel> parsedReactions = <MessageReactionModel>[];
@@ -161,23 +189,11 @@ class ChatMessageModel {
         DateTime.tryParse(json['createdAt']?.toString() ?? '');
     String timeFormatted = json['timestamp']?.toString() ?? '';
     if (timeFormatted.isEmpty && created != null) {
-      final DateTime localCreated = created.toLocal();
       timeFormatted =
-          '${localCreated.hour.toString().padLeft(2, '0')}:${localCreated.minute.toString().padLeft(2, '0')}';
+          '${created.hour.toString().padLeft(2, '0')}:${created.minute.toString().padLeft(2, '0')}';
     }
     if (timeFormatted.isEmpty) {
       timeFormatted = 'Just now';
-    }
-
-    final DateTime? readAtDt = DateTime.tryParse(
-        (json['readAt'] ?? json['read_at'] ?? json['seenAt'] ?? json['seen_at'])
-                ?.toString() ??
-            '');
-    String? readTimeFormatted;
-    if (readAtDt != null) {
-      final DateTime localRead = readAtDt.toLocal();
-      readTimeFormatted =
-          '${localRead.hour.toString().padLeft(2, '0')}:${localRead.minute.toString().padLeft(2, '0')}';
     }
 
     // Shared post / content parsing
@@ -362,10 +378,8 @@ class ChatMessageModel {
       senderId: sId.isNotEmpty ? sId : null,
       senderUsername: sUsername,
       isMe: me,
-      timestamp: (isMsgRead && me && readTimeFormatted != null)
-          ? readTimeFormatted
-          : timeFormatted,
-      text: body,
+      timestamp: timeFormatted,
+      text: parsedText,
       mediaUrl: media,
       postThumbnailAsset: postThumbnail,
       postAuthor: postAuthorName,
@@ -380,6 +394,8 @@ class ChatMessageModel {
       reactionCount: count,
       reactions: parsedReactions,
       isRead: isMsgRead,
+      isUnsent: isUnsent,
+      unsentAt: unsentTime,
       createdAt: created,
       type: mType,
     );
@@ -410,6 +426,8 @@ class ChatMessageModel {
     List<MessageReactionModel>? reactions,
     bool clearReaction = false,
     bool? isRead,
+    bool? isUnsent,
+    DateTime? unsentAt,
     DateTime? createdAt,
     MessageType? type,
   }) {
@@ -437,6 +455,8 @@ class ChatMessageModel {
       reactionCount: clearReaction ? null : (reactionCount ?? this.reactionCount),
       reactions: clearReaction ? const <MessageReactionModel>[] : (reactions ?? this.reactions),
       isRead: isRead ?? this.isRead,
+      isUnsent: isUnsent ?? this.isUnsent,
+      unsentAt: unsentAt ?? this.unsentAt,
       createdAt: createdAt ?? this.createdAt,
       type: type ?? this.type,
     );
@@ -584,6 +604,10 @@ class ConversationModel {
         json['message'];
 
     if (lastMsgRaw is Map<String, dynamic>) {
+      final String? unsentRaw = (lastMsgRaw['unsentAt'] ?? lastMsgRaw['unsent_at'])?.toString();
+      final bool isLastUnsent = lastMsgRaw['isUnsent'] == true ||
+          (unsentRaw != null && unsentRaw.isNotEmpty && unsentRaw != 'null');
+
       final String rawBody = (lastMsgRaw['body'] ??
               lastMsgRaw['text'] ??
               lastMsgRaw['content'] ??
@@ -595,10 +619,15 @@ class ConversationModel {
               lastMsgRaw['sender']?['id'] ??
               lastMsgRaw['sender']?['_id'])
           ?.toString();
+      final bool isMe = (currentUserId != null && lastSender == currentUserId);
       lastMsgTime = DateTime.tryParse(
           (lastMsgRaw['createdAt'] ?? lastMsgRaw['created_at'])?.toString() ?? '');
 
-      if (rawBody.trim().isNotEmpty) {
+      if (isLastUnsent) {
+        lastMsgText = isMe
+            ? 'You unsent a message'
+            : '${pUsername.replaceAll('@', '')} unsent a message';
+      } else if (rawBody.trim().isNotEmpty) {
         lastMsgText = rawBody.trim();
       } else if (lastMsgRaw['sharedPostId'] != null ||
           lastMsgRaw['sharedContent'] != null) {
@@ -619,6 +648,10 @@ class ConversationModel {
         (json['messages'] as List).isNotEmpty) {
       final dynamic lastItem = (json['messages'] as List).last;
       if (lastItem is Map<String, dynamic>) {
+        final String? unsentRaw = (lastItem['unsentAt'] ?? lastItem['unsent_at'])?.toString();
+        final bool isLastUnsent = lastItem['isUnsent'] == true ||
+            (unsentRaw != null && unsentRaw.isNotEmpty && unsentRaw != 'null');
+
         final String rawBody = (lastItem['body'] ??
                 lastItem['text'] ??
                 lastItem['content'] ??
@@ -630,10 +663,15 @@ class ConversationModel {
                 lastItem['sender']?['id'] ??
                 lastItem['sender']?['_id'])
             ?.toString();
+        final bool isMe = (currentUserId != null && lastSender == currentUserId);
         lastMsgTime = DateTime.tryParse(
             (lastItem['createdAt'] ?? lastItem['created_at'])?.toString() ?? '');
 
-        if (rawBody.trim().isNotEmpty) {
+        if (isLastUnsent) {
+          lastMsgText = isMe
+              ? 'You unsent a message'
+              : '${pUsername.replaceAll('@', '')} unsent a message';
+        } else if (rawBody.trim().isNotEmpty) {
           lastMsgText = rawBody.trim();
         } else if (lastItem['sharedPostId'] != null ||
             lastItem['sharedContent'] != null) {
@@ -651,7 +689,8 @@ class ConversationModel {
         lastSender != null &&
         currentUserId != null &&
         lastSender == currentUserId &&
-        !lastMsgText.startsWith('You: ')) {
+        !lastMsgText.startsWith('You: ') &&
+        !lastMsgText.startsWith('You unsent')) {
       lastMsgText = 'You: $lastMsgText';
     }
 

@@ -24,10 +24,7 @@ import '../../auth/auth_provider.dart';
 import '../../profile/screens/user_profile_screen.dart';
 
 class ChatScreen extends StatelessWidget {
-  const ChatScreen({
-    required this.conversation,
-    super.key,
-  });
+  const ChatScreen({required this.conversation, super.key});
 
   final ConversationModel conversation;
 
@@ -136,8 +133,9 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
           final String? pId = widget.conversation.participantId;
           if (pId != null && pId.trim().isNotEmpty) {
             try {
-              final ConversationModel? started =
-                  await p.startConversation(pId.trim());
+              final ConversationModel? started = await p.startConversation(
+                pId.trim(),
+              );
               if (started != null && started.id.isNotEmpty) {
                 convId = started.id;
               }
@@ -206,11 +204,22 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
       orElse: () => widget.conversation,
     );
 
-    final bool isMuted = provider.isMuted(activeConv.username) ||
+    final bool isMuted =
+        provider.isMuted(activeConv.username) ||
         provider.isMuted(activeConv.id) ||
-        activeConv.isMuted;
-    final bool isRestricted = provider.isRestricted(activeConv.username);
-    final bool isBlocked = provider.isBlocked(activeConv.username) ||
+        (activeConv.participantId != null &&
+            provider.isMuted(activeConv.participantId!)) ||
+        (activeConv.isMuted &&
+            !provider.isExplicitlyUnmuted(activeConv.id) &&
+            !provider.isExplicitlyUnmuted(activeConv.username) &&
+            (activeConv.participantId == null ||
+                !provider.isExplicitlyUnmuted(activeConv.participantId!)));
+    final bool isRestricted = provider.isRestricted(activeConv.username) ||
+        (activeConv.participantId != null &&
+            provider.isRestricted(activeConv.participantId!)) ||
+        provider.isRestricted(activeConv.id);
+    final bool isBlocked =
+        provider.isBlocked(activeConv.username) ||
         (activeConv.participantId != null &&
             provider.isBlocked(activeConv.participantId!)) ||
         provider.isBlocked(activeConv.id);
@@ -218,18 +227,20 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
         ? activeConv.username
         : '@${activeConv.username}';
 
-    final String titleText = (activeConv.displayName != null &&
+    final String titleText =
+        (activeConv.displayName != null &&
             activeConv.displayName!.trim().isNotEmpty)
         ? activeConv.displayName!.trim()
         : cleanUsername;
 
-    final String? handleText = (activeConv.displayName != null &&
+    final String? handleText =
+        (activeConv.displayName != null &&
             activeConv.displayName!.trim().isNotEmpty &&
             activeConv.username.isNotEmpty &&
             activeConv.username != 'User')
         ? (activeConv.username.startsWith('@')
-            ? activeConv.username
-            : '@${activeConv.username}')
+              ? activeConv.username
+              : '@${activeConv.username}')
         : null;
 
     return Scaffold(
@@ -266,7 +277,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                             builder: (_) => UserProfileScreen(
                               userId: activeConv.participantId,
                               username: activeConv.username,
-                              name: (activeConv.displayName != null &&
+                              name:
+                                  (activeConv.displayName != null &&
                                       activeConv.displayName!.isNotEmpty)
                                   ? activeConv.displayName!
                                   : activeConv.username.split('.').first,
@@ -296,18 +308,20 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                               clipBehavior: Clip.none,
                               children: <Widget>[
                                 ClipOval(
-                                  child: activeConv.avatarAsset.startsWith('http')
+                                  child:
+                                      activeConv.avatarAsset.startsWith('http')
                                       ? Image.network(
                                           activeConv.avatarAsset,
                                           width: 36,
                                           height: 36,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) => Image.asset(
-                                            AppImages.user1,
-                                            width: 36,
-                                            height: 36,
-                                            fit: BoxFit.cover,
-                                          ),
+                                          errorBuilder: (_, _, _) =>
+                                              Image.asset(
+                                                AppImages.user1,
+                                                width: 36,
+                                                height: 36,
+                                                fit: BoxFit.cover,
+                                              ),
                                         )
                                       : Image.asset(
                                           activeConv.avatarAsset.isNotEmpty
@@ -316,15 +330,19 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                           width: 36,
                                           height: 36,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) => Image.asset(
-                                            AppImages.user1,
-                                            width: 36,
-                                            height: 36,
-                                            fit: BoxFit.cover,
-                                          ),
+                                          errorBuilder: (_, _, _) =>
+                                              Image.asset(
+                                                AppImages.user1,
+                                                width: 36,
+                                                height: 36,
+                                                fit: BoxFit.cover,
+                                              ),
                                         ),
                                 ),
-                                if (provider.isUserOnline(activeConv.participantId, activeConv))
+                                if (provider.isUserOnline(
+                                  activeConv.participantId,
+                                  activeConv,
+                                ))
                                   Positioned(
                                     right: 0,
                                     bottom: 0,
@@ -355,11 +373,12 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                         titleText,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: AppTextStyles.titleMedium.copyWith(
-                                          color: context.themeTextPrimary,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 15,
-                                        ),
+                                        style: AppTextStyles.titleMedium
+                                            .copyWith(
+                                              color: context.themeTextPrimary,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 15,
+                                            ),
                                       ),
                                     ),
                                     if (isRestricted && !isBlocked) ...<Widget>[
@@ -373,7 +392,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                           BlendMode.srcIn,
                                         ),
                                       ),
-                                    ] else if (isMuted && !isBlocked) ...<Widget>[
+                                    ] else if (isMuted &&
+                                        !isBlocked) ...<Widget>[
                                       const SizedBox(width: 6),
                                       SvgPicture.asset(
                                         AppIcons.mute,
@@ -389,21 +409,39 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                 ),
                                 Builder(
                                   builder: (BuildContext _) {
-                                     final bool isTypingAllowed =
-                                         provider.isTypingIndicatorEnabled(activeConv.username) &&
-                                         provider.isTypingIndicatorEnabled(activeConv.id) &&
-                                         (activeConv.participantId == null ||
-                                             provider.isTypingIndicatorEnabled(activeConv.participantId!));
-                                     final bool isOtherTyping = isTypingAllowed &&
-                                         (activeConv.isTyping ||
-                                             provider.isConversationTyping(activeConv.id) ||
-                                             (activeConv.participantId != null &&
-                                                 provider.isConversationTyping(activeConv.participantId!)) ||
-                                             provider.isConversationTyping(activeConv.username));
-                                    final bool isOnline =
-                                        provider.isUserOnline(activeConv.participantId, activeConv);
-                                    final String? lastActiveStr =
-                                        provider.getUserLastActiveText(activeConv.participantId, activeConv);
+                                    final bool isTypingAllowed =
+                                        provider.isTypingIndicatorEnabled(
+                                          activeConv.username,
+                                        ) &&
+                                        provider.isTypingIndicatorEnabled(
+                                          activeConv.id,
+                                        ) &&
+                                        (activeConv.participantId == null ||
+                                            provider.isTypingIndicatorEnabled(
+                                              activeConv.participantId!,
+                                            ));
+                                    final bool isOtherTyping =
+                                        isTypingAllowed &&
+                                        (activeConv.isTyping ||
+                                            provider.isConversationTyping(
+                                              activeConv.id,
+                                            ) ||
+                                            (activeConv.participantId != null &&
+                                                provider.isConversationTyping(
+                                                  activeConv.participantId!,
+                                                )) ||
+                                            provider.isConversationTyping(
+                                              activeConv.username,
+                                            ));
+                                    final bool isOnline = provider.isUserOnline(
+                                      activeConv.participantId,
+                                      activeConv,
+                                    );
+                                    final String? lastActiveStr = provider
+                                        .getUserLastActiveText(
+                                          activeConv.participantId,
+                                          activeConv,
+                                        );
 
                                     String statusText;
                                     Color statusColor;
@@ -423,7 +461,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                     } else if (isOnline) {
                                       statusText = 'Active now';
                                       statusColor = const Color(0xFF10B981);
-                                    } else if (lastActiveStr != null && lastActiveStr.isNotEmpty) {
+                                    } else if (lastActiveStr != null &&
+                                        lastActiveStr.isNotEmpty) {
                                       statusText = lastActiveStr;
                                       statusColor = context.themeTextMuted;
                                     } else {
@@ -485,9 +524,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                   decoration: BoxDecoration(
                     color: context.themeCyanBadgeBackground,
                     borderRadius: BorderRadius.circular(AppRadius.card),
-                    border: Border.all(
-                      color: AppColors.gradientCyan,
-                    ),
+                    border: Border.all(color: AppColors.gradientCyan),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -528,7 +565,10 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       GestureDetector(
-                        onTap: () => provider.toggleRestrict(activeConv.username),
+                        onTap: () => provider.toggleRestrict(
+                          activeConv.username,
+                          userId: activeConv.participantId,
+                        ),
                         child: Text(
                           'Undo',
                           style: AppTextStyles.bodySmall.copyWith(
@@ -555,9 +595,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                   decoration: BoxDecoration(
                     color: context.themeCyanBadgeBackground,
                     borderRadius: BorderRadius.circular(AppRadius.card),
-                    border: Border.all(
-                      color: AppColors.gradientCyan,
-                    ),
+                    border: Border.all(color: AppColors.gradientCyan),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -656,25 +694,30 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                     // Render Chat Bubbles & Live Typing Indicator
                     Builder(
                       builder: (BuildContext _) {
-                        final List<ChatMessageModel> chatMessages =
-                            provider.getMessagesFor(activeConv.id);
+                        final List<ChatMessageModel> chatMessages = provider
+                            .getMessagesFor(activeConv.id);
                         final List<ChatMessageModel> fallbackMessages =
                             activeConv.id != widget.conversation.id
-                                ? provider.getMessagesFor(widget.conversation.id)
-                                : const <ChatMessageModel>[];
+                            ? provider.getMessagesFor(widget.conversation.id)
+                            : const <ChatMessageModel>[];
                         final List<ChatMessageModel> effectiveMessages =
                             chatMessages.isNotEmpty
-                                ? chatMessages
-                                : (fallbackMessages.isNotEmpty
-                                    ? fallbackMessages
-                                    : activeConv.messages);
+                            ? chatMessages
+                            : (fallbackMessages.isNotEmpty
+                                  ? fallbackMessages
+                                  : activeConv.messages);
 
                         final bool isTypingAllowed =
-                            provider.isTypingIndicatorEnabled(activeConv.username) &&
+                            provider.isTypingIndicatorEnabled(
+                              activeConv.username,
+                            ) &&
                             provider.isTypingIndicatorEnabled(activeConv.id) &&
                             (activeConv.participantId == null ||
-                                provider.isTypingIndicatorEnabled(activeConv.participantId!));
-                        final bool isOtherTyping = isTypingAllowed &&
+                                provider.isTypingIndicatorEnabled(
+                                  activeConv.participantId!,
+                                ));
+                        final bool isOtherTyping =
+                            isTypingAllowed &&
                             !isBlocked &&
                             !isMuted &&
                             !isRestricted &&
@@ -682,8 +725,11 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                 provider.isConversationTyping(activeConv.id) ||
                                 (activeConv.participantId != null &&
                                     provider.isConversationTyping(
-                                        activeConv.participantId!)) ||
-                                provider.isConversationTyping(activeConv.username));
+                                      activeConv.participantId!,
+                                    )) ||
+                                provider.isConversationTyping(
+                                  activeConv.username,
+                                ));
 
                         if (effectiveMessages.length != _lastMessageCount ||
                             isOtherTyping != _lastWasTyping) {
@@ -697,50 +743,35 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
 
                         return Column(
                           children: <Widget>[
-                            for (final ChatMessageModel msg in effectiveMessages)
+                            for (final ChatMessageModel msg
+                                in effectiveMessages)
                               GestureDetector(
                                 onLongPress: () {
-                                  // Determine current user's existing reaction
-                                  final String? myId = provider.currentUserId;
-                                  String? myCurrentEmoji;
-                                  if (myId != null && msg.reactionEmoji != null && msg.reactionEmoji!.isNotEmpty) {
-                                    final bool iReacted = msg.reactions.any(
-                                        (MessageReactionModel r) => r.userId == myId);
-                                    if (iReacted) myCurrentEmoji = msg.reactionEmoji;
-                                  }
+                                  if (msg.isUnsent) return;
                                   ChatMessageActionSheet.show(
                                     context,
                                     messageText: msg.text ?? '',
                                     isMe: msg.isMe,
-                                    currentReactionEmoji: myCurrentEmoji,
                                     onEmojiReaction: (String emoji) {
                                       provider.toggleReaction(
-                                          activeConv.id, msg.id, emoji);
-                                    },
-                                    onRemoveReaction: () {
-                                      if (myCurrentEmoji != null) {
-                                        provider.toggleReaction(
-                                            activeConv.id, msg.id, myCurrentEmoji);
-                                      }
-                                    },
-                                    onDeleteForMe: () {
-                                      provider.unsendMessage(
-                                          activeConv.id, msg.id);
+                                        activeConv.id,
+                                        msg.id,
+                                        emoji,
+                                      );
                                     },
                                     onUnsend: () {
                                       provider.unsendMessage(
-                                          activeConv.id, msg.id);
+                                        activeConv.id,
+                                        msg.id,
+                                      );
                                     },
                                   );
                                 },
                                 child: Padding(
                                   padding: const EdgeInsets.only(
-                                      bottom: AppSpacing.md),
-                                  child: ChatBubble(
-                                    message: msg,
-                                    myUserId: provider.currentUserId,
-                                    conversationId: activeConv.id,
+                                    bottom: AppSpacing.md,
                                   ),
+                                  child: ChatBubble(message: msg),
                                 ),
                               ),
 
@@ -748,7 +779,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                             if (isOtherTyping)
                               Padding(
                                 padding: const EdgeInsets.only(
-                                    bottom: AppSpacing.md),
+                                  bottom: AppSpacing.md,
+                                ),
                                 child: Align(
                                   alignment: Alignment.centerLeft,
                                   child: Container(
@@ -763,9 +795,15 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                     decoration: BoxDecoration(
                                       color: context.themeCardBackground,
                                       borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(AppRadius.card),
-                                        topRight: Radius.circular(AppRadius.card),
-                                        bottomRight: Radius.circular(AppRadius.card),
+                                        topLeft: Radius.circular(
+                                          AppRadius.card,
+                                        ),
+                                        topRight: Radius.circular(
+                                          AppRadius.card,
+                                        ),
+                                        bottomRight: Radius.circular(
+                                          AppRadius.card,
+                                        ),
                                         bottomLeft: Radius.circular(4),
                                       ),
                                       border: Border.all(
@@ -773,7 +811,9 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                       ),
                                       boxShadow: <BoxShadow>[
                                         BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.04),
+                                          color: Colors.black.withValues(
+                                            alpha: 0.04,
+                                          ),
                                           blurRadius: 6,
                                           offset: const Offset(0, 2),
                                         ),
@@ -867,7 +907,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                     AppOutlineButton(
                       text: 'Unblock',
                       onPressed: () async {
-                        final String targetId = (activeConv.participantId != null &&
+                        final String targetId =
+                            (activeConv.participantId != null &&
                                 activeConv.participantId!.isNotEmpty)
                             ? activeConv.participantId!
                             : activeConv.username;
@@ -901,7 +942,9 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                             );
                           }
                         } catch (e) {
-                          debugPrint('Error picking chat image from gallery: $e');
+                          debugPrint(
+                            'Error picking chat image from gallery: $e',
+                          );
                         }
                       },
                       child: Container(

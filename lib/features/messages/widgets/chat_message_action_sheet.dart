@@ -12,9 +12,7 @@ class ChatMessageActionSheet extends StatefulWidget {
   const ChatMessageActionSheet({
     required this.messageText,
     this.isMe = false,
-    this.currentReactionEmoji,
     this.onEmojiReaction,
-    this.onRemoveReaction,
     this.onReply,
     this.onCopy,
     this.onDeleteForMe,
@@ -24,10 +22,7 @@ class ChatMessageActionSheet extends StatefulWidget {
 
   final String messageText;
   final bool isMe;
-  /// The emoji the current user has already reacted with (null = no reaction).
-  final String? currentReactionEmoji;
   final ValueChanged<String>? onEmojiReaction;
-  final VoidCallback? onRemoveReaction;
   final VoidCallback? onReply;
   final VoidCallback? onCopy;
   final VoidCallback? onDeleteForMe;
@@ -37,9 +32,7 @@ class ChatMessageActionSheet extends StatefulWidget {
     BuildContext context, {
     required String messageText,
     bool isMe = false,
-    String? currentReactionEmoji,
     ValueChanged<String>? onEmojiReaction,
-    VoidCallback? onRemoveReaction,
     VoidCallback? onReply,
     VoidCallback? onCopy,
     VoidCallback? onDeleteForMe,
@@ -52,9 +45,7 @@ class ChatMessageActionSheet extends StatefulWidget {
       builder: (_) => ChatMessageActionSheet(
         messageText: messageText,
         isMe: isMe,
-        currentReactionEmoji: currentReactionEmoji,
         onEmojiReaction: onEmojiReaction,
-        onRemoveReaction: onRemoveReaction,
         onReply: onReply,
         onCopy: onCopy,
         onDeleteForMe: onDeleteForMe,
@@ -83,11 +74,7 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
         child: Row(
           children: <Widget>[
-            SizedBox(
-              width: 20,
-              height: 20,
-              child: Center(child: iconWidget),
-            ),
+            SizedBox(width: 20, height: 20, child: Center(child: iconWidget)),
             const SizedBox(width: AppSpacing.md),
             Text(
               label,
@@ -108,11 +95,17 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
   @override
   Widget build(BuildContext context) {
     final List<String> baseEmojis = <String>['❤️', '😂', '🔥', '🙌', '🏳️‍🌈'];
-    final List<String> extraEmojis = <String>['👍', '💙', '✨', '🎉', '💯', '🥰'];
-    final List<String> displayEmojis =
-        _showAllEmojis ? <String>[...baseEmojis, ...extraEmojis] : baseEmojis;
-    final bool hasMyReaction = widget.currentReactionEmoji != null &&
-        widget.currentReactionEmoji!.isNotEmpty;
+    final List<String> extraEmojis = <String>[
+      '👍',
+      '💙',
+      '✨',
+      '🎉',
+      '💯',
+      '🥰',
+    ];
+    final List<String> displayEmojis = _showAllEmojis
+        ? <String>[...baseEmojis, ...extraEmojis]
+        : baseEmojis;
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -132,9 +125,7 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
               decoration: BoxDecoration(
                 color: context.themeCardBackground,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
-                border: Border.all(
-                  color: context.themeBorder,
-                ),
+                border: Border.all(color: context.themeBorder),
               ),
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -142,8 +133,6 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     ...displayEmojis.map((String e) {
-                      final bool isMyCurrentReaction =
-                          e == widget.currentReactionEmoji;
                       return GestureDetector(
                         onTap: () {
                           Navigator.pop(context);
@@ -156,29 +145,7 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
                             horizontal: AppSpacing.xs,
                             vertical: 4,
                           ),
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: <Widget>[
-                              Text(
-                                e,
-                                style: const TextStyle(fontSize: 20),
-                              ),
-                              // Highlight dot for the current user's reaction
-                              if (isMyCurrentReaction)
-                                Positioned(
-                                  bottom: -2,
-                                  right: -2,
-                                  child: Container(
-                                    width: 7,
-                                    height: 7,
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.gradientCyan,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
+                          child: Text(e, style: const TextStyle(fontSize: 20)),
                         ),
                       );
                     }),
@@ -227,9 +194,7 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
               decoration: BoxDecoration(
                 color: context.themeCardBackground,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: context.themeBorder,
-                ),
+                border: Border.all(color: context.themeBorder),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -278,49 +243,7 @@ class _ChatMessageActionSheetState extends State<ChatMessageActionSheet> {
                     },
                   ),
 
-                  const SizedBox(height: AppSpacing.xs),
-
-                  // 3. Delete for me
-                  _buildActionItem(
-                    context,
-                    iconWidget: SvgPicture.asset(
-                      AppIcons.hide,
-                      width: 18,
-                      height: 18,
-                      colorFilter: ColorFilter.mode(
-                        context.themeTextSecondary,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                    label: 'Delete for me',
-                    onTap: () {
-                      Navigator.pop(context);
-                      if (widget.onDeleteForMe != null) {
-                        widget.onDeleteForMe!();
-                      }
-                    },
-                  ),
-
-                  // 3b. Remove reaction (only when user has already reacted)
-                  if (hasMyReaction) ...<Widget>[
-                    const SizedBox(height: AppSpacing.xs),
-                    _buildActionItem(
-                      context,
-                      iconWidget: Text(
-                        widget.currentReactionEmoji!,
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      label: 'Remove reaction',
-                      onTap: () {
-                        Navigator.pop(context);
-                        if (widget.onRemoveReaction != null) {
-                          widget.onRemoveReaction!();
-                        }
-                      },
-                    ),
-                  ],
-
-                  // 4. Unsend (available ONLY on sent messages, using AppIcons.delete with Cyan Highlight)
+                  // 3. Unsend (available ONLY on sent messages, using AppIcons.delete with Cyan Highlight)
                   if (widget.isMe) ...<Widget>[
                     const SizedBox(height: AppSpacing.xs),
                     _buildActionItem(
