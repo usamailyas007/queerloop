@@ -17,6 +17,7 @@ import '../../profile/screens/user_profile_screen.dart';
 import '../models/reel_item_model.dart';
 import '../screens/profile_tab_screen.dart';
 import '../services/reel_video_preloader.dart';
+import 'delete_reel_bottom_sheet.dart';
 
 class ReelFeedCard extends StatefulWidget {
   const ReelFeedCard({
@@ -32,6 +33,8 @@ class ReelFeedCard extends StatefulWidget {
     this.selectedCommunity = 'All Communities',
     this.isActive = true,
     this.hasBottomBar = true,
+    this.isCustomView = false,
+    this.onDelete,
     super.key,
   });
 
@@ -43,11 +46,13 @@ class ReelFeedCard extends StatefulWidget {
   final VoidCallback onOpenShare;
   final VoidCallback onOpenSafety;
   final VoidCallback onOpenFilterCommunities;
+  final VoidCallback? onDelete;
   final bool showCommunityFilterTag;
   final String selectedCommunity;
   /// Whether this card is the currently visible page (controls auto-play).
   final bool isActive;
   final bool hasBottomBar;
+  final bool isCustomView;
 
   @override
   State<ReelFeedCard> createState() => _ReelFeedCardState();
@@ -110,6 +115,9 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     );
 
     // Synchronous instant attach if preloader already has initialized controller
+    if (widget.isActive) {
+      ReelVideoPreloader.instance.markActive(widget.reel.id);
+    }
     final VideoPlayerController? existing =
         ReelVideoPreloader.instance.getExisting(widget.reel.id);
     if (existing != null && existing.value.isInitialized) {
@@ -204,6 +212,8 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   void didUpdateWidget(ReelFeedCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
+      ReelVideoPreloader.instance.markActive(widget.reel.id);
+      ReelVideoPreloader.instance.markInactive(oldWidget.reel.id);
       if (_videoInitialized && _videoController != null) {
         if (!_isPaused) {
           _videoController?.play();
@@ -212,6 +222,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         _initVideo();
       }
     } else if (!widget.isActive && oldWidget.isActive) {
+      ReelVideoPreloader.instance.markInactive(widget.reel.id);
       _videoController?.pause();
     }
   }
@@ -219,6 +230,9 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   @override
   void dispose() {
     _isDisposed = true;
+    try {
+      ReelVideoPreloader.instance.markInactive(widget.reel.id);
+    } catch (_) {}
     try {
       appRouteObserver.unsubscribe(this);
     } catch (_) {}
@@ -231,6 +245,71 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     }
     _animController.dispose();
     super.dispose();
+  }
+
+  bool get _isControllerUsable {
+    if (_isDisposed || !_videoInitialized || _videoController == null) {
+      return false;
+    }
+    if (!ReelVideoPreloader.instance.isAlive(_videoController)) {
+      return false;
+    }
+    try {
+      return _videoController!.value.isInitialized &&
+          !_videoController!.value.hasError;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Returns true only if [url] looks like a decodable image URL.
+  ///
+  /// CloudFront returns HTTP 403 XML for missing/untranscoded thumbnails.
+  /// Android's ImageDecoder then throws "Failed to create image decoder:
+  /// unimplemented" because XML bytes are not a valid image format.
+  /// We guard against this by only accepting URLs with known image extensions
+  /// or known CDN image path patterns.
+  static bool _isSafeThumbnailUrl(String url) {
+    final String lower = url.toLowerCase();
+    // Must be an HTTP/HTTPS URL
+    if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
+      return false;
+    }
+    // Known image extensions — safe to decode
+    if (lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.gif') ||
+        lower.endsWith('.avif')) {
+      return true;
+    }
+    // HLS playlists are NOT images — never pass to Image.network
+    if (lower.contains('.m3u8') || lower.contains('/master.')) {
+      return false;
+    }
+    // CDN path patterns we know serve images
+    if (lower.contains('/images/original/') ||
+        lower.contains('/thumbnails/') ||
+        lower.contains('/thumb') ||
+        lower.contains('/poster')) {
+      return true;
+    }
+    // Any other URL without a recognisable image extension → unsafe
+    return false;
+  }
+
+  /// Builds the thumbnail widget, guarding against broken CDN URLs that would
+  /// cause the native ImageDecoder to crash with 'unimplemented'.
+  Widget _buildSafeThumbnail(String? url) {
+    if (url == null || url.isEmpty) return const SizedBox.shrink();
+    if (!_isSafeThumbnailUrl(url)) return const SizedBox.shrink();
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    );
   }
 
   void _handleTap() {
@@ -278,58 +357,67 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         .toLowerCase();
     final String reelUsername =
         item.username.replaceAll('@', '').trim().toLowerCase();
-    final bool isOwnReel = (item.authorId != null &&
+    final bool isOwnReel = profileProvider.userReels.any((ReelItemModel r) => r.id == item.id) ||
+        (item.authorId != null &&
             currentUserId != null &&
             item.authorId!.trim().toLowerCase() ==
                 currentUserId.trim().toLowerCase()) ||
         (myUsername.isNotEmpty && reelUsername == myUsername) ||
-        item.username == '@you';
-    final double viewPaddingBottom = MediaQuery.of(context).viewPadding.bottom;
+        item.username == '@you' ||
+        item.username == 'you';
     final double paddingBottom = MediaQuery.of(context).padding.bottom;
+    final double viewPaddingBottom = MediaQuery.of(context).viewPadding.bottom;
     final double systemBottomInset =
         viewPaddingBottom > paddingBottom ? viewPaddingBottom : paddingBottom;
+
+    // Flutter Scaffold with extendBody: true automatically sets body padding.bottom
+    // to the exact top coordinate of the floating bottomNavigationBar (e.g. 74 on devices
+    // without onscreen nav, ~120 on devices with 3-button onscreen nav).
+    // Minimum bottom bar top is 64 (height) + 10 (margin) = 74.
+    final double bottomBarTop = paddingBottom >= 74.0
+        ? paddingBottom
+        : (74.0 + (systemBottomInset > 0 ? systemBottomInset : 0.0));
+
     final double rightActionsBottom = widget.hasBottomBar
-        ? (66.0 + (systemBottomInset > 0 ? systemBottomInset * 0.25 : 0))
-        : (20.0 + systemBottomInset);
+        ? (bottomBarTop + 8.0)
+        : (systemBottomInset > 0 ? (systemBottomInset + 20.0) : 26.0);
     final double leftDetailsBottom = widget.hasBottomBar
-        ? (62.0 + (systemBottomInset > 0 ? systemBottomInset * 0.25 : 0))
-        : (14.0 + systemBottomInset);
+        ? (bottomBarTop + 6.0)
+        : (systemBottomInset > 0 ? (systemBottomInset + 14.0) : 20.0);
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return GestureDetector(
       onTap: _handleTap,
       onDoubleTap: _handleDoubleTap,
+      onLongPress: isOwnReel
+          ? (widget.onDelete ??
+              () => DeleteReelBottomSheet.show(context, reel: widget.reel))
+          : null,
       child: Stack(
         fit: StackFit.expand,
         children: <Widget>[
-          // ── 1. Video Player (full-bleed, cover-fit) ───────────────────────
-          _videoInitialized && _videoController != null
-              ? SizedBox.expand(
-                  child: FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                      width: _videoController!.value.size.width > 0
-                          ? _videoController!.value.size.width
-                          : 16,
-                      height: _videoController!.value.size.height > 0
-                          ? _videoController!.value.size.height
-                          : 9,
-                      child: VideoPlayer(_videoController!),
-                    ),
-                  ),
-                )
-              : Container(
-                  color: Colors.black,
-                  child: widget.reel.thumbnailUrl != null &&
-                          widget.reel.thumbnailUrl!.isNotEmpty
-                      ? Image.network(
-                          widget.reel.thumbnailUrl!,
-                          fit: BoxFit.cover,
-                          gaplessPlayback: true,
-                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                        )
-                      : const SizedBox.shrink(),
+          // ── 1. Thumbnail Background (persists beneath video for zero-flicker transitions) ──
+          Container(
+            color: Colors.black,
+            child: _buildSafeThumbnail(widget.reel.thumbnailUrl),
+          ),
+
+          // ── 2. Video Player (full-bleed, cover-fit) ───────────────────────
+          if (_isControllerUsable)
+            SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _videoController!.value.size.width > 0
+                      ? _videoController!.value.size.width
+                      : 16,
+                  height: _videoController!.value.size.height > 0
+                      ? _videoController!.value.size.height
+                      : 9,
+                  child: VideoPlayer(_videoController!),
                 ),
+              ),
+            ),
 
           // ── 2. Top & Bottom Dark Gradient Overlay ─────────────────────────
           Container(
@@ -457,47 +545,92 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                   ),
                 ),
 
-                const SizedBox(height: 18),
-
-                // Safety
-                GestureDetector(
-                  onTap: widget.onOpenSafety,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.3),
+                if (isOwnReel) ...<Widget>[
+                  if (widget.isCustomView) ...<Widget>[
+                    const SizedBox(height: 18),
+                    // 3 dots button for own reel in profile / custom view
+                    GestureDetector(
+                      onTap: widget.onDelete ??
+                          () => DeleteReelBottomSheet.show(
+                                context,
+                                reel: widget.reel,
+                              ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: const Column(
+                          children: <Widget>[
+                            Icon(
+                              Icons.more_horiz_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'More',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    child: Column(
-                      children: <Widget>[
-                        SvgPicture.asset(
-                          AppIcons.safety,
-                          width: 20,
-                          height: 20,
-                          colorFilter: const ColorFilter.mode(
-                            Colors.white,
-                            BlendMode.srcIn,
-                          ),
+                  ],
+                ] else ...<Widget>[
+                  const SizedBox(height: 18),
+
+                  // Safety (Only for other users' reels)
+                  GestureDetector(
+                    onTap: widget.onOpenSafety,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.3),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          l10n.homeSafety,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                      ),
+                      child: Column(
+                        children: <Widget>[
+                          SvgPicture.asset(
+                            AppIcons.safety,
+                            width: 20,
+                            height: 20,
+                            colorFilter: const ColorFilter.mode(
+                              Colors.white,
+                              BlendMode.srcIn,
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text(
+                            l10n.homeSafety,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -687,19 +820,70 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              Text(
-                                item.username,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Flexible(
+                                    child: Text(
+                                      (item.authorDisplayName != null &&
+                                              item.authorDisplayName!.trim().isNotEmpty)
+                                          ? item.authorDisplayName!.trim()
+                                          : item.username,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        shadows: <Shadow>[
+                                          Shadow(
+                                            color: Colors.black54,
+                                            blurRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  if (item.authorDisplayName != null &&
+                                      item.authorDisplayName!.trim().isNotEmpty &&
+                                      item.authorDisplayName!.trim().toLowerCase() !=
+                                          item.username
+                                              .replaceAll('@', '')
+                                              .trim()
+                                              .toLowerCase()) ...<Widget>[
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        item.username,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w400,
+                                          shadows: <Shadow>[
+                                            Shadow(
+                                              color: Colors.black54,
+                                              blurRadius: 4,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                               Text(
                                 item.pronounsTime,
                                 style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 11,
+                                  shadows: <Shadow>[
+                                    Shadow(
+                                      color: Colors.black54,
+                                      blurRadius: 4,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],

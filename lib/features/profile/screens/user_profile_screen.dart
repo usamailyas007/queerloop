@@ -22,7 +22,12 @@ import '../../messages/screens/chat_screen.dart';
 import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/models/profile_models.dart';
 import '../../../core/widgets/app_snackbar.dart';
+import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
+import '../../home/provider/home_feed_provider.dart';
+import '../../home/screens/single_post_view_screen.dart';
+import '../../home/widgets/comments_bottom_sheet.dart';
+import '../../home/widgets/post_feed_card.dart';
 import '../models/user_relationship_models.dart';
 import '../provider/profile_provider.dart';
 import '../services/user_relationship_service.dart';
@@ -996,171 +1001,110 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     if (_selectedTabIndex == 0) ...<Widget>[
                       if (_authorTextPosts.isNotEmpty) ...<Widget>[
                         for (final PostResponseModel post in _authorTextPosts) ...<Widget>[
-                          Container(
-                            margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                            padding: const EdgeInsets.all(AppSpacing.md),
-                            decoration: BoxDecoration(
-                              color: context.themeCardBackground,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: context.themeBorder,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Row(
-                                  children: <Widget>[
-                                    ClipOval(
-                                      child: (currentAvatar.startsWith('http://') ||
-                                              currentAvatar.startsWith('https://'))
-                                          ? Image.network(
-                                              currentAvatar,
-                                              width: 32,
-                                              height: 32,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, _, _) => Image.asset(
-                                                AppImages.user1,
-                                                width: 32,
-                                                height: 32,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            )
-                                          : Image.asset(
-                                              currentAvatar.trim().startsWith('assets/')
-                                                  ? currentAvatar.trim()
-                                                  : AppImages.user1,
-                                              width: 32,
-                                              height: 32,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, _, _) => Image.asset(
-                                                AppImages.user1,
-                                                width: 32,
-                                                height: 32,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            ),
-                                    ),
-                                    const SizedBox(width: AppSpacing.sm),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: <Widget>[
-                                        Text(
-                                          currentUsername.startsWith('@')
-                                              ? currentUsername
-                                              : '@$currentUsername',
-                                          style: AppTextStyles.titleSmall.copyWith(
-                                            color: context.themeTextPrimary,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                        if (post.createdAt != null)
-                                          Text(
-                                            post.createdAt!,
-                                            style: AppTextStyles.caption.copyWith(
-                                              color: context.themeTextMuted,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
+                          Builder(
+                            builder: (BuildContext ctx) {
+                              final PostItemModel postItem = PostItemModel(
+                                id: post.id,
+                                authorId: post.authorId,
+                                authorDisplayName: (post.authorDisplayName != null &&
+                                        post.authorDisplayName!.isNotEmpty)
+                                    ? post.authorDisplayName!
+                                    : currentName,
+                                username: (post.authorName != null &&
+                                        post.authorName!.isNotEmpty)
+                                    ? (post.authorName!.startsWith('@')
+                                        ? post.authorName!
+                                        : '@${post.authorName}')
+                                    : (currentUsername.startsWith('@')
+                                        ? currentUsername
+                                        : '@$currentUsername'),
+                                pronounsTime: post.createdAt ?? 'recently',
+                                avatarAsset: (post.authorAvatar != null &&
+                                        post.authorAvatar!.isNotEmpty)
+                                    ? post.authorAvatar!
+                                    : currentAvatar,
+                                content: post.body,
+                                likesCount: post.likesCount,
+                                commentsCount: post.commentsCount,
+                                postImageUrl: _postImageUrls[post.id] ??
+                                    (post.mediaRefs.isNotEmpty
+                                        ? post.mediaRefs.first
+                                        : null),
+                                postType: post.type,
+                                communityId: post.communityId,
+                                isLiked: post.isLiked,
+                                isSaved: post.isSaved,
+                              );
+                              return PostFeedCard(
+                                post: postItem,
+                                isFollowing: _isFollowing,
+                                onFollowToggle: () => _handleFollowToggle(
+                                  isPrivateAccount: widget.isPrivate,
                                 ),
-                                if (post.body.isNotEmpty) ...<Widget>[
-                                  const SizedBox(height: AppSpacing.md),
-                                  Text(
-                                    post.body,
-                                    style: AppTextStyles.bodyMedium.copyWith(
-                                      color: context.themeTextPrimary,
-                                      fontSize: 13,
-                                      height: 1.35,
+                                onCardTap: () {
+                                  Navigator.push<void>(
+                                    context,
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => SinglePostViewScreen(
+                                        postId: post.id,
+                                        initialPost: postItem,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                                if ((_postImageUrls[post.id] ??
-                                        (post.mediaRefs.isNotEmpty ? post.mediaRefs.first : null)) !=
-                                    null) ...<Widget>[
-                                  Builder(
-                                    builder: (BuildContext ctx) {
-                                      final String img = _postImageUrls[post.id] ??
-                                          post.mediaRefs.first;
-                                      if (img.trim().isEmpty) return const SizedBox.shrink();
-                                      return Padding(
-                                        padding: const EdgeInsets.only(top: AppSpacing.md),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(16),
-                                          child: (img.startsWith('http://') ||
-                                                  img.startsWith('https://'))
-                                              ? Image.network(
-                                                  img.trim(),
-                                                  width: double.infinity,
-                                                  height: 220,
-                                                  fit: BoxFit.cover,
-                                                  loadingBuilder: (context, child, progress) {
-                                                    if (progress == null) return child;
-                                                    return Container(
-                                                      height: 220,
-                                                      width: double.infinity,
-                                                      color: context.isDarkMode
-                                                          ? Colors.white.withValues(alpha: 0.05)
-                                                          : Colors.black.withValues(alpha: 0.05),
-                                                      child: const Center(
-                                                        child: CircularProgressIndicator(
-                                                          color: AppColors.gradientPink,
-                                                          strokeWidth: 2,
-                                                        ),
-                                                      ),
-                                                    );
-                                                  },
-                                                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                                                )
-                                              : Image.asset(
-                                                  img.trim(),
-                                                  width: double.infinity,
-                                                  height: 220,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                                                ),
-                                        ),
+                                  );
+                                },
+                                onLikeToggle: () {
+                                  context
+                                      .read<HomeFeedProvider>()
+                                      .toggleLikePost(post.id);
+                                  setState(() {
+                                    final int idx = _authorTextPosts
+                                        .indexWhere((PostResponseModel p) => p.id == post.id);
+                                    if (idx != -1) {
+                                      final bool newLiked =
+                                          !_authorTextPosts[idx].isLiked;
+                                      final int newCount = newLiked
+                                          ? _authorTextPosts[idx].likesCount + 1
+                                          : (_authorTextPosts[idx].likesCount > 0
+                                              ? _authorTextPosts[idx].likesCount - 1
+                                              : 0);
+                                      _authorTextPosts[idx] =
+                                          _authorTextPosts[idx].copyWith(
+                                        isLiked: newLiked,
+                                        likesCount: newCount,
                                       );
-                                    },
-                                  ),
-                                ],
-                                const SizedBox(height: AppSpacing.md),
-                                Row(
-                                  children: <Widget>[
-                                    Icon(
-                                      post.isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                      size: 18,
-                                      color: post.isLiked ? AppColors.gradientPink : context.themeIconMuted,
+                                    }
+                                  });
+                                },
+                                onSaveToggle: () {
+                                  context
+                                      .read<HomeFeedProvider>()
+                                      .toggleSavePost(post.id);
+                                  setState(() {
+                                    final int idx = _authorTextPosts
+                                        .indexWhere((PostResponseModel p) => p.id == post.id);
+                                    if (idx != -1) {
+                                      _authorTextPosts[idx] =
+                                          _authorTextPosts[idx].copyWith(
+                                        isSaved: !_authorTextPosts[idx].isSaved,
+                                      );
+                                    }
+                                  });
+                                },
+                                onOpenComments: () {
+                                  showModalBottomSheet<void>(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (_) => CommentsBottomSheet(
+                                      totalComments: post.commentsCount,
+                                      postId: post.id,
+                                      postAuthorId: post.authorId,
+                                      communityId: post.communityId,
                                     ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${post.likesCount}',
-                                      style: AppTextStyles.caption.copyWith(
-                                        color: context.themeTextMuted,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const SizedBox(width: AppSpacing.lg),
-                                    Icon(
-                                      Icons.chat_bubble_outline_rounded,
-                                      size: 16,
-                                      color: context.themeIconMuted,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${post.commentsCount}',
-                                      style: AppTextStyles.caption.copyWith(
-                                        color: context.themeTextMuted,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                                  );
+                                },
+                              );
+                            },
                           ),
                         ],
                       ] else ...<Widget>[

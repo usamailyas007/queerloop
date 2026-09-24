@@ -86,6 +86,7 @@ class AuthProvider extends ChangeNotifier {
   int? get retryAfterSeconds => _retryAfterSeconds;
   bool get isBusy => _isBusy;
   bool get isSignedIn => _status == AuthStatus.signedIn;
+  bool get isGuest => _status != AuthStatus.signedIn;
 
   // ── Session restore ───────────────────────────────────────────────────────
   // Called once from main — reads stored tokens and validates them with the API.
@@ -101,13 +102,19 @@ class AuthProvider extends ChangeNotifier {
         _applySession(session);
         return;
       }
-    } on ApiException catch (_) {
-      // Stored token expired or network unavailable — fall through to signedOut.
-    } catch (_) {
-      // Other unforeseen errors
+    } on ApiException catch (e) {
+      debugPrint('⚠️ [AuthProvider] ApiException during restoreSession: $e');
+    } catch (e) {
+      debugPrint('⚠️ [AuthProvider] Unexpected error during restoreSession: $e');
     }
 
-    _clearSession();
+    // Do NOT call _clearSession() here. Calling _clearSession() unconditionally wipes
+    // all tokens and user data from storage on temporary network or startup hiccups.
+    // _service.restoreSession() only clears storage when tokens are permanently invalid.
+    _status = AuthStatus.signedOut;
+    _user = null;
+    _refreshToken = null;
+    notifyListeners();
   }
 
   // ── Register ──────────────────────────────────────────────────────────────
@@ -481,6 +488,8 @@ class AuthProvider extends ChangeNotifier {
       }
       // 2. Invalidate refresh token on backend
       await _service.signOut(refreshToken: _refreshToken);
+      // 3. Clear Google SDK session so next sign-in prompts fresh
+      await _service.googleSignOut();
     } on ApiException catch (_) {
       // Best-effort logout — clear local state regardless.
     } catch (_) {

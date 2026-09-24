@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/cotd_models.dart';
 import '../services/cotd_service.dart';
@@ -17,6 +18,7 @@ class CotdProvider extends ChangeNotifier {
   bool _isSubmitting = false;
   bool _hasAnswered = false;
   String? _error;
+  String? _currentUserId;
 
   CotdQuestion? get currentQuestion => _currentQuestion;
   List<CotdAnswer> get answers => List<CotdAnswer>.unmodifiable(_answers);
@@ -24,6 +26,13 @@ class CotdProvider extends ChangeNotifier {
   bool get isSubmitting => _isSubmitting;
   bool get hasAnswered => _hasAnswered;
   String? get error => _error;
+
+  void updateUserId(String? userId) {
+    if (_currentUserId != userId) {
+      _currentUserId = userId;
+      _checkHasAnswered();
+    }
+  }
 
   /// Reload the current question (e.g. on pull-to-refresh).
   Future<void> refresh() async {
@@ -41,6 +50,7 @@ class CotdProvider extends ChangeNotifier {
       _currentQuestion = question;
       if (question != null) {
         _hasAnswered = question.hasAnswered;
+        await _checkHasAnswered();
         // Pre-load answers in the background
         _fetchAnswersIfNeeded(question.id);
       }
@@ -53,10 +63,79 @@ class CotdProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> _checkHasAnswered() async {
+    final String? qid = _currentQuestion?.id;
+    if (qid == null || qid.isEmpty) return;
+
+    if (_currentQuestion?.hasAnswered == true) {
+      _hasAnswered = true;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final List<String> globalAnswered =
+          prefs.getStringList('cotd_answered_questions_global') ?? <String>[];
+      if (globalAnswered.contains(qid)) {
+        _hasAnswered = true;
+        notifyListeners();
+        return;
+      }
+
+      if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+        final List<String> userAnswers =
+            prefs.getStringList('cotd_answered_questions_$_currentUserId') ??
+                <String>[];
+        if (userAnswers.contains(qid)) {
+          _hasAnswered = true;
+          notifyListeners();
+          return;
+        }
+      }
+    } catch (_) {}
+
+    if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+      final bool alreadyInAnswers = _answers.any((CotdAnswer a) =>
+          a.authorId.isNotEmpty && a.authorId == _currentUserId);
+      if (alreadyInAnswers) {
+        _hasAnswered = true;
+        _saveAnsweredQuestionLocally(qid);
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _saveAnsweredQuestionLocally(String qid) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final List<String> globalList =
+          prefs.getStringList('cotd_answered_questions_global') ?? <String>[];
+      if (!globalList.contains(qid)) {
+        globalList.add(qid);
+        await prefs.setStringList('cotd_answered_questions_global', globalList);
+      }
+
+      if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+        final List<String> userList =
+            prefs.getStringList('cotd_answered_questions_$_currentUserId') ??
+                <String>[];
+        if (!userList.contains(qid)) {
+          userList.add(qid);
+          await prefs.setStringList(
+              'cotd_answered_questions_$_currentUserId', userList);
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [CotdProvider] Error saving answered question locally: $e');
+    }
+  }
+
   Future<void> _fetchAnswersIfNeeded(String questionId) async {
     if (_answers.isNotEmpty) return;
     try {
       _answers = await _service.fetchAnswers(questionId);
+      await _checkHasAnswered();
       notifyListeners();
     } catch (_) {}
   }
@@ -67,6 +146,7 @@ class CotdProvider extends ChangeNotifier {
     if (qid == null || qid.isEmpty) return;
     try {
       _answers = await _service.fetchAnswers(qid);
+      await _checkHasAnswered();
       notifyListeners();
     } catch (_) {}
   }
@@ -89,6 +169,7 @@ class CotdProvider extends ChangeNotifier {
       );
       if (ok) {
         _hasAnswered = true;
+        await _saveAnsweredQuestionLocally(qid);
         // Refresh answers and update count optimistically
         await fetchAnswers();
       }

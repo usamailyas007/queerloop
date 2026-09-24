@@ -548,24 +548,30 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
       return RefreshIndicator(
         color: AppColors.gradientPink,
         onRefresh: _loadRequests,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 60),
-              child: Center(
-                child: Text(
-                  _requests.isEmpty
-                      ? 'No pending follow requests.'
-                      : 'No requests match your search.',
-                  style: TextStyle(
-                    color: context.themeTextMuted,
-                    fontSize: 14,
+        child: LayoutBuilder(
+          builder: (BuildContext ctx, BoxConstraints constraints) {
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      _requests.isEmpty
+                          ? 'No pending follow requests.'
+                          : 'No requests match your search.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: context.themeTextMuted,
+                        fontSize: 14,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       );
     }
@@ -820,8 +826,8 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
               ),
             )
           else if (filtered.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 40),
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.5,
               child: Center(
                 child: Text(
                   sourceList.isEmpty

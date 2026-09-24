@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/config/api_endpoints.dart';
+import '../../../core/config/app_config.dart';
 import '../models/message_models.dart';
 
 class ConversationsService {
@@ -223,17 +224,32 @@ class ConversationsService {
 
   // ── 7. Send Message ────────────────────────────────────────────────────────
   /// POST /conversations/:id/messages
-  /// body: { "body": ":text", "sharedPostId"?: ":id" }
+  /// body: { "body": ":text", "mediaRef"?: ":ref", "sharedPostId"?: ":id" }
   Future<ChatMessageModel?> sendMessage({
     required String conversationId,
     required String body,
+    String? mediaRef,
+    String? mediaUrl,
     String? sharedPostId,
     String? currentUserId,
   }) async {
     try {
       debugPrint('🚀 [ConversationsService] Sending message to $conversationId');
+      final String? resolvedUrl = (mediaUrl != null && mediaUrl.trim().isNotEmpty)
+          ? mediaUrl.trim()
+          : ((mediaRef != null && mediaRef.trim().startsWith('http'))
+              ? mediaRef.trim()
+              : (mediaRef != null && mediaRef.trim().isNotEmpty
+                  ? '${AppConfig.baseUrl.replaceAll(RegExp(r"/+$"), "")}/media/${mediaRef.trim().replaceAll(RegExp(r"^/media/"), "").replaceAll(RegExp(r"^/+"), "")}'
+                  : null));
+
+      final String finalBody = body.trim().isNotEmpty
+          ? body.trim()
+          : (resolvedUrl != null && resolvedUrl.isNotEmpty ? resolvedUrl : '');
+
       final Map<String, dynamic> payload = <String, dynamic>{
-        'body': body,
+        'body': finalBody,
+        'mediaUrl': null,
         if (sharedPostId != null && sharedPostId.isNotEmpty)
           'sharedPostId': sharedPostId,
       };

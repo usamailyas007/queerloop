@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../profile_setup/models/community_model.dart';
@@ -168,18 +169,15 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
                             BuildContext ctx,
                             Object err,
                             StackTrace? trace,
-                          ) => Container(
+                          ) => Image.asset(
+                            AppImages.defaultAvatar,
                             width: 76,
                             height: 76,
-                            color: context.themeCardBackground,
-                            child: const Icon(
-                              Icons.person,
-                              color: AppColors.gradientPink,
-                            ),
+                            fit: BoxFit.cover,
                           ),
                         )
                       : Image.asset(
-                          avatarAsset,
+                          avatarAsset.isNotEmpty ? avatarAsset : AppImages.defaultAvatar,
                           width: 76,
                           height: 76,
                           fit: BoxFit.cover,
@@ -187,14 +185,11 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
                             BuildContext ctx,
                             Object err,
                             StackTrace? trace,
-                          ) => Container(
+                          ) => Image.asset(
+                            AppImages.defaultAvatar,
                             width: 76,
                             height: 76,
-                            color: context.themeCardBackground,
-                            child: const Icon(
-                              Icons.person,
-                              color: AppColors.gradientPink,
-                            ),
+                            fit: BoxFit.cover,
                           ),
                         ),
                 ),

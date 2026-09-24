@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -37,9 +39,45 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _staySignedIn = true;
   bool _isPreloadingFeed = false;
+  bool _isEmailLoading = false;
+  bool _isGoogleLoading = false;
+  bool _isAppleLoading = false;
+
+  bool get _isAnyBusy =>
+      _isEmailLoading ||
+      _isGoogleLoading ||
+      _isAppleLoading ||
+      _isPreloadingFeed;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController.addListener(_clearAuthError);
+    _passwordController.addListener(_clearAuthError);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthProvider>().clearError();
+      }
+    });
+  }
+
+  void _clearAuthError() {
+    final AuthProvider auth = context.read<AuthProvider>();
+    if (auth.error != null) {
+      auth.clearError();
+    }
+  }
+
+  @override
+  void deactivate() {
+    context.read<AuthProvider>().clearError();
+    super.deactivate();
+  }
 
   @override
   void dispose() {
+    _emailController.removeListener(_clearAuthError);
+    _passwordController.removeListener(_clearAuthError);
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -53,9 +91,14 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
+    if (_isAnyBusy) return;
 
     final AuthProvider authProvider = context.read<AuthProvider>();
-    setState(() => _isPreloadingFeed = true);
+    setState(() {
+      _isEmailLoading = true;
+      _isPreloadingFeed = true;
+    });
+
     final bool ok = await authProvider.signIn(
           email: _emailController.text.trim(),
           password: _passwordController.text,
@@ -63,7 +106,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!ok) {
       if (mounted) {
-        setState(() => _isPreloadingFeed = false);
+        setState(() {
+          _isEmailLoading = false;
+          _isPreloadingFeed = false;
+        });
         if (authProvider.errorCode == 'EMAIL_NOT_VERIFIED') {
           final String email = _emailController.text.trim();
           authProvider.resendEmailOtp(email);
@@ -172,17 +218,40 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleGoogleSignIn() async {
     final AuthProvider authProvider = context.read<AuthProvider>();
-    if (authProvider.isBusy) return;
+    if (_isAnyBusy || authProvider.isBusy) return;
 
-    final SocialSignInResult result = await authProvider.signInWithGoogle();
+    setState(() => _isGoogleLoading = true);
+    final SocialSignInResult result;
+    try {
+      result = await authProvider.signInWithGoogle();
+    } catch (e) {
+      if (mounted) setState(() => _isGoogleLoading = false);
+      return;
+    }
 
     if (!mounted) return;
 
     if (result.isCancelled) {
+      setState(() => _isGoogleLoading = false);
+      return;
+    }
+
+    if (result.accountExistsWithPassword) {
+      setState(() => _isGoogleLoading = false);
+      if (result.email != null && result.email!.isNotEmpty) {
+        _emailController.text = result.email!;
+      }
+      AppSnackBar.showInfo(
+        context,
+        title: 'Account Exists',
+        subtitle: result.errorMessage ??
+            'This email is already registered with a password. Please sign in with your email and password.',
+      );
       return;
     }
 
     if (result.isError) {
+      setState(() => _isGoogleLoading = false);
       final String? errorMsg = result.errorMessage ?? authProvider.error;
       if (errorMsg != null && errorMsg.isNotEmpty) {
         AppSnackBar.showError(
@@ -216,7 +285,9 @@ class _LoginScreenState extends State<LoginScreen> {
         context,
         AppRoutes.verifyEmailOtp,
         arguments: result.email,
-      );
+      ).then((_) {
+        if (mounted) setState(() => _isGoogleLoading = false);
+      });
       return;
     }
 
@@ -231,7 +302,86 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     // Case 3: Already registered and profile completed -> Preload feed and Go Home
+    // Keep _isGoogleLoading = true so the button shows the loader until _goHome completes!
     if (result.isSuccess) {
+      try {
+        final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+        homeFeed.resetToHome();
+        final String? uid = authProvider.userId;
+        final List<Future<dynamic>> warmUpTasks = <Future<dynamic>>[];
+        if (uid != null && uid.isNotEmpty) {
+          warmUpTasks.add(
+            context.read<ProfileProvider>().fetchProfile(uid).catchError((_) {}),
+          );
+        }
+        warmUpTasks.add(() async {
+          try {
+            await homeFeed.loadFeed();
+            if (homeFeed.reels.isNotEmpty) {
+              final firstReel = homeFeed.reels.first;
+              final controller =
+                  await ReelVideoPreloader.instance.getOrCreate(firstReel);
+              if (controller != null && !controller.value.isInitialized) {
+                await controller.initialize().timeout(
+                      const Duration(seconds: 4),
+                      onTimeout: () => controller,
+                    );
+              }
+              ReelVideoPreloader.instance.preloadSurrounding(homeFeed.reels, 0);
+            }
+          } catch (e) {
+            debugPrint('⚠️ [Login] Social pre-fetching feed failed: $e');
+          }
+        }());
+        await Future.wait(warmUpTasks).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => <dynamic>[],
+        );
+      } catch (e) {
+        debugPrint('⚠️ [Login] Social warmup error: $e');
+      }
+
+      if (!mounted) return;
+      _goHome(context);
+    } else {
+      if (mounted) setState(() => _isGoogleLoading = false);
+    }
+  }
+
+  Future<void> _signInWithSocial(
+    Future<bool> Function() socialMethod,
+  ) async {
+    final AuthProvider authProvider = context.read<AuthProvider>();
+    if (_isAnyBusy || authProvider.isBusy) return;
+
+    setState(() => _isAppleLoading = true);
+    final bool ok;
+    try {
+      ok = await socialMethod();
+    } catch (e) {
+      if (mounted) setState(() => _isAppleLoading = false);
+      return;
+    }
+
+    if (!ok) {
+      if (mounted) {
+        setState(() => _isAppleLoading = false);
+        final String? errorMsg = authProvider.error;
+        if (errorMsg != null && errorMsg.isNotEmpty) {
+          AppSnackBar.showError(
+            context,
+            title: 'Sign In Failed',
+            subtitle: errorMsg,
+          );
+          authProvider.clearError();
+        }
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    try {
+      // Warmup feed after social login
       final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
       homeFeed.resetToHome();
       final String? uid = authProvider.userId;
@@ -264,68 +414,9 @@ class _LoginScreenState extends State<LoginScreen> {
         const Duration(seconds: 5),
         onTimeout: () => <dynamic>[],
       );
-
-      if (!mounted) return;
-      _goHome(context);
+    } catch (e) {
+      debugPrint('⚠️ [Login] Social Apple warmup error: $e');
     }
-  }
-
-  Future<void> _signInWithSocial(
-    Future<bool> Function() socialMethod,
-  ) async {
-    final AuthProvider authProvider = context.read<AuthProvider>();
-    if (authProvider.isBusy) return;
-
-    final bool ok = await socialMethod();
-    if (!ok) {
-      if (mounted) {
-        final String? errorMsg = authProvider.error;
-        if (errorMsg != null && errorMsg.isNotEmpty) {
-          AppSnackBar.showError(
-            context,
-            title: 'Sign In Failed',
-            subtitle: errorMsg,
-          );
-          authProvider.clearError();
-        }
-      }
-      return;
-    }
-
-    if (!mounted) return;
-    // Warmup feed after social login
-    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
-    homeFeed.resetToHome();
-    final String? uid = authProvider.userId;
-    final List<Future<dynamic>> warmUpTasks = <Future<dynamic>>[];
-    if (uid != null && uid.isNotEmpty) {
-      warmUpTasks.add(
-        context.read<ProfileProvider>().fetchProfile(uid).catchError((_) {}),
-      );
-    }
-    warmUpTasks.add(() async {
-      try {
-        await homeFeed.loadFeed();
-        if (homeFeed.reels.isNotEmpty) {
-          final firstReel = homeFeed.reels.first;
-          final controller =
-              await ReelVideoPreloader.instance.getOrCreate(firstReel);
-          if (controller != null && !controller.value.isInitialized) {
-            await controller.initialize().timeout(
-                  const Duration(seconds: 4),
-                  onTimeout: () => controller,
-                );
-          }
-          ReelVideoPreloader.instance.preloadSurrounding(homeFeed.reels, 0);
-        }
-      } catch (e) {
-        debugPrint('⚠️ [Login] Social pre-fetching feed failed: $e');
-      }
-    }());
-    await Future.wait(warmUpTasks).timeout(
-      const Duration(seconds: 5),
-      onTimeout: () => <dynamic>[],
-    );
 
     if (!mounted) return;
     _goHome(context);
@@ -418,7 +509,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             if (value == null || value.isEmpty) {
                               return l10n.authEnterPasswordError;
                             }
-                            if (value.length < 6) {
+                            if (value.length < 8) {
                               return l10n.authPasswordLengthError;
                             }
                             return null;
@@ -480,13 +571,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: AppSpacing.xl),
 
                       // ── Login button — rebuilds when busy or preloading
-                      Selector<AuthProvider, bool>(
-                        selector: (_, AuthProvider p) => p.isBusy,
-                        builder: (_, bool busy, _) => AppGradientButton(
-                          text: l10n.authLogIn,
-                          isLoading: busy || _isPreloadingFeed,
-                          onPressed: (busy || _isPreloadingFeed) ? () {} : _submit,
-                        ),
+                      AppGradientButton(
+                        text: l10n.authLogIn,
+                        isLoading: _isEmailLoading || _isPreloadingFeed,
+                        onPressed: _isAnyBusy ? () {} : _submit,
                       ),
 
                       const SizedBox(height: AppSpacing.lg),
@@ -495,38 +583,29 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: AppSpacing.lg),
 
-                      // ── Social Login Row ─────────────────────────────────
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Selector<AuthProvider, bool>(
-                              selector: (_, AuthProvider p) => p.isBusy,
-                              builder: (_, bool busy, _) => AppSocialButton(
-                                text: l10n.authApple,
-                                iconPath: AppIcons.apple,
-                                onPressed: busy
-                                    ? () {}
-                                    : () => _signInWithSocial(
-                                          () => context
-                                              .read<AuthProvider>()
-                                              .signInWithApple(),
-                                        ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Selector<AuthProvider, bool>(
-                              selector: (_, AuthProvider p) => p.isBusy,
-                              builder: (_, bool busy, _) => AppSocialButton(
-                                text: l10n.authGoogle,
-                                iconPath: AppIcons.google,
-                                onPressed: busy ? () {} : _handleGoogleSignIn,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      // ── Social Login Button (platform-specific) ──────────
+                      // Android: Google only | iOS: Apple only
+                      if (Platform.isIOS)
+                        AppSocialButton(
+                          text: l10n.authApple,
+                          iconPath: AppIcons.apple,
+                          isLoading: _isAppleLoading,
+                          onPressed: _isAnyBusy
+                              ? () {}
+                              : () => _signInWithSocial(
+                                    () => context
+                                        .read<AuthProvider>()
+                                        .signInWithApple(),
+                                  ),
+                        )
+                      else
+                        AppSocialButton(
+                          text: l10n.authGoogle,
+                          iconPath: AppIcons.google,
+                          isLoading: _isGoogleLoading,
+                          onPressed:
+                              _isAnyBusy ? () {} : _handleGoogleSignIn,
+                        ),
                     ],
                   ),
                 ),
@@ -556,6 +635,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     highlightedText: l10n.authCreateAnAccount,
                     highlightColor: AppColors.gradientPink,
                     onTap: () {
+                      context.read<AuthProvider>().clearError();
                       // Replace so back doesn't loop between login ↔ register
                       Navigator.pushReplacementNamed(
                         context,

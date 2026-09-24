@@ -115,10 +115,12 @@ class NotificationsProvider extends ChangeNotifier {
           results[0] as List<NotificationItemModel>;
       final int remoteCount = results[1] as int;
 
-      _notifications = remoteNotifs;
-      _unreadCount = remoteCount > 0
+      _notifications = _deduplicateNotifications(remoteNotifs);
+      final int actualUnread =
+          _notifications.where((NotificationItemModel n) => !n.isRead).length;
+      _unreadCount = (remoteCount > 0 && remoteCount <= _notifications.length)
           ? remoteCount
-          : _notifications.where((NotificationItemModel n) => !n.isRead).length;
+          : actualUnread;
     } catch (e) {
       debugPrint('⚠️ [NotificationsProvider] loadNotifications error: $e');
       _error = e.toString();
@@ -126,6 +128,79 @@ class NotificationsProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  List<NotificationItemModel> _deduplicateNotifications(
+    List<NotificationItemModel> rawList,
+  ) {
+    if (rawList.isEmpty) return <NotificationItemModel>[];
+
+    final Set<String> seenIds = <String>{};
+    final Set<String> seenFollowActors = <String>{};
+    final List<NotificationItemModel> result = <NotificationItemModel>[];
+
+    String getActorKey(NotificationItemModel item) {
+      if (item.actorId != null && item.actorId!.trim().isNotEmpty) {
+        return item.actorId!.trim().toLowerCase();
+      }
+      return item.displayUsername.replaceAll('@', '').trim().toLowerCase();
+    }
+
+    for (final NotificationItemModel item in rawList) {
+      // 1. Strict unique ID check
+      if (!seenIds.add(item.id)) {
+        continue;
+      }
+
+      final String actorKey = getActorKey(item);
+
+      // 2. Follow / Follow-Request deduplication per actor
+      if (item.isFollow || item.isFollowRequest) {
+        if (actorKey.isNotEmpty) {
+          if (!seenFollowActors.add(actorKey)) {
+            continue;
+          }
+        }
+      }
+
+      // 3. Proximity / Semantic deduplication for interactions & likes
+      final bool isDuplicate = result.any((NotificationItemModel existing) {
+        final String existingActor = getActorKey(existing);
+        if (existingActor.isEmpty || actorKey.isEmpty) return false;
+        if (existingActor != actorKey) return false;
+
+        final bool sameType =
+            existing.type.toUpperCase() == item.type.toUpperCase();
+        final bool sameBody = (existing.body != null &&
+            item.body != null &&
+            existing.body!.trim().toLowerCase() ==
+                item.body!.trim().toLowerCase());
+
+        if (sameType || sameBody) {
+          final bool samePost = existing.postId == item.postId;
+          final bool sameComment = existing.commentId == item.commentId;
+
+          if (samePost && sameComment) {
+            if (existing.createdAt != null && item.createdAt != null) {
+              final Duration diff =
+                  existing.createdAt!.difference(item.createdAt!).abs();
+              if (diff.inMinutes <= 15) return true;
+            } else if (existing.timeAgo == item.timeAgo) {
+              return true;
+            }
+          }
+        }
+        return false;
+      });
+
+      if (isDuplicate) {
+        continue;
+      }
+
+      result.add(item);
+    }
+
+    return result;
   }
 
   // ── Mark Single Notification as Read ───────────────────────────────────────

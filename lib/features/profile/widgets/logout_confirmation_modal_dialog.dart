@@ -115,29 +115,25 @@ class LogoutConfirmationModalDialog extends StatelessWidget {
                         width: 58,
                         height: 58,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
-                          color: context.themeChipBackground,
-                          child: Icon(
-                            Icons.person_rounded,
-                            color: context.themeIconMuted,
-                            size: 32,
-                          ),
+                        errorBuilder: (_, _, _) => Image.asset(
+                          AppImages.defaultAvatar,
+                          width: 58,
+                          height: 58,
+                          fit: BoxFit.cover,
                         ),
                       )
                     : Image.asset(
                         resolvedAvatar.isNotEmpty
                             ? resolvedAvatar
-                            : AppImages.user1,
+                            : AppImages.defaultAvatar,
                         width: 58,
                         height: 58,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
-                          color: context.themeChipBackground,
-                          child: Icon(
-                            Icons.person_rounded,
-                            color: context.themeIconMuted,
-                            size: 32,
-                          ),
+                        errorBuilder: (_, _, _) => Image.asset(
+                          AppImages.defaultAvatar,
+                          width: 58,
+                          height: 58,
+                          fit: BoxFit.cover,
                         ),
                       ),
               ),

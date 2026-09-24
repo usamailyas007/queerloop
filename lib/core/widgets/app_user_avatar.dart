@@ -26,7 +26,7 @@ class AppUserAvatar extends StatelessWidget {
         height: height,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => Image.asset(
-          AppImages.user1,
+          AppImages.defaultAvatar,
           width: width,
           height: height,
           fit: BoxFit.cover,
@@ -35,7 +35,7 @@ class AppUserAvatar extends StatelessWidget {
     }
 
     final String assetToLoad =
-        clean.startsWith('assets/') ? clean : AppImages.user1;
+        clean.startsWith('assets/') ? clean : AppImages.defaultAvatar;
 
     return Image.asset(
       assetToLoad,
@@ -43,7 +43,7 @@ class AppUserAvatar extends StatelessWidget {
       height: height,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => Image.asset(
-        AppImages.user1,
+        AppImages.defaultAvatar,
         width: width,
         height: height,
         fit: BoxFit.cover,

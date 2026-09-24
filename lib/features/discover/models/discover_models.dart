@@ -585,6 +585,24 @@ class TrendingItem {
       tag: tagRaw,
     );
   }
+
+  TrendingItem copyWith({
+    String? rank,
+    String? hashtag,
+    String? postsCount,
+    String? thumbnailAsset,
+    String? id,
+    String? tag,
+  }) {
+    return TrendingItem(
+      rank: rank ?? this.rank,
+      hashtag: hashtag ?? this.hashtag,
+      postsCount: postsCount ?? this.postsCount,
+      thumbnailAsset: thumbnailAsset ?? this.thumbnailAsset,
+      id: id ?? this.id,
+      tag: tag ?? this.tag,
+    );
+  }
 }
 
 class RecentSearchItem {

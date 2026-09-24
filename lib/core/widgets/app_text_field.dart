@@ -97,6 +97,21 @@ class _AppTextFieldState extends State<AppTextField> {
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
         child: widget.prefixIcon!,
       );
+    } else if (widget.prefixText != null && widget.prefixText!.isNotEmpty) {
+      finalPrefix = Padding(
+        padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.xs),
+        child: Center(
+          widthFactor: 1.0,
+          child: Text(
+            widget.prefixText!.trim(),
+            style: TextStyle(
+              color: context.themeTextMuted,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
     }
 
     Widget? finalSuffix;
@@ -150,7 +165,7 @@ class _AppTextFieldState extends State<AppTextField> {
         hintStyle: AppTextStyles.inputHintText.copyWith(
           color: context.themeTextMuted,
         ),
-        prefixText: widget.prefixText,
+        prefixText: finalPrefix != null ? null : widget.prefixText,
         prefixStyle: TextStyle(
           color: context.themeTextMuted,
           fontSize: 15,

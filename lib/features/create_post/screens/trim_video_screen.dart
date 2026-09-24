@@ -53,7 +53,8 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
 
     try {
       await ctrl.initialize();
-      ctrl.setLooping(true);
+      ctrl.setLooping(false);
+      ctrl.addListener(_handleVideoLoop);
       if (mounted) {
         setState(() {
           _controller = ctrl;
@@ -64,6 +65,23 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
       }
     } catch (e) {
       debugPrint('Error initializing video in TrimVideoScreen: $e');
+    }
+  }
+
+  void _handleVideoLoop() {
+    if (!mounted || _controller == null || !_isInitialized) return;
+    final CreatePostProvider provider = context.read<CreatePostProvider>();
+    final int totalSec = provider.totalDurationSeconds;
+    if (totalSec <= 0) return;
+
+    final double trimEndSec = provider.trimEnd * totalSec;
+    final double trimStartSec = provider.trimStart * totalSec;
+
+    if (_controller!.value.position.inMilliseconds >= (trimEndSec * 1000).round()) {
+      _controller!.seekTo(Duration(milliseconds: (trimStartSec * 1000).round()));
+      if (!_controller!.value.isPlaying && _isPlaying) {
+        _controller!.play();
+      }
     }
   }
 
@@ -88,6 +106,7 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
 
   @override
   void dispose() {
+    _controller?.removeListener(_handleVideoLoop);
     _controller?.dispose();
     super.dispose();
   }
@@ -263,14 +282,39 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
                                   size: 14,
                                 ),
                                 const SizedBox(width: 6),
-                                Text(
-                                  '${provider.trimStartFormatted} / ${provider.totalDurationFormatted} (${provider.selectedDurationSeconds}s)',
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
+                                if (_controller != null && _isInitialized)
+                                  ValueListenableBuilder<VideoPlayerValue>(
+                                    valueListenable: _controller!,
+                                    builder: (
+                                      BuildContext context,
+                                      VideoPlayerValue val,
+                                      Widget? _,
+                                    ) {
+                                      final int currentSec =
+                                          val.position.inSeconds;
+                                      final int m = currentSec ~/ 60;
+                                      final int s = currentSec % 60;
+                                      final String posFormatted =
+                                          '$m:${s.toString().padLeft(2, '0')}';
+                                      return Text(
+                                        '$posFormatted / ${provider.totalDurationFormatted} (${provider.selectedDurationSeconds}s)',
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12,
+                                        ),
+                                      );
+                                    },
+                                  )
+                                else
+                                  Text(
+                                    '${provider.trimStartFormatted} / ${provider.totalDurationFormatted} (${provider.selectedDurationSeconds}s)',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
                                   ),
-                                ),
                               ],
                             ),
                           ),

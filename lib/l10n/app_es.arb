@@ -51,7 +51,7 @@
   "authEnterEmailError": "Por favor ingresa tu correo electrónico",
   "authEnterValidEmailError": "Por favor ingresa un correo electrónico válido",
   "authEnterPasswordError": "Por favor ingresa tu contraseña",
-  "authPasswordLengthError": "La contraseña debe tener al menos 6 caracteres",
+  "authPasswordLengthError": "La contraseña debe tener al menos 8 caracteres",
   "authAcceptTermsError": "Por favor acepta los Términos y Condiciones para continuar.",
   "authPasswordResetSent": "¡Enlace para restablecer contraseña enviado!",
 

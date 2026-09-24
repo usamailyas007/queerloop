@@ -13,6 +13,7 @@ class AppSocialButton extends StatelessWidget {
     this.icon,
     this.height = AppSizes.buttonHeight,
     this.width = double.infinity,
+    this.isLoading = false,
   });
 
   final String text;
@@ -21,6 +22,7 @@ class AppSocialButton extends StatelessWidget {
   final Widget? icon;
   final double height;
   final double width;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -64,25 +66,36 @@ class AppSocialButton extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onPressed,
+          onTap: isLoading ? () {} : onPressed,
           borderRadius: BorderRadius.circular(AppRadius.input),
           child: Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                if (leadingIcon != null) ...<Widget>[
-                  leadingIcon,
-                  const SizedBox(width: AppSpacing.sm),
-                ],
-                Text(
-                  text,
-                  style: AppTextStyles.socialButtonText.copyWith(
-                    color: context.themeTextPrimary,
+            child: isLoading
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        context.themeTextPrimary,
+                      ),
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      if (leadingIcon != null) ...<Widget>[
+                        leadingIcon,
+                        const SizedBox(width: AppSpacing.sm),
+                      ],
+                      Text(
+                        text,
+                        style: AppTextStyles.socialButtonText.copyWith(
+                          color: context.themeTextPrimary,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ),
       ),

@@ -36,13 +36,17 @@ import 'router.dart';
 import 'routes.dart';
 
 class App extends StatelessWidget {
-  const App({super.key});
+  const App({super.key, this.initialThemeMode = ThemeMode.light});
+
+  final ThemeMode initialThemeMode;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: <SingleChildWidget>[
-        ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider<ThemeProvider>(
+          create: (_) => ThemeProvider(initialMode: initialThemeMode),
+        ),
         ChangeNotifierProvider<NetworkInfo>(create: (_) => NetworkInfo()),
         Provider<ApiClient>(create: (_) => ApiClient()),
         ChangeNotifierProvider<AuthProvider>(
@@ -99,6 +103,7 @@ class App extends StatelessWidget {
                     );
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   provider.updateUser(auth.userId);
+                  provider.setGuestMode(auth.isGuest);
                 });
                 return provider;
               },

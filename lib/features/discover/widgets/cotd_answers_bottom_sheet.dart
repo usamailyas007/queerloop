@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../auth/auth_provider.dart';
 import '../models/cotd_models.dart';
 import '../provider/cotd_provider.dart';
 
@@ -37,7 +38,11 @@ class _CotdAnswersBottomSheetState extends State<CotdAnswersBottomSheet> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<CotdProvider>().fetchAnswers();
+      if (mounted) {
+        final AuthProvider auth = context.read<AuthProvider>();
+        context.read<CotdProvider>().updateUserId(auth.userId);
+        context.read<CotdProvider>().fetchAnswers();
+      }
     });
   }
 

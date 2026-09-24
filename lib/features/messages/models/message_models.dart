@@ -1,3 +1,4 @@
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_images.dart';
 
 enum MessageType {
@@ -150,19 +151,78 @@ class ChatMessageModel {
 
     final String? body =
         (json['body'] ?? json['text'] ?? json['content'])?.toString();
+
+    final String? rawMediaCandidate = isUnsent
+        ? null
+        : (json['mediaUrl'] ??
+                json['imageUrl'] ??
+                json['attachmentUrl'] ??
+                json['mediaRef'] ??
+                json['media'] ??
+                json['attachment'])
+            ?.toString();
+
+    final bool isBodyImageUrl = !isUnsent &&
+        body != null &&
+        (body.trim().startsWith('http://') || body.trim().startsWith('https://')) &&
+        (body.contains('/images/') ||
+            body.contains('/media/') ||
+            body.endsWith('.jpg') ||
+            body.endsWith('.jpeg') ||
+            body.endsWith('.png') ||
+            body.endsWith('.webp') ||
+            body.endsWith('.gif') ||
+            body.contains('cloudfront.net'));
+
+    final String? rawMedia = (rawMediaCandidate != null &&
+            rawMediaCandidate.trim().isNotEmpty &&
+            rawMediaCandidate.trim().toLowerCase() != 'null')
+        ? rawMediaCandidate
+        : (isBodyImageUrl ? body : null);
+
     final String? parsedText = isUnsent
         ? (me ? 'You unsent this message' : '$cleanUsername has unsent this message')
-        : body;
-    final String? media = isUnsent
-        ? null
-        : (json['mediaUrl'] ?? json['imageUrl'] ?? json['attachmentUrl'])?.toString();
+        : (isBodyImageUrl && (rawMediaCandidate == null || rawMediaCandidate.trim().isEmpty || rawMediaCandidate.trim().toLowerCase() == 'null') ? '' : body);
 
-    // Parse reactions
+    final String? media = (rawMedia == null ||
+            rawMedia.trim().isEmpty ||
+            rawMedia.trim().toLowerCase() == 'null')
+        ? null
+        : (rawMedia.trim().startsWith('http') ||
+                rawMedia.trim().startsWith('assets/')
+            ? rawMedia.trim()
+            : '${AppConfig.baseUrl.replaceAll(RegExp(r"/+$"), "")}/media/${rawMedia.trim().replaceAll(RegExp(r"^/media/"), "").replaceAll(RegExp(r"^/+"), "")}');
+
+    // Parse reactions (supports List of reaction objects or Map format: {"😂": ["user_id"]})
     final List<MessageReactionModel> parsedReactions = <MessageReactionModel>[];
-    if (json['reactions'] is List) {
-      for (final dynamic r in json['reactions'] as List) {
+    final dynamic rawReactions = json['reactions'];
+    if (rawReactions is List) {
+      for (final dynamic r in rawReactions) {
         parsedReactions.add(MessageReactionModel.fromJson(r));
       }
+    } else if (rawReactions is Map) {
+      rawReactions.forEach((dynamic key, dynamic val) {
+        final String emojiKey = key.toString().trim();
+        if (emojiKey.isNotEmpty) {
+          if (val is List) {
+            for (final dynamic u in val) {
+              parsedReactions.add(MessageReactionModel(
+                emoji: emojiKey,
+                userId: u?.toString(),
+              ));
+            }
+          } else if (val is num) {
+            for (int i = 0; i < val.toInt(); i++) {
+              parsedReactions.add(MessageReactionModel(emoji: emojiKey));
+            }
+          } else if (val != null) {
+            parsedReactions.add(MessageReactionModel(
+              emoji: emojiKey,
+              userId: val.toString(),
+            ));
+          }
+        }
+      });
     }
 
     String? singleEmoji = json['reactionEmoji']?.toString();
@@ -316,9 +376,12 @@ class ChatMessageModel {
 
     // Message type
     MessageType mType = MessageType.text;
+    final String? rawMsgType = json['type']?.toString().toLowerCase();
     if (isSharedPost) {
       mType = MessageType.postShare;
-    } else if (media != null && media.isNotEmpty) {
+    } else if ((media != null && media.isNotEmpty) ||
+        rawMsgType == 'image' ||
+        rawMsgType == 'photo') {
       mType = MessageType.image;
     } else if (me) {
       mType = MessageType.gradientText;

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -42,6 +43,7 @@ class RefreshTokenResult {
 abstract final class _StorageKey {
   static const String accessToken = 'auth.accessToken';
   static const String refreshToken = 'auth.refreshToken';
+  static const String userData = 'auth.userData';
 }
 
 class AuthService {
@@ -76,11 +78,21 @@ class AuthService {
     scopes: <String>['email', 'profile'],
     clientId: defaultTargetPlatform == TargetPlatform.iOS
         ? '494655940899-k47o7aedu4ggbq1bdabeinl69vma8vok.apps.googleusercontent.com'
-        : null,
+        : (kIsWeb
+            ? (AppConfig.googleServerClientId.isNotEmpty
+                ? AppConfig.googleServerClientId
+                : '494655940899-l61kvs2gq29cp6it6onb5buto8qtlnht.apps.googleusercontent.com')
+            : null),
     serverClientId: AppConfig.googleServerClientId.isNotEmpty
         ? AppConfig.googleServerClientId
-        : null,
+        : '494655940899-l61kvs2gq29cp6it6onb5buto8qtlnht.apps.googleusercontent.com',
   );
+
+  Future<void> googleSignOut() async {
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {}
+  }
 
   Future<SocialSignInResult> signInWithGoogle() async {
     if (AppConfig.useMockApi) {
@@ -92,7 +104,9 @@ class AuthService {
 
     try {
       // Force fresh account picker every time
-      await _googleSignIn.signOut();
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
       final GoogleSignInAccount? account = await _googleSignIn.signIn();
       if (account == null) {
         debugPrint('⚠️ [AuthService] Google sign-in cancelled by user.');
@@ -102,7 +116,9 @@ class AuthService {
       final String email = account.email.trim();
       final String? displayName = account.displayName;
       final String? photoUrl = account.photoUrl;
-      final String googleId = account.id;
+      final String googleId = account.id.isNotEmpty
+          ? account.id
+          : account.email.hashCode.abs().toString();
 
       debugPrint('🔑 [AuthService] Google account selected: $email (Name: $displayName)');
 
@@ -552,6 +568,21 @@ class AuthService {
                 value: newRefreshToken,
               );
             }
+
+            // Check if user object was returned in refresh response
+            final dynamic userPayload = data['user'] ??
+                data['profile'] ??
+                (response.data is Map ? (response.data as Map)['user'] : null);
+            if (userPayload is Map<String, dynamic>) {
+              try {
+                final User user = User.fromJson(userPayload);
+                await _storage.write(
+                  key: _StorageKey.userData,
+                  value: jsonEncode(user.toJson()),
+                );
+              } catch (_) {}
+            }
+
             debugPrint(
                 '🔑 [AuthService] Successfully refreshed and persisted new access token.');
             return RefreshTokenResult(
@@ -564,8 +595,8 @@ class AuthService {
       }
 
       return const RefreshTokenResult(
-        status: RefreshTokenStatus.invalidToken,
-        errorMessage: 'Invalid refresh response payload',
+        status: RefreshTokenStatus.transientError,
+        errorMessage: 'Invalid or non-200 refresh response payload',
       );
     } on DioException catch (dioErr) {
       final int? status = dioErr.response?.statusCode;
@@ -727,6 +758,20 @@ class AuthService {
     return <String, dynamic>{};
   }
 
+  // ── Decode JWT Helper ────────────────────────────────────────────────────
+  Map<String, dynamic>? _decodeJwtPayload(String token) {
+    try {
+      final List<String> parts = token.split('.');
+      if (parts.length != 3) return null;
+      final String normalized = base64Url.normalize(parts[1]);
+      final String decoded = utf8.decode(base64Url.decode(normalized));
+      final dynamic json = jsonDecode(decoded);
+      return json is Map<String, dynamic> ? json : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── Restore from secure storage ───────────────────────────────────────────
   Future<AuthSession?> restoreSession() async {
     if (AppConfig.useMockApi) {
@@ -737,60 +782,151 @@ class AuthService {
         await _storage.read(key: _StorageKey.accessToken);
     final String? refreshToken =
         await _storage.read(key: _StorageKey.refreshToken);
+    final String? rawUserData =
+        await _storage.read(key: _StorageKey.userData);
 
-    if ((accessToken == null || accessToken.isEmpty) &&
-        (refreshToken == null || refreshToken.isEmpty)) {
+    // If both tokens are absent, user has never logged in or explicitly signed out
+    if ((accessToken == null || accessToken.trim().isEmpty) &&
+        (refreshToken == null || refreshToken.trim().isEmpty)) {
       return null;
     }
 
     _inMemoryAccessToken = accessToken;
     _inMemoryRefreshToken = refreshToken;
 
-    // 1. Try with existing accessToken
-    if (accessToken != null && accessToken.isNotEmpty) {
-      _client.authToken = accessToken;
+    User? cachedUser;
+    if (rawUserData != null && rawUserData.trim().isNotEmpty) {
       try {
-        final dynamic data = await _client.get(ApiEndpoints.me);
-        final User user = User.fromJson(data as Map<String, dynamic>);
-        return AuthSession(
-          user: user,
-          accessToken: accessToken,
-          refreshToken: refreshToken ?? '',
-        );
+        final dynamic decoded = jsonDecode(rawUserData);
+        if (decoded is Map<String, dynamic>) {
+          cachedUser = User.fromJson(decoded);
+        }
       } catch (e) {
-        debugPrint(
-            '⚠️ [AuthService] /auth/me failed with stored accessToken: $e');
+        debugPrint('⚠️ [AuthService] Failed to parse cached userData: $e');
       }
     }
 
-    // 2. AccessToken expired or invalid -> Attempt refresh with refreshToken
-    if (refreshToken != null && refreshToken.isNotEmpty) {
-      final String? newAccessToken = await this.refreshToken();
-      if (newAccessToken != null && newAccessToken.isNotEmpty) {
-        try {
-          _client.authToken = newAccessToken;
-          _inMemoryAccessToken = newAccessToken;
-          final dynamic data = await _client.get(ApiEndpoints.me);
-          final User user = User.fromJson(data as Map<String, dynamic>);
-          final String updatedRefresh =
-              await _storage.read(key: _StorageKey.refreshToken) ??
-                  refreshToken;
-          _inMemoryRefreshToken = updatedRefresh;
-          return AuthSession(
-            user: user,
-            accessToken: newAccessToken,
-            refreshToken: updatedRefresh,
-          );
-        } catch (e) {
-          debugPrint(
-              '❌ [AuthService] /auth/me failed even after token refresh: $e');
+    if (cachedUser == null || cachedUser.id.isEmpty) {
+      final String? jwtSource = (accessToken != null && accessToken.isNotEmpty)
+          ? accessToken
+          : refreshToken;
+      if (jwtSource != null) {
+        final Map<String, dynamic>? jwtPayload = _decodeJwtPayload(jwtSource);
+        if (jwtPayload != null) {
+          cachedUser = User.fromJson(jwtPayload);
         }
       }
     }
 
-    // 3. Both tokens expired / invalid -> Clear everything
-    debugPrint(
-        '⚠️ [AuthService] Unable to restore session. Clearing local storage.');
+    // 1. If refresh token is available, always generate a fresh access token on restart
+    // as requested: "jb dare bar app reastart krain tu refersh tocken se new access token generate krwa lya kro"
+    if (refreshToken != null && refreshToken.trim().isNotEmpty) {
+      debugPrint('🔄 [AuthService] Startup session restore: refreshing access token via refresh token...');
+      final RefreshTokenResult refreshResult =
+          await refreshTokenDetailed(refreshToken.trim());
+
+      if (refreshResult.isSuccess &&
+          refreshResult.accessToken != null &&
+          refreshResult.accessToken!.isNotEmpty) {
+        final String newAccessToken = refreshResult.accessToken!;
+        final String effectiveRefresh =
+            (refreshResult.refreshToken != null &&
+                    refreshResult.refreshToken!.isNotEmpty)
+                ? refreshResult.refreshToken!
+                : refreshToken;
+
+        _client.authToken = newAccessToken;
+        _inMemoryAccessToken = newAccessToken;
+        _inMemoryRefreshToken = effectiveRefresh;
+
+        User effectiveUser = cachedUser ??
+            User(
+              id: 'user_${DateTime.now().millisecondsSinceEpoch}',
+              email: '',
+              role: 'user',
+              accountStatus: AccountStatus.active,
+              dobVerified: false,
+            );
+
+        // Try getting latest user info from /auth/me, but NEVER invalidate the session if it fails
+        try {
+          final dynamic data = await _client.get(ApiEndpoints.me);
+          if (data is Map<String, dynamic>) {
+            effectiveUser = User.fromJson(data);
+            await _storage.write(
+              key: _StorageKey.userData,
+              value: jsonEncode(effectiveUser.toJson()),
+            );
+          }
+        } catch (meError) {
+          debugPrint(
+              '⚠️ [AuthService] /auth/me after token refresh failed: $meError. Retaining cached user profile.');
+        }
+
+        final AuthSession session = AuthSession(
+          user: effectiveUser,
+          accessToken: newAccessToken,
+          refreshToken: effectiveRefresh,
+        );
+        await _persistTokens(session);
+        return session;
+      }
+
+      // ONLY evict session if the refresh token is permanently invalid/rejected (401/403)
+      if (refreshResult.isInvalidToken) {
+        debugPrint(
+            '⛔ [AuthService] Refresh token is permanently invalid (${refreshResult.errorMessage}). Clearing local session.');
+        await clearAllLocalData();
+        return null;
+      }
+
+      // If refresh hit a transient error (offline, 5xx, timeout):
+      debugPrint(
+          '⚠️ [AuthService] Transient network/server error refreshing token (${refreshResult.errorMessage}). Preserving session.');
+    }
+
+    // 2. Fallback to existing accessToken if refresh was skipped or hit a transient error
+    if (accessToken != null && accessToken.isNotEmpty) {
+      _client.authToken = accessToken;
+      try {
+        final dynamic data = await _client.get(ApiEndpoints.me);
+        if (data is Map<String, dynamic>) {
+          final User user = User.fromJson(data);
+          final AuthSession session = AuthSession(
+            user: user,
+            accessToken: accessToken,
+            refreshToken: refreshToken ?? '',
+          );
+          await _persistTokens(session);
+          return session;
+        }
+      } catch (meError) {
+        debugPrint(
+            '⚠️ [AuthService] /auth/me with existing access token: $meError');
+      }
+
+      if (cachedUser != null) {
+        debugPrint('✅ [AuthService] Restoring session with cached user profile.');
+        return AuthSession(
+          user: cachedUser,
+          accessToken: accessToken,
+          refreshToken: refreshToken ?? '',
+        );
+      }
+    }
+
+    // 3. If offline/transient error and we have cachedUser and refreshToken, keep user signed in!
+    if (cachedUser != null && refreshToken != null && refreshToken.isNotEmpty) {
+      debugPrint('✅ [AuthService] Preserving user session offline with cached credentials.');
+      return AuthSession(
+        user: cachedUser,
+        accessToken: accessToken ?? '',
+        refreshToken: refreshToken,
+      );
+    }
+
+    // No valid credentials exist
+    debugPrint('⚠️ [AuthService] Unable to restore session. No valid credentials.');
     await clearAllLocalData();
     return null;
   }
@@ -798,13 +934,14 @@ class AuthService {
   // ── Token helpers ─────────────────────────────────────────────────────────
 
   Future<void> _persistTokens(AuthSession session) async {
-    debugPrint('💾 [AuthService] Persisting tokens to SecureStorage:');
+    debugPrint('💾 [AuthService] Persisting tokens and user data to SecureStorage:');
     debugPrint(
         '   accessToken: ${session.accessToken.isNotEmpty ? "EXISTS (${session.accessToken.length} chars)" : "EMPTY"}');
     debugPrint(
         '   refreshToken: ${session.refreshToken.isNotEmpty ? "EXISTS (${session.refreshToken.length} chars)" : "EMPTY"}');
     _inMemoryAccessToken = session.accessToken;
     _inMemoryRefreshToken = session.refreshToken;
+    final String userJson = jsonEncode(session.user.toJson());
     await Future.wait(<Future<void>>[
       if (session.accessToken.isNotEmpty)
         _storage.write(
@@ -812,6 +949,7 @@ class AuthService {
       if (session.refreshToken.isNotEmpty)
         _storage.write(
             key: _StorageKey.refreshToken, value: session.refreshToken),
+      _storage.write(key: _StorageKey.userData, value: userJson),
     ]);
   }
 

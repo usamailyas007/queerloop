@@ -221,60 +221,68 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context, NotificationsProvider provider) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: <Widget>[
-        const SizedBox(height: 80),
-        Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Container(
-                width: 68,
-                height: 68,
-                decoration: BoxDecoration(
-                  color: context.themeCyanBadgeBackground,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.gradientCyan.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: Center(
-                  child: SvgPicture.asset(
-                    AppIcons.bell,
-                    width: 32,
-                    height: 32,
-                    colorFilter: const ColorFilter.mode(
-                      AppColors.gradientCyan,
-                      BlendMode.srcIn,
+    return LayoutBuilder(
+      builder: (BuildContext ctx, BoxConstraints constraints) {
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    Container(
+                      width: 68,
+                      height: 68,
+                      decoration: BoxDecoration(
+                        color: context.themeCyanBadgeBackground,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.gradientCyan.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Center(
+                        child: SvgPicture.asset(
+                          AppIcons.bell,
+                          width: 32,
+                          height: 32,
+                          colorFilter: const ColorFilter.mode(
+                            AppColors.gradientCyan,
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Text(
+                      'No notifications yet',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: context.themeTextPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      provider.selectedFilterIndex == 0
+                          ? "You're all caught up! Check back later."
+                          : 'No ${NotificationsProvider.filters[provider.selectedFilterIndex].toLowerCase()} notifications found.',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.themeTextMuted,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'No notifications yet',
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: context.themeTextPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 17,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                provider.selectedFilterIndex == 0
-                    ? "You're all caught up! Check back later."
-                    : 'No ${NotificationsProvider.filters[provider.selectedFilterIndex].toLowerCase()} notifications found.',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: context.themeTextMuted,
-                  fontSize: 13,
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -650,20 +658,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         height: 40,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => Image.asset(
-          AppImages.user1,
+          AppImages.defaultAvatar,
           width: 40,
           height: 40,
           fit: BoxFit.cover,
         ),
       );
     }
+    final String cleanAsset = avatar.startsWith('assets/') ? avatar : AppImages.defaultAvatar;
     return Image.asset(
-      avatar,
+      cleanAsset,
       width: 40,
       height: 40,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => Image.asset(
-        AppImages.user1,
+        AppImages.defaultAvatar,
         width: 40,
         height: 40,
         fit: BoxFit.cover,

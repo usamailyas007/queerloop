@@ -1,10 +1,12 @@
 import 'dart:async' show StreamSubscription, Timer;
 import 'dart:convert' show jsonDecode, jsonEncode;
+import 'dart:io' show File;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/config/app_config.dart';
 import '../../create_post/models/create_post_models.dart';
 import '../../create_post/services/media_upload_service.dart';
 import '../../create_post/services/post_content_service.dart';
@@ -694,7 +696,10 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // 5. Update conversation tile in inbox
     final int convIdx = _conversations.indexWhere(
-        (ConversationModel c) => c.id == convId || c.participantId == convId);
+        (ConversationModel c) =>
+            c.id == convId ||
+            c.participantId == convId ||
+            (event.senderId.isNotEmpty && c.participantId == event.senderId));
     final String prefix = isFromMe ? 'You: ' : '';
     final String snippet = newMsg.type == MessageType.postShare
         ? (newMsg.text != null && newMsg.text!.isNotEmpty
@@ -708,6 +713,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
           : 0;
       _conversations[convIdx] = current.copyWith(
         lastMessage: '$prefix$snippet',
+        lastMessageSenderId: event.senderId,
         lastMessageAt: DateTime.now(),
         timeAgo: 'Just now',
         unreadCount: unread,
@@ -716,6 +722,25 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       );
       final ConversationModel moved = _conversations.removeAt(convIdx);
       _conversations.insert(0, moved);
+    } else {
+      final int unread = (!isFromMe && _activeChatConvId != convId) ? 1 : 0;
+      final ConversationModel newConv = ConversationModel(
+        id: convId,
+        username: isFromMe ? 'User' : (event.senderId.isNotEmpty ? '@${event.senderId}' : 'User'),
+        displayName: isFromMe ? 'User' : (newMsg.senderUsername.isNotEmpty && newMsg.senderUsername != 'User' ? newMsg.senderUsername : 'User'),
+        avatarAsset: 'assets/images/profile_placeholder.png',
+        avatarUrl: (event.raw['sender'] is Map ? (event.raw['sender']['avatarUrl'] ?? event.raw['sender']['avatar'])?.toString() : null),
+        participantId: isFromMe ? null : (event.senderId.isNotEmpty ? event.senderId : null),
+        lastMessage: '$prefix$snippet',
+        lastMessageSenderId: event.senderId,
+        lastMessageAt: DateTime.now(),
+        timeAgo: 'Just now',
+        unreadCount: unread,
+        messages: msgs,
+        isTyping: false,
+      );
+      _conversations.insert(0, newConv);
+      refreshConversationsSilently();
     }
 
     _sortConversations();
@@ -2180,8 +2205,61 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   // ── Message Requests ───────────────────────────────────────────────────────
   final List<MessageRequestModel> _messageRequests = <MessageRequestModel>[];
-  List<MessageRequestModel> get messageRequests =>
-      List<MessageRequestModel>.unmodifiable(_messageRequests);
+  List<MessageRequestModel> get messageRequests {
+    final List<MessageRequestModel> result =
+        List<MessageRequestModel>.from(_messageRequests);
+
+    // Also include conversations from restricted users that aren't blocked
+    for (final ConversationModel c in _conversations) {
+      final bool restricted = isRestricted(c.participantId) ||
+          isRestricted(c.username) ||
+          isRestricted(c.id);
+      final bool blocked = isBlocked(c.participantId) ||
+          isBlocked(c.username) ||
+          isBlocked(c.id);
+
+      if (restricted && !blocked) {
+        final String cleanUname =
+            c.username.replaceAll('@', '').toLowerCase().trim();
+        final bool alreadyPresent = result.any((MessageRequestModel r) =>
+            r.id == c.id ||
+            (c.participantId != null &&
+                c.participantId!.isNotEmpty &&
+                r.participantId == c.participantId) ||
+            (cleanUname.isNotEmpty &&
+                r.username.replaceAll('@', '').toLowerCase().trim() == cleanUname));
+
+        if (!alreadyPresent) {
+          result.add(
+            MessageRequestModel(
+              id: c.id,
+              participantId: c.participantId,
+              username: c.username,
+              displayName: c.displayName,
+              avatarUrl: c.avatarUrl,
+              avatarAsset: c.avatarAsset,
+              previewMessage: c.lastMessage,
+              createdAt: c.lastMessageAt,
+            ),
+          );
+        }
+      }
+    }
+
+    // Filter out blocked users from requests
+    result.removeWhere((MessageRequestModel r) =>
+        isBlocked(r.id) ||
+        isBlocked(r.participantId) ||
+        isBlocked(r.username));
+
+    result.sort((MessageRequestModel a, MessageRequestModel b) {
+      final DateTime timeA = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final DateTime timeB = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return timeB.compareTo(timeA);
+    });
+
+    return List<MessageRequestModel>.unmodifiable(result);
+  }
 
   Future<void> loadMessageRequests({bool force = false}) async {
     if (_service == null) return;
@@ -2202,12 +2280,31 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<bool> acceptRequest(String conversationId) async {
+    // If this request belongs to a restricted user, unrestrict them
+    final ConversationModel? conv = _conversations.cast<ConversationModel?>().firstWhere(
+      (ConversationModel? c) =>
+          c != null && (c.id == conversationId || c.participantId == conversationId),
+      orElse: () => null,
+    );
+    if (conv != null) {
+      final String? pId = conv.participantId;
+      final String uname = conv.username;
+      if (isRestricted(pId) || isRestricted(uname) || isRestricted(conv.id)) {
+        await unrestrictUser(pId ?? uname, username: uname);
+      }
+    }
+
     // Optimistic removal from requests
     _messageRequests.removeWhere((MessageRequestModel req) => req.id == conversationId);
     notifyListeners();
 
     if (_service != null) {
-      final bool ok = await _service!.acceptRequest(conversationId);
+      bool ok = true;
+      try {
+        ok = await _service!.acceptRequest(conversationId);
+      } catch (_) {
+        ok = true;
+      }
       // Refresh inbox to display the newly accepted conversation
       await loadConversations();
       return ok;
@@ -2218,10 +2315,20 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<bool> rejectRequest(String conversationId) async {
     // Optimistic removal from requests
     _messageRequests.removeWhere((MessageRequestModel req) => req.id == conversationId);
+    final int cIdx = _conversations.indexWhere(
+        (ConversationModel c) => c.id == conversationId || c.participantId == conversationId);
+    if (cIdx != -1) {
+      final String targetConvId = _conversations[cIdx].id;
+      deleteConversation(targetConvId);
+    }
     notifyListeners();
 
     if (_service != null) {
-      return await _service!.rejectRequest(conversationId);
+      try {
+        return await _service!.rejectRequest(conversationId);
+      } catch (_) {
+        return true;
+      }
     }
     return true;
   }
@@ -2236,9 +2343,20 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       <String, List<ChatMessageModel>>{};
 
   List<ConversationModel> get conversations {
+    // Exclude conversations from restricted and blocked users from the primary inbox
+    final List<ConversationModel> nonRestricted = _conversations.where((ConversationModel c) {
+      if (isBlocked(c.participantId) || isBlocked(c.username) || isBlocked(c.id)) {
+        return false;
+      }
+      if (isRestricted(c.participantId) || isRestricted(c.username) || isRestricted(c.id)) {
+        return false;
+      }
+      return true;
+    }).toList();
+
     final List<ConversationModel> list = _searchQuery.trim().isEmpty
-        ? _conversations
-        : _conversations
+        ? nonRestricted
+        : nonRestricted
             .where((ConversationModel c) =>
                 c.username.toLowerCase().contains(_searchQuery.toLowerCase()) ||
                 (c.displayName != null &&
@@ -2353,11 +2471,11 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Total count of conversations that have unread received messages
   int get unreadConversationsCount =>
-      _conversations.where((ConversationModel c) => c.unreadCount > 0).length;
+      conversations.where((ConversationModel c) => c.unreadCount > 0).length;
 
   /// Total count of all unread messages across all conversations
   int get totalUnreadMessagesCount =>
-      _conversations.fold<int>(0, (int sum, ConversationModel c) => sum + c.unreadCount);
+      conversations.fold<int>(0, (int sum, ConversationModel c) => sum + c.unreadCount);
 
   List<ChatMessageModel> getMessagesFor(String conversationId) {
     return _messagesByConvId[conversationId] ?? const <ChatMessageModel>[];
@@ -3237,18 +3355,32 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    final bool alreadyReactedWithEmoji = targetMessage.reactionEmoji == emoji;
+    final bool alreadyReactedWithEmoji = targetMessage.reactionEmoji == emoji ||
+        targetMessage.reactions.any((MessageReactionModel r) =>
+            r.emoji == emoji && (_currentUserId == null || r.userId == _currentUserId));
 
     final ChatMessageModel updated;
     if (alreadyReactedWithEmoji) {
+      final List<MessageReactionModel> nextReactions =
+          List<MessageReactionModel>.from(targetMessage.reactions)
+            ..removeWhere((MessageReactionModel r) =>
+                r.emoji == emoji &&
+                (_currentUserId == null || r.userId == _currentUserId));
       updated = targetMessage.copyWith(
-        clearReaction: true,
+        reactions: nextReactions,
+        reactionEmoji: nextReactions.isNotEmpty ? nextReactions.first.emoji : null,
+        reactionCount: nextReactions.isNotEmpty ? nextReactions.length : null,
+        clearReaction: nextReactions.isEmpty,
       );
       _localReactionMap.remove(messageId);
     } else {
+      final List<MessageReactionModel> nextReactions =
+          List<MessageReactionModel>.from(targetMessage.reactions)
+            ..add(MessageReactionModel(emoji: emoji, userId: _currentUserId));
       updated = targetMessage.copyWith(
+        reactions: nextReactions,
         reactionEmoji: emoji,
-        reactionCount: (targetMessage.reactionCount ?? 0) + 1,
+        reactionCount: nextReactions.length,
       );
       _localReactionMap[messageId] = emoji;
     }
@@ -3297,7 +3429,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    // 3. Socket emit (reactions strictly via socket per backend spec)
+    // 3. Socket emit (real-time reaction event)
     if (backendConvId.isNotEmpty) {
       if (alreadyReactedWithEmoji) {
         _socketService?.removeReaction(
@@ -3313,6 +3445,27 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
           emoji: emoji,
           userId: _currentUserId,
         );
+      }
+    }
+
+    // 4. REST persistence fallback
+    if (backendConvId.isNotEmpty && _service != null) {
+      try {
+        if (alreadyReactedWithEmoji) {
+          _service?.removeReaction(
+            conversationId: backendConvId,
+            messageId: messageId,
+            emoji: emoji,
+          );
+        } else {
+          _service?.addReaction(
+            conversationId: backendConvId,
+            messageId: messageId,
+            emoji: emoji,
+          );
+        }
+      } catch (e) {
+        debugPrint('⚠️ [MessagesProvider] REST reaction sync error: $e');
       }
     }
   }
@@ -3402,14 +3555,16 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    // ── 3. Socket emit — real-time delivery to already-resolved conv IDs ─────
-    for (final String cId in targetConvIds) {
-      _socketService?.sendMessage(
-        conversationId: cId,
-        sharedPostId: sharedPostId,
-        text: message,
-        body: message,
-      );
+    // ── 3. Socket emit — fallback only if API was not used or failed ────────
+    if (!apiOk) {
+      for (final String cId in targetConvIds) {
+        _socketService?.sendMessage(
+          conversationId: cId,
+          sharedPostId: sharedPostId,
+          text: message,
+          body: message,
+        );
+      }
     }
 
     // ── 4. Optimistic UI update ───────────────────────────────────────────────
@@ -3556,11 +3711,11 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // ── Send Image Message ─────────────────────────────────────────────────────
-  void sendImageMessage(
+  Future<void> sendImageMessage(
     String conversationId, {
     String? imageFilePath,
     String? imageAsset,
-  }) {
+  }) async {
     final int convIdx =
         _conversations.indexWhere((ConversationModel c) => c.id == conversationId);
     final ConversationModel? targetConv =
@@ -3573,22 +3728,23 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
+    final String tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final ChatMessageModel optimisticMsg = ChatMessageModel(
+      id: tempId,
+      conversationId: conversationId,
+      senderId: _currentUserId,
+      senderUsername: 'me',
+      isMe: true,
+      timestamp: 'Just now',
+      imageFilePath: imageFilePath,
+      imageAsset: imageAsset,
+      type: MessageType.image,
+      createdAt: DateTime.now(),
+    );
+
     final List<ChatMessageModel> currentMsgs = List<ChatMessageModel>.from(
         _messagesByConvId[conversationId] ?? <ChatMessageModel>[])
-      ..add(
-        ChatMessageModel(
-          id: 'm_${DateTime.now().millisecondsSinceEpoch}',
-          conversationId: conversationId,
-          senderId: _currentUserId,
-          senderUsername: 'me',
-          isMe: true,
-          timestamp: 'Just now',
-          imageFilePath: imageFilePath,
-          imageAsset: imageAsset,
-          type: MessageType.image,
-          createdAt: DateTime.now(),
-        ),
-      );
+      ..add(optimisticMsg);
 
     _messagesByConvId[conversationId] = currentMsgs;
 
@@ -3596,7 +3752,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         _conversations.indexWhere((ConversationModel c) => c.id == conversationId);
     if (idx != -1) {
       final ConversationModel updated = _conversations[idx].copyWith(
-        lastMessage: 'You: Sent an image',
+        lastMessage: 'You: Sent a photo',
         timeAgo: 'Just now',
         lastMessageAt: DateTime.now(),
         unreadCount: 0,
@@ -3609,7 +3765,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
           c.participantId == conversationId);
       if (pIdx != -1) {
         final ConversationModel updated = _conversations[pIdx].copyWith(
-          lastMessage: 'You: Sent an image',
+          lastMessage: 'You: Sent a photo',
           timeAgo: 'Just now',
           lastMessageAt: DateTime.now(),
           unreadCount: 0,
@@ -3622,12 +3778,157 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     _sortConversations();
     notifyListeners();
 
-    // Socket emit
-    _socketService?.sendMessage(
-      conversationId: conversationId,
-      mediaRef: imageFilePath ?? imageAsset,
-      text: '',
-      body: '',
-    );
+    // Async upload & sync
+    String targetConvId = conversationId;
+    final ConversationModel? conv =
+        idx != -1 ? _conversations[idx] : null;
+
+    if (conv == null ||
+        conv.participantId == conversationId ||
+        conversationId.isEmpty ||
+        conversationId.startsWith('temp_')) {
+      final String? recipientId = conv?.participantId;
+      if (recipientId != null && recipientId.trim().isNotEmpty) {
+        try {
+          final ConversationModel? created = await _service?.startConversation(
+            participantId: recipientId.trim(),
+            currentUserId: _currentUserId,
+          );
+          if (created != null) {
+            targetConvId = created.id;
+            final int existing = _conversations
+                .indexWhere((ConversationModel c) => c.id == created.id);
+            if (existing != -1) {
+              _conversations[existing] = created;
+            } else {
+              _conversations.insert(0, created);
+            }
+            if (targetConvId != conversationId) {
+              _messagesByConvId[targetConvId] =
+                  _messagesByConvId[conversationId] ?? <ChatMessageModel>[];
+            }
+            notifyListeners();
+          }
+        } catch (e) {
+          debugPrint('⚠️ [MessagesProvider] Error creating conv before image send: $e');
+        }
+      }
+    }
+
+    String? resolvedMediaRef = imageAsset;
+    String? resolvedMediaUrl;
+
+    if (imageAsset != null && imageAsset.isNotEmpty) {
+      resolvedMediaUrl = imageAsset;
+    }
+
+    // Step 1: Upload image file to S3 via MediaUploadService
+    if (imageFilePath != null && imageFilePath.isNotEmpty && _service != null) {
+      try {
+        final File file = File(imageFilePath);
+        if (await file.exists()) {
+          final MediaUploadService mediaService =
+              MediaUploadService(_service!.client);
+          final int fileSize = await file.length();
+          final String fileName = file.uri.pathSegments.isNotEmpty
+              ? file.uri.pathSegments.last
+              : 'chat_photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          final String lower = fileName.toLowerCase();
+          final String contentType = lower.endsWith('.png')
+              ? 'image/png'
+              : (lower.endsWith('.webp') ? 'image/webp' : 'image/jpeg');
+
+          debugPrint('🚀 [MessagesProvider] Requesting chat media upload URL: $fileName ($fileSize bytes)');
+          final MediaUploadResult uploadInfo = await mediaService.getUploadUrl(
+            fileType: 'image',
+            filename: fileName,
+            contentType: contentType,
+            fileSize: fileSize,
+          );
+
+          if (uploadInfo.uploadUrl != null && uploadInfo.uploadUrl!.isNotEmpty) {
+            debugPrint('🚀 [MessagesProvider] Uploading chat image to S3: ${uploadInfo.id}');
+            await mediaService.uploadFileToS3(
+              uploadUrl: uploadInfo.uploadUrl!,
+              file: file,
+              contentType: contentType,
+            );
+          }
+
+          if (uploadInfo.id.isNotEmpty) {
+            debugPrint('🚀 [MessagesProvider] Completing chat media upload: ${uploadInfo.id}');
+            final MediaUploadResult completed =
+                await mediaService.completeUpload(uploadInfo.id);
+            resolvedMediaRef = uploadInfo.id;
+            resolvedMediaUrl = completed.downloadUrl ??
+                completed.url ??
+                uploadInfo.downloadUrl ??
+                uploadInfo.url;
+            if (resolvedMediaUrl == null || resolvedMediaUrl.isEmpty) {
+              if (completed.key != null && completed.key!.isNotEmpty) {
+                resolvedMediaUrl = '${AppConfig.cdnUrl}/${completed.key}';
+              } else if (uploadInfo.key != null && uploadInfo.key!.isNotEmpty) {
+                resolvedMediaUrl = '${AppConfig.cdnUrl}/${uploadInfo.key}';
+              } else {
+                resolvedMediaUrl =
+                    '${AppConfig.baseUrl.replaceAll(RegExp(r"/+$"), "")}/media/${uploadInfo.id}';
+              }
+            }
+          }
+        }
+      } catch (e, stack) {
+        debugPrint('❌ [MessagesProvider] Chat media upload failed: $e\n$stack');
+      }
+    }
+
+    // Update optimistic message with resolved mediaUrl / mediaRef
+    final String? effectiveMedia =
+        (resolvedMediaUrl != null && resolvedMediaUrl.isNotEmpty)
+            ? resolvedMediaUrl
+            : resolvedMediaRef;
+    if (effectiveMedia != null && effectiveMedia.isNotEmpty) {
+      final List<ChatMessageModel>? msgs = _messagesByConvId[targetConvId];
+      if (msgs != null) {
+        final int optIdx =
+            msgs.indexWhere((ChatMessageModel m) => m.id == tempId);
+        if (optIdx != -1) {
+          msgs[optIdx] = msgs[optIdx].copyWith(
+            mediaUrl: effectiveMedia,
+          );
+          _messagesByConvId[targetConvId] = List<ChatMessageModel>.from(msgs);
+          notifyListeners();
+        }
+      }
+    }
+
+    final String imageMessageBody =
+        (resolvedMediaUrl != null && resolvedMediaUrl.isNotEmpty)
+            ? resolvedMediaUrl
+            : (resolvedMediaRef ?? '');
+
+    final bool isSocketAvailable =
+        _socketService != null && _socketService!.isConnected;
+
+    if (isSocketAvailable) {
+      // Send once through socket gateway (socket saves and broadcasts)
+      _socketService!.sendMessage(
+        conversationId: targetConvId,
+        body: imageMessageBody,
+        text: imageMessageBody,
+        mediaUrl: null,
+      );
+    } else if (_service != null && imageMessageBody.isNotEmpty) {
+      // Fallback via REST endpoint only when socket is not connected
+      try {
+        await _service!.sendMessage(
+          conversationId: targetConvId,
+          body: imageMessageBody,
+          mediaUrl: null,
+          currentUserId: _currentUserId,
+        );
+      } catch (e) {
+        debugPrint('⚠️ [MessagesProvider] REST sendMessage for image returned: $e');
+      }
+    }
   }
 }

@@ -133,7 +133,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get authPasswordLengthError =>
-      'La contraseña debe tener al menos 6 caracteres';
+      'La contraseña debe tener al menos 8 caracteres';
 
   @override
   String get authEnterNameError => 'Please enter your name';

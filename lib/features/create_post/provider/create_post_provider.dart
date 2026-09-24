@@ -9,6 +9,7 @@ import 'package:video_player/video_player.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/theme/app_images.dart';
 import '../models/create_post_models.dart';
+import '../models/post_draft_model.dart';
 import '../services/media_upload_service.dart';
 import '../services/post_content_service.dart';
 
@@ -137,10 +138,13 @@ class CreatePostProvider extends ChangeNotifier {
 
   bool get isMediaReady => _uploadStatus == MediaUploadStatus.ready;
 
-  /// Gate: Client-side gating on status===ready
+  /// Gate: Client-side gating on status
   bool get canPublish =>
       !_isPublishing &&
-      (_selectedMedia == null || _uploadStatus == MediaUploadStatus.ready);
+      (_selectedMedia == null ||
+          _uploadStatus == MediaUploadStatus.ready ||
+          _uploadStatus == MediaUploadStatus.idle ||
+          _uploadStatus == MediaUploadStatus.failed);
 
   int _uploadSessionId = 0;
 
@@ -341,8 +345,12 @@ class CreatePostProvider extends ChangeNotifier {
   Future<PostResponseModel?> publishPost() async {
     if (_isPublishing) return null;
 
-    // Client-side gating: status must be ready before creating post
-    if (_selectedMedia != null && _uploadStatus != MediaUploadStatus.ready) {
+    // Client-side gating: text posts never upload or require media
+    if (_mediaType == MediaType.text) {
+      _selectedMedia = null;
+      _uploadedMediaId = null;
+      _uploadResult = null;
+    } else if (_selectedMedia != null && _uploadStatus != MediaUploadStatus.ready) {
       if (_uploadStatus == MediaUploadStatus.idle ||
           _uploadStatus == MediaUploadStatus.failed) {
         await startMediaUpload();
@@ -359,16 +367,18 @@ class CreatePostProvider extends ChangeNotifier {
 
     try {
       final List<String> mediaRefs = <String>[];
-      if (_uploadedMediaId != null && _uploadedMediaId!.isNotEmpty) {
+      if (_mediaType != MediaType.text &&
+          _uploadedMediaId != null &&
+          _uploadedMediaId!.isNotEmpty) {
         mediaRefs.add(_uploadedMediaId!);
       }
 
       // Backend expects type: "TEXT" | "PHOTO" | "VIDEO"
-      final bool isVideo =
-          _selectedMedia?.isVideo ?? (_mediaType == MediaType.video);
-      final String postType = (_selectedMedia != null || mediaRefs.isNotEmpty)
-          ? (isVideo ? 'VIDEO' : 'PHOTO')
-          : 'TEXT';
+      final String postType = _mediaType == MediaType.text
+          ? 'TEXT'
+          : ((_selectedMedia?.isVideo ?? (_mediaType == MediaType.video))
+              ? 'VIDEO'
+              : 'PHOTO');
 
       // Backend expects visibility: "EVERYONE" | "FOLLOWERS" | "COMMUNITY_ONLY"
       final String serverVisibility = () {
@@ -382,8 +392,11 @@ class CreatePostProvider extends ChangeNotifier {
         }
       }();
 
-      final List<String> postTags =
-          _tags.isNotEmpty ? _tags : <String>[_selectedCommunity];
+      final List<String> postTags = _tags.isNotEmpty
+          ? _tags
+          : const <String>[];
+
+      final String? commId = postType == 'TEXT' ? null : _selectedCommunityId;
 
       PostResponseModel result;
       if (_contentService != null) {
@@ -391,20 +404,22 @@ class CreatePostProvider extends ChangeNotifier {
           body: _caption,
           type: postType,
           visibility: serverVisibility,
-          mediaRefs: mediaRefs,
+          mediaRefs: postType == 'TEXT' ? const <String>[] : mediaRefs,
           tags: postTags,
-          communityId: _selectedCommunityId,
+          communityId: commId,
+          allowDownloads: _allowDownloads,
         );
       } else {
         result = PostResponseModel(
           id: 'post_${DateTime.now().millisecondsSinceEpoch}',
           caption: _caption,
           type: postType,
-          mediaRefs: mediaRefs,
+          mediaRefs: postType == 'TEXT' ? const <String>[] : mediaRefs,
           tags: postTags,
-          community: _selectedCommunity,
-          communityId: _selectedCommunityId,
+          community: postType == 'TEXT' ? '' : _selectedCommunity,
+          communityId: commId,
           visibility: serverVisibility,
+          allowDownloads: _allowDownloads,
         );
       }
 
@@ -440,10 +455,105 @@ class CreatePostProvider extends ChangeNotifier {
   final List<String> _tags = <String>[];
   List<String> get tags => List<String>.unmodifiable(_tags);
 
+  String? _currentDraftId;
+  String? get currentDraftId => _currentDraftId;
+
+  PostDraft toDraft({String? caption}) {
+    final String draftId =
+        _currentDraftId ?? 'draft_${DateTime.now().millisecondsSinceEpoch}';
+    return PostDraft(
+      id: draftId,
+      mediaType: _selectedMedia != null
+          ? (_selectedMedia!.isVideo ? MediaType.video : MediaType.photo)
+          : _mediaType,
+      caption: caption ?? _caption,
+      createdAt: DateTime.now(),
+      mediaPath: _selectedMedia?.filePath,
+      communityId: _selectedCommunityId,
+      communityName: _selectedCommunity,
+      allowComments: _allowComments,
+      allowSharing: _allowDownloads,
+      taggedUsers: _tags,
+      mediaUrl: _uploadResult?.downloadUrl ?? _uploadResult?.url,
+      uploadedMediaId: _uploadedMediaId ?? _uploadResult?.id,
+      thumbnailUrl: _uploadResult?.thumbnailUrl,
+    );
+  }
+
+  void loadFromDraft(PostDraft draft) {
+    _currentDraftId = draft.id;
+    _caption = draft.caption;
+    _mediaType = draft.mediaType;
+    if (draft.communityName != null && draft.communityName!.isNotEmpty) {
+      _selectedCommunity = draft.communityName!;
+      _selectedCommunityId = draft.communityId;
+    }
+    _allowComments = draft.allowComments;
+    _allowDownloads = draft.allowSharing;
+    _tags.clear();
+    _tags.addAll(draft.taggedUsers);
+
+    final bool hasMediaUrl =
+        draft.mediaUrl != null && draft.mediaUrl!.trim().isNotEmpty;
+    final String? mediaId = draft.uploadedMediaId;
+
+    if (draft.mediaPath != null && draft.mediaPath!.isNotEmpty) {
+      final File file = File(draft.mediaPath!);
+      if (file.existsSync()) {
+        _selectedMedia = GalleryMediaItem(
+          id: 'draft_${draft.id}',
+          isVideo: draft.mediaType == MediaType.video,
+          filePath: draft.mediaPath,
+          mediaUrl: draft.mediaUrl,
+          thumbnailUrl: draft.thumbnailUrl,
+          durationSeconds: 47,
+        );
+      } else if (hasMediaUrl) {
+        _selectedMedia = GalleryMediaItem(
+          id: 'draft_${draft.id}',
+          isVideo: draft.mediaType == MediaType.video,
+          mediaUrl: draft.mediaUrl,
+          thumbnailUrl: draft.thumbnailUrl,
+          durationSeconds: 47,
+        );
+      }
+    } else if (hasMediaUrl) {
+      _selectedMedia = GalleryMediaItem(
+        id: 'draft_${draft.id}',
+        isVideo: draft.mediaType == MediaType.video,
+        mediaUrl: draft.mediaUrl,
+        thumbnailUrl: draft.thumbnailUrl,
+        durationSeconds: 47,
+      );
+    }
+
+    if (hasMediaUrl && mediaId != null && mediaId.isNotEmpty) {
+      // Re-hydrate the uploaded media state so the user does NOT have to re-process video or image
+      _uploadedMediaId = mediaId;
+      _uploadResult = MediaUploadResult(
+        id: mediaId,
+        status: 'ready',
+        downloadUrl: draft.mediaUrl,
+        thumbnailUrl: draft.thumbnailUrl,
+      );
+      _uploadStatus = MediaUploadStatus.ready;
+      _uploadProgress = 1.0;
+      _uploadError = null;
+    } else {
+      _resetUploadState();
+    }
+    notifyListeners();
+  }
+
   // ── Actions ──────────────────────────────────────────────────────────
   void setMediaType(MediaType type) {
     _mediaType = type;
-    if (type == MediaType.video) {
+    if (type == MediaType.text) {
+      _selectedMedia = null;
+      _uploadedMediaId = null;
+      _uploadResult = null;
+      _resetUploadState();
+    } else if (type == MediaType.video) {
       if (_videoGallery.isNotEmpty) {
         selectMedia(_videoGallery.first);
       } else {
@@ -456,6 +566,14 @@ class CreatePostProvider extends ChangeNotifier {
         loadDevicePhotos();
       }
     }
+    notifyListeners();
+  }
+
+  void clearSelectedMedia() {
+    _selectedMedia = null;
+    _uploadedMediaId = null;
+    _uploadResult = null;
+    _resetUploadState();
     notifyListeners();
   }
 
@@ -524,6 +642,7 @@ class CreatePostProvider extends ChangeNotifier {
   }
 
   void resetPostForm() {
+    _currentDraftId = null;
     _caption = '';
     _tags.clear();
     _selectedCommunity = 'Transgender';
@@ -674,7 +793,8 @@ class CreatePostProvider extends ChangeNotifier {
 
             if (realItems.isNotEmpty) {
               _photoGallery = realItems;
-              if (_selectedMedia == null || _selectedMedia!.isVideo) {
+              if (_mediaType == MediaType.photo &&
+                  (_selectedMedia == null || _selectedMedia!.isVideo)) {
                 selectMedia(realItems.first);
               }
             }
@@ -788,6 +908,8 @@ class CreatePostProvider extends ChangeNotifier {
       const GalleryMediaItem(id: 'p8', assetPath: AppImages.transgender),
     ];
 
-    _selectedMedia = _videoGallery.first;
+    if (_mediaType == MediaType.photo && _photoGallery.isNotEmpty) {
+      _selectedMedia = _photoGallery.first;
+    }
   }
 }

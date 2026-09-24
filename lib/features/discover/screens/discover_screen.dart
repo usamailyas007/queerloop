@@ -13,6 +13,7 @@ import '../widgets/discover_community_tile.dart';
 import '../widgets/discover_conversation_card.dart';
 import '../widgets/discover_creator_circle.dart';
 import '../widgets/discover_section_label.dart';
+import '../widgets/discover_shimmer_skeleton.dart';
 import '../widgets/discover_spotlight_card.dart';
 import '../widgets/discover_static_search_bar.dart';
 import '../widgets/discover_trending_card.dart';
@@ -39,7 +40,11 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         final String myUsername = (auth.user?.displayName ?? profile.username)
             .replaceAll('@', '')
             .trim();
-        context.read<DiscoverProvider>().setCurrentUser(userId: myId, username: myUsername);
+        final DiscoverProvider discover = context.read<DiscoverProvider>();
+        discover.setCurrentUser(userId: myId, username: myUsername);
+        if (discover.isInitialLoading) {
+          discover.fetchDiscoverData();
+        }
         context.read<SpotlightsProvider>().loadInitial();
         if (myId != null && myId.isNotEmpty) {
           profile.fetchUserCommunities(myId);
@@ -83,11 +88,13 @@ class _DiscoverScreenBody extends StatelessWidget {
           },
           color: AppColors.gradientCyan,
           backgroundColor: context.themeCardBackground,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
-            slivers: <Widget>[
+          child: provider.isDiscoverLoading
+              ? const DiscoverShimmerSkeleton()
+              : CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  slivers: <Widget>[
               // ── App Bar ────────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(

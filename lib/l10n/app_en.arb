@@ -64,7 +64,7 @@
   "authEnterEmailError": "Please enter your email",
   "authEnterValidEmailError": "Please enter a valid email address",
   "authEnterPasswordError": "Please enter your password",
-  "authPasswordLengthError": "Password must be at least 6 characters",
+  "authPasswordLengthError": "Password must be at least 8 characters",
   "authEnterNameError": "Please enter your name",
   "authEnterUsernameError": "Please enter a username",
   "authUsernameLengthError": "Username must be at least 3 characters",

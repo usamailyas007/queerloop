@@ -161,17 +161,17 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
 
                     // Blocked Accounts List / Loader / Empty State
                     if (isLoading && blockedList.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 40),
-                        child: Center(
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.45,
+                        child: const Center(
                           child: CircularProgressIndicator(
                             color: AppColors.gradientPink,
                           ),
                         ),
                       )
                     else if (filtered.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 40),
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.45,
                         child: Center(
                           child: Text(
                             blockedList.isEmpty
@@ -199,18 +199,26 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                                         width: 44,
                                         height: 44,
                                         fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) =>
-                                            const Icon(Icons.person, size: 44),
+                                        errorBuilder: (_, _, _) => Image.asset(
+                                            AppImages.defaultAvatar,
+                                            width: 44,
+                                            height: 44,
+                                            fit: BoxFit.cover,
+                                          ),
                                       )
                                     : Image.asset(
                                         avatar.isNotEmpty
                                             ? avatar
-                                            : AppImages.user1,
+                                            : AppImages.defaultAvatar,
                                         width: 44,
                                         height: 44,
                                         fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) =>
-                                            const Icon(Icons.person, size: 44),
+                                        errorBuilder: (_, _, _) => Image.asset(
+                                            AppImages.defaultAvatar,
+                                            width: 44,
+                                            height: 44,
+                                            fit: BoxFit.cover,
+                                          ),
                                       ),
                               ),
                               const SizedBox(width: AppSpacing.md),

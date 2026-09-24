@@ -20,9 +20,12 @@ import '../../profile/widgets/profile_header_stats_widget.dart';
 import '../../profile/widgets/profile_media_grid_widget.dart';
 import '../provider/home_feed_provider.dart';
 import '../widgets/post_feed_card.dart';
+import 'single_post_view_screen.dart';
 
 class ProfileTabScreen extends StatefulWidget {
-  const ProfileTabScreen({super.key});
+  const ProfileTabScreen({this.showBackButton = false, super.key});
+
+  final bool showBackButton;
 
   @override
   State<ProfileTabScreen> createState() => _ProfileTabScreenState();
@@ -80,7 +83,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
               ),
               child: Row(
                 children: <Widget>[
-                  if (Navigator.canPop(context)) ...<Widget>[
+                  if (widget.showBackButton) ...<Widget>[
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: Container(
@@ -383,6 +386,17 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       ...profileProvider.userPosts.map(
                         (post) => PostFeedCard(
                           post: post,
+                          onCardTap: () {
+                            Navigator.push<void>(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => SinglePostViewScreen(
+                                  postId: post.id,
+                                  initialPost: post,
+                                ),
+                              ),
+                            );
+                          },
                           onLikeToggle: () {
                             context
                                 .read<HomeFeedProvider>()
@@ -469,6 +483,17 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                         ...profileProvider.savedPosts.map(
                           (post) => PostFeedCard(
                             post: post,
+                            onCardTap: () {
+                              Navigator.push<void>(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) => SinglePostViewScreen(
+                                    postId: post.id,
+                                    initialPost: post,
+                                  ),
+                                ),
+                              );
+                            },
                             onLikeToggle: () {
                               context
                                   .read<HomeFeedProvider>()
@@ -551,6 +576,17 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                         ...profileProvider.likedPosts.map(
                           (post) => PostFeedCard(
                             post: post,
+                            onCardTap: () {
+                              Navigator.push<void>(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) => SinglePostViewScreen(
+                                    postId: post.id,
+                                    initialPost: post,
+                                  ),
+                                ),
+                              );
+                            },
                             onLikeToggle: () {
                               context
                                   .read<HomeFeedProvider>()

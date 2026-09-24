@@ -118,18 +118,26 @@ class ConversationTile extends StatelessWidget {
                                 width: 44,
                                 height: 44,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) =>
-                                    const Icon(Icons.person, size: 44),
+                                errorBuilder: (_, _, _) => Image.asset(
+                                    AppImages.defaultAvatar,
+                                    width: 44,
+                                    height: 44,
+                                    fit: BoxFit.cover,
+                                  ),
                               )
                             : Image.asset(
                                 conversation.avatarAsset.isNotEmpty
                                     ? conversation.avatarAsset
-                                    : AppImages.user1,
+                                    : AppImages.defaultAvatar,
                                 width: 44,
                                 height: 44,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) =>
-                                    const Icon(Icons.person, size: 44),
+                                errorBuilder: (_, _, _) => Image.asset(
+                                    AppImages.defaultAvatar,
+                                    width: 44,
+                                    height: 44,
+                                    fit: BoxFit.cover,
+                                  ),
                               ),
                       ),
                     ),

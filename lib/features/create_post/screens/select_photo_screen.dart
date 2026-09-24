@@ -7,6 +7,8 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../models/create_post_models.dart';
 import '../provider/create_post_provider.dart';
+import '../services/draft_service.dart';
+import '../widgets/drafts_bottom_sheet.dart';
 import '../widgets/media_processing_dialog.dart';
 import '../widgets/media_thumbnail_widget.dart';
 import 'new_post_form_screen.dart';
@@ -22,6 +24,7 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
   @override
   void initState() {
     super.initState();
+    DraftService.init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final CreatePostProvider provider = context.read<CreatePostProvider>();
       provider.loadDevicePhotos();
@@ -52,7 +55,6 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
                   vertical: AppSpacing.md,
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
                     // Circular Back Button <
                     GestureDetector(
@@ -83,6 +85,8 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
                       ),
                     ),
 
+                    const SizedBox(width: AppSpacing.md),
+
                     // Title
                     Text(
                       'Choose Photo',
@@ -91,6 +95,62 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+
+                    const Spacer(),
+
+                    // Drafts Button
+                    ValueListenableBuilder<int>(
+                      valueListenable: DraftService.draftCountNotifier,
+                      builder: (BuildContext ctx, int count, _) {
+                        return GestureDetector(
+                          onTap: () {
+                            DraftsBottomSheet.show(context);
+                          },
+                          child: Container(
+                            height: 32,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            decoration: BoxDecoration(
+                              color: context.isDarkMode
+                                  ? Colors.white.withValues(alpha: 0.08)
+                                  : Colors.black.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: count > 0
+                                    ? AppColors.gradientCyan
+                                    : (context.isDarkMode
+                                        ? Colors.white12
+                                        : context.themeBorder),
+                                width: 1.1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Icon(
+                                  Icons.drafts_outlined,
+                                  size: 15,
+                                  color: count > 0
+                                      ? AppColors.gradientCyan
+                                      : context.themeIcon,
+                                ),
+                                if (count > 0) ...<Widget>[
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$count',
+                                    style: const TextStyle(
+                                      color: AppColors.gradientCyan,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
 
                     // Next Button
                     AppGradientButton(

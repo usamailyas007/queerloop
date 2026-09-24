@@ -172,6 +172,9 @@ abstract final class ApiEndpoints {
   static const String engagementSpotlights = '/engagement/spotlights';
 
   // ── Feeds ─────────────────────────────────────────────────────────────────
+  /// For You feed. GET /feed/for-you
+  static const String feedForYou = '/feed/for-you';
+
   /// Following feed. GET /feed/following
   static const String feedFollowing = '/feed/following';
 

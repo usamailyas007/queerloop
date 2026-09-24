@@ -15,21 +15,40 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic> payload = (json['data'] is Map<String, dynamic>)
+        ? json['data'] as Map<String, dynamic>
+        : (json['user'] is Map<String, dynamic>
+            ? json['user'] as Map<String, dynamic>
+            : (json['profile'] is Map<String, dynamic>
+                ? json['profile'] as Map<String, dynamic>
+                : json));
+
     return User(
-      id: (json['id'] ?? json['_id'] ?? json['userId'] ?? '').toString(),
-      email: (json['email'] ?? '').toString(),
-      role: (json['role'] ?? 'user').toString(),
-      accountStatus: _parseStatus(json['accountStatus']?.toString()),
-      dobVerified: json['dobVerified'] as bool? ??
-          json['emailVerified'] as bool? ??
+      id: (payload['id'] ?? payload['_id'] ?? payload['userId'] ?? '').toString(),
+      email: (payload['email'] ?? '').toString(),
+      role: (payload['role'] ?? 'user').toString(),
+      accountStatus: _parseStatus(payload['accountStatus']?.toString()),
+      dobVerified: payload['dobVerified'] as bool? ??
+          payload['emailVerified'] as bool? ??
           false,
       displayName:
-          (json['displayName'] ?? json['name'] ?? json['username']) as String?,
-      avatarUrl: (json['avatarUrl'] ?? json['avatar'] ?? json['profilePic'])
+          (payload['displayName'] ?? payload['name'] ?? payload['username']) as String?,
+      avatarUrl: (payload['avatarUrl'] ?? payload['avatar'] ?? payload['profilePic'])
           as String?,
-      emailVerified: json['emailVerified'] as bool?,
+      emailVerified: payload['emailVerified'] as bool?,
     );
   }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'email': email,
+        'role': role,
+        'accountStatus': accountStatus.name,
+        'dobVerified': dobVerified,
+        if (displayName != null) 'displayName': displayName,
+        if (avatarUrl != null) 'avatarUrl': avatarUrl,
+        if (emailVerified != null) 'emailVerified': emailVerified,
+      };
 
   final String id;
   final String email;

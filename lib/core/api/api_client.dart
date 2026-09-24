@@ -297,6 +297,14 @@ class ApiClient {
   Future<dynamic> postNoAuth(String path, {Object? body}) =>
       _send(() => _bareDio.post<dynamic>(path, data: body));
 
+  /// GET with no auth header — for public endpoints that fail when a Bearer
+  /// token is present (e.g. /posts when the auth-validation service is down).
+  Future<dynamic> getNoAuth(
+    String path, {
+    Map<String, dynamic>? query,
+  }) =>
+      _send(() => _bareDio.get<dynamic>(path, queryParameters: query));
+
   Future<dynamic> patch(String path, {Object? body, Duration? timeout}) =>
       _send(() => _dio.patch<dynamic>(
             path,

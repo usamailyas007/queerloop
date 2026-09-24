@@ -1,6 +1,42 @@
 import 'dart:typed_data';
 import 'package:photo_manager/photo_manager.dart';
 
+import '../../../core/config/app_config.dart';
+import '../../../core/cache/cache_manager.dart';
+
+class AuthorInfo {
+  const AuthorInfo({
+    required this.id,
+    required this.username,
+    required this.displayName,
+    this.avatarUrl,
+  });
+
+  final String id;
+  final String username;
+  final String displayName;
+  final String? avatarUrl;
+}
+
+class AuthorProfileCache {
+  AuthorProfileCache._();
+  static final Map<String, AuthorInfo> _cache = <String, AuthorInfo>{};
+
+  static AuthorInfo? get(String userId) {
+    final String clean = userId.trim();
+    if (clean.isEmpty) return null;
+    return _cache[clean];
+  }
+
+  static void set(String userId, AuthorInfo info) {
+    final String clean = userId.trim();
+    if (clean.isEmpty) return;
+    _cache[clean] = info;
+  }
+
+  static bool contains(String userId) => _cache.containsKey(userId.trim());
+}
+
 enum MediaType { video, photo, text }
 
 enum PostVisibility { everyone, followers, communityOnly }
@@ -16,6 +52,8 @@ class GalleryMediaItem {
     this.filePath,
     this.thumbnailBytes,
     this.assetEntity,
+    this.mediaUrl,
+    this.thumbnailUrl,
   });
 
   final String id;
@@ -27,6 +65,8 @@ class GalleryMediaItem {
   final String? filePath;
   final Uint8List? thumbnailBytes;
   final AssetEntity? assetEntity;
+  final String? mediaUrl;
+  final String? thumbnailUrl;
 }
 
 enum MediaUploadStatus {
@@ -218,6 +258,54 @@ class PostResponseModel {
 
   String get body => caption;
 
+  PostResponseModel copyWith({
+    String? id,
+    String? caption,
+    String? type,
+    String? authorId,
+    String? authorName,
+    String? authorDisplayName,
+    String? authorAvatar,
+    String? createdAt,
+    List<String>? mediaRefs,
+    List<String>? tags,
+    String? community,
+    String? communityId,
+    String? visibility,
+    bool? allowComments,
+    bool? allowDownloads,
+    int? likesCount,
+    int? commentsCount,
+    bool? isLiked,
+    bool? isSaved,
+    String? duration,
+    String? postImageUrl,
+  }) {
+    return PostResponseModel(
+      id: id ?? this.id,
+      caption: caption ?? this.caption,
+      type: type ?? this.type,
+      authorId: authorId ?? this.authorId,
+      authorName: authorName ?? this.authorName,
+      authorDisplayName: authorDisplayName ?? this.authorDisplayName,
+      authorAvatar: authorAvatar ?? this.authorAvatar,
+      createdAt: createdAt ?? this.createdAt,
+      mediaRefs: mediaRefs ?? this.mediaRefs,
+      tags: tags ?? this.tags,
+      community: community ?? this.community,
+      communityId: communityId ?? this.communityId,
+      visibility: visibility ?? this.visibility,
+      allowComments: allowComments ?? this.allowComments,
+      allowDownloads: allowDownloads ?? this.allowDownloads,
+      likesCount: likesCount ?? this.likesCount,
+      commentsCount: commentsCount ?? this.commentsCount,
+      isLiked: isLiked ?? this.isLiked,
+      isSaved: isSaved ?? this.isSaved,
+      duration: duration ?? this.duration,
+      postImageUrl: postImageUrl ?? this.postImageUrl,
+    );
+  }
+
   factory PostResponseModel.fromJson(Map<String, dynamic> json) {
     final Map<String, dynamic> map =
         (json['data'] is Map<String, dynamic>) ? json['data'] as Map<String, dynamic> : json;
@@ -379,23 +467,48 @@ class PostResponseModel {
                 map['user']['displayName'] ??
                 map['user']['name'])
             : null) ??
+        (map['creator'] is Map
+            ? (map['creator']['username'] ??
+                map['creator']['userName'] ??
+                map['creator']['handle'] ??
+                map['creator']['displayName'] ??
+                map['creator']['name'])
+            : null) ??
         map['authorName']?.toString() ??
         map['author_name']?.toString() ??
         map['userName']?.toString() ??
-        map['username']?.toString();
+        map['username']?.toString() ??
+        map['user_name']?.toString() ??
+        map['handle']?.toString();
 
     final String? resolvedAuthorDisplayName = (map['author'] is Map
             ? (map['author']['displayName'] ??
+                map['author']['display_name'] ??
                 map['author']['name'] ??
-                map['author']['fullName'])
+                map['author']['fullName'] ??
+                map['author']['full_name'])
             : null) ??
         (map['user'] is Map
             ? (map['user']['displayName'] ??
+                map['user']['display_name'] ??
                 map['user']['name'] ??
-                map['user']['fullName'])
+                map['user']['fullName'] ??
+                map['user']['full_name'])
+            : null) ??
+        (map['creator'] is Map
+            ? (map['creator']['displayName'] ??
+                map['creator']['display_name'] ??
+                map['creator']['name'] ??
+                map['creator']['fullName'] ??
+                map['creator']['full_name'])
             : null) ??
         map['displayName']?.toString() ??
-        map['authorDisplayName']?.toString();
+        map['display_name']?.toString() ??
+        map['authorDisplayName']?.toString() ??
+        map['author_display_name']?.toString() ??
+        map['fullName']?.toString() ??
+        map['full_name']?.toString() ??
+        map['name']?.toString();
 
     final String? resolvedAuthorAvatar = (map['author'] is Map
             ? (map['author']['avatarUrl'] ??
@@ -414,6 +527,96 @@ class PostResponseModel {
         map['avatarUrl']?.toString() ??
         map['avatar']?.toString();
 
+    String? finalAuthorName = resolvedAuthorName;
+    String? finalAuthorDisplayName = resolvedAuthorDisplayName;
+    String? finalAuthorAvatar = resolvedAuthorAvatar;
+
+    if (finalAuthorId != null && finalAuthorId.isNotEmpty) {
+      final AuthorInfo? cachedAuthor = AuthorProfileCache.get(finalAuthorId);
+      if (cachedAuthor != null) {
+        finalAuthorName ??= cachedAuthor.username;
+        finalAuthorDisplayName ??= cachedAuthor.displayName;
+        finalAuthorAvatar ??= cachedAuthor.avatarUrl;
+      } else {
+        try {
+          final dynamic persistent =
+              CacheManager.instance.get('profile_details_$finalAuthorId');
+          if (persistent is Map) {
+            final Map<String, dynamic> c =
+                Map<String, dynamic>.from(persistent);
+            final dynamic userObj =
+                c['data'] ?? c['user'] ?? c['profile'] ?? c;
+            if (userObj is Map) {
+              final String? u = (userObj['username'] ??
+                      userObj['userName'] ??
+                      userObj['handle'])
+                  ?.toString();
+              if (u != null && u.trim().isNotEmpty) {
+                final String? d = (userObj['displayName'] ??
+                        userObj['display_name'] ??
+                        userObj['name'] ??
+                        userObj['fullName'])
+                    ?.toString();
+                final String? a = (userObj['avatarUrl'] ??
+                        userObj['avatar'] ??
+                        userObj['profilePic'])
+                    ?.toString();
+                final AuthorInfo info = AuthorInfo(
+                  id: finalAuthorId,
+                  username: u.trim(),
+                  displayName: (d != null && d.trim().isNotEmpty)
+                      ? d.trim()
+                      : u.trim(),
+                  avatarUrl: a,
+                );
+                AuthorProfileCache.set(finalAuthorId, info);
+                finalAuthorName ??= info.username;
+                finalAuthorDisplayName ??= info.displayName;
+                finalAuthorAvatar ??= info.avatarUrl;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    final String parsedRawType = (map['type'] ??
+            map['postType'] ??
+            map['post_type'] ??
+            map['mediaType'] ??
+            map['media_type'] ??
+            map['contentType'] ??
+            map['content_type'] ??
+            (map['media'] is Map ? map['media']['type'] : null) ??
+            (map['media'] is List &&
+                    (map['media'] as List).isNotEmpty &&
+                    map['media'][0] is Map
+                ? map['media'][0]['type']
+                : null) ??
+            '')
+        .toString()
+        .toUpperCase()
+        .trim();
+
+    final bool isVideoType = parsedRawType == 'VIDEO' ||
+        parsedRawType == 'REEL' ||
+        (durationStr != null && durationStr.isNotEmpty) ||
+        extractedMediaRefs.any((String r) {
+          final String l = r.toLowerCase();
+          return l.endsWith('.mp4') ||
+              l.endsWith('.mov') ||
+              l.endsWith('.webm') ||
+              l.endsWith('.mkv') ||
+              l.contains('/videos/') ||
+              l.contains('/video/');
+        });
+
+    final String finalType = isVideoType
+        ? 'VIDEO'
+        : (parsedRawType.isNotEmpty
+            ? parsedRawType
+            : (extractedMediaRefs.isNotEmpty ? 'PHOTO' : 'TEXT'));
+
     return PostResponseModel(
       id: (map['id'] ?? map['_id'] ?? '').toString(),
       caption: (map['body'] ??
@@ -424,11 +627,11 @@ class PostResponseModel {
               map['description'] ??
               '')
           .toString(),
-      type: (map['type'] ?? 'TEXT').toString(),
+      type: finalType,
       authorId: finalAuthorId,
-      authorName: resolvedAuthorName,
-      authorDisplayName: resolvedAuthorDisplayName,
-      authorAvatar: resolvedAuthorAvatar,
+      authorName: finalAuthorName,
+      authorDisplayName: finalAuthorDisplayName,
+      authorAvatar: finalAuthorAvatar,
       createdAt: map['createdAt']?.toString(),
       mediaRefs: extractedMediaRefs,
       tags: rawTags?.map((e) => e.toString()).toList() ?? <String>[],
@@ -436,17 +639,23 @@ class PostResponseModel {
       communityId: map['communityId']?.toString(),
       visibility: map['visibility']?.toString(),
       allowComments: map['allowComments'] as bool? ?? true,
-      allowDownloads: map['allowDownloads'] as bool? ?? false,
+      allowDownloads: (map['allowDownloads'] ?? map['allowSharing'] ?? map['allowDownload']) as bool? ?? false,
       likesCount: rawLikes is num ? rawLikes.toInt() : int.tryParse(rawLikes?.toString() ?? '0') ?? 0,
       commentsCount: rawComments is num ? rawComments.toInt() : int.tryParse(rawComments?.toString() ?? '0') ?? 0,
       isLiked: (map['isLiked'] ?? map['liked'] ?? false) == true,
       isSaved: (map['isSaved'] ?? map['saved'] ?? false) == true,
       duration: durationStr,
       postImageUrl: explicitImageUrl ??
-          (extractedMediaRefs.isNotEmpty &&
-                  (extractedMediaRefs.first.startsWith('http://') ||
-                      extractedMediaRefs.first.startsWith('https://'))
-              ? extractedMediaRefs.first
+          (extractedMediaRefs.isNotEmpty && !isVideoType
+              ? ((extractedMediaRefs.first.startsWith('http://') ||
+                      extractedMediaRefs.first.startsWith('https://') ||
+                      extractedMediaRefs.first.startsWith('assets/'))
+                  ? extractedMediaRefs.first
+                  : (finalAuthorId != null && finalAuthorId.isNotEmpty
+                      ? '${AppConfig.cdnUrl}/images/original/$finalAuthorId/${extractedMediaRefs.first.replaceAll(RegExp(r"^/+"), "").replaceAll(RegExp(r"^media/"), "")}.jpg'
+                      : (AppConfig.baseUrl.isNotEmpty
+                          ? '${AppConfig.baseUrl.replaceAll(RegExp(r"/+$"), "")}/media/${extractedMediaRefs.first.replaceAll(RegExp(r"^/+"), "").replaceAll(RegExp(r"^media/"), "")}'
+                          : extractedMediaRefs.first)))
               : null),
     );
   }

@@ -20,12 +20,16 @@ class DiscoverProvider extends ChangeNotifier {
   Timer? _debounceTimer;
 
   // ── Loading States ──────────────────────────────────────────────────────────
+  bool _isInitialLoading = true;
   bool _isLoadingTrending = false;
   bool _isLoadingCreatorsToWatch = false;
   bool _isLoadingNewCreators = false;
   bool _isLoadingSearch = false;
   bool _isLoadingRecentSearches = false;
 
+  bool get isInitialLoading => _isInitialLoading;
+  bool get isDiscoverLoading =>
+      _isInitialLoading || (_isLoadingTrending && _trendingItems.isEmpty);
   bool get isLoadingTrending => _isLoadingTrending;
   bool get isLoadingCreatorsToWatch => _isLoadingCreatorsToWatch;
   bool get isLoadingNewCreators => _isLoadingNewCreators;
@@ -71,6 +75,7 @@ class DiscoverProvider extends ChangeNotifier {
   }) {
     _liveHomePosts = posts;
     _liveHomeReels = reels;
+    _updateTrendingCountsWithLiveFeed();
   }
 
   // Current authenticated user (to exclude from search/explore)
@@ -395,8 +400,77 @@ class DiscoverProvider extends ChangeNotifier {
       if (items.isNotEmpty) {
         _trendingItems = items.take(4).toList();
       }
+      _updateTrendingCountsWithLiveFeed();
     } finally {
       _isLoadingTrending = false;
+      notifyListeners();
+    }
+  }
+
+  void updateHashtagCount(String hashtag, int actualCount) {
+    final String clean = hashtag.replaceAll('#', '').toLowerCase();
+    bool updated = false;
+    _trendingItems = _trendingItems.map((TrendingItem item) {
+      final String itemClean = item.hashtag.replaceAll('#', '').toLowerCase();
+      if (itemClean == clean) {
+        final String countText = actualCount > 1000
+            ? '${(actualCount / 1000).toStringAsFixed(1)}K posts'
+            : '$actualCount ${actualCount == 1 ? 'post' : 'posts'}';
+        updated = true;
+        return item.copyWith(postsCount: countText);
+      }
+      return item;
+    }).toList();
+    if (updated) {
+      notifyListeners();
+    }
+  }
+
+  void _updateTrendingCountsWithLiveFeed() {
+    if (_trendingItems.isEmpty) return;
+    bool changed = false;
+    final List<TrendingItem> updated = _trendingItems.map((TrendingItem item) {
+      final String clean = item.hashtag.replaceAll('#', '').toLowerCase();
+      if (clean.isEmpty) return item;
+
+      int liveMatchCount = 0;
+      final Set<String> seen = <String>{};
+      for (final PostItemModel p in _liveHomePosts) {
+        final String cLower = p.content.toLowerCase();
+        if (cLower.contains('#$clean') || cLower.contains(clean)) {
+          if (seen.add(p.id)) liveMatchCount++;
+        }
+      }
+      for (final ReelItemModel r in _liveHomeReels) {
+        final String cLower = r.caption.toLowerCase();
+        final bool hasTag = r.tags.any(
+          (String t) => t.toLowerCase().replaceAll('#', '') == clean,
+        );
+        if (hasTag || cLower.contains('#$clean') || cLower.contains(clean)) {
+          if (seen.add(r.id)) liveMatchCount++;
+        }
+      }
+
+      int existingCount = 0;
+      final Match? m = RegExp(r'(\d+)').firstMatch(item.postsCount);
+      if (m != null) {
+        existingCount = int.tryParse(m.group(1)!) ?? 0;
+      }
+
+      final int bestCount =
+          liveMatchCount > existingCount ? liveMatchCount : existingCount;
+      if (bestCount > existingCount) {
+        changed = true;
+        final String countText = bestCount > 1000
+            ? '${(bestCount / 1000).toStringAsFixed(1)}K posts'
+            : '$bestCount ${bestCount == 1 ? 'post' : 'posts'}';
+        return item.copyWith(postsCount: countText);
+      }
+      return item;
+    }).toList();
+
+    if (changed) {
+      _trendingItems = updated;
       notifyListeners();
     }
   }
@@ -472,14 +546,27 @@ class DiscoverProvider extends ChangeNotifier {
 
   // ── Unified Initial / Refresh Fetch ──────────────────────────────────────────
   Future<void> fetchDiscoverData({bool refresh = false}) async {
-    if (_discoverService == null) return;
-    await Future.wait<void>(<Future<void>>[
-      fetchTrendingHashtags(),
-      fetchCreatorsToWatch(),
-      fetchNewCreators(),
-      fetchRecentSearches(),
-      fetchCommunities(),
-    ]);
+    if (!refresh && _trendingItems.isEmpty) {
+      _isInitialLoading = true;
+      notifyListeners();
+    }
+    if (_discoverService == null) {
+      _isInitialLoading = false;
+      notifyListeners();
+      return;
+    }
+    try {
+      await Future.wait<void>(<Future<void>>[
+        fetchTrendingHashtags(),
+        fetchCreatorsToWatch(),
+        fetchNewCreators(),
+        fetchRecentSearches(),
+        fetchCommunities(),
+      ]);
+    } finally {
+      _isInitialLoading = false;
+      notifyListeners();
+    }
   }
 
   // ── Dynamic Tags & Creators ──────────────────────────────────────────────────

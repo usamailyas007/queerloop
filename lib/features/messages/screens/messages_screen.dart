@@ -343,7 +343,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            "$requestCount people you don't follow",
+                                            "$requestCount ${requestCount == 1 ? 'request' : 'requests'}",
                                             style: AppTextStyles.bodySmall
                                                 .copyWith(
                                               color: context.themeTextMuted,
@@ -439,12 +439,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             ),
 
                           if (isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: AppSpacing.xxl,
-                              ),
+                            SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.45,
                               child: Center(
                                 child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: <Widget>[
                                     Icon(
                                       _searchController.text.trim().isNotEmpty

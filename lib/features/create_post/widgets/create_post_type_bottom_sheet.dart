@@ -153,10 +153,11 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
               iconPath: AppIcons.textBoard,
               iconColor: AppColors.gradientPurple,
               title: 'Text Post',
-              subtitle: 'Write something, add an optional image',
+              subtitle: 'Write something',
               onTap: () {
                 Navigator.pop(context);
                 provider.setMediaType(MediaType.text);
+                provider.setVisibility(PostVisibility.everyone);
                 Navigator.push<void>(
                   context,
                   MaterialPageRoute<void>(

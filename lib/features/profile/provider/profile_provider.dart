@@ -492,6 +492,10 @@ class ProfileProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateLikedPost(String id, {required bool isLiked, required int likesCount}) {
+    updateLikedReel(id, isLiked: isLiked, likesCount: likesCount);
+  }
+
   Future<_ContentBatch> _processPosts(
     List<PostResponseModel> posts, {
     String? fallbackAuthorId,

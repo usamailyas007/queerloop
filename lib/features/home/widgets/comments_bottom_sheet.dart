@@ -653,18 +653,28 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                               width: 36,
                                               height: 36,
                                               fit: BoxFit.cover,
-                                              errorBuilder: (_, _, _) =>
-                                                  const Icon(Icons.person, size: 36),
+                                  errorBuilder: (_, _, _) =>
+                                                  Image.asset(
+                                                    AppImages.defaultAvatar,
+                                                    width: 36,
+                                                    height: 36,
+                                                    fit: BoxFit.cover,
+                                                  ),
                                             )
                                           : Image.asset(
                                               item.avatarAsset.isNotEmpty
                                                   ? item.avatarAsset
-                                                  : AppImages.user1,
+                                                  : AppImages.defaultAvatar,
                                               width: 36,
                                               height: 36,
                                               fit: BoxFit.cover,
                                               errorBuilder: (_, _, _) =>
-                                                  const Icon(Icons.person, size: 36),
+                                                  Image.asset(
+                                                    AppImages.defaultAvatar,
+                                                    width: 36,
+                                                    height: 36,
+                                                    fit: BoxFit.cover,
+                                                  ),
                                             ),
                                     ),
                                     const SizedBox(width: 10),
@@ -1268,14 +1278,26 @@ class _CommentItemTile extends StatelessWidget {
                           width: avatarSize,
                           height: avatarSize,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) =>
-                              Icon(Icons.person, size: avatarSize),
+                          errorBuilder: (_, _, _) => Image.asset(
+                              AppImages.defaultAvatar,
+                              width: avatarSize,
+                              height: avatarSize,
+                              fit: BoxFit.cover,
+                            ),
                         )
                       : Image.asset(
-                          comment.avatarAsset,
+                          comment.avatarAsset.isNotEmpty
+                              ? comment.avatarAsset
+                              : AppImages.defaultAvatar,
                           width: avatarSize,
                           height: avatarSize,
                           fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Image.asset(
+                            AppImages.defaultAvatar,
+                            width: avatarSize,
+                            height: avatarSize,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                 ),
               ),

@@ -450,16 +450,24 @@ class _ContactListTile extends StatelessWidget {
                       width: 40,
                       height: 40,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) =>
-                          const Icon(Icons.person, size: 40),
+                      errorBuilder: (_, _, _) => Image.asset(
+                          AppImages.defaultAvatar,
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                        ),
                     )
                   : Image.asset(
-                      avatarAsset.isNotEmpty ? avatarAsset : AppImages.user1,
+                      avatarAsset.isNotEmpty ? avatarAsset : AppImages.defaultAvatar,
                       width: 40,
                       height: 40,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) =>
-                          const Icon(Icons.person, size: 40),
+                      errorBuilder: (_, _, _) => Image.asset(
+                          AppImages.defaultAvatar,
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                        ),
                     ),
             ),
             const SizedBox(width: AppSpacing.md),

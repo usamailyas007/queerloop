@@ -156,6 +156,42 @@ abstract final class PushNotificationService {
   static Future<void> _showForegroundNotification(RemoteMessage message) async {
     final RemoteNotification? notification = message.notification;
     final Map<String, dynamic> data = message.data;
+    final Map<String, dynamic> d =
+        (data['data'] is Map<String, dynamic>) ? data['data'] as Map<String, dynamic> : data;
+
+    // Suppress notifications if sender is restricted or blocked
+    final BuildContext? ctx = navigatorKey.currentContext;
+    if (ctx != null) {
+      try {
+        final MessagesProvider msgProv = ctx.read<MessagesProvider>();
+        final String? senderId = (d['senderId'] ??
+                d['sender_id'] ??
+                d['actorId'] ??
+                d['actor_id'] ??
+                d['userId'])
+            ?.toString();
+        final String? senderUname = (d['senderUsername'] ??
+                d['sender_username'] ??
+                d['username'] ??
+                d['actorUsername'])
+            ?.toString();
+        final String? convId = (d['conversationId'] ??
+                d['conversation_id'] ??
+                d['convId'] ??
+                d['targetId'])
+            ?.toString();
+
+        if (msgProv.isRestricted(senderId) ||
+            msgProv.isRestricted(senderUname) ||
+            msgProv.isRestricted(convId) ||
+            msgProv.isBlocked(senderId) ||
+            msgProv.isBlocked(senderUname) ||
+            msgProv.isBlocked(convId)) {
+          debugPrint('🔇 [PushNotificationService] Suppressing notification from restricted/blocked user');
+          return;
+        }
+      } catch (_) {}
+    }
 
     final String title = notification?.title ??
         (data['title']?.toString() ?? 'QueerLoop');

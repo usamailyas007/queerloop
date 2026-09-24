@@ -169,7 +169,7 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
                       if (value == null || value.trim().isEmpty) {
                         return l10n.authEnterPasswordError;
                       }
-                      if (value.length < 6) {
+                      if (value.length < 8) {
                         return l10n.authPasswordLengthError;
                       }
                       return null;

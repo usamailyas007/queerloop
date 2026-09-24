@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/config/app_config.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -47,6 +49,34 @@ class ChatBubble extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildReactions(BuildContext context) {
+    if (message.reactions.isNotEmpty) {
+      final Map<String, int> counts = <String, int>{};
+      for (final MessageReactionModel r in message.reactions) {
+        if (r.emoji.isNotEmpty) {
+          counts[r.emoji] = (counts[r.emoji] ?? 0) + 1;
+        }
+      }
+      if (counts.isNotEmpty) {
+        return Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: counts.entries.map((MapEntry<String, int> entry) {
+            return _buildReactionPill(context, entry.key, entry.value);
+          }).toList(),
+        );
+      }
+    }
+    if (message.reactionEmoji != null && message.reactionEmoji!.isNotEmpty) {
+      return _buildReactionPill(
+        context,
+        message.reactionEmoji!,
+        message.reactionCount ?? 1,
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   Widget _buildSharedPostThumbnail(BuildContext context) {
@@ -331,12 +361,8 @@ class ChatBubble extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (message.reactionEmoji != null)
-                    _buildReactionPill(
-                      context,
-                      message.reactionEmoji!,
-                      message.reactionCount ?? 1,
-                    ),
+                  if (message.reactionEmoji != null || message.reactions.isNotEmpty)
+                    _buildReactions(context),
                 ],
               ),
             ),
@@ -369,12 +395,8 @@ class ChatBubble extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (message.reactionEmoji != null)
-                    _buildReactionPill(
-                      context,
-                      message.reactionEmoji!,
-                      message.reactionCount ?? 1,
-                    ),
+                  if (message.reactionEmoji != null || message.reactions.isNotEmpty)
+                    _buildReactions(context),
                 ],
               ),
             ),
@@ -410,12 +432,8 @@ class ChatBubble extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (message.reactionEmoji != null)
-                    _buildReactionPill(
-                      context,
-                      message.reactionEmoji!,
-                      message.reactionCount ?? 1,
-                    ),
+                  if (message.reactionEmoji != null || message.reactions.isNotEmpty)
+                    _buildReactions(context),
                 ],
               ),
             ),
@@ -433,62 +451,111 @@ class ChatBubble extends StatelessWidget {
                     ? CrossAxisAlignment.end
                     : CrossAxisAlignment.start,
                 children: <Widget>[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: message.imageFilePath != null
-                        ? Image.file(
-                            File(message.imageFilePath!),
-                            width: 190,
-                            height: 190,
-                            fit: BoxFit.cover,
-                          )
-                        : (message.mediaUrl != null &&
-                              message.mediaUrl!.startsWith('http'))
-                        ? Image.network(
-                            message.mediaUrl!,
-                            width: 190,
-                            height: 190,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Image.asset(
-                              AppImages.user1,
-                              width: 190,
-                              height: 190,
-                              fit: BoxFit.cover,
-                            ),
-                          )
-                        : (message.imageAsset != null &&
-                              message.imageAsset!.startsWith('http'))
-                        ? Image.network(
-                            message.imageAsset!,
-                            width: 190,
-                            height: 190,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Image.asset(
-                              AppImages.user1,
-                              width: 190,
-                              height: 190,
-                              fit: BoxFit.cover,
-                            ),
-                          )
-                        : Image.asset(
-                            message.imageAsset ?? AppImages.user1,
-                            width: 190,
-                            height: 190,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Image.asset(
-                              AppImages.user1,
-                              width: 190,
-                              height: 190,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
+                  Builder(
+                    builder: (BuildContext context) {
+                      final bool hasLocalFile = message.imageFilePath != null &&
+                          message.imageFilePath!.isNotEmpty &&
+                          File(message.imageFilePath!).existsSync();
+                      final String? resolvedUrl = (message.mediaUrl != null &&
+                              message.mediaUrl!.isNotEmpty)
+                          ? (message.mediaUrl!.startsWith('http')
+                              ? message.mediaUrl!
+                              : '${AppConfig.baseUrl.replaceAll(RegExp(r"/+$"), "")}/media/${message.mediaUrl!.replaceAll(RegExp(r"^/media/"), "").replaceAll(RegExp(r"^/+"), "")}')
+                          : ((message.imageAsset != null &&
+                                  message.imageAsset!.startsWith('http'))
+                              ? message.imageAsset!
+                              : null);
+
+                      return GestureDetector(
+                        onTap: () {
+                          showDialog<void>(
+                            context: context,
+                            builder: (BuildContext ctx) {
+                              return Dialog(
+                                backgroundColor: const Color(0xEB000000),
+                                insetPadding: EdgeInsets.zero,
+                                child: Stack(
+                                  children: <Widget>[
+                                    Center(
+                                      child: InteractiveViewer(
+                                        child: hasLocalFile
+                                            ? Image.file(
+                                                File(message.imageFilePath!),
+                                                fit: BoxFit.contain,
+                                              )
+                                            : (resolvedUrl != null
+                                                ? Image.network(
+                                                    resolvedUrl,
+                                                    fit: BoxFit.contain,
+                                                    errorBuilder: (_, _, _) =>
+                                                        Image.asset(
+                                                      AppImages.user1,
+                                                      fit: BoxFit.contain,
+                                                    ),
+                                                  )
+                                                : Image.asset(
+                                                    message.imageAsset ??
+                                                        AppImages.user1,
+                                                    fit: BoxFit.contain,
+                                                  )),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 40,
+                                      right: 20,
+                                      child: IconButton(
+                                        icon: const Icon(Icons.close,
+                                            color: Colors.white, size: 28),
+                                        onPressed: () =>
+                                            Navigator.of(ctx).pop(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: hasLocalFile
+                              ? Image.file(
+                                  File(message.imageFilePath!),
+                                  width: 190,
+                                  height: 190,
+                                  fit: BoxFit.cover,
+                                )
+                              : (resolvedUrl != null
+                                  ? Image.network(
+                                      resolvedUrl,
+                                      width: 190,
+                                      height: 190,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Image.asset(
+                                        AppImages.user1,
+                                        width: 190,
+                                        height: 190,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    )
+                                  : Image.asset(
+                                      message.imageAsset ?? AppImages.user1,
+                                      width: 190,
+                                      height: 190,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Image.asset(
+                                        AppImages.user1,
+                                        width: 190,
+                                        height: 190,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    )),
+                        ),
+                      );
+                    },
                   ),
-                  if (message.reactionEmoji != null)
-                    _buildReactionPill(
-                      context,
-                      message.reactionEmoji!,
-                      message.reactionCount ?? 1,
-                    ),
+                  if (message.reactionEmoji != null || message.reactions.isNotEmpty)
+                    _buildReactions(context),
                 ],
               ),
             ),
@@ -707,12 +774,8 @@ class ChatBubble extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (message.reactionEmoji != null)
-                    _buildReactionPill(
-                      context,
-                      message.reactionEmoji!,
-                      message.reactionCount ?? 1,
-                    ),
+                  if (message.reactionEmoji != null || message.reactions.isNotEmpty)
+                    _buildReactions(context),
                 ],
               ),
             ),

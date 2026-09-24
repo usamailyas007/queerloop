@@ -92,7 +92,7 @@ class PostsFeedView extends StatelessWidget {
     final double paddingBottom = MediaQuery.of(context).padding.bottom;
     final double systemBottomInset =
         viewPaddingBottom > paddingBottom ? viewPaddingBottom : paddingBottom;
-    final double bottomPadding = 90 + systemBottomInset;
+    final double bottomPadding = 100 + systemBottomInset;
 
     if (provider.isLoadingFeed && posts.isEmpty) {
       return Padding(

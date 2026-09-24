@@ -6,10 +6,17 @@ import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../auth/auth_provider.dart';
+import '../../home/models/post_item_model.dart';
+import '../../home/provider/home_feed_provider.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../models/create_post_models.dart';
 import '../provider/create_post_provider.dart';
+import '../services/draft_service.dart';
 import '../widgets/add_tag_bottom_sheet.dart';
+import '../widgets/drafts_bottom_sheet.dart';
 import '../widgets/who_can_see_this_bottom_sheet.dart';
 import 'post_success_screen.dart';
 
@@ -26,7 +33,20 @@ class _WritePostScreenState extends State<WritePostScreen> {
   @override
   void initState() {
     super.initState();
+    DraftService.init();
     _contentController = TextEditingController(); // Starts empty, no static initial text
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final CreatePostProvider provider = context.read<CreatePostProvider>();
+      provider.setMediaType(MediaType.text);
+      provider.clearSelectedMedia();
+      provider.setVisibility(PostVisibility.everyone);
+      final String? uid = context.read<AuthProvider>().userId;
+      final ProfileProvider profile = context.read<ProfileProvider>();
+      if (uid != null && uid.isNotEmpty && profile.profile == null && !profile.isBusy) {
+        profile.fetchProfile(uid).catchError((_) {});
+      }
+    });
   }
 
   @override
@@ -46,10 +66,68 @@ class _WritePostScreenState extends State<WritePostScreen> {
     }
   }
 
+  Widget _buildAvatar(String avatar) {
+    final String clean = avatar.trim();
+    if (clean.startsWith('http://') || clean.startsWith('https://')) {
+      return Image.network(
+        clean,
+        width: 36,
+        height: 36,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => Image.asset(
+          AppImages.user1,
+          width: 36,
+          height: 36,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+    return Image.asset(
+      clean.startsWith('assets/') ? clean : AppImages.user1,
+      width: 36,
+      height: 36,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => Image.asset(
+        AppImages.user1,
+        width: 36,
+        height: 36,
+        fit: BoxFit.cover,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final CreatePostProvider provider = context.watch<CreatePostProvider>();
+    final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+    final AuthProvider authProvider = context.watch<AuthProvider>();
     final bool hasContent = _contentController.text.trim().isNotEmpty;
+
+    final String resolvedUsername = (profileProvider.profile?.username != null &&
+            profileProvider.profile!.username!.trim().isNotEmpty)
+        ? profileProvider.profile!.username!.trim()
+        : ((authProvider.user?.displayName != null &&
+                authProvider.user!.displayName!.trim().isNotEmpty)
+            ? authProvider.user!.displayName!.trim()
+            : profileProvider.username);
+
+    final String displayUsername = resolvedUsername.startsWith('@')
+        ? resolvedUsername.substring(1)
+        : resolvedUsername;
+
+    final String displayPronouns = (profileProvider.profile != null)
+        ? profileProvider.profile!.formattedPronouns
+        : profileProvider.pronounsFormatted;
+
+    final String resolvedAvatar = (profileProvider.profile?.avatarUrl != null &&
+            profileProvider.profile!.avatarUrl!.trim().isNotEmpty)
+        ? profileProvider.profile!.avatarUrl!.trim()
+        : ((authProvider.user?.avatarUrl != null &&
+                authProvider.user!.avatarUrl!.trim().isNotEmpty)
+            ? authProvider.user!.avatarUrl!.trim()
+            : (profileProvider.avatarUrl.isNotEmpty
+                ? profileProvider.avatarUrl
+                : AppImages.user1));
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -85,10 +163,118 @@ class _WritePostScreenState extends State<WritePostScreen> {
                     ),
                   ),
 
+                  const Spacer(),
+
+                  // Drafts Button
+                  ValueListenableBuilder<int>(
+                    valueListenable: DraftService.draftCountNotifier,
+                    builder: (BuildContext ctx, int count, _) {
+                      return GestureDetector(
+                        onTap: () {
+                          DraftsBottomSheet.show(context);
+                        },
+                        child: Container(
+                          height: 32,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: context.isDarkMode
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.black.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: count > 0
+                                  ? AppColors.gradientCyan
+                                  : (context.isDarkMode
+                                      ? Colors.white12
+                                      : context.themeBorder),
+                              width: 1.1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Icon(
+                                Icons.drafts_outlined,
+                                size: 15,
+                                color: count > 0
+                                    ? AppColors.gradientCyan
+                                    : context.themeIcon,
+                              ),
+                              if (count > 0) ...<Widget>[
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$count',
+                                  style: const TextStyle(
+                                    color: AppColors.gradientCyan,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+
                   // Post Button -> Navigates to PostSuccessScreen
                   AppGradientButton(
                     text: 'Post',
-                    onPressed: () {
+                    isEnabled: hasContent && !provider.isPublishing,
+                    isLoading: provider.isPublishing,
+                    onPressed: () async {
+                      final String content = _contentController.text.trim();
+                      if (content.isEmpty) return;
+
+                      provider.updateCaption(content);
+                      PostResponseModel? postResult;
+                      try {
+                        postResult = await provider.publishPost();
+                      } catch (e) {
+                        debugPrint('⚠️ [WritePostScreen] publishPost error: $e');
+                        if (!context.mounted) return;
+                        AppSnackBar.showError(
+                          context,
+                          title: 'Publish Failed',
+                          subtitle: e.toString().replaceFirst('Exception: ', ''),
+                        );
+                        return;
+                      }
+
+                      if (!context.mounted) return;
+
+                      final HomeFeedProvider homeProvider =
+                          context.read<HomeFeedProvider>();
+                      final String handle = displayUsername.startsWith('@')
+                          ? displayUsername
+                          : '@$displayUsername';
+                      final String pronounsTime = displayPronouns.trim().isNotEmpty
+                          ? '${displayPronouns.trim()} · just now'
+                          : 'just now';
+
+                      final PostItemModel newPost = PostItemModel(
+                        id: postResult?.id ??
+                            'post_${DateTime.now().millisecondsSinceEpoch}',
+                        authorId: authProvider.userId,
+                        authorDisplayName: profileProvider.displayName,
+                        username: handle,
+                        pronounsTime: pronounsTime,
+                        avatarAsset: resolvedAvatar,
+                        content: content,
+                        likesCount: 0,
+                        commentsCount: 0,
+                        postType: 'TEXT',
+                      );
+                      homeProvider.addNewPost(newPost);
+                      try {
+                        context.read<ProfileProvider>().addUserPost(newPost);
+                      } catch (_) {}
+
+                      // Refresh live feed in background
+                      homeProvider.loadFeed();
+
                       provider.resetPostForm();
                       Navigator.push<void>(
                         context,
@@ -114,30 +300,26 @@ class _WritePostScreenState extends State<WritePostScreen> {
                   Row(
                     children: <Widget>[
                       ClipOval(
-                        child: Image.asset(
-                          AppImages.user1,
-                          width: 36,
-                          height: 36,
-                          fit: BoxFit.cover,
-                        ),
+                        child: _buildAvatar(resolvedAvatar),
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            'ashinorbit',
+                            displayUsername.isNotEmpty ? displayUsername : 'user',
                             style: AppTextStyles.titleSmall.copyWith(
                               color: context.themeTextPrimary,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          Text(
-                            'she/they',
-                            style: AppTextStyles.caption.copyWith(
-                              color: context.themeTextMuted,
+                          if (displayPronouns.trim().isNotEmpty)
+                            Text(
+                              displayPronouns.trim(),
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.themeTextMuted,
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ],

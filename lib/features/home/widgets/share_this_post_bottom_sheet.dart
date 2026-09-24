@@ -2,17 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/services/media_download_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../auth/auth_provider.dart';
 import '../../messages/models/message_models.dart';
 import '../../messages/provider/messages_provider.dart';
 import '../../profile/models/user_relationship_models.dart';
 import '../../profile/provider/profile_provider.dart';
+import '../models/post_item_model.dart';
 import '../models/reel_item_model.dart';
+import '../provider/home_feed_provider.dart';
+import '../../messages/widgets/report_conversation_bottom_sheet.dart';
+import '../../reports/models/report_models.dart';
 
 class ShareContactItem {
   const ShareContactItem({
@@ -35,18 +41,24 @@ class ShareThisPostBottomSheet extends StatefulWidget {
     required this.onOpenMoreSendTo,
     required this.onOpenReportSafety,
     this.reel,
+    this.post,
     this.postId,
     this.postAuthor,
     this.postThumbnail,
+    this.mediaUrl,
+    this.allowDownloads = true,
     super.key,
   });
 
   final VoidCallback onOpenMoreSendTo;
   final VoidCallback onOpenReportSafety;
   final ReelItemModel? reel;
+  final PostItemModel? post;
   final String? postId;
   final String? postAuthor;
   final String? postThumbnail;
+  final String? mediaUrl;
+  final bool allowDownloads;
 
   @override
   State<ShareThisPostBottomSheet> createState() =>
@@ -264,46 +276,159 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // ── Action Circular Buttons Row (Copy Link, Save, Report) ────────
-            Row(
-              children: <Widget>[
-                // 1. Copy Link
-                _ActionButtonTile(
-                  iconPath: AppIcons.copyLink,
-                  label: l10n.shareCopyLink,
-                  iconColor: context.themeIcon,
-                  labelColor: context.themeTextSecondary,
-                  onTap: () {
-                    AppSnackBar.showSuccess(
-                      context,
-                      title: 'Link Copied',
-                      subtitle: 'Link copied to clipboard!',
-                    );
-                  },
-                ),
+            // ── Action Circular Buttons Row (Copy Link, Download, Save, Report) ────────
+            Builder(
+              builder: (BuildContext ctx) {
+                final String? resolvedMedia = widget.mediaUrl ??
+                    widget.reel?.videoUrl ??
+                    widget.reel?.videoFilePath ??
+                    (widget.reel?.videoAsset.isNotEmpty == true ? widget.reel?.videoAsset : null) ??
+                    widget.post?.videoUrl ??
+                    widget.post?.postImageUrl ??
+                    widget.post?.postImageAsset ??
+                    widget.postThumbnail;
+                final bool isVideo = widget.reel != null ||
+                    (widget.post?.videoUrl != null) ||
+                    (resolvedMedia != null &&
+                        (resolvedMedia.endsWith('.mp4') ||
+                            resolvedMedia.endsWith('.mov') ||
+                            resolvedMedia.endsWith('.m3u8') ||
+                            resolvedMedia.contains('video') ||
+                            resolvedMedia.contains('/videos/')));
+                final String? currentUserId = context.read<AuthProvider>().userId;
+                final String? authorId = widget.reel?.authorId ?? widget.post?.authorId;
+                final bool isCreator = (authorId != null &&
+                        currentUserId != null &&
+                        authorId.toLowerCase() == currentUserId.toLowerCase()) ||
+                    (widget.postAuthor != null &&
+                        context.read<ProfileProvider>().username.replaceAll('@', '').toLowerCase() ==
+                            widget.postAuthor!.replaceAll('@', '').toLowerCase());
+                final bool canDownload = widget.reel?.allowDownloads ??
+                    widget.post?.allowDownloads ??
+                    widget.allowDownloads;
 
-                const SizedBox(width: 24),
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: <Widget>[
+                    // 1. Copy Link
+                    _ActionButtonTile(
+                      iconPath: AppIcons.copyLink,
+                      label: l10n.shareCopyLink,
+                      iconColor: context.themeIcon,
+                      labelColor: context.themeTextSecondary,
+                      onTap: () {
+                        AppSnackBar.showSuccess(
+                          context,
+                          title: 'Link Copied',
+                          subtitle: 'Link copied to clipboard!',
+                        );
+                      },
+                    ),
 
-                // 2. Save
-                _ActionButtonTile(
-                  iconPath: AppIcons.save,
-                  label: l10n.homeSave,
-                  iconColor: context.themeIcon,
-                  labelColor: context.themeTextSecondary,
-                  onTap: () {},
-                ),
+                    // 2. Download (Only if allowed by creator)
+                    if (canDownload)
+                      _ActionButtonTile(
+                        icon: Icon(
+                          Icons.download_rounded,
+                          color: context.themeIcon,
+                          size: 22,
+                        ),
+                        label: 'Download',
+                        iconColor: context.themeIcon,
+                        labelColor: context.themeTextSecondary,
+                        onTap: () {
+                          Navigator.pop(context);
+                          MediaDownloadService.downloadMedia(
+                            context: context,
+                            mediaUrl: resolvedMedia,
+                            title: widget.postAuthor ?? 'queerloop',
+                            isVideo: isVideo,
+                            allowDownloads: canDownload,
+                            isCreator: isCreator,
+                          );
+                        },
+                      ),
 
-                const SizedBox(width: 24),
+                    // 3. Save
+                    Builder(
+                      builder: (BuildContext ctx) {
+                        final HomeFeedProvider homeFeed = ctx.watch<HomeFeedProvider>();
+                        final String? targetId = widget.reel?.id ?? widget.post?.id ?? widget.postId;
+                        bool isSaved = widget.reel?.isSaved ?? widget.post?.isSaved ?? false;
+                        if (targetId != null) {
+                          final ReelItemModel? r = homeFeed.reels.where((e) => e.id == targetId).firstOrNull;
+                          if (r != null) {
+                            isSaved = r.isSaved;
+                          } else {
+                            final PostItemModel? p = homeFeed.posts.where((e) => e.id == targetId).firstOrNull;
+                            if (p != null) isSaved = p.isSaved;
+                          }
+                        }
 
-                // 3. Report (Pink Icon + Pink Label, opens SafetyBottomSheet)
-                _ActionButtonTile(
-                  iconPath: AppIcons.report,
-                  label: l10n.shareReport,
-                  iconColor: const Color(0xFFFF4B8B),
-                  labelColor: const Color(0xFFFF4B8B),
-                  onTap: widget.onOpenReportSafety,
-                ),
-              ],
+                        return _ActionButtonTile(
+                          iconPath: AppIcons.save,
+                          label: isSaved ? 'Saved' : l10n.homeSave,
+                          iconColor: isSaved ? AppColors.gradientCyan : context.themeIcon,
+                          labelColor: isSaved ? AppColors.gradientCyan : context.themeTextSecondary,
+                          onTap: () {
+                            Navigator.pop(context);
+                            if (targetId != null && targetId.isNotEmpty) {
+                              if (widget.reel != null || isVideo) {
+                                homeFeed.toggleSaveReel(targetId);
+                              } else {
+                                homeFeed.toggleSavePost(targetId);
+                              }
+                              try {
+                                context.read<ProfileProvider>().fetchSavedPosts(force: true);
+                              } catch (_) {}
+                              AppSnackBar.showSuccess(
+                                context,
+                                title: isSaved ? 'Removed' : 'Saved',
+                                subtitle: isSaved
+                                    ? 'Removed from your saved items.'
+                                    : 'Saved to your profile!',
+                              );
+                            }
+                          },
+                        );
+                      },
+                    ),
+
+                    // 4. Report (Only visible for other users' content)
+                    if (!isCreator)
+                      _ActionButtonTile(
+                        iconPath: AppIcons.report,
+                        label: l10n.shareReport,
+                        iconColor: const Color(0xFFFF4B8B),
+                        labelColor: const Color(0xFFFF4B8B),
+                        onTap: () {
+                          Navigator.pop(context);
+                          final String author = widget.postAuthor ??
+                              widget.reel?.username ??
+                              widget.post?.username ??
+                              'queerloop';
+                          final String? targetId =
+                              widget.reel?.id ?? widget.post?.id ?? widget.postId;
+                          final String? authorId =
+                              widget.reel?.authorId ?? widget.post?.authorId;
+                          final String? communityId =
+                              widget.reel?.communityId ?? widget.post?.communityId;
+                          ReportConversationBottomSheet.show(
+                            context,
+                            username: author,
+                            targetTitle:
+                                'Reporting ${author.startsWith('@') ? author : '@$author'}\'s post',
+                            targetType: ReportTargetType.post,
+                            targetId: targetId,
+                            targetOwnerId: authorId,
+                            communityId: communityId,
+                            onReportSubmitted: () {},
+                          );
+                        },
+                      ),
+                  ],
+                );
+              },
             ),
 
             const SizedBox(height: AppSpacing.lg),
@@ -398,16 +523,24 @@ class _UserAvatarItem extends StatelessWidget {
                     width: 48,
                     height: 48,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) =>
-                        const Icon(Icons.person, size: 48),
+                    errorBuilder: (_, _, _) => Image.asset(
+                        AppImages.defaultAvatar,
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                      ),
                   )
                 : Image.asset(
-                    avatarAsset.isNotEmpty ? avatarAsset : AppImages.user1,
+                    avatarAsset.isNotEmpty ? avatarAsset : AppImages.defaultAvatar,
                     width: 48,
                     height: 48,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) =>
-                        const Icon(Icons.person, size: 48),
+                    errorBuilder: (_, _, _) => Image.asset(
+                        AppImages.defaultAvatar,
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                      ),
                   ),
           ),
           const SizedBox(height: 6),
@@ -426,14 +559,16 @@ class _UserAvatarItem extends StatelessWidget {
 
 class _ActionButtonTile extends StatelessWidget {
   const _ActionButtonTile({
-    required this.iconPath,
+    this.iconPath,
+    this.icon,
     required this.label,
     required this.iconColor,
     required this.labelColor,
     required this.onTap,
   });
 
-  final String iconPath;
+  final String? iconPath;
+  final Widget? icon;
   final String label;
   final Color iconColor;
   final Color labelColor;
@@ -454,15 +589,18 @@ class _ActionButtonTile extends StatelessWidget {
               border: Border.all(color: context.themeBorder),
             ),
             child: Center(
-              child: SvgPicture.asset(
-                iconPath,
-                width: 20,
-                height: 20,
-                colorFilter: ColorFilter.mode(
-                  iconColor,
-                  BlendMode.srcIn,
-                ),
-              ),
+              child: icon ??
+                  (iconPath != null
+                      ? SvgPicture.asset(
+                          iconPath!,
+                          width: 20,
+                          height: 20,
+                          colorFilter: ColorFilter.mode(
+                            iconColor,
+                            BlendMode.srcIn,
+                          ),
+                        )
+                      : const SizedBox.shrink()),
             ),
           ),
           const SizedBox(height: 6),

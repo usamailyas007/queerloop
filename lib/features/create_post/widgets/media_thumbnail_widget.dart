@@ -95,7 +95,18 @@ class MediaThumbnailWidget extends StatelessWidget {
       return _VideoFileThumbnail(filePath: filePath, fit: fit);
     }
 
-    // 5. Asset path fallback if provided
+    // 5. Remote URL / Thumbnail URL from processed draft
+    final String? remoteThumb = item!.thumbnailUrl ?? (item!.isVideo ? null : item!.mediaUrl);
+    if (remoteThumb != null && remoteThumb.isNotEmpty) {
+      return Image.network(
+        remoteThumb,
+        fit: fit,
+        errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) =>
+            _fallbackPlaceholder(),
+      );
+    }
+
+    // 6. Asset path fallback if provided
     if (item!.assetPath.isNotEmpty) {
       return Image.asset(
         item!.assetPath,

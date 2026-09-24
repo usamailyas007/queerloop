@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../auth/auth_provider.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/provider/profile_setup_provider.dart';
@@ -13,6 +12,7 @@ import '../widgets/comments_bottom_sheet.dart';
 import '../widgets/filter_communities_bottom_sheet.dart';
 import '../widgets/home_empty_state_view.dart';
 import '../widgets/reel_feed_card.dart';
+import '../widgets/delete_reel_bottom_sheet.dart';
 import '../widgets/safety_bottom_sheet.dart';
 import '../widgets/send_to_bottom_sheet.dart';
 import '../widgets/share_this_post_bottom_sheet.dart';
@@ -195,26 +195,22 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     );
   }
 
-  Future<void> _showSafetySheet(ReelItemModel reel) async {
-    final AuthProvider auth = context.read<AuthProvider>();
-    final ProfileProvider profileProvider = context.read<ProfileProvider>();
-    final String? currentUserId = auth.userId ?? profileProvider.profile?.id;
-    final String myUsername = (auth.user?.displayName ?? profileProvider.username)
-        .replaceAll('@', '')
-        .trim()
-        .toLowerCase();
-    final String reelUsername =
-        reel.username.replaceAll('@', '').trim().toLowerCase();
-    final bool isOwnReel = profileProvider.userReels.any((ReelItemModel r) => r.id == reel.id) ||
-        (reel.authorId != null &&
-            currentUserId != null &&
-            reel.authorId!.trim().toLowerCase() ==
-                currentUserId.trim().toLowerCase()) ||
-        (myUsername.isNotEmpty && reelUsername == myUsername) ||
-        reel.username == '@you' ||
-        reel.username == 'you';
+  Future<void> _showDeleteSheet(ReelItemModel reel) async {
+    final bool? deleted = await DeleteReelBottomSheet.show(context, reel: reel);
+    if (deleted == true && mounted) {
+      setState(() {
+        _localReels.removeWhere((ReelItemModel r) => r.id == reel.id);
+      });
+      final List<ReelItemModel> currentReels =
+          widget.customReels != null ? _localReels : context.read<HomeFeedProvider>().reels;
+      if (currentReels.isEmpty && widget.customReels != null) {
+        Navigator.pop(context);
+      }
+    }
+  }
 
-    final dynamic deleted = await showModalBottomSheet<dynamic>(
+  Future<void> _showSafetySheet(ReelItemModel reel) async {
+    await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -225,19 +221,10 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
           authorId: reel.authorId ?? reel.username,
           communityId: reel.communityId,
           isReel: true,
-          isCreator: isOwnReel,
+          isCreator: false,
         );
       },
     );
-
-    if (deleted == true && mounted) {
-      setState(() {});
-      final List<ReelItemModel> currentReels =
-          widget.customReels ?? context.read<HomeFeedProvider>().reels;
-      if (currentReels.isEmpty && widget.customReels != null) {
-        Navigator.pop(context);
-      }
-    }
   }
 
   @override
@@ -478,6 +465,8 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                 _showShareSheet(context, item);
               }
             },
+            isCustomView: widget.customReels != null,
+            onDelete: () => _showDeleteSheet(item),
             onOpenSafety: () => _showSafetySheet(item),
             onOpenFilterCommunities: () =>
                 _showFilterCommunitiesSheet(context, provider),

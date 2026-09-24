@@ -19,6 +19,7 @@ class ReelItemModel {
     this.tags = const <String>[],
     this.durationText = '',
     this.communityId,
+    this.allowDownloads = true,
   });
 
   final String id;
@@ -40,35 +41,48 @@ class ReelItemModel {
   final List<String> tags;
   final String durationText;
   final String? communityId;
+  final bool allowDownloads;
 
   ReelItemModel copyWith({
     String? authorId,
+    String? authorDisplayName,
+    String? username,
+    String? pronounsTime,
+    String? avatarAsset,
     bool? isLiked,
     bool? isSaved,
     bool? isFollowing,
+    bool? allowDownloads,
     int? likesCount,
     int? commentsCount,
     String? videoUrl,
     String? thumbnailUrl,
+    String? caption,
+    List<String>? tags,
+    String? durationText,
+    String? communityId,
   }) {
     return ReelItemModel(
       id: id,
       authorId: authorId ?? this.authorId,
-      username: username,
-      pronounsTime: pronounsTime,
-      avatarAsset: avatarAsset,
+      authorDisplayName: authorDisplayName ?? this.authorDisplayName,
+      username: username ?? this.username,
+      pronounsTime: pronounsTime ?? this.pronounsTime,
+      avatarAsset: avatarAsset ?? this.avatarAsset,
       videoAsset: videoAsset,
       videoFilePath: videoFilePath,
       videoUrl: videoUrl ?? this.videoUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
-      caption: caption,
+      caption: caption ?? this.caption,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
       isLiked: isLiked ?? this.isLiked,
       isSaved: isSaved ?? this.isSaved,
       isFollowing: isFollowing ?? this.isFollowing,
-      tags: tags,
-      durationText: durationText,
+      tags: tags ?? this.tags,
+      durationText: durationText ?? this.durationText,
+      communityId: communityId ?? this.communityId,
+      allowDownloads: allowDownloads ?? this.allowDownloads,
     );
   }
 }

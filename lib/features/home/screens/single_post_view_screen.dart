@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/config/app_config.dart';
+import '../../../core/services/media_download_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../auth/auth_provider.dart';
 import '../../create_post/models/create_post_models.dart';
-import '../../create_post/services/media_upload_service.dart';
 import '../../create_post/services/post_content_service.dart';
 import '../../messages/models/message_models.dart';
 import '../models/post_item_model.dart';
@@ -15,6 +17,7 @@ import '../models/reel_item_model.dart';
 import '../provider/home_feed_provider.dart';
 import '../widgets/comments_bottom_sheet.dart';
 import '../widgets/post_feed_card.dart';
+import 'post_fullscreen_image_viewer_screen.dart';
 import 'reels_feed_view.dart';
 
 class SinglePostViewScreen extends StatefulWidget {
@@ -62,7 +65,6 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
     try {
       final ApiClient client = context.read<ApiClient>();
       final PostContentService postService = PostContentService(client);
-      final MediaUploadService mediaService = MediaUploadService(client);
 
       final PostResponseModel raw = await postService.getPost(widget.postId);
       final String rawType = raw.type.trim().toUpperCase();
@@ -79,24 +81,51 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
           mediaUrl = firstRef;
           thumbUrl = firstRef;
         } else {
-          try {
-            final MediaUploadResult status = await mediaService.getMediaStatus(firstRef);
-            mediaUrl = status.url ?? status.downloadUrl;
-            thumbUrl = status.thumbnailUrl ?? mediaUrl;
-          } catch (_) {
-            mediaUrl = firstRef;
-            thumbUrl = firstRef;
+          final String cleanRef = firstRef
+              .replaceAll(RegExp(r'^/+'), '')
+              .replaceAll(RegExp(r'^media/'), '');
+          if (isVideoType) {
+            mediaUrl = '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
+            // ⚠️ Don't set thumbUrl to .../thumb.0000000.jpg speculatively —
+            // CloudFront returns HTTP 403 XML for untranscoded videos which crashes
+            // Android's ImageDecoder with 'unimplemented'. Leave null for now;
+            // if raw.postImageUrl is set it will be picked up below.
+            thumbUrl = null;
+          } else if (raw.authorId != null && raw.authorId!.isNotEmpty) {
+            mediaUrl = '${AppConfig.cdnUrl}/images/original/${raw.authorId}/$cleanRef.jpg';
+            thumbUrl = mediaUrl;
+          } else {
+            mediaUrl = '${AppConfig.baseUrl.replaceAll(RegExp(r"/+$"), "")}/media/$cleanRef';
+            thumbUrl = mediaUrl;
           }
         }
       }
 
       mediaUrl ??= widget.chatMessage?.postThumbnailAsset;
+      // Prefer the backend-supplied postImageUrl for video thumbnails.
+      // It's a verified CDN URL — safe for ImageDecoder.
+      if (thumbUrl == null &&
+          raw.postImageUrl != null &&
+          raw.postImageUrl!.isNotEmpty) {
+        thumbUrl = raw.postImageUrl;
+      }
       thumbUrl ??= mediaUrl;
       _resolvedVideoUrl = mediaUrl;
 
+      final String? rawDisplayName = (raw.authorDisplayName != null && raw.authorDisplayName!.trim().isNotEmpty)
+          ? raw.authorDisplayName!.trim()
+          : null;
+
       final String resolvedAuthor = (raw.authorName != null && raw.authorName!.isNotEmpty)
           ? (raw.authorName!.startsWith('@') ? raw.authorName! : '@${raw.authorName!}')
-          : (widget.chatMessage?.postAuthor ?? '@creator');
+          : (rawDisplayName != null
+              ? '@${rawDisplayName.toLowerCase().replaceAll(' ', '_')}'
+              : (widget.chatMessage?.postAuthor ?? '@creator'));
+
+      final String resolvedDisplayName = rawDisplayName ??
+          ((raw.authorName != null && raw.authorName!.isNotEmpty)
+              ? raw.authorName!
+              : (widget.chatMessage?.postAuthor?.replaceAll('@', '') ?? 'Creator'));
 
       final String resolvedAvatar = (raw.authorAvatar != null && raw.authorAvatar!.isNotEmpty)
           ? raw.authorAvatar!
@@ -107,6 +136,7 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
           _post = PostItemModel(
             id: raw.id,
             authorId: raw.authorId,
+            authorDisplayName: resolvedDisplayName,
             username: resolvedAuthor,
             pronounsTime: raw.createdAt != null && raw.createdAt!.isNotEmpty
                 ? raw.createdAt!
@@ -125,6 +155,7 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
             postType: isVideoType ? 'VIDEO' : 'IMAGE',
             isLiked: raw.isLiked,
             isSaved: raw.isSaved,
+            allowDownloads: raw.allowDownloads,
           );
           _isLoading = false;
         });
@@ -225,6 +256,16 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
     );
   }
 
+  void _openFullscreenImage() {
+    if (_post == null) return;
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => PostFullscreenImageViewerScreen(post: _post!),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -259,6 +300,33 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
             color: context.themeTextPrimary,
           ),
         ),
+        actions: <Widget>[
+          if ((_post?.postImageUrl != null ||
+                  _post?.postImageAsset != null ||
+                  _resolvedVideoUrl != null) &&
+              (_post?.allowDownloads ?? false))
+            IconButton(
+              icon: Icon(
+                Icons.download_rounded,
+                color: context.themeIcon,
+                size: 22,
+              ),
+              onPressed: () {
+                final AuthProvider auth = context.read<AuthProvider>();
+                final bool isCreator = (_post?.authorId != null &&
+                    auth.userId != null &&
+                    _post!.authorId!.toLowerCase() == auth.userId!.toLowerCase());
+                MediaDownloadService.downloadMedia(
+                  context: context,
+                  mediaUrl: _resolvedVideoUrl ?? _post?.postImageUrl ?? _post?.postImageAsset,
+                  title: _post?.username ?? 'queerloop_post',
+                  isVideo: _isReel,
+                  allowDownloads: _post?.allowDownloads ?? true,
+                  isCreator: isCreator,
+                );
+              },
+            ),
+        ],
       ),
       body: _isLoading
           ? const Center(
@@ -390,6 +458,51 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
                                       SizedBox(width: 8),
                                       Text(
                                         'Watch Full Reel',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            )
+                          else if ((_post!.postImageUrl != null && _post!.postImageUrl!.isNotEmpty) ||
+                              (_post!.postImageAsset != null && _post!.postImageAsset!.isNotEmpty))
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.lg,
+                                vertical: AppSpacing.md,
+                              ),
+                              child: GestureDetector(
+                                onTap: _openFullscreenImage,
+                                child: Container(
+                                  width: double.infinity,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    gradient: AppColors.secondaryGradientButton,
+                                    borderRadius: BorderRadius.circular(24),
+                                    boxShadow: <BoxShadow>[
+                                      BoxShadow(
+                                        color: AppColors.gradientCyan.withValues(alpha: 0.3),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: <Widget>[
+                                      Icon(
+                                        Icons.fullscreen_rounded,
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'View Full Photo',
                                         style: TextStyle(
                                           color: Colors.white,
                                           fontWeight: FontWeight.w700,

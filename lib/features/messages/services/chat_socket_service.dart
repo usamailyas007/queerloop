@@ -700,6 +700,8 @@ class ChatSocketService {
     }
     _socket!.on('reaction_add', (dynamic d) => handleReactionAdd(d, 'reaction_add'));
     _socket!.on('reaction:add', (dynamic d) => handleReactionAdd(d, 'reaction:add'));
+    _socket!.on('message_reaction', (dynamic d) => handleReactionAdd(d, 'message_reaction'));
+    _socket!.on('reaction', (dynamic d) => handleReactionAdd(d, 'reaction'));
 
     // 3b. reaction_remove / reaction:remove -> { conversationId, messageId, emoji }
     void handleReactionRemove(dynamic data, String eventName) {
@@ -992,13 +994,14 @@ class ChatSocketService {
   }
 
   /// 3. send_message
-  /// payload: { conversationId, text?, body?, mediaRef?, sharedPostId? }
+  /// payload: { conversationId, text?, body?, mediaUrl?, mediaRef?, sharedPostId? }
   /// purpose: send a message through the backend gateway
   void sendMessage({
     required String conversationId,
     String? text,
     String? body,
     String? mediaRef,
+    String? mediaUrl,
     String? sharedPostId,
   }) {
     final String cleanId = cleanConversationId(conversationId);
@@ -1007,12 +1010,22 @@ class ChatSocketService {
     _ensureConnected();
 
     final String messageBody = (body ?? text ?? '').trim();
+    final String? resolvedUrl = (mediaUrl != null && mediaUrl.trim().isNotEmpty)
+        ? mediaUrl.trim()
+        : ((mediaRef != null && mediaRef.trim().startsWith('http'))
+            ? mediaRef.trim()
+            : (mediaRef != null && mediaRef.trim().isNotEmpty
+                ? '${AppConfig.baseUrl.replaceAll(RegExp(r"/+$"), "")}/media/${mediaRef.trim().replaceAll(RegExp(r"^/media/"), "").replaceAll(RegExp(r"^/+"), "")}'
+                : null));
+
+    final String finalBody = messageBody.isNotEmpty
+        ? messageBody
+        : (resolvedUrl != null && resolvedUrl.isNotEmpty ? resolvedUrl : '');
+
     final Map<String, dynamic> payload = <String, dynamic>{
       'conversationId': cleanId,
-      if (text != null && text.isNotEmpty) 'text': text.trim(),
-      if (body != null && body.isNotEmpty) 'body': body.trim(),
-      if (text == null && body == null && messageBody.isNotEmpty) 'body': messageBody,
-      if (mediaRef != null && mediaRef.isNotEmpty) 'mediaRef': mediaRef,
+      'body': finalBody,
+      'mediaUrl': null,
       if (sharedPostId != null && sharedPostId.isNotEmpty)
         'sharedPostId': sharedPostId,
     };
@@ -1063,9 +1076,13 @@ class ChatSocketService {
       'conversationId': cleanConv,
       'messageId': cleanMsg,
       'emoji': cleanEmoji,
+      if (userId != null && userId.isNotEmpty) 'userId': userId,
     };
     _logEmit('reaction_add', payload);
     _socket?.emit('reaction_add', payload);
+    _socket?.emit('reaction:add', payload);
+    _socket?.emit('message_reaction', payload);
+    _socket?.emit('reaction', payload);
   }
 
   /// 6. reaction_remove
@@ -1089,9 +1106,12 @@ class ChatSocketService {
       'conversationId': cleanConv,
       'messageId': cleanMsg,
       'emoji': cleanEmoji,
+      if (userId != null && userId.isNotEmpty) 'userId': userId,
     };
     _logEmit('reaction_remove', payload);
     _socket?.emit('reaction_remove', payload);
+    _socket?.emit('reaction:remove', payload);
+    _socket?.emit('message_reaction_remove', payload);
   }
 
   /// 7. unsend_message

@@ -14,9 +14,14 @@ import '../../auth/auth_provider.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../models/post_item_model.dart';
+import '../models/reel_item_model.dart';
 import '../provider/home_feed_provider.dart';
+import '../../../core/services/media_download_service.dart';
+import '../screens/post_fullscreen_image_viewer_screen.dart';
 import '../screens/profile_tab_screen.dart';
+import '../screens/reels_feed_view.dart';
 import 'safety_bottom_sheet.dart';
+import 'share_this_post_bottom_sheet.dart';
 
 class PostFeedCard extends StatelessWidget {
   const PostFeedCard({
@@ -26,6 +31,7 @@ class PostFeedCard extends StatelessWidget {
     required this.onOpenComments,
     this.isFollowing = false,
     this.onFollowToggle,
+    this.onCardTap,
     super.key,
   });
 
@@ -35,6 +41,7 @@ class PostFeedCard extends StatelessWidget {
   final VoidCallback onOpenComments;
   final bool isFollowing;
   final VoidCallback? onFollowToggle;
+  final VoidCallback? onCardTap;
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +64,7 @@ class PostFeedCard extends StatelessWidget {
                 currentUserId.trim().toLowerCase()) ||
         (myUsername.isNotEmpty && postUsername == myUsername);
 
-    return Container(
+    final Widget card = Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
@@ -87,7 +94,10 @@ class PostFeedCard extends StatelessWidget {
                     builder: (_) => UserProfileScreen(
                       userId: post.authorId,
                       username: post.username.replaceAll('@', ''),
-                      name: post.username.replaceAll('@', '').split('.').first,
+                      name: (post.authorDisplayName != null &&
+                              post.authorDisplayName!.trim().isNotEmpty)
+                          ? post.authorDisplayName!.trim()
+                          : post.username.replaceAll('@', '').split('.').first,
                       avatarAsset: post.avatarAsset,
                     ),
                   ),
@@ -131,14 +141,47 @@ class PostFeedCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        post.username,
-                        style: TextStyle(
-                          color: context.themeTextPrimary,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Row(
+                        children: <Widget>[
+                          Flexible(
+                            child: Text(
+                              (post.authorDisplayName != null &&
+                                      post.authorDisplayName!.trim().isNotEmpty)
+                                  ? post.authorDisplayName!.trim()
+                                  : post.username,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: context.themeTextPrimary,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          if (post.authorDisplayName != null &&
+                              post.authorDisplayName!.trim().isNotEmpty &&
+                              post.authorDisplayName!.trim().toLowerCase() !=
+                                  post.username
+                                      .replaceAll('@', '')
+                                      .trim()
+                                      .toLowerCase()) ...<Widget>[
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                post.username,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: context.themeTextMuted,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         post.pronounsTime,
                         style: TextStyle(
@@ -155,25 +198,81 @@ class PostFeedCard extends StatelessWidget {
                     isFollowing: isFollowing,
                     onTap: onFollowToggle!,
                   ),
-                ] else if (isCurrentUser) ...<Widget>[
-                  const SizedBox(width: 8),
-                  PopupMenuButton<String>(
-                    icon: Icon(
-                      Icons.more_vert_rounded,
-                      color: context.themeIconMuted,
-                      size: 20,
+                ],
+                const SizedBox(width: 4),
+                PopupMenuButton<String>(
+                  icon: Icon(
+                    Icons.more_vert_rounded,
+                    color: context.themeIconMuted,
+                    size: 20,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: context.themeBorder),
+                  ),
+                  color: context.themeCardBackground,
+                  onSelected: (String value) {
+                    if (value == 'download') {
+                      MediaDownloadService.downloadMedia(
+                        context: context,
+                        mediaUrl: post.videoUrl ?? post.postImageUrl ?? post.postImageAsset,
+                        title: post.username,
+                        isVideo: post.videoUrl != null,
+                        allowDownloads: post.allowDownloads,
+                        isCreator: isCurrentUser,
+                      );
+                    } else if (value == 'share') {
+                      _openShareBottomSheet(context);
+                    } else if (value == 'delete') {
+                      _confirmDeletePost(context);
+                    }
+                  },
+                  itemBuilder: (BuildContext ctx) => <PopupMenuEntry<String>>[
+                    if ((post.postImageUrl != null || post.postImageAsset != null || post.videoUrl != null) &&
+                        post.allowDownloads)
+                      PopupMenuItem<String>(
+                        value: 'download',
+                        child: Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.download_rounded,
+                              color: context.themeIcon,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Download',
+                              style: TextStyle(
+                                color: context.themeTextPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    PopupMenuItem<String>(
+                      value: 'share',
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
+                            Icons.share_outlined,
+                            color: context.themeIcon,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Share',
+                            style: TextStyle(
+                              color: context.themeTextPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: context.themeBorder),
-                    ),
-                    color: context.themeCardBackground,
-                    onSelected: (String value) {
-                      if (value == 'delete') {
-                        _confirmDeletePost(context);
-                      }
-                    },
-                    itemBuilder: (BuildContext ctx) => <PopupMenuEntry<String>>[
+                    if (isCurrentUser)
                       const PopupMenuItem<String>(
                         value: 'delete',
                         child: Row(
@@ -195,9 +294,8 @@ class PostFeedCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -283,6 +381,22 @@ class PostFeedCard extends StatelessWidget {
 
               const SizedBox(width: 20),
 
+              // Share Action
+              GestureDetector(
+                onTap: () => _openShareBottomSheet(context),
+                child: SvgPicture.asset(
+                  AppIcons.share,
+                  width: 18,
+                  height: 18,
+                  colorFilter: ColorFilter.mode(
+                    context.themeTextSecondary,
+                    BlendMode.srcIn,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 20),
+
               // Save Action
               GestureDetector(
                 onTap: onSaveToggle,
@@ -362,6 +476,55 @@ class PostFeedCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+
+    if (onCardTap != null) {
+      return GestureDetector(
+        onTap: onCardTap,
+        behavior: HitTestBehavior.opaque,
+        child: card,
+      );
+    }
+    return card;
+  }
+
+  void _openShareBottomSheet(BuildContext context) {
+    final AuthProvider auth = context.read<AuthProvider>();
+    final String? currentUserId = auth.userId;
+    final String? authorId = post.authorId;
+    final bool isCurrentUser = authorId != null &&
+        currentUserId != null &&
+        authorId.trim().toLowerCase() == currentUserId.trim().toLowerCase();
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext ctx) => ShareThisPostBottomSheet(
+        post: post,
+        postId: post.id,
+        postAuthor: post.username,
+        postThumbnail: post.postImageUrl ?? post.postImageAsset,
+        mediaUrl: post.videoUrl ?? post.postImageUrl ?? post.postImageAsset,
+        allowDownloads: post.allowDownloads,
+        onOpenMoreSendTo: () {},
+        onOpenReportSafety: () {
+          Navigator.pop(ctx);
+          showModalBottomSheet<void>(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => SafetyBottomSheet(
+              username: post.username,
+              postId: post.id,
+              authorId: post.authorId ?? post.username,
+              communityId: post.communityId,
+              isReel: false,
+              isCreator: isCurrentUser,
+            ),
+          );
+        },
       ),
     );
   }
@@ -449,12 +612,21 @@ class PostFeedCard extends StatelessWidget {
         ),
       );
     } else {
-      final String networkUrl =
-          (clean.startsWith('http://') || clean.startsWith('https://'))
-              ? clean
-              : (clean.startsWith('/')
-                  ? '${AppConfig.baseUrl}$clean'
-                  : '${AppConfig.baseUrl}/$clean');
+      final String networkUrl;
+      if (clean.startsWith('http://') || clean.startsWith('https://')) {
+        networkUrl = clean;
+      } else {
+        final String cleanId = clean
+            .replaceAll(RegExp(r'^/+'), '')
+            .replaceAll(RegExp(r'^media/'), '');
+        if (post.authorId != null && post.authorId!.isNotEmpty) {
+          networkUrl =
+              '${AppConfig.cdnUrl}/images/original/${post.authorId}/$cleanId.jpg';
+        } else {
+          final String base = AppConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
+          networkUrl = '$base/media/$cleanId';
+        }
+      }
 
       imageWidget = Image.network(
         networkUrl,
@@ -484,11 +656,118 @@ class PostFeedCard extends StatelessWidget {
       );
     }
 
+    final bool isVideo = post.postType.toUpperCase() == 'VIDEO' ||
+        post.postType.toLowerCase() == 'reel' ||
+        (post.postImageUrl != null &&
+            (post.postImageUrl!.endsWith('.mp4') ||
+                post.postImageUrl!.endsWith('.m3u8') ||
+                post.postImageUrl!.contains('video') ||
+                post.postImageUrl!.contains('/videos/'))) ||
+        clean.endsWith('.mp4') ||
+        clean.endsWith('.m3u8') ||
+        clean.contains('video') ||
+        clean.contains('/videos/');
+
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.md),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: imageWidget,
+      child: GestureDetector(
+        onTap: () {
+          if (isVideo) {
+            final ReelItemModel reel = ReelItemModel(
+              id: post.id,
+              authorId: post.authorId,
+              authorDisplayName: post.authorDisplayName ?? post.username,
+              username: post.username,
+              pronounsTime: post.pronounsTime,
+              avatarAsset: post.avatarAsset,
+              videoAsset: '',
+              videoUrl: clean.startsWith('http') ? clean : post.postImageUrl,
+              thumbnailUrl: (post.postImageUrl != null &&
+                      post.postImageUrl!.startsWith('http'))
+                  ? post.postImageUrl
+                  : (clean.startsWith('http') ? clean : null),
+              caption: post.content,
+              likesCount: post.likesCount,
+              commentsCount: post.commentsCount,
+              isLiked: post.isLiked,
+              isSaved: post.isSaved,
+              communityId: post.communityId,
+            );
+            Navigator.push<void>(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => Scaffold(
+                  backgroundColor: Colors.black,
+                  body: Stack(
+                    children: <Widget>[
+                      ReelsFeedView(
+                        initialPage: 0,
+                        customReels: <ReelItemModel>[reel],
+                        hasBottomBar: false,
+                      ),
+                      SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white24),
+                              ),
+                              child: const Icon(
+                                Icons.chevron_left_rounded,
+                                color: Colors.white,
+                                size: 26,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          } else {
+            Navigator.push<void>(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => PostFullscreenImageViewerScreen(post: post),
+              ),
+            );
+          }
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              imageWidget,
+              if (isVideo)
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white70, width: 1.5),
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 34,
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

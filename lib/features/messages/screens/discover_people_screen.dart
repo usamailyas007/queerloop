@@ -315,11 +315,11 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
           width: 44,
           height: 44,
           fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => Container(
+          errorBuilder: (_, _, _) => Image.asset(
+            AppImages.defaultAvatar,
             width: 44,
             height: 44,
-            color: Colors.white10,
-            child: const Icon(Icons.person, size: 24, color: Colors.white70),
+            fit: BoxFit.cover,
           ),
         ),
       );
@@ -327,15 +327,15 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
 
     return ClipOval(
       child: Image.asset(
-        avatarUrl.isNotEmpty ? avatarUrl : AppImages.user1,
+        avatarUrl.isNotEmpty ? avatarUrl : AppImages.defaultAvatar,
         width: 44,
         height: 44,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => Container(
+        errorBuilder: (_, _, _) => Image.asset(
+          AppImages.defaultAvatar,
           width: 44,
           height: 44,
-          color: Colors.white10,
-          child: const Icon(Icons.person, size: 24, color: Colors.white70),
+          fit: BoxFit.cover,
         ),
       ),
     );
