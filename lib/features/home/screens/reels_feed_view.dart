@@ -10,6 +10,7 @@ import '../provider/home_feed_provider.dart';
 import '../services/reel_video_preloader.dart';
 import '../widgets/comments_bottom_sheet.dart';
 import '../widgets/filter_communities_bottom_sheet.dart';
+import '../widgets/guest_action_modal_dialog.dart';
 import '../widgets/home_empty_state_view.dart';
 import '../widgets/reel_feed_card.dart';
 import '../widgets/delete_reel_bottom_sheet.dart';
@@ -59,6 +60,10 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
   late int _activePage;
   List<ReelItemModel> _localReels = <ReelItemModel>[];
 
+  // Guest: show signup popup after 3 reels
+  int _guestReelsWatched = 0;
+  bool _guestPopupShown = false;
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +71,11 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     _pageController = PageController(initialPage: widget.initialPage);
     if (widget.customReels != null) {
       _localReels = List<ReelItemModel>.from(widget.customReels!);
+      // Restore feed visibility for standalone/custom reel viewers.
+      // When the home feed's ReelFeedCard.didPushNext fires (e.g. user opened
+      // profile), it sets isFeedVisible=false. If the user then opens a custom
+      // reel player, that flag is still false → _canPlayAudio = false → no audio.
+      ReelVideoPreloader.instance.setFeedVisible(true);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -74,6 +84,9 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
             widget.customReels != null ? _localReels : provider.reels;
         if (reels.isNotEmpty) {
           ReelVideoPreloader.instance.preloadSurrounding(reels, _activePage);
+          if (_activePage < reels.length) {
+            provider.recordView(reels[_activePage].id);
+          }
         }
       }
     });
@@ -90,6 +103,12 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
   @override
   void deactivate() {
     ReelVideoPreloader.instance.pauseAll();
+    // Use markFeedInvisible() instead of setFeedVisible(false) — the latter
+    // triggers async pauseAll()/muteAll() platform-channel calls that complete
+    // after deactivation and throw "deactivated widget ancestor" FlutterError.
+    if (widget.customReels != null) {
+      ReelVideoPreloader.instance.markFeedInvisible();
+    }
     super.deactivate();
   }
 
@@ -145,6 +164,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     String postId,
     int totalComments, {
     String? postAuthorId,
+    bool allowComments = true,
   }) {
     showModalBottomSheet<void>(
       context: context,
@@ -155,6 +175,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
           postId: postId,
           postAuthorId: postAuthorId,
           totalComments: totalComments,
+          allowComments: allowComments,
           onCommentAdded: () {
             context.read<HomeFeedProvider>().incrementCommentCount(postId);
           },
@@ -358,6 +379,25 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
           if (index < reels.length) {
             provider.recordView(reels[index].id);
           }
+          // Guest: show signup popup after watching 3 reels
+          if (provider.isGuest && widget.customReels == null && !_guestPopupShown) {
+            _guestReelsWatched++;
+            if (_guestReelsWatched >= 3) {
+              _guestPopupShown = true;
+              Future<void>.delayed(const Duration(milliseconds: 400), () {
+                if (!mounted) return;
+                ReelVideoPreloader.instance.pauseAll();
+                GuestActionModalDialog.show(
+                  // ignore: use_build_context_synchronously
+                  context,
+                  title: 'Join QueerLoop',
+                  subtitle:
+                      'Create a free account to get your personalized For You feed, like, comment and connect with the community.',
+                  iconData: Icons.favorite_border_rounded,
+                );
+              });
+            }
+          }
         },
         itemBuilder: (context, index) {
           final ReelItemModel item = reels[index];
@@ -373,9 +413,16 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                   provider.bottomNavIndex == 0 &&
                   provider.activeSubMode == SubMode.reels);
 
+          final bool isItemLiked = provider.isPostLiked(item.id) || item.isLiked;
+          final bool isItemSaved = provider.isPostSaved(item.id) || item.isSaved;
+
           return ReelFeedCard(
             key: ValueKey<String>(item.id),
-            reel: item.copyWith(isFollowing: isAuthorFollowed),
+            reel: item.copyWith(
+              isFollowing: isAuthorFollowed,
+              isLiked: isItemLiked,
+              isSaved: isItemSaved,
+            ),
             isActive: isVisuallyActive,
             hasBottomBar: widget.hasBottomBar,
             showCommunityFilterTag: provider.activeTopTab == TopTab.communities,
@@ -384,36 +431,69 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
               if (provider.isGuest) {
                 widget.onGuestActionTriggered?.call();
               } else {
+                final bool currentlyLiked =
+                    provider.isPostLiked(item.id) || item.isLiked;
+                final bool newLiked = !currentlyLiked;
+                final int newCount = newLiked
+                    ? item.likesCount + 1
+                    : (item.likesCount > 0 ? item.likesCount - 1 : 0);
+
                 if (widget.customReels != null) {
                   final int idx = _localReels.indexWhere((r) => r.id == item.id);
                   if (idx != -1) {
-                    final bool newLiked = !_localReels[idx].isLiked;
-                    final int newCount = newLiked
-                        ? _localReels[idx].likesCount + 1
-                        : (_localReels[idx].likesCount > 0 ? _localReels[idx].likesCount - 1 : 0);
                     setState(() {
                       _localReels[idx] = _localReels[idx].copyWith(
                         isLiked: newLiked,
                         likesCount: newCount,
                       );
                     });
-                    try {
-                      context.read<ProfileProvider>().updateLikedReel(
-                        item.id,
-                        isLiked: newLiked,
-                        likesCount: newCount,
-                      );
-                    } catch (_) {}
                   }
                 }
-                provider.toggleLikeReel(item.id, fallbackReel: item);
+                try {
+                  context.read<ProfileProvider>().updateLikedReel(
+                    item.id,
+                    isLiked: newLiked,
+                    likesCount: newCount,
+                    fallbackReel: item.copyWith(isLiked: newLiked, likesCount: newCount),
+                  );
+                } catch (_) {}
+                // Pass the original item (not pre-toggled) so toggleLikeReel
+                // can correctly compute the direction by negating item.isLiked.
+                provider.toggleLikeReel(
+                  item.id,
+                  fallbackReel: item,
+                );
               }
             },
             onSaveToggle: () {
               if (provider.isGuest) {
                 widget.onGuestActionTriggered?.call();
               } else {
-                provider.toggleSaveReel(item.id);
+                final bool currentlySaved =
+                    provider.isPostSaved(item.id) || item.isSaved;
+                final bool newSaved = !currentlySaved;
+
+                if (widget.customReels != null) {
+                  final int idx = _localReels.indexWhere((r) => r.id == item.id);
+                  if (idx != -1) {
+                    setState(() {
+                      _localReels[idx] = _localReels[idx].copyWith(isSaved: newSaved);
+                    });
+                  }
+                }
+                try {
+                  context.read<ProfileProvider>().updateSavedReel(
+                    item.id,
+                    isSaved: newSaved,
+                    fallbackReel: item.copyWith(isSaved: newSaved),
+                  );
+                } catch (_) {}
+                // Pass the original item (not pre-toggled) so toggleSaveReel
+                // can correctly compute the direction by negating item.isSaved.
+                provider.toggleSaveReel(
+                  item.id,
+                  fallbackReel: item,
+                );
               }
             },
             onFollowToggle: () async {
@@ -455,6 +535,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                   item.id,
                   item.commentsCount,
                   postAuthorId: item.authorId,
+                  allowComments: item.allowComments,
                 );
               }
             },

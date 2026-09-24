@@ -16,6 +16,7 @@ import '../../profile/provider/profile_provider.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../models/reel_item_model.dart';
 import '../screens/profile_tab_screen.dart';
+import '../../create_post/models/create_post_models.dart';
 import '../services/reel_video_preloader.dart';
 import 'delete_reel_bottom_sheet.dart';
 
@@ -65,32 +66,62 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   bool _videoInitialized = false;
   bool _isPaused = false;
   bool _isDisposed = false;
+  bool _isCoveredByRoute = false;
+
+  bool get _canPlayAudio =>
+      widget.isActive &&
+      !_isPaused &&
+      !_isDisposed &&
+      !_isCoveredByRoute &&
+      ReelVideoPreloader.instance.isFeedVisible;
 
   // ── Double-tap heart animation ───────────────────────────────────────────
   late AnimationController _animController;
   late Animation<double> _scaleAnim;
   bool _showDoubleTapHeart = false;
+  ModalRoute<void>? _route;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final ModalRoute<void>? route = ModalRoute.of(context);
-    if (route != null) {
-      appRouteObserver.subscribe(this, route);
+    if (route != null && route != _route) {
+      if (_route != null) {
+        try {
+          appRouteObserver.unsubscribe(this);
+        } catch (_) {}
+      }
+      _route = route;
+      try {
+        appRouteObserver.subscribe(this, route);
+      } catch (_) {}
     }
   }
 
   @override
   void didPushNext() {
-    // A new route was pushed on top of this screen (e.g. SearchScreen, ProfileScreen, Comments)
+    // A new route was pushed on top — pause AND mute so audio never leaks
+    _isCoveredByRoute = true;
     _videoController?.pause();
+    _videoController?.setVolume(0);
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
   }
 
   @override
   void didPopNext() {
-    // User returned to this screen
-    if (widget.isActive && !_isPaused && _videoInitialized && !_isDisposed) {
+    if (!mounted) return;
+    // User returned — restore only if this route is currently active
+    _isCoveredByRoute = false;
+    final bool isCurrentRoute = _route?.isCurrent ?? false;
+    if (isCurrentRoute && widget.isActive && !_isPaused && _videoInitialized && !_isDisposed) {
+      ReelVideoPreloader.instance.setFeedVisible(true);
+      ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
       _videoController?.play();
+    } else {
+      _videoController?.pause();
+      _videoController?.setVolume(0);
     }
   }
 
@@ -98,6 +129,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   void didPop() {
     // This route is being popped
     _videoController?.pause();
+    _videoController?.setVolume(0);
   }
 
   @override
@@ -123,8 +155,13 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     if (existing != null && existing.value.isInitialized) {
       _videoController = existing;
       _videoInitialized = true;
-      if (widget.isActive && !_isPaused) {
+      if (_canPlayAudio) {
+        // Ensure only this reel has audio
+        ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
         existing.play();
+      } else {
+        existing.pause();
+        existing.setVolume(0);
       }
     } else {
       _initVideo();
@@ -157,10 +194,12 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         if (mounted) {
           setState(() => _videoInitialized = true);
         }
-        if (widget.isActive && !_isPaused && !_isDisposed) {
+        if (_canPlayAudio) {
+          ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
           controller.play();
         } else {
           controller.pause();
+          controller.setVolume(0);
         }
       } else {
         void onReady() {
@@ -168,16 +207,19 @@ class _ReelFeedCardState extends State<ReelFeedCard>
             try {
               controller.removeListener(onReady);
               controller.pause();
+              controller.setVolume(0);
             } catch (_) {}
             return;
           }
           if (controller.value.isInitialized) {
             controller.removeListener(onReady);
             setState(() => _videoInitialized = true);
-            if (widget.isActive && !_isPaused && !_isDisposed) {
+            if (_canPlayAudio) {
+              ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
               controller.play();
             } else {
               controller.pause();
+              controller.setVolume(0);
             }
           }
         }
@@ -195,8 +237,11 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.hidden) {
       _videoController?.pause();
+      _videoController?.setVolume(0);
+      ReelVideoPreloader.instance.pauseAll();
     } else if (state == AppLifecycleState.resumed) {
-      if (widget.isActive && !_isPaused && _videoInitialized) {
+      if (_canPlayAudio && _videoInitialized) {
+        ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
         _videoController?.play();
       }
     }
@@ -205,6 +250,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   @override
   void deactivate() {
     _videoController?.pause();
+    _videoController?.setVolume(0);
     super.deactivate();
   }
 
@@ -215,8 +261,12 @@ class _ReelFeedCardState extends State<ReelFeedCard>
       ReelVideoPreloader.instance.markActive(widget.reel.id);
       ReelVideoPreloader.instance.markInactive(oldWidget.reel.id);
       if (_videoInitialized && _videoController != null) {
-        if (!_isPaused) {
+        if (_canPlayAudio) {
+          ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
           _videoController?.play();
+        } else {
+          _videoController?.pause();
+          _videoController?.setVolume(0);
         }
       } else {
         _initVideo();
@@ -224,6 +274,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     } else if (!widget.isActive && oldWidget.isActive) {
       ReelVideoPreloader.instance.markInactive(widget.reel.id);
       _videoController?.pause();
+      _videoController?.setVolume(0);
     }
   }
 
@@ -236,13 +287,12 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     try {
       appRouteObserver.unsubscribe(this);
     } catch (_) {}
+    _route = null;
     WidgetsBinding.instance.removeObserver(this);
-    try {
-      _videoController?.pause();
-      _videoController = null;
-    } catch (e) {
-      debugPrint('Error pausing reel video: $e');
-    }
+    // NOTE: deactivate() already calls pause()/setVolume() safely before the
+    // widget tree is torn down. Repeating them here triggers async platform
+    // channel calls that look up a deactivated ancestor → FlutterError.
+    _videoController = null;
     _animController.dispose();
     super.dispose();
   }
@@ -365,6 +415,18 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         (myUsername.isNotEmpty && reelUsername == myUsername) ||
         item.username == '@you' ||
         item.username == 'you';
+
+    final String reelAuthorId = (item.authorId ?? '').trim().toLowerCase();
+    final AuthorInfo? cachedAuthor =
+        reelAuthorId.isNotEmpty ? AuthorProfileCache.get(reelAuthorId) : null;
+    final bool authorHidesLikes = item.hideLikes || (cachedAuthor?.hideMyLikes == true);
+    final bool myProfileHidesLikes = profileProvider.hideMyLikes;
+    final bool shouldHideLikes = !isOwnReel &&
+        (authorHidesLikes ||
+            (reelAuthorId.isNotEmpty &&
+                currentUserId != null &&
+                reelAuthorId == currentUserId.trim().toLowerCase() &&
+                myProfileHidesLikes));
     final double paddingBottom = MediaQuery.of(context).padding.bottom;
     final double viewPaddingBottom = MediaQuery.of(context).viewPadding.bottom;
     final double systemBottomInset =
@@ -415,6 +477,17 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                       ? _videoController!.value.size.height
                       : 9,
                   child: VideoPlayer(_videoController!),
+                ),
+              ),
+            )
+          else if (widget.isActive)
+            const Center(
+              child: SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
                 ),
               ),
             ),
@@ -486,7 +559,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                 // Like
                 _RightActionButton(
                   onTap: widget.onLikeToggle,
-                  label: '${item.likesCount}',
+                  label: shouldHideLikes ? '' : '${item.likesCount}',
                   child: Image.asset(
                     item.isLiked ? AppIcons.likedLogo : AppIcons.unlikeLogo,
                     width: 28,
@@ -494,22 +567,24 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                   ),
                 ),
 
-                const SizedBox(height: 18),
+                if (item.allowComments) ...<Widget>[
+                  const SizedBox(height: 18),
 
-                // Comment
-                _RightActionButton(
-                  onTap: widget.onOpenComments,
-                  label: '${item.commentsCount}',
-                  child: SvgPicture.asset(
-                    AppIcons.comment,
-                    width: 26,
-                    height: 26,
-                    colorFilter: const ColorFilter.mode(
-                      Colors.white,
-                      BlendMode.srcIn,
+                  // Comment
+                  _RightActionButton(
+                    onTap: widget.onOpenComments,
+                    label: '${item.commentsCount}',
+                    child: SvgPicture.asset(
+                      AppIcons.comment,
+                      width: 26,
+                      height: 26,
+                      colorFilter: const ColorFilter.mode(
+                        Colors.white,
+                        BlendMode.srcIn,
+                      ),
                     ),
                   ),
-                ),
+                ],
 
                 const SizedBox(height: 18),
 
@@ -533,104 +608,66 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                 // Save
                 _RightActionButton(
                   onTap: widget.onSaveToggle,
-                  label: l10n.homeSave,
-                  child: SvgPicture.asset(
-                    AppIcons.save,
-                    width: 24,
-                    height: 24,
-                    colorFilter: ColorFilter.mode(
-                      item.isSaved ? AppColors.gradientCyan : Colors.white,
-                      BlendMode.srcIn,
-                    ),
+                  label: item.isSaved ? 'Saved' : l10n.homeSave,
+                  child: Icon(
+                    item.isSaved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                    size: 28,
+                    color: item.isSaved ? AppColors.gradientCyan : Colors.white,
                   ),
                 ),
 
-                if (isOwnReel) ...<Widget>[
-                  if (widget.isCustomView) ...<Widget>[
-                    const SizedBox(height: 18),
-                    // 3 dots button for own reel in profile / custom view
-                    GestureDetector(
-                      onTap: widget.onDelete ??
-                          () => DeleteReelBottomSheet.show(
-                                context,
-                                reel: widget.reel,
-                              ),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.4),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: const Column(
-                          children: <Widget>[
-                            Icon(
-                              Icons.more_horiz_rounded,
-                              color: Colors.white,
-                              size: 22,
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              'More',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                const SizedBox(height: 18),
+
+                // More / Options button (for both own reels and other users' reels)
+                GestureDetector(
+                  onTap: () {
+                    if (isOwnReel) {
+                      if (widget.onDelete != null) {
+                        widget.onDelete!();
+                      } else {
+                        DeleteReelBottomSheet.show(
+                          context,
+                          reel: widget.reel,
+                        );
+                      }
+                    } else {
+                      widget.onOpenSafety();
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.3),
                       ),
                     ),
-                  ],
-                ] else ...<Widget>[
-                  const SizedBox(height: 18),
-
-                  // Safety (Only for other users' reels)
-                  GestureDetector(
-                    onTap: widget.onOpenSafety,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.3),
+                    child: const Column(
+                      children: <Widget>[
+                        Icon(
+                          Icons.more_horiz_rounded,
+                          color: Colors.white,
+                          size: 22,
                         ),
-                      ),
-                      child: Column(
-                        children: <Widget>[
-                          SvgPicture.asset(
-                            AppIcons.safety,
-                            width: 20,
-                            height: 20,
-                            colorFilter: const ColorFilter.mode(
-                              Colors.white,
-                              BlendMode.srcIn,
-                            ),
+                        SizedBox(height: 2),
+                        Text(
+                          'More',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            l10n.homeSafety,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ],
             ),
           ),
@@ -785,6 +822,9 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                             authorId.trim().toLowerCase() ==
                                 currentUserId.trim().toLowerCase();
 
+                        ReelVideoPreloader.instance.setFeedVisible(false);
+                        ReelVideoPreloader.instance.pauseAll();
+                        ReelVideoPreloader.instance.muteAll();
                         if (isCurrentUser) {
                           Navigator.push<void>(
                             context,

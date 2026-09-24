@@ -687,24 +687,50 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         width: 40,
         height: 40,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => Image.asset(
-          AppImages.forYouImg,
+        errorBuilder: (_, _, _) => Container(
           width: 40,
           height: 40,
-          fit: BoxFit.cover,
+          color: Colors.white12,
+          child: const Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white38,
+              size: 20,
+            ),
+          ),
         ),
       );
     }
-    return Image.asset(
-      url,
-      width: 40,
-      height: 40,
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => Image.asset(
-        AppImages.forYouImg,
+    if (url.startsWith('assets/')) {
+      return Image.asset(
+        url,
         width: 40,
         height: 40,
         fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => Container(
+          width: 40,
+          height: 40,
+          color: Colors.white12,
+          child: const Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white38,
+              size: 20,
+            ),
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: 40,
+      height: 40,
+      color: Colors.white12,
+      child: const Center(
+        child: Icon(
+          Icons.image_outlined,
+          color: Colors.white38,
+          size: 20,
+        ),
       ),
     );
   }

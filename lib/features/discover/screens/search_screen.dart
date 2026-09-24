@@ -346,15 +346,8 @@ class _SearchResultsBody extends StatelessWidget {
                       final bool isHttp =
                           img.startsWith('http://') || img.startsWith('https://');
                       final bool isAsset = img.startsWith('assets/');
-
-                      final String fallbackImg = <String>[
-                        AppImages.searchResult1,
-                        AppImages.searchResult2,
-                        AppImages.searchResult3,
-                        AppImages.searchResult4,
-                        AppImages.searchResult5,
-                        AppImages.searchResult6,
-                      ][(res.id ?? '').hashCode.abs() % 6];
+                      final bool isText = res.type == 'TEXT' ||
+                          (img.isEmpty && res.mediaRefs.isEmpty);
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -377,14 +370,18 @@ class _SearchResultsBody extends StatelessWidget {
                                 : 'Shared post',
                             likesCount: res.likesCount ?? 0,
                             commentsCount: res.commentsCount ?? 0,
-                            postImageUrl: isHttp ? img : null,
-                            postImageAsset: isAsset
-                                ? img
-                                : (!isHttp ? fallbackImg : null),
-                            postType: 'PHOTO',
+                            viewsCount: res.viewsCount,
+                            postImageUrl: (!isText && isHttp) ? img : null,
+                            postImageAsset: (!isText && isAsset) ? img : null,
+                            postType: isText ? 'TEXT' : (res.type ?? 'PHOTO'),
                             communityId: res.communityId,
                             isLiked: res.isLiked,
                           ),
+                          onPostDeleted: () {
+                            if (res.id != null) {
+                              provider.notifyPostDeleted(res.id!);
+                            }
+                          },
                           onLikeToggle: () {
                             context
                                 .read<HomeFeedProvider>()
@@ -401,6 +398,9 @@ class _SearchResultsBody extends StatelessWidget {
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
                               builder: (_) => CommentsBottomSheet(
+                                postId: res.id,
+                                postAuthorId: res.authorId,
+                                communityId: res.communityId,
                                 totalComments: res.commentsCount ?? 0,
                               ),
                             );
@@ -557,15 +557,8 @@ class _SearchResultsBody extends StatelessWidget {
                       final bool isHttp =
                           img.startsWith('http://') || img.startsWith('https://');
                       final bool isAsset = img.startsWith('assets/');
-
-                      final String fallbackImg = <String>[
-                        AppImages.searchResult1,
-                        AppImages.searchResult2,
-                        AppImages.searchResult3,
-                        AppImages.searchResult4,
-                        AppImages.searchResult5,
-                        AppImages.searchResult6,
-                      ][(res.id ?? '').hashCode.abs() % 6];
+                      final bool isText = res.type == 'TEXT' ||
+                          (img.isEmpty && res.mediaRefs.isEmpty);
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -588,14 +581,18 @@ class _SearchResultsBody extends StatelessWidget {
                                 : 'Shared post',
                             likesCount: res.likesCount ?? 0,
                             commentsCount: res.commentsCount ?? 0,
-                            postImageUrl: isHttp ? img : null,
-                            postImageAsset: isAsset
-                                ? img
-                                : (!isHttp ? fallbackImg : null),
-                            postType: 'PHOTO',
+                            viewsCount: res.viewsCount,
+                            postImageUrl: (!isText && isHttp) ? img : null,
+                            postImageAsset: (!isText && isAsset) ? img : null,
+                            postType: isText ? 'TEXT' : (res.type ?? 'PHOTO'),
                             communityId: res.communityId,
                             isLiked: res.isLiked,
                           ),
+                          onPostDeleted: () {
+                            if (res.id != null) {
+                              provider.notifyPostDeleted(res.id!);
+                            }
+                          },
                           onLikeToggle: () {
                             context
                                 .read<HomeFeedProvider>()
@@ -612,6 +609,9 @@ class _SearchResultsBody extends StatelessWidget {
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
                               builder: (_) => CommentsBottomSheet(
+                                postId: res.id,
+                                postAuthorId: res.authorId,
+                                communityId: res.communityId,
                                 totalComments: res.commentsCount ?? 0,
                               ),
                             );
@@ -840,15 +840,18 @@ class _NoResultsBody extends StatelessWidget {
                 // YOU MIGHT LIKE
                 const DiscoverSectionLabel(label: 'YOU MIGHT LIKE'),
                 const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: provider.youMightLike
-                      .map(
-                        (DiscoverCreator c) => Padding(
-                          padding: const EdgeInsets.only(right: AppSpacing.lg),
-                          child: DiscoverCreatorCircle(creator: c, size: 60),
-                        ),
-                      )
-                      .toList(),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: provider.youMightLike
+                        .map(
+                          (DiscoverCreator c) => Padding(
+                            padding: const EdgeInsets.only(right: AppSpacing.lg),
+                            child: DiscoverCreatorCircle(creator: c, size: 60),
+                          ),
+                        )
+                        .toList(),
+                  ),
                 ),
               ],
             ],

@@ -73,7 +73,7 @@ class MediaThumbnailWidget extends StatelessWidget {
 
     // 3. Local device image file (not video)
     final String? filePath = item!.filePath;
-    if (filePath != null && isImageFilePath(filePath)) {
+    if (filePath != null && (!item!.isVideo || isImageFilePath(filePath))) {
       final File file = File(filePath);
       if (file.existsSync()) {
         return Image.file(
@@ -119,11 +119,12 @@ class MediaThumbnailWidget extends StatelessWidget {
   }
 
   Widget _fallbackPlaceholder() {
+    final bool isVideo = item?.isVideo ?? true;
     return Container(
       color: const Color(0xFF1E1B26),
-      child: const Center(
+      child: Center(
         child: Icon(
-          Icons.videocam_rounded,
+          isVideo ? Icons.videocam_rounded : Icons.image_rounded,
           color: Colors.white24,
           size: 28,
         ),
@@ -156,7 +157,13 @@ class _VideoFileThumbnailState extends State<_VideoFileThumbnail> {
     try {
       final VideoPlayerController ctrl =
           VideoPlayerController.file(File(widget.filePath));
+      await ctrl.setVolume(0);
       await ctrl.initialize();
+      try {
+        await ctrl.setVolume(0);
+        await ctrl.pause();
+        await ctrl.seekTo(Duration.zero);
+      } catch (_) {}
       if (mounted) {
         setState(() {
           _controller = ctrl;
@@ -170,7 +177,11 @@ class _VideoFileThumbnailState extends State<_VideoFileThumbnail> {
 
   @override
   void dispose() {
-    _controller?.dispose();
+    try {
+      _controller?.pause();
+      _controller?.setVolume(0);
+      _controller?.dispose();
+    } catch (_) {}
     super.dispose();
   }
 

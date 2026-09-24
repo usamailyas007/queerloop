@@ -7,7 +7,6 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../core/api/api_exception.dart';
-import '../../../core/theme/app_images.dart';
 import '../models/create_post_models.dart';
 import '../models/post_draft_model.dart';
 import '../services/media_upload_service.dart';
@@ -19,7 +18,6 @@ class CreatePostProvider extends ChangeNotifier {
     PostContentService? contentService,
   })  : _uploadService = uploadService,
         _contentService = contentService {
-    _initDefaultMedia();
     loadDeviceVideos();
     loadDevicePhotos();
   }
@@ -57,7 +55,7 @@ class CreatePostProvider extends ChangeNotifier {
 
   List<GalleryMediaItem> _photoGallery = <GalleryMediaItem>[];
   List<GalleryMediaItem> get photoGallery =>
-      List<GalleryMediaItem>.unmodifiable(_photoGallery.take(8));
+      List<GalleryMediaItem>.unmodifiable(_photoGallery);
 
   // ── Video Trimming & 60-Second Server Limit ─────────────────────────
   static const int maxVideoDurationLimitSeconds = 60;
@@ -214,7 +212,7 @@ class CreatePostProvider extends ChangeNotifier {
         _uploadResult = MediaUploadResult(
           id: _uploadedMediaId!,
           status: 'ready',
-          downloadUrl: isVideo ? 'assets/videos/video1.mp4' : path,
+          downloadUrl: path,
         );
         _uploadStatus = MediaUploadStatus.ready;
         notifyListeners();
@@ -376,9 +374,9 @@ class CreatePostProvider extends ChangeNotifier {
       // Backend expects type: "TEXT" | "PHOTO" | "VIDEO"
       final String postType = _mediaType == MediaType.text
           ? 'TEXT'
-          : ((_selectedMedia?.isVideo ?? (_mediaType == MediaType.video))
-              ? 'VIDEO'
-              : 'PHOTO');
+          : (_mediaType == MediaType.photo
+              ? 'PHOTO'
+              : ((_selectedMedia?.isVideo ?? true) ? 'VIDEO' : 'PHOTO'));
 
       // Backend expects visibility: "EVERYONE" | "FOLLOWERS" | "COMMUNITY_ONLY"
       final String serverVisibility = () {
@@ -407,6 +405,7 @@ class CreatePostProvider extends ChangeNotifier {
           mediaRefs: postType == 'TEXT' ? const <String>[] : mediaRefs,
           tags: postTags,
           communityId: commId,
+          allowComments: _allowComments,
           allowDownloads: _allowDownloads,
         );
       } else {
@@ -419,6 +418,7 @@ class CreatePostProvider extends ChangeNotifier {
           community: postType == 'TEXT' ? '' : _selectedCommunity,
           communityId: commId,
           visibility: serverVisibility,
+          allowComments: _allowComments,
           allowDownloads: _allowDownloads,
         );
       }
@@ -652,6 +652,7 @@ class CreatePostProvider extends ChangeNotifier {
     _allowDownloads = false;
     _trimStart = 0.0;
     _trimEnd = 1.0;
+    _selectedMedia = null;
     _resetUploadState();
     notifyListeners();
   }
@@ -759,7 +760,7 @@ class CreatePostProvider extends ChangeNotifier {
 
         if (albums.isNotEmpty) {
           final List<AssetEntity> entities =
-              await albums.first.getAssetListRange(start: 0, end: 8);
+              await albums.first.getAssetListRange(start: 0, end: 100);
 
           if (entities.isNotEmpty) {
             final List<GalleryMediaItem> realItems = <GalleryMediaItem>[];
@@ -857,59 +858,6 @@ class CreatePostProvider extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Device media picker exception: $e');
-    }
-  }
-
-  // ── Initial Fallback ─────────────────────────────────────────────────
-  void _initDefaultMedia() {
-    _videoGallery = <GalleryMediaItem>[
-      const GalleryMediaItem(
-        id: 'v1',
-        assetPath: AppImages.forYouImg,
-        videoAsset: 'assets/videos/video1.mp4',
-        isVideo: true,
-        duration: '0:47',
-        durationSeconds: 47,
-      ),
-      const GalleryMediaItem(
-        id: 'v2',
-        assetPath: AppImages.followingImg,
-        videoAsset: 'assets/videos/video2.mp4',
-        isVideo: true,
-        duration: '0:40',
-        durationSeconds: 40,
-      ),
-      const GalleryMediaItem(
-        id: 'v3',
-        assetPath: AppImages.communityImg,
-        videoAsset: 'assets/videos/video3.mp4',
-        isVideo: true,
-        duration: '0:59',
-        durationSeconds: 59,
-      ),
-      const GalleryMediaItem(
-        id: 'v4',
-        assetPath: AppImages.emptyHomeImg,
-        videoAsset: 'assets/videos/video1.mp4',
-        isVideo: true,
-        duration: '0:47',
-        durationSeconds: 47,
-      ),
-    ];
-
-    _photoGallery = <GalleryMediaItem>[
-      const GalleryMediaItem(id: 'p1', assetPath: AppImages.searchResult1),
-      const GalleryMediaItem(id: 'p2', assetPath: AppImages.searchResult2),
-      const GalleryMediaItem(id: 'p3', assetPath: AppImages.searchResult3),
-      const GalleryMediaItem(id: 'p4', assetPath: AppImages.searchResult4),
-      const GalleryMediaItem(id: 'p5', assetPath: AppImages.searchResult5),
-      const GalleryMediaItem(id: 'p6', assetPath: AppImages.searchResult6),
-      const GalleryMediaItem(id: 'p7', assetPath: AppImages.queer),
-      const GalleryMediaItem(id: 'p8', assetPath: AppImages.transgender),
-    ];
-
-    if (_mediaType == MediaType.photo && _photoGallery.isNotEmpty) {
-      _selectedMedia = _photoGallery.first;
     }
   }
 }

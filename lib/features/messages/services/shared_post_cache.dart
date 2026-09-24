@@ -7,44 +7,52 @@ class SharedPostData {
   const SharedPostData({
     required this.postId,
     this.thumbnailUrl,
+    this.videoUrl,
     this.caption,
     this.author,
     this.authorAvatarUrl,
     this.type = 'post',
     this.likes = 0,
     this.comments = 0,
+    this.views = 0,
   });
 
   final String postId;
   final String? thumbnailUrl;
+  final String? videoUrl;
   final String? caption;
   final String? author;
   final String? authorAvatarUrl;
   final String type; // 'post' or 'reel'
   final int likes;
   final int comments;
+  final int views;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'postId': postId,
         if (thumbnailUrl != null) 'thumbnailUrl': thumbnailUrl,
+        if (videoUrl != null) 'videoUrl': videoUrl,
         if (caption != null) 'caption': caption,
         if (author != null) 'author': author,
         if (authorAvatarUrl != null) 'authorAvatarUrl': authorAvatarUrl,
         'type': type,
         'likes': likes,
         'comments': comments,
+        'views': views,
       };
 
   factory SharedPostData.fromJson(Map<String, dynamic> json) {
     return SharedPostData(
       postId: (json['postId'] ?? '').toString(),
       thumbnailUrl: json['thumbnailUrl'] as String?,
+      videoUrl: json['videoUrl'] as String?,
       caption: json['caption'] as String?,
       author: json['author'] as String?,
       authorAvatarUrl: json['authorAvatarUrl'] as String?,
       type: (json['type'] ?? 'post').toString(),
       likes: (json['likes'] as num?)?.toInt() ?? 0,
       comments: (json['comments'] as num?)?.toInt() ?? 0,
+      views: (json['views'] as num?)?.toInt() ?? 0,
     );
   }
 }

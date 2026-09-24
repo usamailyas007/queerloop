@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -20,13 +20,24 @@ class SearchPostsGrid extends StatelessWidget {
   final List<DiscoverSearchResult> results;
 
   List<ReelItemModel> _buildSearchReels() {
-    return results.asMap().entries.map((MapEntry<int, DiscoverSearchResult> entry) {
+    return results
+        .where((res) => !DeletedPostsRegistry.isDeleted(res.id ?? ''))
+        .toList()
+        .asMap()
+        .entries
+        .map((MapEntry<int, DiscoverSearchResult> entry) {
       final int i = entry.key;
       final DiscoverSearchResult res = entry.value;
 
       final String img = (res.imageAsset.isNotEmpty ? res.imageAsset : (res.thumbnailUrl ?? '')).trim();
       final bool isVideoUrl = img.startsWith('http') &&
-          (img.endsWith('.mp4') || img.endsWith('.m3u8') || img.contains('video'));
+          (img.endsWith('.mp4') || img.endsWith('.m3u8') || img.contains('video') || img.contains('/videos/'));
+
+      final String? thumb = (res.thumbnailUrl != null && res.thumbnailUrl!.isNotEmpty)
+          ? res.thumbnailUrl
+          : (res.videoUrl != null && res.videoUrl!.contains('/videos/processed/')
+              ? res.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumbnail.jpg')
+              : (isVideoUrl ? null : (img.startsWith('http') ? img : null)));
 
       return ReelItemModel(
         id: res.id ?? 'search_reel_$i',
@@ -40,10 +51,11 @@ class SearchPostsGrid extends StatelessWidget {
             : AppImages.user1,
         videoAsset: (img.startsWith('assets/') && img.endsWith('.mp4')) ? img : '',
         videoUrl: res.videoUrl ?? (isVideoUrl ? img : (img.startsWith('http') ? img : null)),
-        thumbnailUrl: res.thumbnailUrl ?? (isVideoUrl ? null : (img.startsWith('http') ? img : null)),
+        thumbnailUrl: thumb,
         caption: res.caption ?? '',
         likesCount: res.likesCount ?? 0,
         commentsCount: res.commentsCount ?? 0,
+        viewsCount: res.viewsCount,
         tags: const <String>[],
       );
     }).toList();
@@ -101,6 +113,7 @@ class SearchPostsGrid extends StatelessWidget {
     final String img = (item.imageAsset.isNotEmpty ? item.imageAsset : (item.thumbnailUrl ?? '')).trim();
     final bool isHttp = img.startsWith('http://') || img.startsWith('https://');
     final bool isAsset = img.startsWith('assets/');
+    final bool isText = item.type == 'TEXT' || (img.isEmpty && item.mediaRefs.isEmpty);
 
     showModalBottomSheet<void>(
       context: context,
@@ -146,20 +159,9 @@ class SearchPostsGrid extends StatelessWidget {
                       : 'Shared post',
                   likesCount: item.likesCount ?? 0,
                   commentsCount: item.commentsCount ?? 0,
-                  postImageUrl: isHttp ? img : null,
-                  postImageAsset: isAsset
-                      ? img
-                      : (!isHttp
-                          ? <String>[
-                              AppImages.searchResult1,
-                              AppImages.searchResult2,
-                              AppImages.searchResult3,
-                              AppImages.searchResult4,
-                              AppImages.searchResult5,
-                              AppImages.searchResult6,
-                            ][(item.id ?? '').hashCode.abs() % 6]
-                          : null),
-                  postType: item.type ?? 'PHOTO',
+                  postImageUrl: (!isText && isHttp) ? img : null,
+                  postImageAsset: (!isText && isAsset) ? img : null,
+                  postType: isText ? 'TEXT' : (item.type ?? 'PHOTO'),
                   communityId: item.communityId,
                   isLiked: item.isLiked,
                 ),
@@ -171,6 +173,9 @@ class SearchPostsGrid extends StatelessWidget {
                     isScrollControlled: true,
                     backgroundColor: Colors.transparent,
                     builder: (_) => CommentsBottomSheet(
+                      postId: item.id,
+                      postAuthorId: item.authorId,
+                      communityId: item.communityId,
                       totalComments: item.commentsCount ?? 0,
                     ),
                   );
@@ -184,7 +189,11 @@ class SearchPostsGrid extends StatelessWidget {
   }
 
   void _handleTap(BuildContext context, int index) {
-    final DiscoverSearchResult item = results[index];
+    final List<DiscoverSearchResult> activeResults = results
+        .where((DiscoverSearchResult r) => !DeletedPostsRegistry.isDeleted(r.id ?? ''))
+        .toList();
+    if (index >= activeResults.length) return;
+    final DiscoverSearchResult item = activeResults[index];
     if (item.isReel) {
       _openReelPlayer(context, index);
     } else {
@@ -194,7 +203,11 @@ class SearchPostsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (results.isEmpty) {
+    final List<DiscoverSearchResult> activeResults = results
+        .where((DiscoverSearchResult r) => !DeletedPostsRegistry.isDeleted(r.id ?? ''))
+        .toList();
+
+    if (activeResults.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -207,14 +220,15 @@ class SearchPostsGrid extends StatelessWidget {
         mainAxisSpacing: 8,
         childAspectRatio: 0.72,
       ),
-      itemCount: results.length,
+      itemCount: activeResults.length,
       itemBuilder: (BuildContext context, int index) {
-        final DiscoverSearchResult item = results[index];
+        final DiscoverSearchResult item = activeResults[index];
         final bool isReel = item.isReel;
-        final String countText = item.viewCount ??
-            (item.likesCount != null && item.likesCount! > 0
+        final String countText = isReel
+            ? (item.viewCount ?? '${item.viewsCount}')
+            : (item.likesCount != null && item.likesCount! > 0
                 ? '${item.likesCount}'
-                : '');
+                : (item.viewCount ?? ''));
 
         return GestureDetector(
           onTap: () => _handleTap(context, index),
@@ -301,19 +315,45 @@ class SearchPostsGrid extends StatelessWidget {
   }
 
   Widget _fallbackContainer(DiscoverSearchResult item) {
-    final int hash = (item.id ?? item.caption ?? '').hashCode.abs() % 6;
-    final String fallbackAsset = <String>[
-      AppImages.searchResult1,
-      AppImages.searchResult2,
-      AppImages.searchResult3,
-      AppImages.searchResult4,
-      AppImages.searchResult5,
-      AppImages.searchResult6,
-    ][hash];
-
-    return Image.asset(
-      fallbackAsset,
-      fit: BoxFit.cover,
+    if (item.isReel) {
+      return Container(
+        color: const Color(0xFF1E1B26),
+        child: const Center(
+          child: Icon(
+            Icons.play_circle_outline_rounded,
+            color: Colors.white38,
+            size: 32,
+          ),
+        ),
+      );
+    }
+    if (item.caption != null && item.caption!.isNotEmpty && item.imageAsset.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(8),
+        color: const Color(0xFF231E34),
+        child: Center(
+          child: Text(
+            item.caption!,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      );
+    }
+    return Container(
+      color: const Color(0xFF1E1E2C),
+      child: Center(
+        child: Icon(
+          item.isReel ? Icons.play_arrow_rounded : Icons.image_outlined,
+          color: Colors.white24,
+          size: 28,
+        ),
+      ),
     );
   }
 }

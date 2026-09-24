@@ -19,6 +19,7 @@ import '../models/reel_item_model.dart';
 import '../provider/home_feed_provider.dart';
 import '../../messages/widgets/report_conversation_bottom_sheet.dart';
 import '../../reports/models/report_models.dart';
+import 'send_to_bottom_sheet.dart';
 
 class ShareContactItem {
   const ShareContactItem({
@@ -38,8 +39,8 @@ class ShareContactItem {
 
 class ShareThisPostBottomSheet extends StatefulWidget {
   const ShareThisPostBottomSheet({
-    required this.onOpenMoreSendTo,
-    required this.onOpenReportSafety,
+    this.onOpenMoreSendTo,
+    this.onOpenReportSafety,
     this.reel,
     this.post,
     this.postId,
@@ -50,8 +51,8 @@ class ShareThisPostBottomSheet extends StatefulWidget {
     super.key,
   });
 
-  final VoidCallback onOpenMoreSendTo;
-  final VoidCallback onOpenReportSafety;
+  final VoidCallback? onOpenMoreSendTo;
+  final VoidCallback? onOpenReportSafety;
   final ReelItemModel? reel;
   final PostItemModel? post;
   final String? postId;
@@ -238,7 +239,25 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
 
                   // More Circle Button (Opens SendToBottomSheet)
                   GestureDetector(
-                    onTap: widget.onOpenMoreSendTo,
+                    onTap: () {
+                      if (widget.onOpenMoreSendTo != null) {
+                        widget.onOpenMoreSendTo!();
+                      } else {
+                        Navigator.pop(context);
+                        showModalBottomSheet<void>(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (BuildContext ctx) => SendToBottomSheet(
+                            reel: widget.reel,
+                            postId: widget.reel?.id ?? widget.postId ?? widget.post?.id,
+                            postAuthor: widget.reel?.username ?? widget.postAuthor ?? widget.post?.username,
+                            postThumbnail: widget.reel?.thumbnailUrl ?? widget.postThumbnail ?? widget.post?.postImageUrl ?? widget.post?.postImageAsset,
+                            postCaption: widget.reel?.caption ?? widget.post?.content,
+                          ),
+                        );
+                      }
+                    },
                     child: Column(
                       children: <Widget>[
                         Container(
@@ -303,9 +322,11 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                     (widget.postAuthor != null &&
                         context.read<ProfileProvider>().username.replaceAll('@', '').toLowerCase() ==
                             widget.postAuthor!.replaceAll('@', '').toLowerCase());
-                final bool canDownload = widget.reel?.allowDownloads ??
+                final bool downloadsAllowed = widget.reel?.allowDownloads ??
                     widget.post?.allowDownloads ??
                     widget.allowDownloads;
+                final bool canDownload = downloadsAllowed &&
+                    (resolvedMedia != null && resolvedMedia.isNotEmpty);
 
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -342,6 +363,7 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                             context: context,
                             mediaUrl: resolvedMedia,
                             title: widget.postAuthor ?? 'queerloop',
+                            authorId: authorId,
                             isVideo: isVideo,
                             allowDownloads: canDownload,
                             isCreator: isCreator,

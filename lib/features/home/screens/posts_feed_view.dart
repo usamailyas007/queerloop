@@ -65,6 +65,7 @@ class PostsFeedView extends StatelessWidget {
     String postId,
     int totalComments, {
     String? postAuthorId,
+    bool allowComments = true,
   }) {
     showModalBottomSheet<void>(
       context: context,
@@ -75,6 +76,7 @@ class PostsFeedView extends StatelessWidget {
           postId: postId,
           postAuthorId: postAuthorId,
           totalComments: totalComments,
+          allowComments: allowComments,
           onCommentAdded: () {
             context.read<HomeFeedProvider>().incrementCommentCount(postId);
           },
@@ -333,6 +335,7 @@ class PostsFeedView extends StatelessWidget {
                   item.id,
                   item.commentsCount,
                   postAuthorId: item.authorId,
+                  allowComments: item.allowComments,
                 );
               }
             },

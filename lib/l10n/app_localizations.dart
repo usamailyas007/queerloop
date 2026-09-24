@@ -275,7 +275,7 @@ abstract class AppLocalizations {
   /// No description provided for @authGoogle.
   ///
   /// In en, this message translates to:
-  /// **'Google'**
+  /// **'Continue with Google'**
   String get authGoogle;
 
   /// No description provided for @authContinueApple.

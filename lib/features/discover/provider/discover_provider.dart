@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/theme/app_images.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
@@ -90,32 +91,47 @@ class DiscoverProvider extends ChangeNotifier {
     }
   }
 
-  List<DiscoverSearchResult> _filterCurrentUser(List<DiscoverSearchResult> list) {
-    if (_currentUserId == null && _currentUsername == null) {
-      return list;
-    }
-    final String cleanUid = _currentUserId?.trim().toLowerCase() ?? '';
-    final String cleanUname = _currentUsername?.replaceAll('@', '').trim().toLowerCase() ?? '';
+  List<DiscoverSearchResult> _filterDeletedPosts(List<DiscoverSearchResult> list) {
     return list.where((DiscoverSearchResult p) {
-      if (cleanUid.isNotEmpty && p.authorId != null && p.authorId!.trim().toLowerCase() == cleanUid) {
-        return false;
-      }
-      if (cleanUname.isNotEmpty &&
-          p.authorUsername != null &&
-          p.authorUsername!.replaceAll('@', '').trim().toLowerCase() == cleanUname) {
-        return false;
-      }
-      return true;
+      final String id = p.id ?? '';
+      return id.isNotEmpty && !DeletedPostsRegistry.isDeleted(id);
     }).toList();
   }
 
-  List<DiscoverSearchResult> get searchResults => _filterCurrentUser(_searchResults.posts);
+  List<DiscoverSearchResult> _filterVisiblePosts(List<DiscoverSearchResult> list) {
+    return list.where((DiscoverSearchResult p) {
+      return PostVisibilityFilter.canViewPost(
+        visibility: p.visibility,
+        authorId: p.authorId,
+        authorUsername: p.authorUsername,
+        currentUserId: _currentUserId,
+        currentUsername: _currentUsername,
+        isGuest: _currentUserId == null || _currentUserId!.isEmpty,
+      );
+    }).toList();
+  }
+
+  List<DiscoverSearchResult> get searchResults =>
+      _filterVisiblePosts(_filterDeletedPosts(_searchResults.posts));
 
   List<DiscoverSearchResult> get postsResults =>
       searchResults.where((DiscoverSearchResult p) => !p.isReel).toList();
 
-  List<DiscoverSearchResult> get reelsResults =>
-      searchResults.where((DiscoverSearchResult p) => p.isReel).toList();
+  List<DiscoverSearchResult> get reelsResults {
+    final List<DiscoverSearchResult> fromReels =
+        _filterVisiblePosts(_filterDeletedPosts(_searchResults.reels));
+    final List<DiscoverSearchResult> fromPosts =
+        searchResults.where((DiscoverSearchResult p) => p.isReel).toList();
+    final Set<String> seenIds = <String>{};
+    final List<DiscoverSearchResult> combined = <DiscoverSearchResult>[];
+    for (final DiscoverSearchResult r in <DiscoverSearchResult>[...fromReels, ...fromPosts]) {
+      final String id = r.id ?? '';
+      if (id.isNotEmpty && !DeletedPostsRegistry.isDeleted(id) && seenIds.add(id)) {
+        combined.add(r);
+      }
+    }
+    return combined;
+  }
 
   List<DiscoverPerson> get peopleResults {
     if (_currentUserId == null && _currentUsername == null) {
@@ -146,6 +162,7 @@ class DiscoverProvider extends ChangeNotifier {
       case 0:
         return _searchResults.isNotEmpty ||
             _searchResults.posts.isNotEmpty ||
+            _searchResults.reels.isNotEmpty ||
             _searchResults.people.isNotEmpty ||
             _searchResults.tags.isNotEmpty ||
             _searchResults.communities.isNotEmpty;
@@ -212,6 +229,20 @@ class DiscoverProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void notifyPostDeleted(String postId) {
+    final String clean = postId.trim();
+    if (clean.isEmpty) return;
+    DeletedPostsRegistry.markDeleted(clean);
+    _searchCache.clear();
+    _liveHomePosts = _liveHomePosts.where((PostItemModel p) => p.id != clean).toList();
+    _liveHomeReels = _liveHomeReels.where((ReelItemModel r) => r.id != clean).toList();
+    _searchResults = _searchResults.copyWith(
+      posts: _searchResults.posts.where((DiscoverSearchResult p) => p.id != clean).toList(),
+      reels: _searchResults.reels.where((DiscoverSearchResult r) => r.id != clean).toList(),
+    );
+    notifyListeners();
+  }
+
   Future<void> _executeSearch(String query, int tabIndex) async {
     final String tabName =
         (tabIndex >= 0 && tabIndex < _tabMapping.length) ? _tabMapping[tabIndex] : 'all';
@@ -238,41 +269,61 @@ class DiscoverProvider extends ChangeNotifier {
 
       // Merge matching posts and reels from live home feed so recently created or loaded content is immediately searchable
       final String qLower = query.toLowerCase();
-      final List<DiscoverSearchResult> localMatched = <DiscoverSearchResult>[];
+      final List<DiscoverSearchResult> localMatchedPosts = <DiscoverSearchResult>[];
+      final List<DiscoverSearchResult> localMatchedReels = <DiscoverSearchResult>[];
 
       if (tabName == 'all' || tabName == 'posts') {
         for (final PostItemModel p in _liveHomePosts) {
+          if (DeletedPostsRegistry.isDeleted(p.id)) continue;
           if (p.postType.toUpperCase().trim() == 'VIDEO') continue;
           if (p.content.toLowerCase().contains(qLower) ||
               p.username.toLowerCase().contains(qLower)) {
-            localMatched.add(DiscoverSearchResult.fromPostItem(p));
+            localMatchedPosts.add(DiscoverSearchResult.fromPostItem(p));
           }
         }
       }
 
       if (tabName == 'all' || tabName == 'reels') {
         for (final ReelItemModel r in _liveHomeReels) {
+          if (DeletedPostsRegistry.isDeleted(r.id)) continue;
           if (r.caption.toLowerCase().contains(qLower) ||
               r.username.toLowerCase().contains(qLower) ||
               r.tags.any((String t) => t.toLowerCase().contains(qLower))) {
-            localMatched.add(DiscoverSearchResult.fromReelItem(r));
+            localMatchedReels.add(DiscoverSearchResult.fromReelItem(r));
           }
         }
       }
 
-      if (localMatched.isNotEmpty) {
+      final List<DiscoverSearchResult> filteredPosts = results.posts
+          .where((DiscoverSearchResult p) => !DeletedPostsRegistry.isDeleted(p.id ?? ''))
+          .toList();
+      final List<DiscoverSearchResult> filteredReels = results.reels
+          .where((DiscoverSearchResult r) => !DeletedPostsRegistry.isDeleted(r.id ?? ''))
+          .toList();
+
+      if (localMatchedPosts.isNotEmpty) {
         final Set<String> existingIds =
-            results.posts.map((DiscoverSearchResult p) => p.id ?? '').toSet();
-        final List<DiscoverSearchResult> mergedPosts =
-            List<DiscoverSearchResult>.from(results.posts);
-        for (final DiscoverSearchResult lm in localMatched) {
+            filteredPosts.map((DiscoverSearchResult p) => p.id ?? '').toSet();
+        for (final DiscoverSearchResult lm in localMatchedPosts) {
           if (lm.id != null && !existingIds.contains(lm.id)) {
-            mergedPosts.add(lm);
+            filteredPosts.add(lm);
             existingIds.add(lm.id!);
           }
         }
-        results = results.copyWith(posts: mergedPosts);
       }
+
+      if (localMatchedReels.isNotEmpty) {
+        final Set<String> existingReelIds =
+            filteredReels.map((DiscoverSearchResult r) => r.id ?? '').toSet();
+        for (final DiscoverSearchResult lr in localMatchedReels) {
+          if (lr.id != null && !existingReelIds.contains(lr.id)) {
+            filteredReels.add(lr);
+            existingReelIds.add(lr.id!);
+          }
+        }
+      }
+
+      results = results.copyWith(posts: filteredPosts, reels: filteredReels);
 
       _searchCache[cacheKey] = results;
 
@@ -365,25 +416,25 @@ class DiscoverProvider extends ChangeNotifier {
       rank: '01',
       hashtag: '#chosenfamily',
       postsCount: '28.4K posts today',
-      thumbnailAsset: AppImages.forYouImg,
+      thumbnailAsset: '',
     ),
     TrendingItem(
       rank: '02',
       hashtag: '#prideprep2026',
       postsCount: '19.7K posts today',
-      thumbnailAsset: AppImages.followingImg,
+      thumbnailAsset: '',
     ),
     TrendingItem(
       rank: '03',
       hashtag: '#binderfitcheck',
       postsCount: '11.2K posts today',
-      thumbnailAsset: AppImages.communityImg,
+      thumbnailAsset: '',
     ),
     TrendingItem(
       rank: '04',
       hashtag: '#queerbooktok',
       postsCount: '8.9K posts today',
-      thumbnailAsset: AppImages.emptyHomeImg,
+      thumbnailAsset: '',
     ),
   ];
 

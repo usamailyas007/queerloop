@@ -3,12 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../create_post/models/create_post_models.dart';
+import '../../create_post/services/post_content_service.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../home/screens/reels_feed_view.dart';
 import '../../home/screens/single_post_view_screen.dart';
@@ -128,8 +131,16 @@ class ChatBubble extends StatelessWidget {
       return Image.asset(
         thumb,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) =>
-            Image.asset(AppImages.forYouImg, fit: BoxFit.cover),
+        errorBuilder: (_, _, _) => Container(
+          color: const Color(0xFF1E1B26),
+          child: const Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white24,
+              size: 28,
+            ),
+          ),
+        ),
       );
     }
 
@@ -175,29 +186,86 @@ class ChatBubble extends StatelessWidget {
     );
   }
 
-  void _openSharedPostOrReel(BuildContext context) {
+  Future<void> _openSharedPostOrReel(BuildContext context) async {
     final String? postId = message.sharedPostId;
     if (postId == null || postId.trim().isEmpty) return;
 
     if (message.postType == 'reel') {
+      final SharedPostData? cached = SharedPostCache.get(postId);
+      String? resolvedVideo = (cached?.videoUrl != null && cached!.videoUrl!.isNotEmpty)
+          ? cached.videoUrl
+          : ((message.mediaUrl != null &&
+                  (message.mediaUrl!.contains('/videos/') ||
+                      message.mediaUrl!.endsWith('.m3u8') ||
+                      message.mediaUrl!.endsWith('.mp4')))
+              ? message.mediaUrl
+              : null);
+      String? resolvedThumb = cached?.thumbnailUrl ?? message.postThumbnailAsset;
+      String authorName = cached?.author ?? message.postAuthor ?? '@creator';
+      String authorAvatar = cached?.authorAvatarUrl ??
+          ((message.postAuthorAvatarUrl != null && message.postAuthorAvatarUrl!.isNotEmpty)
+              ? message.postAuthorAvatarUrl!
+              : AppImages.user1);
+      String caption = cached?.caption ?? message.postCaption ?? '';
+      int likes = cached?.likes ?? message.postLikes ?? 0;
+      int comments = cached?.comments ?? message.postComments ?? 0;
+      String? authorId = (message.postAuthorId != null && message.postAuthorId!.isNotEmpty)
+          ? message.postAuthorId
+          : null;
+
+      // If videoUrl is not resolved yet, fetch the post from backend
+      if (resolvedVideo == null || resolvedVideo.isEmpty) {
+        try {
+          final PostContentService postService =
+              PostContentService(context.read<ApiClient>());
+          final PostResponseModel raw = await postService.getPost(postId);
+          authorId ??= raw.authorId;
+          if (raw.authorName != null && raw.authorName!.isNotEmpty) {
+            authorName = raw.authorName!.startsWith('@') ? raw.authorName! : '@${raw.authorName!}';
+          }
+          if (raw.authorAvatar != null && raw.authorAvatar!.isNotEmpty) {
+            authorAvatar = raw.authorAvatar!;
+          }
+          if (raw.caption.isNotEmpty) caption = raw.caption;
+          if (raw.likesCount > 0) likes = raw.likesCount;
+          if (raw.commentsCount > 0) comments = raw.commentsCount;
+
+          if (raw.mediaRefs.isNotEmpty) {
+            final String firstRef = raw.mediaRefs.first.trim();
+            if (firstRef.startsWith('http://') || firstRef.startsWith('https://')) {
+              resolvedVideo = firstRef;
+              resolvedThumb ??= firstRef;
+            } else {
+              final String cleanRef = firstRef
+                  .replaceAll(RegExp(r'^/+'), '')
+                  .replaceAll(RegExp(r'^media/'), '');
+              resolvedVideo = '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
+              if (authorId != null && authorId.isNotEmpty) {
+                resolvedThumb ??= '${AppConfig.cdnUrl}/images/original/$authorId/$cleanRef.jpg';
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('⚠️ [ChatBubble] Error fetching shared reel $postId: $e');
+        }
+      }
+
+      if (!context.mounted) return;
+
       final ReelItemModel reel = ReelItemModel(
         id: postId,
-        authorId: message.senderId,
-        username: message.postAuthor ?? '@creator',
+        authorId: authorId,
+        username: authorName,
         pronounsTime: message.timestamp.isNotEmpty
             ? message.timestamp
             : 'just now',
-        avatarAsset:
-            (message.postAuthorAvatarUrl != null &&
-                message.postAuthorAvatarUrl!.isNotEmpty)
-            ? message.postAuthorAvatarUrl!
-            : AppImages.user1,
+        avatarAsset: authorAvatar,
         videoAsset: '',
-        videoUrl: message.postThumbnailAsset,
-        thumbnailUrl: message.postThumbnailAsset,
-        caption: message.postCaption ?? '',
-        likesCount: message.postLikes ?? 0,
-        commentsCount: message.postComments ?? 0,
+        videoUrl: resolvedVideo,
+        thumbnailUrl: resolvedThumb,
+        caption: caption,
+        likesCount: likes,
+        commentsCount: comments,
       );
 
       Navigator.push<void>(
@@ -695,7 +763,7 @@ class ChatBubble extends StatelessWidget {
                                             message.postViews ??
                                                 (message.postLikes != null
                                                     ? '${message.postLikes}'
-                                                    : '12.4K'),
+                                                    : '0'),
                                             style: AppTextStyles.caption
                                                 .copyWith(
                                                   color: Colors.white,

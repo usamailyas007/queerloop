@@ -2,16 +2,17 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:queerloop/features/create_post/widgets/media_thumbnail_widget.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../home/services/reel_video_preloader.dart';
 import '../models/create_post_models.dart';
 import '../provider/create_post_provider.dart';
 import '../widgets/media_processing_dialog.dart';
-import '../widgets/media_thumbnail_widget.dart';
 import 'new_post_form_screen.dart';
 
 class TrimVideoScreen extends StatefulWidget {
@@ -29,7 +30,11 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
   @override
   void initState() {
     super.initState();
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ReelVideoPreloader.instance.pauseAll();
       final CreatePostProvider provider = context.read<CreatePostProvider>();
       _setupVideoController(provider.selectedMedia);
     });
@@ -48,7 +53,7 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
     } else if (videoAsset != null && videoAsset.isNotEmpty) {
       ctrl = VideoPlayerController.asset(videoAsset);
     } else {
-      ctrl = VideoPlayerController.asset('assets/videos/video1.mp4');
+      return;
     }
 
     try {
@@ -105,9 +110,20 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
   }
 
   @override
+  void deactivate() {
+    _controller?.pause();
+    _controller?.setVolume(0);
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
-    _controller?.removeListener(_handleVideoLoop);
-    _controller?.dispose();
+    try {
+      _controller?.pause();
+      _controller?.setVolume(0);
+      _controller?.removeListener(_handleVideoLoop);
+      _controller?.dispose();
+    } catch (_) {}
     super.dispose();
   }
 
@@ -121,6 +137,8 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
       canPop: true,
       onPopInvokedWithResult: (bool didPop, dynamic result) {
         if (didPop) {
+          _controller?.pause();
+          _controller?.setVolume(0);
           context.read<CreatePostProvider>().cancelMediaUpload();
         }
       },
@@ -142,6 +160,8 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
                     // Circular Back Button <
                     GestureDetector(
                       onTap: () {
+                        _controller?.pause();
+                        _controller?.setVolume(0);
                         context.read<CreatePostProvider>().cancelMediaUpload();
                         Navigator.pop(context);
                       },
@@ -182,11 +202,18 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
                       text: 'Done',
                       onPressed: () async {
                         _controller?.pause();
+                        _controller?.setVolume(0);
+                        _isPlaying = false;
                         final bool success = await MediaProcessingDialog.show(
                           context,
                           isVideo: true,
                         );
                         if (success && context.mounted) {
+                          _controller?.pause();
+                          _controller?.setVolume(0);
+                          _controller?.removeListener(_handleVideoLoop);
+                          _controller?.dispose();
+                          _controller = null;
                           Navigator.pushReplacement<void, void>(
                             context,
                             MaterialPageRoute<void>(

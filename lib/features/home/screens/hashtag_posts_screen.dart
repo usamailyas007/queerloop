@@ -3,14 +3,18 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/cache/user_relationship_cache.dart';
+import '../../../core/config/app_config.dart';
+import '../../auth/auth_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../discover/models/discover_models.dart';
+import '../../create_post/models/create_post_models.dart';
+import '../../create_post/services/post_content_service.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../../discover/provider/discover_provider.dart';
-import '../../discover/services/discover_service.dart';
 import '../models/post_item_model.dart';
 import '../models/reel_item_model.dart';
 import '../provider/home_feed_provider.dart';
@@ -75,6 +79,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
     try {
       final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
       for (final PostItemModel p in homeFeed.posts) {
+        if (DeletedPostsRegistry.isDeleted(p.id)) continue;
         final String contentLower = p.content.toLowerCase();
         if (contentLower.contains(hashTag.toLowerCase()) ||
             contentLower.contains(tagLower)) {
@@ -87,6 +92,9 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
                         p.postImageUrl!.contains('video') ||
                         p.postImageUrl!.contains('/videos/')));
             if (isVid) {
+              final String? thumb = (p.postImageUrl != null && p.postImageUrl!.contains('/videos/processed/'))
+                  ? p.postImageUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumbnail.jpg')
+                  : p.postImageUrl;
               videoReels.add(ReelItemModel(
                 id: p.id,
                 authorId: p.authorId,
@@ -96,7 +104,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
                 avatarAsset: p.avatarAsset,
                 videoAsset: '',
                 videoUrl: p.postImageUrl,
-                thumbnailUrl: p.postImageUrl,
+                thumbnailUrl: thumb,
                 caption: p.content,
                 likesCount: p.likesCount,
                 commentsCount: p.commentsCount,
@@ -112,6 +120,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
       }
       // Scan live reels for matching hashtag – keep as reels
       for (final ReelItemModel r in homeFeed.reels) {
+        if (DeletedPostsRegistry.isDeleted(r.id)) continue;
         final String captionLower = r.caption.toLowerCase();
         final bool hasTag = r.tags.any(
           (String t) => t.toLowerCase().replaceAll('#', '') == tagLower,
@@ -126,98 +135,135 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
       }
     } catch (_) {}
 
-    // 2. Query backend search API for this hashtag
+    // 2. Query Posts API for existing posts containing this hashtag
     try {
       final ApiClient client = context.read<ApiClient>();
-      final DiscoverService service = DiscoverService(client);
+      final AuthProvider auth = context.read<AuthProvider>();
+      final ProfileProvider profile = context.read<ProfileProvider>();
+      final String? curUserId = auth.userId ?? profile.profile?.id;
+      final String? curUsername = profile.profile?.username ?? auth.user?.displayName;
+      final bool isGuest = auth.isGuest;
+      final PostContentService postService = PostContentService(client);
 
-      MultiTabSearchResults searchRes = await service.search(
-        query: rawTag,
-        tab: 'posts',
-      );
+      final List<PostResponseModel> livePosts = await postService.getFeedPosts();
 
-      if (searchRes.posts.isEmpty && cleanTag != rawTag) {
-        searchRes = await service.search(
-          query: cleanTag,
-          tab: 'posts',
-        );
-      }
+      for (final PostResponseModel p in livePosts) {
+        if (DeletedPostsRegistry.isDeleted(p.id)) continue;
 
-      for (final DiscoverSearchResult item in searchRes.posts) {
-        final String id = item.id ?? 'search_${item.caption.hashCode}';
-        if (!seenIds.add(id)) continue;
+        if (!PostVisibilityFilter.canViewPost(
+          visibility: p.visibility,
+          authorId: p.authorId,
+          authorUsername: p.authorName,
+          currentUserId: curUserId,
+          currentUsername: curUsername,
+          isGuest: isGuest,
+        )) {
+          continue;
+        }
 
-        final String img = (item.imageAsset.isNotEmpty
-                ? item.imageAsset
-                : (item.thumbnailUrl ?? ''))
-            .trim();
-        final bool isHttp =
-            img.startsWith('http://') || img.startsWith('https://');
-        final bool isAsset = img.startsWith('assets/');
+        // Only show posts whose tags contain the searched tag (or caption has #tag)
+        final bool hasTag = p.tags.any(
+          (String t) => t.replaceAll('#', '').trim().toLowerCase() == tagLower,
+        ) || p.caption.toLowerCase().contains(hashTag.toLowerCase())
+          || p.caption.toLowerCase().contains('#$tagLower');
 
-        final bool isVid = item.isReel ||
-            item.type?.toUpperCase() == 'VIDEO' ||
-            item.type?.toUpperCase() == 'REEL' ||
-            (item.videoUrl != null && item.videoUrl!.isNotEmpty) ||
-            img.endsWith('.mp4') ||
-            img.endsWith('.m3u8') ||
-            img.contains('video') ||
-            img.contains('/videos/');
+        if (!hasTag) continue;
+
+        if (!seenIds.add(p.id)) continue;
+
+        final bool isVid = p.type.toUpperCase().trim() == 'VIDEO' ||
+            p.type.toLowerCase().trim() == 'reel' ||
+            (p.postImageUrl != null &&
+                (p.postImageUrl!.endsWith('.mp4') ||
+                    p.postImageUrl!.endsWith('.m3u8') ||
+                    p.postImageUrl!.contains('video') ||
+                    p.postImageUrl!.contains('/videos/')));
 
         if (isVid) {
-          // Build a ReelItemModel for video results
+          String? videoUrl = p.postImageUrl;
+          String? thumb;
+          if (p.mediaRefs.isNotEmpty) {
+            final String firstRef =
+                p.mediaRefs.first.replaceAll(RegExp(r'^/+|^media/'), '').trim();
+            if (firstRef.startsWith('http')) {
+              videoUrl ??= firstRef;
+              thumb ??= firstRef;
+            } else {
+              videoUrl ??=
+                  '${AppConfig.cdnUrl}/videos/processed/$firstRef/master.m3u8';
+              thumb ??=
+                  '${AppConfig.cdnUrl}/videos/processed/$firstRef/thumbnail.jpg';
+            }
+          }
+          thumb ??= (videoUrl != null && videoUrl.contains('/videos/processed/'))
+              ? videoUrl.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumbnail.jpg')
+              : videoUrl;
+
           videoReels.add(ReelItemModel(
-            id: id,
-            authorId: item.authorId,
-            authorDisplayName: item.authorUsername ?? 'Creator',
-            username: (item.authorUsername != null &&
-                    item.authorUsername!.trim().isNotEmpty)
-                ? (item.authorUsername!.startsWith('@')
-                    ? item.authorUsername!.trim()
-                    : '@${item.authorUsername!.trim()}')
+            id: p.id,
+            authorId: p.authorId,
+            authorDisplayName: p.authorDisplayName ?? p.authorName ?? 'Creator',
+            username: (p.authorName != null && p.authorName!.trim().isNotEmpty)
+                ? (p.authorName!.startsWith('@')
+                    ? p.authorName!.trim()
+                    : '@${p.authorName!.trim()}')
                 : '@creator',
             pronounsTime: 'they/them · recent',
-            avatarAsset: (item.authorAvatar != null &&
-                    item.authorAvatar!.trim().isNotEmpty)
-                ? item.authorAvatar!.trim()
+            avatarAsset: (p.authorAvatar != null &&
+                    p.authorAvatar!.trim().isNotEmpty)
+                ? p.authorAvatar!.trim()
                 : AppImages.user1,
             videoAsset: '',
-            videoUrl: isHttp ? (item.videoUrl ?? img) : null,
-            thumbnailUrl: isHttp ? (item.thumbnailUrl ?? img) : null,
-            caption: (item.caption != null && item.caption!.trim().isNotEmpty)
-                ? item.caption!
-                : 'Reel about $hashTag',
-            likesCount: item.likesCount ?? 0,
-            commentsCount: item.commentsCount ?? 0,
-            isLiked: item.isLiked,
-            communityId: item.communityId,
+            videoUrl: videoUrl,
+            thumbnailUrl: thumb,
+            caption: p.caption,
+            likesCount: p.likesCount,
+            commentsCount: p.commentsCount,
+            viewsCount: p.viewsCount,
+            isLiked: p.isLiked,
+            communityId: p.communityId,
+            tags: p.tags,
           ));
         } else {
+          String? imgUrl = p.postImageUrl;
+          if ((imgUrl == null || imgUrl.isEmpty) && p.mediaRefs.isNotEmpty) {
+            final String firstRef =
+                p.mediaRefs.first.replaceAll(RegExp(r'^/+|^media/'), '').trim();
+            if (firstRef.startsWith('http')) {
+              imgUrl = firstRef;
+            } else if (p.authorId != null && p.authorId!.isNotEmpty) {
+              imgUrl =
+                  '${AppConfig.cdnUrl}/images/original/${p.authorId}/$firstRef.jpg';
+            } else {
+              imgUrl = '${AppConfig.cdnUrl}/images/original/$firstRef.jpg';
+            }
+          }
+          final bool isText = p.type.toUpperCase().trim() == 'TEXT' ||
+              (imgUrl == null && p.mediaRefs.isEmpty);
+
           photoPosts.add(PostItemModel(
-            id: id,
-            authorId: item.authorId,
-            authorDisplayName: item.authorUsername,
-            username: (item.authorUsername != null &&
-                    item.authorUsername!.trim().isNotEmpty)
-                ? (item.authorUsername!.startsWith('@')
-                    ? item.authorUsername!.trim()
-                    : '@${item.authorUsername!.trim()}')
+            id: p.id,
+            authorId: p.authorId,
+            authorDisplayName: p.authorDisplayName ?? p.authorName,
+            username: (p.authorName != null && p.authorName!.trim().isNotEmpty)
+                ? (p.authorName!.startsWith('@')
+                    ? p.authorName!.trim()
+                    : '@${p.authorName!.trim()}')
                 : '@queer_creator',
             pronounsTime: 'they/them · recent',
-            avatarAsset: (item.authorAvatar != null &&
-                    item.authorAvatar!.trim().isNotEmpty)
-                ? item.authorAvatar!.trim()
+            avatarAsset: (p.authorAvatar != null &&
+                    p.authorAvatar!.trim().isNotEmpty)
+                ? p.authorAvatar!.trim()
                 : AppImages.user1,
-            content: (item.caption != null && item.caption!.trim().isNotEmpty)
-                ? item.caption!
-                : 'Post about $hashTag',
-            likesCount: item.likesCount ?? 0,
-            commentsCount: item.commentsCount ?? 0,
-            postImageUrl: isHttp ? img : null,
-            postImageAsset: isAsset ? img : null,
-            postType: 'PHOTO',
-            communityId: item.communityId,
-            isLiked: item.isLiked,
+            content: p.caption,
+            likesCount: p.likesCount,
+            commentsCount: p.commentsCount,
+            viewsCount: p.viewsCount,
+            postImageUrl: !isText ? imgUrl : null,
+            postType: isText ? 'TEXT' : (p.type.isNotEmpty ? p.type : 'PHOTO'),
+            communityId: p.communityId,
+            isLiked: p.isLiked,
+            isSaved: p.isSaved,
           ));
         }
       }
@@ -241,8 +287,8 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
     }
   }
 
-  void _openReelPlayer(int initialIndex) {
-    Navigator.push<void>(
+  void _openReelPlayer(int initialIndex) async {
+    await Navigator.push<void>(
       context,
       MaterialPageRoute<void>(
         builder: (_) => Scaffold(
@@ -284,6 +330,12 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
         ),
       ),
     );
+    if (mounted) {
+      setState(() {
+        _reels.removeWhere((ReelItemModel r) => DeletedPostsRegistry.isDeleted(r.id));
+        _posts.removeWhere((PostItemModel p) => DeletedPostsRegistry.isDeleted(p.id));
+      });
+    }
   }
 
   void _toggleLike(String id) {
@@ -317,13 +369,31 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
     } catch (_) {}
   }
 
-  void _showCommentsSheet(BuildContext context, int totalComments) {
+  void _showCommentsSheet(BuildContext context, PostItemModel post) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (BuildContext ctx) {
-        return CommentsBottomSheet(totalComments: totalComments);
+        return CommentsBottomSheet(
+          postId: post.id,
+          postAuthorId: post.authorId,
+          communityId: post.communityId,
+          totalComments: post.commentsCount,
+          onCommentAdded: () {
+            setState(() {
+              final int i = _posts.indexWhere((PostItemModel p) => p.id == post.id);
+              if (i != -1) {
+                _posts[i] = _posts[i].copyWith(
+                  commentsCount: _posts[i].commentsCount + 1,
+                );
+              }
+            });
+            try {
+              context.read<HomeFeedProvider>().incrementCommentCount(post.id);
+            } catch (_) {}
+          },
+        );
       },
     );
   }
@@ -513,8 +583,12 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
             },
             onLikeToggle: () => _toggleLike(post.id),
             onSaveToggle: () => _toggleSave(post.id),
-            onOpenComments: () =>
-                _showCommentsSheet(context, post.commentsCount),
+            onOpenComments: () => _showCommentsSheet(context, post),
+            onPostDeleted: () {
+              setState(() {
+                _posts.removeWhere((PostItemModel p) => p.id == post.id);
+              });
+            },
           );
         },
       ),
@@ -594,7 +668,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
                         ),
                         const SizedBox(width: 2),
                         Text(
-                          _formatCount(reel.likesCount > 0 ? reel.likesCount : 0),
+                          _formatCount(reel.viewsCount),
                           style: AppTextStyles.caption.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,

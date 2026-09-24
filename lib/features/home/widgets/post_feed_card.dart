@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
@@ -20,7 +22,11 @@ import '../../../core/services/media_download_service.dart';
 import '../screens/post_fullscreen_image_viewer_screen.dart';
 import '../screens/profile_tab_screen.dart';
 import '../screens/reels_feed_view.dart';
+import '../../create_post/models/create_post_models.dart';
+import '../../../core/cache/user_relationship_cache.dart';
+import '../../discover/provider/discover_provider.dart';
 import 'safety_bottom_sheet.dart';
+import 'send_to_bottom_sheet.dart';
 import 'share_this_post_bottom_sheet.dart';
 
 class PostFeedCard extends StatelessWidget {
@@ -32,6 +38,7 @@ class PostFeedCard extends StatelessWidget {
     this.isFollowing = false,
     this.onFollowToggle,
     this.onCardTap,
+    this.onPostDeleted,
     super.key,
   });
 
@@ -42,6 +49,7 @@ class PostFeedCard extends StatelessWidget {
   final bool isFollowing;
   final VoidCallback? onFollowToggle;
   final VoidCallback? onCardTap;
+  final VoidCallback? onPostDeleted;
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +71,17 @@ class PostFeedCard extends StatelessWidget {
             authorId.trim().toLowerCase() ==
                 currentUserId.trim().toLowerCase()) ||
         (myUsername.isNotEmpty && postUsername == myUsername);
+
+    final AuthorInfo? cachedAuthor =
+        (authorId != null && authorId.isNotEmpty) ? AuthorProfileCache.get(authorId) : null;
+    final bool authorHidesLikes = post.hideLikes || (cachedAuthor?.hideMyLikes == true);
+    final bool myProfileHidesLikes = profileProvider.hideMyLikes;
+    final bool shouldHideLikes = !isCurrentUser &&
+        (authorHidesLikes ||
+            (authorId != null &&
+                currentUserId != null &&
+                authorId.trim().toLowerCase() == currentUserId.trim().toLowerCase() &&
+                myProfileHidesLikes));
 
     final Widget card = Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -213,10 +232,13 @@ class PostFeedCard extends StatelessWidget {
                   color: context.themeCardBackground,
                   onSelected: (String value) {
                     if (value == 'download') {
+                      final String raw = post.videoUrl ?? post.postImageUrl ?? post.postImageAsset ?? '';
+                      final String resolved = _resolveImageUrl(raw);
                       MediaDownloadService.downloadMedia(
                         context: context,
-                        mediaUrl: post.videoUrl ?? post.postImageUrl ?? post.postImageAsset,
+                        mediaUrl: resolved.isNotEmpty ? resolved : raw,
                         title: post.username,
+                        authorId: post.authorId,
                         isVideo: post.videoUrl != null,
                         allowDownloads: post.allowDownloads,
                         isCreator: isCurrentUser,
@@ -314,10 +336,12 @@ class PostFeedCard extends StatelessWidget {
           ],
 
           // ── Optional Post Attached Image ──────────────────────────────────
-          if (post.postImageUrl != null &&
+          if (post.postType.toUpperCase().trim() != 'TEXT' &&
+              post.postImageUrl != null &&
               post.postImageUrl!.trim().isNotEmpty) ...<Widget>[
             _buildAttachedImage(context, post.postImageUrl!),
-          ] else if (post.postImageAsset != null &&
+          ] else if (post.postType.toUpperCase().trim() != 'TEXT' &&
+              post.postImageAsset != null &&
               post.postImageAsset!.trim().isNotEmpty) ...<Widget>[
             _buildAttachedImage(context, post.postImageAsset!),
           ],
@@ -327,7 +351,6 @@ class PostFeedCard extends StatelessWidget {
           // ── Bottom Action Row (Like + Comment + Save + Safety Badge) ─────
           Row(
             children: <Widget>[
-              // Like Action (liked-logo.png / unlike-logo.png)
               GestureDetector(
                 onTap: onLikeToggle,
                 child: Row(
@@ -337,47 +360,51 @@ class PostFeedCard extends StatelessWidget {
                       width: 22,
                       height: 22,
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${post.likesCount > 1000 ? '${(post.likesCount / 1000).toStringAsFixed(1)}K' : post.likesCount}',
-                      style: TextStyle(
-                        color: context.themeTextSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                    if (!shouldHideLikes) ...<Widget>[
+                      const SizedBox(width: 6),
+                      Text(
+                        '${post.likesCount > 1000 ? '${(post.likesCount / 1000).toStringAsFixed(1)}K' : post.likesCount}',
+                        style: TextStyle(
+                          color: context.themeTextSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
 
-              const SizedBox(width: 20),
+              if (post.allowComments) ...<Widget>[
+                const SizedBox(width: 20),
 
-              // Comment Action (Opens Comments Bottom Sheet)
-              GestureDetector(
-                onTap: onOpenComments,
-                child: Row(
-                  children: <Widget>[
-                    SvgPicture.asset(
-                      AppIcons.comment,
-                      width: 18,
-                      height: 18,
-                      colorFilter: ColorFilter.mode(
-                        context.themeTextSecondary,
-                        BlendMode.srcIn,
+                // Comment Action (Opens Comments Bottom Sheet)
+                GestureDetector(
+                  onTap: onOpenComments,
+                  child: Row(
+                    children: <Widget>[
+                      SvgPicture.asset(
+                        AppIcons.comment,
+                        width: 18,
+                        height: 18,
+                        colorFilter: ColorFilter.mode(
+                          context.themeTextSecondary,
+                          BlendMode.srcIn,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${post.commentsCount}',
-                      style: TextStyle(
-                        color: context.themeTextSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                      const SizedBox(width: 6),
+                      Text(
+                        '${post.commentsCount}',
+                        style: TextStyle(
+                          color: context.themeTextSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+              ],
 
               const SizedBox(width: 20),
 
@@ -400,16 +427,14 @@ class PostFeedCard extends StatelessWidget {
               // Save Action
               GestureDetector(
                 onTap: onSaveToggle,
-                child: SvgPicture.asset(
-                  AppIcons.save,
-                  width: 18,
-                  height: 18,
-                  colorFilter: ColorFilter.mode(
-                    post.isSaved
-                        ? AppColors.gradientCyan
-                        : context.themeTextSecondary,
-                    BlendMode.srcIn,
-                  ),
+                child: Icon(
+                  post.isSaved
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_border_rounded,
+                  size: 22,
+                  color: post.isSaved
+                      ? AppColors.gradientCyan
+                      : context.themeTextSecondary,
                 ),
               ),
 
@@ -508,7 +533,20 @@ class PostFeedCard extends StatelessWidget {
         postThumbnail: post.postImageUrl ?? post.postImageAsset,
         mediaUrl: post.videoUrl ?? post.postImageUrl ?? post.postImageAsset,
         allowDownloads: post.allowDownloads,
-        onOpenMoreSendTo: () {},
+        onOpenMoreSendTo: () {
+          Navigator.pop(ctx);
+          showModalBottomSheet<void>(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => SendToBottomSheet(
+              postId: post.id,
+              postAuthor: post.username,
+              postThumbnail: post.postImageUrl ?? post.postImageAsset,
+              postCaption: post.content,
+            ),
+          );
+        },
         onOpenReportSafety: () {
           Navigator.pop(ctx);
           showModalBottomSheet<void>(
@@ -572,6 +610,11 @@ class PostFeedCard extends StatelessWidget {
     if (confirmed == true && context.mounted) {
       final ProfileProvider profile = context.read<ProfileProvider>();
       final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+      DeletedPostsRegistry.markDeleted(post.id);
+      try {
+        context.read<DiscoverProvider>().notifyPostDeleted(post.id);
+      } catch (_) {}
+      onPostDeleted?.call();
       final bool ok1 = await profile.deletePost(post.id);
       final bool ok2 = await homeFeed.deletePost(post.id);
       if (context.mounted) {
@@ -593,6 +636,36 @@ class PostFeedCard extends StatelessWidget {
     }
   }
 
+  String _resolveImageUrl(String rawUrl) {
+    final String clean = rawUrl.trim();
+    if (clean.isEmpty) return '';
+    if (clean.startsWith('assets/') ||
+        clean.startsWith('http://') ||
+        clean.startsWith('https://')) {
+      if (clean.contains('/videos/processed/') && clean.endsWith('/master.m3u8')) {
+        return clean.replaceAll('/master.m3u8', '/thumbnail.jpg');
+      }
+      return clean;
+    }
+    final String cleanId = clean
+        .replaceAll(RegExp(r'^/+'), '')
+        .replaceAll(RegExp(r'^media/'), '');
+
+    final bool isVid = post.postType.toUpperCase() == 'VIDEO' ||
+        post.postType.toLowerCase() == 'reel' ||
+        clean.contains('video') ||
+        clean.contains('/videos/');
+
+    if (isVid) {
+      return '${AppConfig.cdnUrl}/videos/processed/$cleanId/thumbnail.jpg';
+    }
+
+    if (post.authorId != null && post.authorId!.isNotEmpty) {
+      return '${AppConfig.cdnUrl}/images/original/${post.authorId}/$cleanId.jpg';
+    }
+    return '${AppConfig.cdnUrl}/images/original/$cleanId.jpg';
+  }
+
   Widget _buildAttachedImage(BuildContext context, String rawUrl) {
     final String clean = rawUrl.trim();
     if (clean.isEmpty) return const SizedBox.shrink();
@@ -604,29 +677,30 @@ class PostFeedCard extends StatelessWidget {
         width: double.infinity,
         height: 220,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => Image.asset(
-          AppImages.forYouImg,
+        errorBuilder: (_, _, _) => Container(
           width: double.infinity,
           height: 220,
-          fit: BoxFit.cover,
+          color: context.isDarkMode ? Colors.white10 : Colors.black12,
+          child: const Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white24,
+              size: 36,
+            ),
+          ),
         ),
       );
+    } else if (!clean.startsWith('http://') &&
+        !clean.startsWith('https://') &&
+        File(clean).existsSync()) {
+      imageWidget = Image.file(
+        File(clean),
+        width: double.infinity,
+        height: 220,
+        fit: BoxFit.cover,
+      );
     } else {
-      final String networkUrl;
-      if (clean.startsWith('http://') || clean.startsWith('https://')) {
-        networkUrl = clean;
-      } else {
-        final String cleanId = clean
-            .replaceAll(RegExp(r'^/+'), '')
-            .replaceAll(RegExp(r'^media/'), '');
-        if (post.authorId != null && post.authorId!.isNotEmpty) {
-          networkUrl =
-              '${AppConfig.cdnUrl}/images/original/${post.authorId}/$cleanId.jpg';
-        } else {
-          final String base = AppConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
-          networkUrl = '$base/media/$cleanId';
-        }
-      }
+      final String networkUrl = _resolveImageUrl(clean);
 
       imageWidget = Image.network(
         networkUrl,
@@ -647,26 +721,34 @@ class PostFeedCard extends StatelessWidget {
             ),
           );
         },
-        errorBuilder: (_, _, _) => Image.asset(
-          AppImages.searchResult1,
+        errorBuilder: (_, _, _) => Container(
           width: double.infinity,
           height: 220,
-          fit: BoxFit.cover,
+          color: context.isDarkMode ? Colors.white10 : Colors.black12,
+          child: const Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white24,
+              size: 36,
+            ),
+          ),
         ),
       );
     }
 
-    final bool isVideo = post.postType.toUpperCase() == 'VIDEO' ||
-        post.postType.toLowerCase() == 'reel' ||
-        (post.postImageUrl != null &&
-            (post.postImageUrl!.endsWith('.mp4') ||
-                post.postImageUrl!.endsWith('.m3u8') ||
-                post.postImageUrl!.contains('video') ||
-                post.postImageUrl!.contains('/videos/'))) ||
-        clean.endsWith('.mp4') ||
-        clean.endsWith('.m3u8') ||
-        clean.contains('video') ||
-        clean.contains('/videos/');
+    final bool isPhoto = post.postType.toUpperCase() == 'PHOTO';
+    final bool isVideo = !isPhoto &&
+        (post.postType.toUpperCase() == 'VIDEO' ||
+            post.postType.toLowerCase() == 'reel' ||
+            (post.postImageUrl != null &&
+                (post.postImageUrl!.endsWith('.mp4') ||
+                    post.postImageUrl!.endsWith('.m3u8') ||
+                    post.postImageUrl!.contains('video') ||
+                    post.postImageUrl!.contains('/videos/'))) ||
+            clean.endsWith('.mp4') ||
+            clean.endsWith('.m3u8') ||
+            clean.contains('video') ||
+            clean.contains('/videos/'));
 
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.md),
@@ -691,6 +773,7 @@ class PostFeedCard extends StatelessWidget {
               commentsCount: post.commentsCount,
               isLiked: post.isLiked,
               isSaved: post.isSaved,
+              hideLikes: post.hideLikes,
               communityId: post.communityId,
             );
             Navigator.push<void>(

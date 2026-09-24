@@ -10,6 +10,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../home/services/reel_video_preloader.dart';
 import '../models/create_post_models.dart';
 import '../provider/create_post_provider.dart';
 import '../services/draft_service.dart';
@@ -33,10 +34,16 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
   @override
   void initState() {
     super.initState();
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
     DraftService.init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ReelVideoPreloader.instance.pauseAll();
       final CreatePostProvider provider = context.read<CreatePostProvider>();
-      _setupVideoController(provider.selectedMedia);
+      if (provider.selectedMedia != null) {
+        _setupVideoController(provider.selectedMedia);
+      }
       provider.loadDeviceVideos().then((_) {
         if (mounted && provider.selectedMedia != null) {
           _setupVideoController(provider.selectedMedia);
@@ -46,7 +53,16 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
   }
 
   Future<void> _setupVideoController(GalleryMediaItem? item) async {
-    if (item == null) return;
+    if (item == null) {
+      final VideoPlayerController? oldCtrl = _controller;
+      _controller = null;
+      _isInitialized = false;
+      _isPlaying = false;
+      _currentMediaId = null;
+      await oldCtrl?.dispose();
+      if (mounted) setState(() {});
+      return;
+    }
     if (_currentMediaId == item.id && _controller != null && _isInitialized) return;
 
     _currentMediaId = item.id;
@@ -102,7 +118,18 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
   }
 
   @override
+  void deactivate() {
+    _controller?.pause();
+    _controller?.setVolume(0);
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
+    try {
+      _controller?.pause();
+      _controller?.setVolume(0);
+    } catch (_) {}
     _controller?.dispose();
     super.dispose();
   }
@@ -160,6 +187,8 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
                       ),
                     ),
                   ),
+
+                  const SizedBox(width: AppSpacing.md),
 
                   // Title
                   Text(
@@ -233,14 +262,21 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
                     isEnabled: selectedItem != null,
                     onPressed: () {
                       _controller?.pause();
+                      _controller?.setVolume(0);
+                      _isPlaying = false;
+                      final ModalRoute<void>? currentRoute = ModalRoute.of(context);
                       Navigator.push<void>(
                         context,
                         MaterialPageRoute<void>(
                           builder: (_) => const TrimVideoScreen(),
                         ),
                       ).then((_) {
-                        if (mounted && _isPlaying) {
-                          _controller?.play();
+                        if (!mounted) return;
+                        if (currentRoute?.isCurrent ?? false) {
+                          _controller?.setVolume(1.0);
+                        } else {
+                          _controller?.pause();
+                          _controller?.setVolume(0);
                         }
                       });
                     },
@@ -412,7 +448,42 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
                         ),
                       ),
                     )
-                  : GridView.builder(
+                  : provider.videoGallery.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: <Widget>[
+                              Icon(
+                                Icons.video_library_outlined,
+                                color: context.themeIconMuted,
+                                size: 40,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'No videos found in gallery',
+                                style: TextStyle(
+                                  color: context.themeTextMuted,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: () async {
+                                  await provider.pickMediaFromDevice(true);
+                                  if (mounted && provider.selectedMedia != null) {
+                                    _setupVideoController(provider.selectedMedia);
+                                  }
+                                },
+                                child: const Text(
+                                  'Pick Video from Device',
+                                  style: TextStyle(
+                                    color: AppColors.gradientPink,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : GridView.builder(
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.lg,
                       ),

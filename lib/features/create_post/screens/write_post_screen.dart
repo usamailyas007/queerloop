@@ -11,6 +11,7 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../auth/auth_provider.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/provider/home_feed_provider.dart';
+import '../../home/services/reel_video_preloader.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../models/create_post_models.dart';
 import '../provider/create_post_provider.dart';
@@ -33,9 +34,13 @@ class _WritePostScreenState extends State<WritePostScreen> {
   @override
   void initState() {
     super.initState();
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
     DraftService.init();
     _contentController = TextEditingController(); // Starts empty, no static initial text
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ReelVideoPreloader.instance.pauseAll();
       if (!mounted) return;
       final CreatePostProvider provider = context.read<CreatePostProvider>();
       provider.setMediaType(MediaType.text);
@@ -146,13 +151,18 @@ class _WritePostScreenState extends State<WritePostScreen> {
                   // Cancel button
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: Text(
-                      'Cancel',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: context.themeTextMuted,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        'Cancel',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: context.themeTextMuted,
+                        ),
                       ),
                     ),
                   ),
+
+                  const SizedBox(width: AppSpacing.xl),
 
                   // Title
                   Text(

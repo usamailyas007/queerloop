@@ -19,7 +19,10 @@ import '../../profile/widgets/profile_feed_tabs_widget.dart';
 import '../../profile/widgets/profile_header_stats_widget.dart';
 import '../../profile/widgets/profile_media_grid_widget.dart';
 import '../provider/home_feed_provider.dart';
+import '../widgets/comments_bottom_sheet.dart';
 import '../widgets/post_feed_card.dart';
+import '../models/post_item_model.dart';
+import '../services/reel_video_preloader.dart';
 import 'single_post_view_screen.dart';
 
 class ProfileTabScreen extends StatefulWidget {
@@ -37,7 +40,11 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
   @override
   void initState() {
     super.initState();
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ReelVideoPreloader.instance.pauseAll();
       _loadProfile();
     });
   }
@@ -384,31 +391,84 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       )
                     else
                       ...profileProvider.userPosts.map(
-                        (post) => PostFeedCard(
-                          post: post,
-                          onCardTap: () {
-                            Navigator.push<void>(
-                              context,
-                              MaterialPageRoute<void>(
-                                builder: (_) => SinglePostViewScreen(
-                                  postId: post.id,
-                                  initialPost: post,
+                        (post) {
+                          final bool isLiked = context.watch<HomeFeedProvider>().isPostLiked(post.id) || post.isLiked;
+                          final bool isSaved = context.watch<HomeFeedProvider>().isPostSaved(post.id) || post.isSaved;
+                          final PostItemModel resolvedPost = post.copyWith(
+                            isLiked: isLiked,
+                            isSaved: isSaved,
+                            hideLikes: profileProvider.hideMyLikes,
+                          );
+
+                          return PostFeedCard(
+                            post: resolvedPost,
+                            onCardTap: () async {
+                              await Navigator.push<void>(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) => SinglePostViewScreen(
+                                    postId: post.id,
+                                    initialPost: resolvedPost,
+                                  ),
                                 ),
+                              );
+                              if (mounted) setState(() {});
+                            },
+                            onLikeToggle: () {
+                              final bool currentLiked =
+                                  context.read<HomeFeedProvider>().isPostLiked(post.id) || post.isLiked;
+                              final bool newLiked = !currentLiked;
+                              final int newCount = newLiked
+                                  ? post.likesCount + 1
+                                  : (post.likesCount > 0 ? post.likesCount - 1 : 0);
+                              context.read<ProfileProvider>().updateLikedPost(
+                                post.id,
+                                isLiked: newLiked,
+                                likesCount: newCount,
+                                fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                              );
+                              context.read<HomeFeedProvider>().toggleLikePost(
+                                post.id,
+                                fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                              );
+                            },
+                            onSaveToggle: () {
+                              final bool currentSaved =
+                                  context.read<HomeFeedProvider>().isPostSaved(post.id) || post.isSaved;
+                              final bool newSaved = !currentSaved;
+                              context.read<ProfileProvider>().updateSavedPost(
+                                post.id,
+                                isSaved: newSaved,
+                                fallbackPost: post.copyWith(isSaved: newSaved),
+                              );
+                              context.read<HomeFeedProvider>().toggleSavePost(
+                                post.id,
+                                fallbackPost: post.copyWith(isSaved: newSaved),
+                              );
+                            },
+                          onOpenComments: () {
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => CommentsBottomSheet(
+                                totalComments: post.commentsCount,
+                                postId: post.id,
+                                postAuthorId: post.authorId,
+                                communityId: post.communityId,
+                                allowComments: post.allowComments,
+                                onCommentAdded: () {
+                                  context.read<HomeFeedProvider>().incrementCommentCount(post.id);
+                                  context.read<ProfileProvider>().updatePostCommentCount(
+                                    post.id,
+                                    post.commentsCount + 1,
+                                  );
+                                },
                               ),
                             );
                           },
-                          onLikeToggle: () {
-                            context
-                                .read<HomeFeedProvider>()
-                                .toggleLikePost(post.id);
-                          },
-                          onSaveToggle: () {
-                            context
-                                .read<HomeFeedProvider>()
-                                .toggleSavePost(post.id);
-                          },
-                          onOpenComments: () {},
-                        ),
+                          );
+                        },
                       ),
                   ],
 
@@ -481,33 +541,81 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       if (profileProvider.savedPosts.isNotEmpty) ...<Widget>[
                         const SizedBox(height: AppSpacing.md),
                         ...profileProvider.savedPosts.map(
-                          (post) => PostFeedCard(
-                            post: post,
-                            onCardTap: () {
-                              Navigator.push<void>(
-                                context,
-                                MaterialPageRoute<void>(
-                                  builder: (_) => SinglePostViewScreen(
-                                    postId: post.id,
-                                    initialPost: post,
+                          (post) {
+                            final bool isLiked = context.watch<HomeFeedProvider>().isPostLiked(post.id) || post.isLiked;
+                            final bool isSaved = context.watch<HomeFeedProvider>().isPostSaved(post.id) || post.isSaved;
+                            final PostItemModel resolvedPost = post.copyWith(isLiked: isLiked, isSaved: isSaved);
+
+                            return PostFeedCard(
+                              post: resolvedPost,
+                              onCardTap: () async {
+                                await Navigator.push<void>(
+                                  context,
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => SinglePostViewScreen(
+                                      postId: post.id,
+                                      initialPost: resolvedPost,
+                                    ),
                                   ),
+                                );
+                                if (mounted) setState(() {});
+                              },
+                              onLikeToggle: () {
+                                final bool currentLiked =
+                                    context.read<HomeFeedProvider>().isPostLiked(post.id) || post.isLiked;
+                                final bool newLiked = !currentLiked;
+                                final int newCount = newLiked
+                                    ? post.likesCount + 1
+                                    : (post.likesCount > 0 ? post.likesCount - 1 : 0);
+                                context.read<ProfileProvider>().updateLikedPost(
+                                  post.id,
+                                  isLiked: newLiked,
+                                  likesCount: newCount,
+                                  fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                                );
+                                context.read<HomeFeedProvider>().toggleLikePost(
+                                  post.id,
+                                  fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                                );
+                              },
+                              onSaveToggle: () {
+                                final bool currentSaved =
+                                    context.read<HomeFeedProvider>().isPostSaved(post.id) || post.isSaved;
+                                final bool newSaved = !currentSaved;
+                                context.read<ProfileProvider>().updateSavedPost(
+                                  post.id,
+                                  isSaved: newSaved,
+                                  fallbackPost: post.copyWith(isSaved: newSaved),
+                                );
+                                context.read<HomeFeedProvider>().toggleSavePost(
+                                  post.id,
+                                  fallbackPost: post.copyWith(isSaved: newSaved),
+                                );
+                              },
+                            onOpenComments: () {
+                              showModalBottomSheet<void>(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => CommentsBottomSheet(
+                                  totalComments: post.commentsCount,
+                                  postId: post.id,
+                                  postAuthorId: post.authorId,
+                                  communityId: post.communityId,
+                                  allowComments: post.allowComments,
+                                  onCommentAdded: () {
+                                    context.read<HomeFeedProvider>().incrementCommentCount(post.id);
+                                    context.read<ProfileProvider>().updatePostCommentCount(
+                                      post.id,
+                                      post.commentsCount + 1,
+                                    );
+                                  },
                                 ),
                               );
                             },
-                            onLikeToggle: () {
-                              context
-                                  .read<HomeFeedProvider>()
-                                  .toggleLikePost(post.id);
-                            },
-                            onSaveToggle: () {
-                              context
-                                  .read<HomeFeedProvider>()
-                                  .toggleSavePost(post.id);
-                              profileProvider.fetchSavedPosts(force: true);
-                            },
-                            onOpenComments: () {},
-                          ),
-                        ),
+                          );
+                        },
+                      ),
                       ],
                     ],
                   ],
@@ -574,33 +682,81 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       if (profileProvider.likedPosts.isNotEmpty) ...<Widget>[
                         const SizedBox(height: AppSpacing.md),
                         ...profileProvider.likedPosts.map(
-                          (post) => PostFeedCard(
-                            post: post,
-                            onCardTap: () {
-                              Navigator.push<void>(
-                                context,
-                                MaterialPageRoute<void>(
-                                  builder: (_) => SinglePostViewScreen(
-                                    postId: post.id,
-                                    initialPost: post,
+                          (post) {
+                            final bool isLiked = context.watch<HomeFeedProvider>().isPostLiked(post.id) || post.isLiked;
+                            final bool isSaved = context.watch<HomeFeedProvider>().isPostSaved(post.id) || post.isSaved;
+                            final PostItemModel resolvedPost = post.copyWith(isLiked: isLiked, isSaved: isSaved);
+
+                            return PostFeedCard(
+                              post: resolvedPost,
+                              onCardTap: () async {
+                                await Navigator.push<void>(
+                                  context,
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => SinglePostViewScreen(
+                                      postId: post.id,
+                                      initialPost: resolvedPost,
+                                    ),
                                   ),
+                                );
+                                if (mounted) setState(() {});
+                              },
+                              onLikeToggle: () {
+                                final bool currentLiked =
+                                    context.read<HomeFeedProvider>().isPostLiked(post.id) || post.isLiked;
+                                final bool newLiked = !currentLiked;
+                                final int newCount = newLiked
+                                    ? post.likesCount + 1
+                                    : (post.likesCount > 0 ? post.likesCount - 1 : 0);
+                                context.read<ProfileProvider>().updateLikedPost(
+                                  post.id,
+                                  isLiked: newLiked,
+                                  likesCount: newCount,
+                                  fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                                );
+                                context.read<HomeFeedProvider>().toggleLikePost(
+                                  post.id,
+                                  fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                                );
+                              },
+                              onSaveToggle: () {
+                                final bool currentSaved =
+                                    context.read<HomeFeedProvider>().isPostSaved(post.id) || post.isSaved;
+                                final bool newSaved = !currentSaved;
+                                context.read<ProfileProvider>().updateSavedPost(
+                                  post.id,
+                                  isSaved: newSaved,
+                                  fallbackPost: post.copyWith(isSaved: newSaved),
+                                );
+                                context.read<HomeFeedProvider>().toggleSavePost(
+                                  post.id,
+                                  fallbackPost: post.copyWith(isSaved: newSaved),
+                                );
+                              },
+                            onOpenComments: () {
+                              showModalBottomSheet<void>(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => CommentsBottomSheet(
+                                  totalComments: post.commentsCount,
+                                  postId: post.id,
+                                  postAuthorId: post.authorId,
+                                  communityId: post.communityId,
+                                  allowComments: post.allowComments,
+                                  onCommentAdded: () {
+                                    context.read<HomeFeedProvider>().incrementCommentCount(post.id);
+                                    context.read<ProfileProvider>().updatePostCommentCount(
+                                      post.id,
+                                      post.commentsCount + 1,
+                                    );
+                                  },
                                 ),
                               );
                             },
-                            onLikeToggle: () {
-                              context
-                                  .read<HomeFeedProvider>()
-                                  .toggleLikePost(post.id);
-                              profileProvider.fetchLikedPosts(force: true);
-                            },
-                            onSaveToggle: () {
-                              context
-                                  .read<HomeFeedProvider>()
-                                  .toggleSavePost(post.id);
-                            },
-                            onOpenComments: () {},
-                          ),
-                        ),
+                          );
+                        },
+                      ),
                       ],
                     ],
                   ],

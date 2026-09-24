@@ -19,7 +19,11 @@ class ReelItemModel {
     this.tags = const <String>[],
     this.durationText = '',
     this.communityId,
+    this.allowComments = true,
     this.allowDownloads = true,
+    this.hideLikes = false,
+    this.viewsCount = 0,
+    this.visibility,
   });
 
   final String id;
@@ -41,7 +45,11 @@ class ReelItemModel {
   final List<String> tags;
   final String durationText;
   final String? communityId;
+  final bool allowComments;
   final bool allowDownloads;
+  final bool hideLikes;
+  final int viewsCount;
+  final String? visibility;
 
   ReelItemModel copyWith({
     String? authorId,
@@ -52,15 +60,19 @@ class ReelItemModel {
     bool? isLiked,
     bool? isSaved,
     bool? isFollowing,
+    bool? allowComments,
     bool? allowDownloads,
+    bool? hideLikes,
     int? likesCount,
     int? commentsCount,
+    int? viewsCount,
     String? videoUrl,
     String? thumbnailUrl,
     String? caption,
     List<String>? tags,
     String? durationText,
     String? communityId,
+    String? visibility,
   }) {
     return ReelItemModel(
       id: id,
@@ -76,13 +88,17 @@ class ReelItemModel {
       caption: caption ?? this.caption,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
+      viewsCount: viewsCount ?? this.viewsCount,
       isLiked: isLiked ?? this.isLiked,
       isSaved: isSaved ?? this.isSaved,
       isFollowing: isFollowing ?? this.isFollowing,
       tags: tags ?? this.tags,
       durationText: durationText ?? this.durationText,
       communityId: communityId ?? this.communityId,
+      allowComments: allowComments ?? this.allowComments,
       allowDownloads: allowDownloads ?? this.allowDownloads,
+      hideLikes: hideLikes ?? this.hideLikes,
+      visibility: visibility ?? this.visibility,
     );
   }
 }

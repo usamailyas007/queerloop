@@ -120,12 +120,18 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
       }
     }
     if (!provider.isGuest && index == 2) {
+      ReelVideoPreloader.instance.setFeedVisible(false);
       ReelVideoPreloader.instance.pauseAll();
+      ReelVideoPreloader.instance.muteAll();
       CreatePostTypeBottomSheet.show(context);
       return;
     }
     if (index != 0) {
+      ReelVideoPreloader.instance.setFeedVisible(false);
       ReelVideoPreloader.instance.pauseAll();
+      ReelVideoPreloader.instance.muteAll();
+    } else {
+      ReelVideoPreloader.instance.setFeedVisible(true);
     }
     provider.setBottomNavIndex(index);
   }

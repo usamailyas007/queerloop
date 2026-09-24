@@ -77,131 +77,134 @@ class _CotdAnswersBottomSheetState extends State<CotdAnswersBottomSheet> {
         color: sheetColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
-        children: <Widget>[
-          // ── Drag handle ──────────────────────────────────────────────────
-          const SizedBox(height: AppSpacing.sm),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.2)
-                  : Colors.black.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-
-          // ── Header ───────────────────────────────────────────────────────
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: Row(
-              children: <Widget>[
-                Text(
-                  "TODAY'S ANSWERS",
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.gradientCyan,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const Spacer(),
-                if (question != null)
-                  Text(
-                    question.formattedAnswerCount,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.5)
-                          : Colors.black.withValues(alpha: 0.4),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          if (question != null) ...<Widget>[
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: <Widget>[
+            // ── Drag handle ──────────────────────────────────────────────────
             const SizedBox(height: AppSpacing.sm),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.2)
+                    : Colors.black.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+
+            // ── Header ───────────────────────────────────────────────────────
             Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Text(
-                question.body,
-                style: AppTextStyles.titleSmall.copyWith(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.9)
-                      : Colors.black.withValues(alpha: 0.85),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-
-          const SizedBox(height: AppSpacing.md),
-          Divider(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.black.withValues(alpha: 0.06),
-            height: 1,
-          ),
-
-          // ── Answers list ─────────────────────────────────────────────────
-          Expanded(
-            child: provider.answers.isEmpty && !provider.isLoading
-                ? Center(
-                    child: Text(
-                      'No answers yet. Be the first!',
-                      style: AppTextStyles.bodyMedium.copyWith(
+              child: Row(
+                children: <Widget>[
+                  Text(
+                    "TODAY'S ANSWERS",
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.gradientCyan,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (question != null)
+                    Text(
+                      question.formattedAnswerCount,
+                      style: AppTextStyles.bodySmall.copyWith(
                         color: isDark
-                            ? Colors.white.withValues(alpha: 0.4)
-                            : Colors.black.withValues(alpha: 0.35),
+                            ? Colors.white.withValues(alpha: 0.5)
+                            : Colors.black.withValues(alpha: 0.4),
                       ),
                     ),
-                  )
-                : provider.isLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.gradientCyan,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.sm,
-                          horizontal: AppSpacing.lg,
-                        ),
-                        itemCount: provider.answers.length,
-                        separatorBuilder: (BuildContext c, int i) => Divider(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.06)
-                              : Colors.black.withValues(alpha: 0.05),
-                          height: 1,
-                        ),
-                        itemBuilder: (BuildContext context, int index) {
-                          final CotdAnswer answer = provider.answers[index];
-                          return _AnswerTile(
-                            answer: answer,
-                            isDark: isDark,
-                          );
-                        },
-                      ),
-          ),
-
-          // ── Submit section ───────────────────────────────────────────────
-          if (question != null)
-            _AnswerInputSection(
-              controller: _controller,
-              showInput: _showInput,
-              hasAnswered: provider.hasAnswered,
-              isSubmitting: provider.isSubmitting,
-              isDark: isDark,
-              onToggle: () => setState(() => _showInput = !_showInput),
-              onSubmit: _submit,
+                ],
+              ),
             ),
 
-          SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
-        ],
+            if (question != null) ...<Widget>[
+              const SizedBox(height: AppSpacing.sm),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                child: Text(
+                  question.body,
+                  style: AppTextStyles.titleSmall.copyWith(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.9)
+                        : Colors.black.withValues(alpha: 0.85),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: AppSpacing.md),
+            Divider(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.06),
+              height: 1,
+            ),
+
+            // ── Answers list ─────────────────────────────────────────────────
+            Expanded(
+              child: provider.answers.isEmpty && !provider.isLoading
+                  ? Center(
+                      child: Text(
+                        'No answers yet. Be the first!',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.4)
+                              : Colors.black.withValues(alpha: 0.35),
+                        ),
+                      ),
+                    )
+                  : provider.isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.gradientCyan,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.sm,
+                            horizontal: AppSpacing.lg,
+                          ),
+                          itemCount: provider.answers.length,
+                          separatorBuilder: (BuildContext c, int i) => Divider(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.06)
+                                : Colors.black.withValues(alpha: 0.05),
+                            height: 1,
+                          ),
+                          itemBuilder: (BuildContext context, int index) {
+                            final CotdAnswer answer = provider.answers[index];
+                            return _AnswerTile(
+                              answer: answer,
+                              isDark: isDark,
+                            );
+                          },
+                        ),
+            ),
+
+            // ── Submit section ───────────────────────────────────────────────
+            if (question != null)
+              _AnswerInputSection(
+                controller: _controller,
+                showInput: _showInput,
+                hasAnswered: provider.hasAnswered,
+                isSubmitting: provider.isSubmitting,
+                isDark: isDark,
+                onToggle: () => setState(() => _showInput = !_showInput),
+                onSubmit: _submit,
+              ),
+
+            SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
+          ],
+        ),
       ),
     );
   }

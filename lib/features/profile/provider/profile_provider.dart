@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/cache/cache_manager.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/config/api_endpoints.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_images.dart';
@@ -90,6 +91,7 @@ class ProfileProvider extends ChangeNotifier {
     if (username != null && username.trim().isNotEmpty) {
       _followingUsernames.add(username.replaceAll('@', '').trim().toLowerCase());
     }
+    UserRelationshipCache.add(userId: userId, username: username);
     notifyListeners();
   }
 
@@ -100,6 +102,7 @@ class ProfileProvider extends ChangeNotifier {
     if (username != null && username.trim().isNotEmpty) {
       _followingUsernames.remove(username.replaceAll('@', '').trim().toLowerCase());
     }
+    UserRelationshipCache.remove(userId: userId, username: username);
     notifyListeners();
   }
 
@@ -122,6 +125,26 @@ class ProfileProvider extends ChangeNotifier {
   List<ReelItemModel> get savedReels => _savedReels;
   bool get isLoadingSaved => _isLoadingSaved;
   bool get hasFetchedSaved => _hasFetchedSaved;
+
+  bool isPostLiked(String id) {
+    if (_likedPosts.any((PostItemModel p) => p.id == id && p.isLiked)) return true;
+    if (_likedReels.any((ReelItemModel r) => r.id == id && r.isLiked)) return true;
+    if (_userPosts.any((PostItemModel p) => p.id == id && p.isLiked)) return true;
+    if (_userReels.any((ReelItemModel r) => r.id == id && r.isLiked)) return true;
+    if (_savedPosts.any((PostItemModel p) => p.id == id && p.isLiked)) return true;
+    if (_savedReels.any((ReelItemModel r) => r.id == id && r.isLiked)) return true;
+    return false;
+  }
+
+  bool isPostSaved(String id) {
+    if (_savedPosts.any((PostItemModel p) => p.id == id && p.isSaved)) return true;
+    if (_savedReels.any((ReelItemModel r) => r.id == id && r.isSaved)) return true;
+    if (_userPosts.any((PostItemModel p) => p.id == id && p.isSaved)) return true;
+    if (_userReels.any((ReelItemModel r) => r.id == id && r.isSaved)) return true;
+    if (_likedPosts.any((PostItemModel p) => p.id == id && p.isSaved)) return true;
+    if (_likedReels.any((ReelItemModel r) => r.id == id && r.isSaved)) return true;
+    return false;
+  }
 
   List<BlockedAccountItem> get blockedAccounts => _blockedAccounts;
   bool get isLoadingBlocked => _isLoadingBlocked;
@@ -299,6 +322,18 @@ class ProfileProvider extends ChangeNotifier {
             ttl: const Duration(days: 7),
           );
           _profile = UserProfile.fromJson(data);
+          if (_profile != null) {
+            AuthorProfileCache.set(
+              _profile!.id,
+              AuthorInfo(
+                id: _profile!.id,
+                username: _profile!.username ?? '',
+                displayName: _profile!.displayName ?? '',
+                avatarUrl: _profile!.avatarUrl,
+                hideMyLikes: _profile!.hideMyLikes,
+              ),
+            );
+          }
           try {
             if (data['showActivityStatus'] is bool) {
               SharedPreferences.getInstance().then((SharedPreferences prefs) {
@@ -472,7 +507,18 @@ class ProfileProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateLikedReel(String id, {required bool isLiked, required int likesCount}) {
+  void updateLikedReel(String id, {required bool isLiked, required int likesCount, ReelItemModel? fallbackReel}) {
+    // 1. Update _userReels
+    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (urIndex != -1) {
+      _userReels[urIndex] = _userReels[urIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    // 2. Update _userPosts
+    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (upIndex != -1) {
+      _userPosts[upIndex] = _userPosts[upIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    // 3. Update _likedReels
     final int rIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
     if (rIndex != -1) {
       if (!isLiked) {
@@ -480,7 +526,14 @@ class ProfileProvider extends ChangeNotifier {
       } else {
         _likedReels[rIndex] = _likedReels[rIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
       }
+    } else if (isLiked) {
+      if (urIndex != -1) {
+        _likedReels.insert(0, _userReels[urIndex]);
+      } else if (fallbackReel != null) {
+        _likedReels.insert(0, fallbackReel.copyWith(isLiked: true, likesCount: likesCount));
+      }
     }
+    // 4. Update _likedPosts
     final int pIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
     if (pIndex != -1) {
       if (!isLiked) {
@@ -489,11 +542,141 @@ class ProfileProvider extends ChangeNotifier {
         _likedPosts[pIndex] = _likedPosts[pIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
       }
     }
+    // 5. Update _savedPosts & _savedReels if present
+    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (spIndex != -1) {
+      _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (srIndex != -1) {
+      _savedReels[srIndex] = _savedReels[srIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
     notifyListeners();
   }
 
-  void updateLikedPost(String id, {required bool isLiked, required int likesCount}) {
-    updateLikedReel(id, isLiked: isLiked, likesCount: likesCount);
+  void updateLikedPost(String id, {required bool isLiked, required int likesCount, PostItemModel? fallbackPost}) {
+    // 1. Update _userPosts
+    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (upIndex != -1) {
+      _userPosts[upIndex] = _userPosts[upIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    // 2. Update _userReels
+    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (urIndex != -1) {
+      _userReels[urIndex] = _userReels[urIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    // 3. Update _likedPosts
+    final int pIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (pIndex != -1) {
+      if (!isLiked) {
+        _likedPosts.removeAt(pIndex);
+      } else {
+        _likedPosts[pIndex] = _likedPosts[pIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+      }
+    } else if (isLiked) {
+      if (upIndex != -1) {
+        _likedPosts.insert(0, _userPosts[upIndex]);
+      } else if (fallbackPost != null) {
+        _likedPosts.insert(0, fallbackPost.copyWith(isLiked: true, likesCount: likesCount));
+      }
+    }
+    // 4. Update _likedReels
+    final int rIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (rIndex != -1) {
+      if (!isLiked) {
+        _likedReels.removeAt(rIndex);
+      } else {
+        _likedReels[rIndex] = _likedReels[rIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+      }
+    }
+    // 5. Update _savedPosts & _savedReels if present
+    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (spIndex != -1) {
+      _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (srIndex != -1) {
+      _savedReels[srIndex] = _savedReels[srIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    notifyListeners();
+  }
+
+  void updateSavedPost(String id, {required bool isSaved, PostItemModel? fallbackPost}) {
+    // 1. Update _userPosts
+    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (upIndex != -1) {
+      _userPosts[upIndex] = _userPosts[upIndex].copyWith(isSaved: isSaved);
+    }
+    // 2. Update _savedPosts
+    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (spIndex != -1) {
+      if (!isSaved) {
+        _savedPosts.removeAt(spIndex);
+      } else {
+        _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(isSaved: isSaved);
+      }
+    } else if (isSaved) {
+      if (upIndex != -1) {
+        _savedPosts.insert(0, _userPosts[upIndex].copyWith(isSaved: true));
+      } else if (fallbackPost != null) {
+        _savedPosts.insert(0, fallbackPost.copyWith(isSaved: true));
+      }
+    }
+    // 3. Update _likedPosts
+    final int lpIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (lpIndex != -1) {
+      _likedPosts[lpIndex] = _likedPosts[lpIndex].copyWith(isSaved: isSaved);
+    }
+    notifyListeners();
+  }
+
+  void updateSavedReel(String id, {required bool isSaved, ReelItemModel? fallbackReel}) {
+    // 1. Update _userReels
+    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (urIndex != -1) {
+      _userReels[urIndex] = _userReels[urIndex].copyWith(isSaved: isSaved);
+    }
+    // 2. Update _savedReels
+    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (srIndex != -1) {
+      if (!isSaved) {
+        _savedReels.removeAt(srIndex);
+      } else {
+        _savedReels[srIndex] = _savedReels[srIndex].copyWith(isSaved: isSaved);
+      }
+    } else if (isSaved) {
+      if (urIndex != -1) {
+        _savedReels.insert(0, _userReels[urIndex].copyWith(isSaved: true));
+      } else if (fallbackReel != null) {
+        _savedReels.insert(0, fallbackReel.copyWith(isSaved: true));
+      }
+    }
+    // 3. Update _likedReels
+    final int lrIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (lrIndex != -1) {
+      _likedReels[lrIndex] = _likedReels[lrIndex].copyWith(isSaved: isSaved);
+    }
+    notifyListeners();
+  }
+
+  void updatePostCommentCount(String id, int count) {
+    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (upIndex != -1) {
+      _userPosts[upIndex] = _userPosts[upIndex].copyWith(commentsCount: count);
+    }
+    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (urIndex != -1) {
+      _userReels[urIndex] = _userReels[urIndex].copyWith(commentsCount: count);
+    }
+    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (spIndex != -1) {
+      _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(commentsCount: count);
+    }
+    final int lpIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (lpIndex != -1) {
+      _likedPosts[lpIndex] = _likedPosts[lpIndex].copyWith(commentsCount: count);
+    }
+    notifyListeners();
   }
 
   Future<_ContentBatch> _processPosts(
@@ -506,25 +689,73 @@ class ProfileProvider extends ChangeNotifier {
     final List<ReelItemModel> userReelsList = <ReelItemModel>[];
 
     for (final PostResponseModel post in posts) {
+      if (post.isDeleted) continue;
+
+      final String type = post.type.toUpperCase().trim();
+      final bool isVideo = type == 'VIDEO' ||
+          type == 'REEL' ||
+          (post.duration != null && post.duration!.isNotEmpty) ||
+          post.mediaRefs.any((String r) {
+            final String l = r.toLowerCase();
+            return l.endsWith('.mp4') ||
+                l.endsWith('.mov') ||
+                l.endsWith('.webm') ||
+                l.contains('/videos/');
+          });
+
       String? mediaUrl;
       String? thumbnailUrl;
 
-      if (post.mediaRefs.isNotEmpty) {
-        final String mediaId = post.mediaRefs.first;
-        try {
-          final dynamic mediaData =
-              await _client.get(ApiEndpoints.mediaStatus(mediaId));
-          if (mediaData is Map<String, dynamic>) {
-            mediaUrl = mediaData['url'] as String? ??
-                mediaData['downloadUrl'] as String?;
-            thumbnailUrl = mediaData['thumbnailUrl'] as String?;
+      if (isVideo) {
+        if (post.mediaRefs.isNotEmpty) {
+          final String firstRef = post.mediaRefs.first.trim();
+          if (firstRef.startsWith('http://') || firstRef.startsWith('https://')) {
+            // Already a full CDN/HTTP URL
+            mediaUrl = firstRef;
+            thumbnailUrl = post.postImageUrl?.isNotEmpty == true ? post.postImageUrl : firstRef;
+          } else {
+            // Raw UUID — build CDN HLS URL directly (no extra API call per video)
+            final String clean = firstRef
+                .replaceAll(RegExp(r'^/+'), '')
+                .replaceAll(RegExp(r'^media/'), '');
+            mediaUrl = '${AppConfig.cdnUrl}/videos/processed/$clean/master.m3u8';
+            thumbnailUrl = (post.postImageUrl != null && post.postImageUrl!.isNotEmpty)
+                ? post.postImageUrl
+                : '${AppConfig.cdnUrl}/videos/processed/$clean/thumbnail.jpg';
           }
-        } catch (e) {
-          debugPrint('⚠️ [ProfileProvider] Could not resolve media $mediaId: $e');
+        } else if (post.postImageUrl != null && post.postImageUrl!.isNotEmpty) {
+          mediaUrl = post.postImageUrl;
+          thumbnailUrl = post.postImageUrl;
+        }
+      } else {
+        // Photo or Text post: prefer post.postImageUrl, then resolve mediaRefs to image CDN URL
+        if (post.postImageUrl != null && post.postImageUrl!.isNotEmpty) {
+          mediaUrl = post.postImageUrl;
+          thumbnailUrl = post.postImageUrl;
+        } else if (post.mediaRefs.isNotEmpty) {
+          final String firstRef = post.mediaRefs.first.trim();
+          if (firstRef.startsWith('http://') ||
+              firstRef.startsWith('https://') ||
+              firstRef.startsWith('assets/')) {
+            mediaUrl = firstRef;
+            thumbnailUrl = firstRef;
+          } else {
+            final String clean = firstRef
+                .replaceAll(RegExp(r'^/+'), '')
+                .replaceAll(RegExp(r'^media/'), '');
+            final String effectiveAuthor =
+                post.authorId ?? fallbackAuthorId ?? _cachedUserId ?? '';
+            if (effectiveAuthor.isNotEmpty) {
+              mediaUrl =
+                  '${AppConfig.cdnUrl}/images/original/$effectiveAuthor/$clean.jpg';
+            } else {
+              mediaUrl = '${AppConfig.cdnUrl}/images/original/$clean.jpg';
+            }
+            thumbnailUrl = mediaUrl;
+          }
         }
       }
 
-      final String type = post.type.toUpperCase().trim();
       final String authorUsername =
           post.authorName ?? _profile?.username ?? 'you';
       final String formattedUsername = authorUsername.startsWith('@')
@@ -537,7 +768,7 @@ class ProfileProvider extends ChangeNotifier {
               ? _profile!.avatarUrl!
               : AppImages.user1);
 
-      if (type == 'VIDEO') {
+      if (isVideo) {
         userReelsList.add(
           ReelItemModel(
             id: post.id,
@@ -554,9 +785,14 @@ class ProfileProvider extends ChangeNotifier {
             caption: post.body.isNotEmpty ? post.body : post.caption,
             likesCount: post.likesCount,
             commentsCount: post.commentsCount,
-            isLiked: markLiked || post.isLiked,
-            isSaved: markSaved || post.isSaved,
+            viewsCount: post.viewsCount,
+            isLiked: markLiked || post.isLiked || isPostLiked(post.id),
+            isSaved: markSaved || post.isSaved || isPostSaved(post.id),
+            allowComments: post.allowComments,
+            allowDownloads: post.allowDownloads,
+            hideLikes: post.hideLikes,
             tags: post.tags,
+            communityId: post.communityId,
             durationText:
                 (post.duration != null && post.duration!.isNotEmpty)
                     ? post.duration!
@@ -569,6 +805,7 @@ class ProfileProvider extends ChangeNotifier {
           PostItemModel(
             id: post.id,
             authorId: post.authorId ?? fallbackAuthorId ?? _cachedUserId,
+            authorDisplayName: post.authorDisplayName,
             username: formattedUsername,
             pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
                 ? _formatTime(post.createdAt)
@@ -577,10 +814,15 @@ class ProfileProvider extends ChangeNotifier {
             content: post.body.isNotEmpty ? post.body : post.caption,
             likesCount: post.likesCount,
             commentsCount: post.commentsCount,
-            isLiked: markLiked || post.isLiked,
-            isSaved: markSaved || post.isSaved,
+            viewsCount: post.viewsCount,
+            isLiked: markLiked || post.isLiked || isPostLiked(post.id),
+            isSaved: markSaved || post.isSaved || isPostSaved(post.id),
+            allowComments: post.allowComments,
+            allowDownloads: post.allowDownloads,
+            hideLikes: post.hideLikes,
             postImageUrl: mediaUrl,
             postType: type,
+            communityId: post.communityId,
           ),
         );
       }
@@ -670,6 +912,7 @@ class ProfileProvider extends ChangeNotifier {
 
   /// Delete own Post or Video Post. DELETE /posts/:id
   Future<bool> deletePost(String postId) async {
+    DeletedPostsRegistry.markDeleted(postId);
     _userPosts.removeWhere((PostItemModel p) => p.id == postId);
     _userReels.removeWhere((ReelItemModel r) => r.id == postId);
     _likedPosts.removeWhere((PostItemModel p) => p.id == postId);
@@ -846,6 +1089,18 @@ class ProfileProvider extends ChangeNotifier {
           ),
         );
       }
+      if (_profile != null) {
+        AuthorProfileCache.set(
+          _profile!.id,
+          AuthorInfo(
+            id: _profile!.id,
+            username: _profile!.username ?? '',
+            displayName: _profile!.displayName ?? '',
+            avatarUrl: _profile!.avatarUrl,
+            hideMyLikes: _profile!.hideMyLikes,
+          ),
+        );
+      }
       _error = null;
       notifyListeners();
       return true;
@@ -1002,6 +1257,8 @@ class ProfileProvider extends ChangeNotifier {
           );
         }
         notifyListeners();
+        // Immediately fetch all restricted accounts from API to stay in sync
+        loadRestrictedAccounts(forceRefresh: true).ignore();
       }
       return success;
     } catch (e) {
@@ -1016,6 +1273,8 @@ class ProfileProvider extends ChangeNotifier {
       if (success) {
         _restrictedAccounts.removeWhere((RestrictedAccountItem a) => a.userId == userId);
         notifyListeners();
+        // Immediately fetch all restricted accounts from API to stay in sync
+        loadRestrictedAccounts(forceRefresh: true).ignore();
       }
       return success;
     } catch (e) {
@@ -1183,6 +1442,7 @@ class ProfileProvider extends ChangeNotifier {
           _followingUsernames.add(u.username.replaceAll('@', '').trim().toLowerCase());
         }
       }
+      UserRelationshipCache.sync(ids: _followingUserIds, usernames: _followingUsernames);
       if (_profile != null) {
         final int current = _profile!.followingCount ?? 0;
         final int updated = items.length > current ? items.length : current;
@@ -1208,6 +1468,7 @@ class ProfileProvider extends ChangeNotifier {
         if (username != null && username.trim().isNotEmpty) {
           _followingUsernames.add(username.replaceAll('@', '').trim().toLowerCase());
         }
+        UserRelationshipCache.add(userId: userId, username: username);
         final int idx = _following.indexWhere(
             (UserRelationItem u) => u.userId.toLowerCase() == userId.toLowerCase());
         if (idx != -1) {
@@ -1254,6 +1515,7 @@ class ProfileProvider extends ChangeNotifier {
         if (username != null && username.trim().isNotEmpty) {
           _followingUsernames.remove(username.replaceAll('@', '').trim().toLowerCase());
         }
+        UserRelationshipCache.remove(userId: userId, username: username);
         _following.removeWhere(
             (UserRelationItem u) => u.userId.toLowerCase() == userId.toLowerCase());
         final int fIdx = _followers.indexWhere(

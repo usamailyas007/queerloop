@@ -255,7 +255,9 @@ class ConversationTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: <Widget>[
                 Text(
-                  conversation.timeAgo,
+                  conversation.formattedLocalTime.isNotEmpty
+                      ? conversation.formattedLocalTime
+                      : conversation.timeAgo,
                   style: AppTextStyles.caption.copyWith(
                     color: conversation.unreadCount > 0
                         ? AppColors.gradientPink

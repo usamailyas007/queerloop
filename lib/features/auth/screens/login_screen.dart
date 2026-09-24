@@ -583,9 +583,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: AppSpacing.lg),
 
-                      // ── Social Login Button (platform-specific) ──────────
-                      // Android: Google only | iOS: Apple only
-                      if (Platform.isIOS)
+                      // ── Social Login Buttons ──────────────────────────────
+                      // Google: all platforms | Apple: iOS only
+                      AppSocialButton(
+                        text: l10n.authGoogle,
+                        iconPath: AppIcons.google,
+                        isLoading: _isGoogleLoading,
+                        onPressed:
+                            _isAnyBusy ? () {} : _handleGoogleSignIn,
+                      ),
+                      if (Platform.isIOS) ...<Widget>[
+                        const SizedBox(height: AppSpacing.md),
                         AppSocialButton(
                           text: l10n.authApple,
                           iconPath: AppIcons.apple,
@@ -597,15 +605,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                         .read<AuthProvider>()
                                         .signInWithApple(),
                                   ),
-                        )
-                      else
-                        AppSocialButton(
-                          text: l10n.authGoogle,
-                          iconPath: AppIcons.google,
-                          isLoading: _isGoogleLoading,
-                          onPressed:
-                              _isAnyBusy ? () {} : _handleGoogleSignIn,
                         ),
+                      ],
                     ],
                   ),
                 ),

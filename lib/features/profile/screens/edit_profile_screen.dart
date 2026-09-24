@@ -571,7 +571,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ],
                   ),
 
-                  // 2. USERNAME
+                  // 2. USERNAME (read-only — cannot be changed)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -585,8 +585,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xs),
-                      AppTextField(
-                        controller: _usernameController,
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: context.themeInputBackground.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: context.themeBorder.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                _usernameController.text,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: context.themeTextMuted,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.lock_outline_rounded,
+                              color: context.themeTextMuted,
+                              size: 16,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Username cannot be changed',
+                        style: AppTextStyles.caption.copyWith(
+                          color: context.themeTextMuted,
+                          fontSize: 11,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                     ],

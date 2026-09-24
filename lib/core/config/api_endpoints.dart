@@ -278,8 +278,8 @@ abstract final class ApiEndpoints {
   /// Comments for a post. GET / POST /posts/:id/comments
   static String postComments(String id) => '/posts/$id/comments';
 
-  /// Single comment operations (Delete). DELETE /comments/:commentId
-  static String comment(String commentId) => '/comments/$commentId';
+  /// Single comment operations (Delete). DELETE /comment/:commentId
+  static String comment(String commentId) => '/comment/$commentId';
 
   /// Like / unlike a comment. POST /comments/:commentId/like · DELETE /comments/:commentId/like
   static String commentLike(String commentId) => '/comments/$commentId/like';

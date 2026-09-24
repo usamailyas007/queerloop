@@ -17,6 +17,7 @@ import '../provider/profile_provider.dart';
 
 import '../widgets/logout_confirmation_modal_dialog.dart';
 import 'blocked_accounts_screen.dart';
+import '../../home/services/reel_video_preloader.dart';
 import 'delete_account_screen.dart';
 import 'edit_profile_screen.dart';
 import 'muted_accounts_screen.dart';
@@ -45,7 +46,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ReelVideoPreloader.instance.pauseAll();
       if (mounted) {
         context.read<ProfileProvider>().loadBlockedAccounts();
         context.read<ProfileProvider>().loadMutedAccounts();

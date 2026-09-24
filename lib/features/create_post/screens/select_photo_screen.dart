@@ -27,6 +27,7 @@ class _SelectPhotoScreenState extends State<SelectPhotoScreen> {
     DraftService.init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final CreatePostProvider provider = context.read<CreatePostProvider>();
+      provider.setMediaType(MediaType.photo);
       provider.loadDevicePhotos();
     });
   }

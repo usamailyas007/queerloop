@@ -101,7 +101,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authApple => 'Apple';
 
   @override
-  String get authGoogle => 'Google';
+  String get authGoogle => 'Continue with Google';
 
   @override
   String get authContinueApple => 'Continuar con Apple';

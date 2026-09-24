@@ -132,7 +132,7 @@ class DiscoverTabScreen extends StatelessWidget {
               rankColor: AppColors.gradientPink,
               hashtag: '#chosenfamily',
               postsCount: '28.4K posts today',
-              thumbnailAsset: AppImages.forYouImg,
+              thumbnailAsset: '',
               onTap: () => _handleTrendingTap(
                 context,
                 hashtag: '#chosenfamily',
@@ -149,7 +149,7 @@ class DiscoverTabScreen extends StatelessWidget {
               rankColor: AppColors.gradientPurple,
               hashtag: '#prideprep2026',
               postsCount: '19.7K posts today',
-              thumbnailAsset: AppImages.followingImg,
+              thumbnailAsset: '',
               onTap: () => _handleTrendingTap(
                 context,
                 hashtag: '#prideprep2026',
@@ -166,7 +166,7 @@ class DiscoverTabScreen extends StatelessWidget {
               rankColor: AppColors.gradientCyan,
               hashtag: '#binderfitcheck',
               postsCount: '11.2K posts today',
-              thumbnailAsset: AppImages.communityImg,
+              thumbnailAsset: '',
               onTap: () => _handleTrendingTap(
                 context,
                 hashtag: '#binderfitcheck',
@@ -183,7 +183,7 @@ class DiscoverTabScreen extends StatelessWidget {
               rankColor: AppColors.gradientPurple,
               hashtag: '#queerbooktok',
               postsCount: '8.9K posts today',
-              thumbnailAsset: AppImages.forYouImg,
+              thumbnailAsset: '',
               onTap: () => _handleTrendingTap(
                 context,
                 hashtag: '#queerbooktok',
@@ -295,15 +295,36 @@ class _TrendingItemCard extends StatelessWidget {
                 ],
               ),
             ),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              child: Image.asset(
-                thumbnailAsset,
+            if (thumbnailAsset.isNotEmpty &&
+                (thumbnailAsset.startsWith('http://') ||
+                    thumbnailAsset.startsWith('https://')))
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                child: Image.network(
+                  thumbnailAsset,
+                  width: 44,
+                  height: 44,
+                  fit: BoxFit.cover,
+                ),
+              )
+            else
+              Container(
                 width: 44,
                 height: 44,
-                fit: BoxFit.cover,
+                decoration: BoxDecoration(
+                  color: rankColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Center(
+                  child: Text(
+                    '#',
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: rankColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
               ),
-            ),
           ],
         ),
       ),

@@ -588,6 +588,16 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (event.conversationId.isEmpty || event.messageId.isEmpty) return;
 
     final String convId = event.conversationId;
+
+    // Completely drop incoming messages from blocked users
+    final String? senderUsername = (event.raw['sender'] is Map
+        ? (event.raw['sender']['username'] ?? event.raw['sender']['handle'])?.toString()
+        : null);
+    if (isBlocked(event.senderId) ||
+        isBlocked(convId) ||
+        (senderUsername != null && isBlocked(senderUsername))) {
+      return;
+    }
     _typingByConvId[convId] = false;
     if (event.senderId.isNotEmpty) {
       _typingByConvId[event.senderId] = false;
@@ -682,7 +692,10 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         _lastReadTimeByConv[_activeChatConvId!] = DateTime.now();
       }
       _persistReadStates();
-      if (_sendReadReceipts) {
+      final bool isRestrictedUser = isRestricted(event.senderId) ||
+          isRestricted(convId) ||
+          (senderUsername != null && isRestricted(senderUsername));
+      if (_sendReadReceipts && !isRestrictedUser) {
         _socketService?.markMessageRead(
           conversationId: convId,
           messageId: event.messageId,
@@ -1736,6 +1749,8 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     _restrictedUserIds.add(cleanId);
     _restrictedUsers[cleanId] = true;
     _restrictedUsers[userId] = true;
+    _restrictedUsers[actualId] = true;
+    _restrictedUserIds.add(actualId);
     if (cleanUname.isNotEmpty) {
       _restrictedUsernames.add(cleanUname);
       _restrictedUsers[cleanUname] = true;
@@ -1747,8 +1762,10 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       final bool ok = await _service!.restrictUser(actualId);
       if (!ok) {
         _restrictedUserIds.remove(cleanId);
+        _restrictedUserIds.remove(actualId);
         _restrictedUsers.remove(cleanId);
         _restrictedUsers.remove(userId);
+        _restrictedUsers.remove(actualId);
         if (cleanUname.isNotEmpty) {
           _restrictedUsernames.remove(cleanUname);
           _restrictedUsers.remove(cleanUname);
@@ -1757,6 +1774,11 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         notifyListeners();
         return false;
       }
+
+      // Immediately fetch all restricted users and message requests from API
+      await loadRestrictedUsers(force: true);
+      await loadMessageRequests(force: true);
+      notifyListeners();
     }
     return true;
   }
@@ -1776,6 +1798,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     _explicitlyUnrestricted.add(actualId);
 
     _restrictedUserIds.remove(cleanId);
+    _restrictedUserIds.remove(actualId);
     _restrictedUsers.remove(cleanId);
     _restrictedUsers.remove(userId);
     _restrictedUsers.remove(actualId);
@@ -1801,6 +1824,12 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         notifyListeners();
         return false;
       }
+
+      // Immediately fetch updated restricted users and inbox
+      await loadRestrictedUsers(force: true);
+      await loadMessageRequests(force: true);
+      await loadConversations();
+      notifyListeners();
     }
     return true;
   }
@@ -2055,6 +2084,18 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         for (int i = 0; i < list.length; i++) {
           if (list[i].sharedPostId == cleanPostId &&
               (list[i].postThumbnailAsset == null || list[i].postThumbnailAsset!.isEmpty)) {
+            // Format views
+            String? cachedViews;
+            if (cached.views > 0) {
+              final int v = cached.views;
+              if (v >= 1000000) {
+                cachedViews = '${(v / 1000000).toStringAsFixed(1)}M';
+              } else if (v >= 1000) {
+                cachedViews = '${(v / 1000).toStringAsFixed(1)}K';
+              } else {
+                cachedViews = '$v';
+              }
+            }
             list[i] = list[i].copyWith(
               postThumbnailAsset: cached.thumbnailUrl,
               postCaption: cached.caption ?? list[i].postCaption,
@@ -2063,6 +2104,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
               postType: cached.type.isNotEmpty ? cached.type : list[i].postType,
               postLikes: cached.likes > 0 ? cached.likes : list[i].postLikes,
               postComments: cached.comments > 0 ? cached.comments : list[i].postComments,
+              postViews: cachedViews ?? list[i].postViews,
             );
             anyUpdated = true;
           }
@@ -2091,6 +2133,9 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       final PostResponseModel post = await postService.getPost(cleanPostId);
       _resolvedPosts[cleanPostId] = post;
 
+      final String rawType = post.type.trim().toUpperCase();
+      final String pType = (rawType == 'VIDEO' || rawType == 'REEL') ? 'reel' : 'post';
+
       String? mediaUrl;
       String? thumbUrl;
       if (post.mediaRefs.isNotEmpty) {
@@ -2099,20 +2144,33 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
           mediaUrl = firstRef;
           thumbUrl = firstRef;
         } else {
-          try {
-            final MediaUploadResult status = await mediaService.getMediaStatus(firstRef);
-            mediaUrl = status.url ?? status.downloadUrl;
-            thumbUrl = status.thumbnailUrl ?? mediaUrl;
-          } catch (_) {
-            mediaUrl = firstRef;
-            thumbUrl = firstRef;
+          final String cleanRef = firstRef
+              .replaceAll(RegExp(r'^/+'), '')
+              .replaceAll(RegExp(r'^media/'), '');
+          if (pType == 'reel') {
+            mediaUrl = '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
+            if (post.authorId != null && post.authorId!.isNotEmpty) {
+              thumbUrl = '${AppConfig.cdnUrl}/images/original/${post.authorId}/$cleanRef.jpg';
+            }
+          } else {
+            if (post.authorId != null && post.authorId!.isNotEmpty) {
+              mediaUrl = '${AppConfig.cdnUrl}/images/original/${post.authorId}/$cleanRef.jpg';
+              thumbUrl = mediaUrl;
+            } else {
+              try {
+                final MediaUploadResult status = await mediaService.getMediaStatus(firstRef);
+                mediaUrl = status.url ?? status.downloadUrl;
+                thumbUrl = status.thumbnailUrl ?? mediaUrl;
+              } catch (_) {
+                mediaUrl = '${AppConfig.baseUrl}/media/$cleanRef';
+                thumbUrl = mediaUrl;
+              }
+            }
           }
         }
       }
 
-      final String effectiveThumb = thumbUrl ?? mediaUrl ?? '';
-      final String rawType = post.type.trim().toUpperCase();
-      final String pType = (rawType == 'VIDEO' || rawType == 'REEL') ? 'reel' : 'post';
+      final String effectiveThumb = thumbUrl ?? (pType == 'reel' ? null : mediaUrl) ?? '';
       final String resolvedAuthor = (post.authorName != null && post.authorName!.isNotEmpty)
           ? (post.authorName!.startsWith('@') ? post.authorName! : '@${post.authorName!}')
           : '@creator';
@@ -2123,12 +2181,14 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         SharedPostData(
           postId: cleanPostId,
           thumbnailUrl: effectiveThumb.isNotEmpty ? effectiveThumb : null,
+          videoUrl: (pType == 'reel') ? mediaUrl : null,
           caption: post.caption,
           author: resolvedAuthor,
           authorAvatarUrl: post.authorAvatar,
           type: pType,
           likes: post.likesCount,
           comments: post.commentsCount,
+          views: post.viewsCount,
         ),
       );
 
@@ -2137,14 +2197,29 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         final List<ChatMessageModel> list = entry.value;
         for (int i = 0; i < list.length; i++) {
           if (list[i].sharedPostId == cleanPostId) {
+            // Format views count from resolved post
+            String? resolvedViews;
+            if (post.viewsCount > 0) {
+              final int v = post.viewsCount;
+              if (v >= 1000000) {
+                resolvedViews = '${(v / 1000000).toStringAsFixed(1)}M';
+              } else if (v >= 1000) {
+                resolvedViews = '${(v / 1000).toStringAsFixed(1)}K';
+              } else {
+                resolvedViews = '$v';
+              }
+            }
             list[i] = list[i].copyWith(
+              mediaUrl: mediaUrl ?? list[i].mediaUrl,
               postThumbnailAsset: effectiveThumb.isNotEmpty ? effectiveThumb : list[i].postThumbnailAsset,
               postCaption: post.caption.isNotEmpty ? post.caption : list[i].postCaption,
               postAuthor: resolvedAuthor,
+              postAuthorId: post.authorId,
               postAuthorAvatarUrl: post.authorAvatar ?? list[i].postAuthorAvatarUrl,
               postType: pType,
               postLikes: post.likesCount > 0 ? post.likesCount : list[i].postLikes,
               postComments: post.commentsCount > 0 ? post.commentsCount : list[i].postComments,
+              postViews: resolvedViews ?? list[i].postViews,
             );
             anyUpdated = true;
           }
@@ -2343,11 +2418,9 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       <String, List<ChatMessageModel>>{};
 
   List<ConversationModel> get conversations {
-    // Exclude conversations from restricted and blocked users from the primary inbox
+    // Exclude conversations from restricted users from the primary inbox (they go to requests).
+    // Blocked users stay in the inbox so their chat history remains visible with a "Blocked" badge.
     final List<ConversationModel> nonRestricted = _conversations.where((ConversationModel c) {
-      if (isBlocked(c.participantId) || isBlocked(c.username) || isBlocked(c.id)) {
-        return false;
-      }
       if (isRestricted(c.participantId) || isRestricted(c.username) || isRestricted(c.id)) {
         return false;
       }
@@ -2454,6 +2527,23 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     return DateTime.fromMillisecondsSinceEpoch(1);
+  }
+
+  static String _formatConversationTime(DateTime dt) {
+    final DateTime local = dt.toLocal();
+    final DateTime now = DateTime.now();
+    if (local.year == now.year && local.month == now.month && local.day == now.day) {
+      return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    }
+    final DateTime yesterday = now.subtract(const Duration(days: 1));
+    if (local.year == yesterday.year && local.month == yesterday.month && local.day == yesterday.day) {
+      return 'Yesterday';
+    }
+    final Duration diff = now.difference(local);
+    if (diff.inDays < 7) {
+      return '${diff.inDays}d';
+    }
+    return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}';
   }
 
   void _sortConversations() {
@@ -2567,10 +2657,13 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
             lastMessageAt: last.createdAt ?? c.lastMessageAt,
           );
 
+          final DateTime? effTime = last.createdAt ?? c.lastMessageAt;
           _conversations[i] = c.copyWith(
             lastMessage: '$prefix$lastBody',
-            timeAgo: last.timestamp.isNotEmpty ? last.timestamp : c.timeAgo,
-            lastMessageAt: last.createdAt ?? c.lastMessageAt,
+            timeAgo: effTime != null
+                ? _formatConversationTime(effTime)
+                : (last.timestamp.isNotEmpty ? last.timestamp : c.timeAgo),
+            lastMessageAt: effTime,
             unreadCount: unread,
             messages: msgs,
           );
@@ -2621,13 +2714,17 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
                 final int targetIdx = _conversations
                     .indexWhere((ConversationModel item) => item.id == c.id);
                 if (targetIdx != -1) {
+                  final DateTime? effTime =
+                      last.createdAt ?? _conversations[targetIdx].lastMessageAt;
                   _conversations[targetIdx] = _conversations[targetIdx].copyWith(
                     lastMessage: '$prefix$lastBody',
-                    timeAgo: last.timestamp.isNotEmpty
-                        ? last.timestamp
-                        : _conversations[targetIdx].timeAgo,
+                    timeAgo: effTime != null
+                        ? _formatConversationTime(effTime)
+                        : (last.timestamp.isNotEmpty
+                            ? last.timestamp
+                            : _conversations[targetIdx].timeAgo),
                     lastMessageSenderId: last.senderId,
-                    lastMessageAt: last.createdAt ?? _conversations[targetIdx].lastMessageAt,
+                    lastMessageAt: effTime,
                     unreadCount: unread,
                     messages: msgs,
                   );
@@ -2733,13 +2830,17 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
                     hasChanges = true;
                   }
 
+                  final DateTime? effTime =
+                      last.createdAt ?? target.lastMessageAt;
                   _conversations[targetIdx] = target.copyWith(
                     lastMessage: fullLastMsg,
-                    timeAgo: last.timestamp.isNotEmpty
-                        ? last.timestamp
-                        : target.timeAgo,
+                    timeAgo: effTime != null
+                        ? _formatConversationTime(effTime)
+                        : (last.timestamp.isNotEmpty
+                            ? last.timestamp
+                            : target.timeAgo),
                     lastMessageSenderId: last.senderId,
-                    lastMessageAt: last.createdAt ?? target.lastMessageAt,
+                    lastMessageAt: effTime,
                     unreadCount: unread,
                     messages: msgs,
                   );
@@ -2938,13 +3039,17 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
             lastMessageAt: last.createdAt ?? _conversations[idx].lastMessageAt,
           );
 
+          final DateTime? effTime =
+              last.createdAt ?? _conversations[idx].lastMessageAt;
           _conversations[idx] = _conversations[idx].copyWith(
             lastMessage: '$prefix$lastBody',
-            timeAgo: last.timestamp.isNotEmpty
-                ? last.timestamp
-                : _conversations[idx].timeAgo,
+            timeAgo: effTime != null
+                ? _formatConversationTime(effTime)
+                : (last.timestamp.isNotEmpty
+                    ? last.timestamp
+                    : _conversations[idx].timeAgo),
             lastMessageSenderId: last.senderId,
-            lastMessageAt: last.createdAt ?? _conversations[idx].lastMessageAt,
+            lastMessageAt: effTime,
             unreadCount: unread,
             messages: msgs,
           );

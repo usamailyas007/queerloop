@@ -15,6 +15,7 @@ import '../../auth/auth_provider.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../home/provider/home_feed_provider.dart';
+import '../../home/services/reel_video_preloader.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/provider/profile_setup_provider.dart';
@@ -82,6 +83,9 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
   @override
   void initState() {
     super.initState();
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
     final CreatePostProvider provider = context.read<CreatePostProvider>();
     _captionController =
         _HashtagTextEditingController(text: provider.caption);
@@ -89,6 +93,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
 
     // Auto-start upload if media is selected and in idle status
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ReelVideoPreloader.instance.pauseAll();
       if (!mounted) return;
       if (provider.selectedMedia != null &&
           provider.uploadStatus == MediaUploadStatus.idle) {
@@ -154,8 +159,8 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
 
       final HomeFeedProvider homeProvider = context.read<HomeFeedProvider>();
       final GalleryMediaItem? item = provider.selectedMedia;
-      final bool isVideo = (item != null && item.isVideo) ||
-          (provider.mediaType == MediaType.video);
+      final bool isVideo = provider.mediaType == MediaType.video &&
+          (item == null || item.isVideo);
 
       final ProfileProvider profile = context.read<ProfileProvider>();
       final AuthProvider auth = context.read<AuthProvider>();
@@ -190,8 +195,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
           username: handle,
           pronounsTime: pronounsTime,
           avatarAsset: avatar,
-          videoAsset:
-              item?.videoAsset ?? (item?.filePath ?? 'assets/videos/video1.mp4'),
+          videoAsset: item?.videoAsset ?? '',
           videoFilePath: item?.filePath,
           videoUrl: provider.uploadResult?.downloadUrl ?? provider.uploadResult?.url,
           thumbnailUrl: provider.uploadResult?.thumbnailUrl,
@@ -210,6 +214,9 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
           context.read<ProfileProvider>().addUserReel(newReel);
         } catch (_) {}
       } else {
+        final String? localPath = (item != null && item.filePath != null && item.filePath!.isNotEmpty)
+            ? item.filePath
+            : null;
         final PostItemModel newPost = PostItemModel(
           id: postResult?.id ?? 'post_${DateTime.now().millisecondsSinceEpoch}',
           authorId: auth.userId,
@@ -220,11 +227,11 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
           content: provider.caption,
           likesCount: 0,
           commentsCount: 0,
-          postImageAsset: (item != null && item.assetPath.isNotEmpty)
-              ? item.assetPath
-              : null,
-          postImageUrl: provider.uploadResult?.downloadUrl ?? provider.uploadResult?.url,
-          postType: item != null ? 'PHOTO' : 'TEXT',
+          postImageAsset: localPath,
+          postImageUrl: provider.uploadResult?.downloadUrl ??
+              provider.uploadResult?.url ??
+              localPath,
+          postType: provider.mediaType == MediaType.text ? 'TEXT' : 'PHOTO',
           allowDownloads: provider.allowDownloads,
         );
         homeProvider.addNewPost(newPost);
@@ -397,7 +404,8 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                             children: <Widget>[
                               MediaThumbnailWidget(item: selectedItem),
 
-                              if (selectedItem?.isVideo ?? true) ...<Widget>[
+                              if (provider.mediaType == MediaType.video &&
+                                  (selectedItem?.isVideo ?? true)) ...<Widget>[
                                 Positioned(
                                   top: 4,
                                   left: 4,

@@ -230,18 +230,34 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                                   width: 44,
                                   height: 44,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => Image.asset(
-                                    AppImages.forYouImg,
+                                  errorBuilder: (_, _, _) => Container(
                                     width: 44,
                                     height: 44,
-                                    fit: BoxFit.cover,
+                                    color: context.isDarkMode
+                                        ? Colors.white12
+                                        : Colors.black12,
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.play_circle_outline_rounded,
+                                        color: Colors.white38,
+                                        size: 24,
+                                      ),
+                                    ),
                                   ),
                                 )
-                              : Image.asset(
-                                  AppImages.forYouImg,
+                              : Container(
                                   width: 44,
                                   height: 44,
-                                  fit: BoxFit.cover,
+                                  color: context.isDarkMode
+                                      ? Colors.white12
+                                      : Colors.black12,
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.play_circle_outline_rounded,
+                                      color: Colors.white38,
+                                      size: 24,
+                                    ),
+                                  ),
                                 ),
                         ),
                         const SizedBox(width: AppSpacing.md),

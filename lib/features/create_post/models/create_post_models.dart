@@ -10,12 +10,14 @@ class AuthorInfo {
     required this.username,
     required this.displayName,
     this.avatarUrl,
+    this.hideMyLikes,
   });
 
   final String id;
   final String username;
   final String displayName;
   final String? avatarUrl;
+  final bool? hideMyLikes;
 }
 
 class AuthorProfileCache {
@@ -225,13 +227,17 @@ class PostResponseModel {
     this.communityId,
     this.visibility,
     this.allowComments = true,
-    this.allowDownloads = false,
+    this.allowDownloads = true,
     this.likesCount = 0,
     this.commentsCount = 0,
+    this.viewsCount = 0,
     this.isLiked = false,
     this.isSaved = false,
+    this.hideLikes = false,
     this.duration,
     this.postImageUrl,
+    this.status,
+    this.deletedAt,
   });
 
   final String id;
@@ -251,12 +257,20 @@ class PostResponseModel {
   final bool allowDownloads;
   final int likesCount;
   final int commentsCount;
+  final int viewsCount;
   final bool isLiked;
   final bool isSaved;
+  final bool hideLikes;
   final String? duration;
   final String? postImageUrl;
+  final String? status;
+  final String? deletedAt;
 
   String get body => caption;
+  bool get isDeleted =>
+      deletedAt != null ||
+      status?.toLowerCase() == 'deleted' ||
+      status?.toLowerCase() == 'removed';
 
   PostResponseModel copyWith({
     String? id,
@@ -276,10 +290,14 @@ class PostResponseModel {
     bool? allowDownloads,
     int? likesCount,
     int? commentsCount,
+    int? viewsCount,
     bool? isLiked,
     bool? isSaved,
+    bool? hideLikes,
     String? duration,
     String? postImageUrl,
+    String? status,
+    String? deletedAt,
   }) {
     return PostResponseModel(
       id: id ?? this.id,
@@ -299,10 +317,14 @@ class PostResponseModel {
       allowDownloads: allowDownloads ?? this.allowDownloads,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
+      viewsCount: viewsCount ?? this.viewsCount,
       isLiked: isLiked ?? this.isLiked,
       isSaved: isSaved ?? this.isSaved,
+      hideLikes: hideLikes ?? this.hideLikes,
       duration: duration ?? this.duration,
       postImageUrl: postImageUrl ?? this.postImageUrl,
+      status: status ?? this.status,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 
@@ -530,9 +552,10 @@ class PostResponseModel {
     String? finalAuthorName = resolvedAuthorName;
     String? finalAuthorDisplayName = resolvedAuthorDisplayName;
     String? finalAuthorAvatar = resolvedAuthorAvatar;
+    AuthorInfo? cachedAuthor;
 
     if (finalAuthorId != null && finalAuthorId.isNotEmpty) {
-      final AuthorInfo? cachedAuthor = AuthorProfileCache.get(finalAuthorId);
+      cachedAuthor = AuthorProfileCache.get(finalAuthorId);
       if (cachedAuthor != null) {
         finalAuthorName ??= cachedAuthor.username;
         finalAuthorDisplayName ??= cachedAuthor.displayName;
@@ -561,6 +584,8 @@ class PostResponseModel {
                         userObj['avatar'] ??
                         userObj['profilePic'])
                     ?.toString();
+                final bool? hideLikes =
+                    (userObj['hideMyLikes'] ?? userObj['hideLikes']) as bool?;
                 final AuthorInfo info = AuthorInfo(
                   id: finalAuthorId,
                   username: u.trim(),
@@ -568,8 +593,10 @@ class PostResponseModel {
                       ? d.trim()
                       : u.trim(),
                   avatarUrl: a,
+                  hideMyLikes: hideLikes,
                 );
                 AuthorProfileCache.set(finalAuthorId, info);
+                cachedAuthor = info;
                 finalAuthorName ??= info.username;
                 finalAuthorDisplayName ??= info.displayName;
                 finalAuthorAvatar ??= info.avatarUrl;
@@ -638,12 +665,33 @@ class PostResponseModel {
       community: (map['community'] ?? map['communityId'])?.toString(),
       communityId: map['communityId']?.toString(),
       visibility: map['visibility']?.toString(),
-      allowComments: map['allowComments'] as bool? ?? true,
-      allowDownloads: (map['allowDownloads'] ?? map['allowSharing'] ?? map['allowDownload']) as bool? ?? false,
+      allowComments: (map['allowComments'] ?? map['allowComment']) as bool? ?? true,
+      allowDownloads: (map['allowDownloads'] ?? map['allowSharing'] ?? map['allowDownload']) as bool? ?? true,
       likesCount: rawLikes is num ? rawLikes.toInt() : int.tryParse(rawLikes?.toString() ?? '0') ?? 0,
       commentsCount: rawComments is num ? rawComments.toInt() : int.tryParse(rawComments?.toString() ?? '0') ?? 0,
+      viewsCount: () {
+        final dynamic rawViews = map['viewCount'] ??
+            map['viewsCount'] ??
+            map['views'] ??
+            map['playCount'] ??
+            map['playsCount'] ??
+            map['plays'] ??
+            (map['_count'] is Map ? (map['_count']['views'] ?? map['_count']['plays']) : null);
+        return rawViews is num ? rawViews.toInt() : int.tryParse(rawViews?.toString() ?? '0') ?? 0;
+      }(),
       isLiked: (map['isLiked'] ?? map['liked'] ?? false) == true,
       isSaved: (map['isSaved'] ?? map['saved'] ?? false) == true,
+      hideLikes: (map['hideLikes'] ??
+              map['hideMyLikes'] ??
+              (map['author'] is Map
+                  ? (map['author']['hideMyLikes'] ?? map['author']['hideLikes'])
+                  : null) ??
+              (map['user'] is Map
+                  ? (map['user']['hideMyLikes'] ?? map['user']['hideLikes'])
+                  : null) ??
+              cachedAuthor?.hideMyLikes ??
+              false) ==
+          true,
       duration: durationStr,
       postImageUrl: explicitImageUrl ??
           (extractedMediaRefs.isNotEmpty && !isVideoType
@@ -653,10 +701,10 @@ class PostResponseModel {
                   ? extractedMediaRefs.first
                   : (finalAuthorId != null && finalAuthorId.isNotEmpty
                       ? '${AppConfig.cdnUrl}/images/original/$finalAuthorId/${extractedMediaRefs.first.replaceAll(RegExp(r"^/+"), "").replaceAll(RegExp(r"^media/"), "")}.jpg'
-                      : (AppConfig.baseUrl.isNotEmpty
-                          ? '${AppConfig.baseUrl.replaceAll(RegExp(r"/+$"), "")}/media/${extractedMediaRefs.first.replaceAll(RegExp(r"^/+"), "").replaceAll(RegExp(r"^media/"), "")}'
-                          : extractedMediaRefs.first)))
+                      : '${AppConfig.cdnUrl}/images/original/${extractedMediaRefs.first.replaceAll(RegExp(r"^/+"), "").replaceAll(RegExp(r"^media/"), "")}.jpg'))
               : null),
+      status: map['status']?.toString(),
+      deletedAt: map['deletedAt']?.toString() ?? map['deleted_at']?.toString(),
     );
   }
 }

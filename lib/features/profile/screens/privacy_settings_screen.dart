@@ -9,6 +9,7 @@ import '../../create_post/widgets/custom_gradient_switch.dart';
 import '../../profile_setup/screens/allow_messages_from_screen.dart';
 import '../../profile_setup/screens/profile_visibility_screen.dart';
 import '../../messages/provider/messages_provider.dart';
+import '../../home/services/reel_video_preloader.dart';
 import '../provider/profile_provider.dart';
 import 'who_can_comment_screen.dart';
 
@@ -34,6 +35,12 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   @override
   void initState() {
     super.initState();
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ReelVideoPreloader.instance.pauseAll();
+    });
     final ProfileProvider provider = context.read<ProfileProvider>();
     _privateAccount = provider.isPrivate;
     _appearInExplore = provider.showInDiscover;

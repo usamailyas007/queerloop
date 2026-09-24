@@ -7,6 +7,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_outline_button.dart';
+import '../../home/services/reel_video_preloader.dart';
 import '../models/create_post_models.dart';
 import '../provider/create_post_provider.dart';
 import '../screens/select_photo_screen.dart';
@@ -17,6 +18,9 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
   const CreatePostTypeBottomSheet({super.key});
 
   static Future<void> show(BuildContext context) async {
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
     context.read<CreatePostProvider>().resetPostForm();
     await showModalBottomSheet<void>(
       context: context,
@@ -115,6 +119,9 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
               title: 'Video',
               subtitle: 'Upload a video from your gallery, up to 60s',
               onTap: () {
+                ReelVideoPreloader.instance.setFeedVisible(false);
+                ReelVideoPreloader.instance.pauseAll();
+                ReelVideoPreloader.instance.muteAll();
                 Navigator.pop(context);
                 provider.setMediaType(MediaType.video);
                 Navigator.push<void>(
@@ -135,6 +142,9 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
               title: 'Photo',
               subtitle: 'Upload one or more photos from your gallery',
               onTap: () {
+                ReelVideoPreloader.instance.setFeedVisible(false);
+                ReelVideoPreloader.instance.pauseAll();
+                ReelVideoPreloader.instance.muteAll();
                 Navigator.pop(context);
                 provider.setMediaType(MediaType.photo);
                 Navigator.push<void>(
@@ -155,6 +165,9 @@ class CreatePostTypeBottomSheet extends StatelessWidget {
               title: 'Text Post',
               subtitle: 'Write something',
               onTap: () {
+                ReelVideoPreloader.instance.setFeedVisible(false);
+                ReelVideoPreloader.instance.pauseAll();
+                ReelVideoPreloader.instance.muteAll();
                 Navigator.pop(context);
                 provider.setMediaType(MediaType.text);
                 provider.setVisibility(PostVisibility.everyone);

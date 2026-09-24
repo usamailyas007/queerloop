@@ -17,6 +17,34 @@ import '../../profile/screens/user_profile_screen.dart';
 import '../screens/profile_tab_screen.dart';
 import 'report_comment_bottom_sheet.dart';
 
+/// Global in-memory tracker for comment likes across all screens.
+/// Guarantees that if a user likes a comment on screen A, opening comments on
+/// screen B (e.g. profile, feed, hashtag, discover) will preserve the liked state.
+class CommentLikesTracker {
+  CommentLikesTracker._();
+
+  static final Set<String> _likedCommentIds = <String>{};
+  static final Set<String> _unlikedCommentIds = <String>{};
+
+  static bool isCommentLiked(String id, {bool serverStatus = false}) {
+    if (id.isEmpty) return serverStatus;
+    if (_likedCommentIds.contains(id)) return true;
+    if (_unlikedCommentIds.contains(id)) return false;
+    return serverStatus;
+  }
+
+  static void setLiked(String id, bool liked) {
+    if (id.isEmpty) return;
+    if (liked) {
+      _likedCommentIds.add(id);
+      _unlikedCommentIds.remove(id);
+    } else {
+      _unlikedCommentIds.add(id);
+      _likedCommentIds.remove(id);
+    }
+  }
+}
+
 class CommentItemModel {
   CommentItemModel({
     required this.id,
@@ -36,7 +64,7 @@ class CommentItemModel {
     this.moderationReason,
   }) : replies = replies ?? <CommentItemModel>[];
 
-  final String id;
+  String id;
   final String? authorId;
   final String avatarAsset;
   final String username;
@@ -60,6 +88,7 @@ class CommentsBottomSheet extends StatefulWidget {
     this.postAuthorId,
     this.communityId,
     this.isAnswers = false,
+    this.allowComments = true,
     this.onCommentAdded,
     super.key,
   });
@@ -69,6 +98,7 @@ class CommentsBottomSheet extends StatefulWidget {
   final String? postAuthorId;
   final String? communityId;
   final bool isAnswers;
+  final bool allowComments;
   final VoidCallback? onCommentAdded;
 
   @override
@@ -89,7 +119,10 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
   @override
   void initState() {
     super.initState();
-    if (widget.postId != null && widget.postId!.contains('-')) {
+    final bool isRealPostId = widget.postId != null &&
+        widget.postId!.isNotEmpty &&
+        !widget.postId!.startsWith('mock_');
+    if (isRealPostId) {
       _isLoadingComments = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _fetchLiveComments();
@@ -127,6 +160,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     try {
       final PostContentService service =
           PostContentService(context.read<ApiClient>());
+      final String? myUserId = context.read<AuthProvider>().userId;
       final List<dynamic> raw = await service.getComments(widget.postId!);
       final Map<String, CommentItemModel> allMap = <String, CommentItemModel>{};
       final List<CommentItemModel> topLevel = <CommentItemModel>[];
@@ -150,10 +184,37 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
           final String? parentId = item['parentId']?.toString();
           final String timeAgo = _formatCommentTime(item['createdAt']?.toString());
           final int likesCount = (item['likeCount'] ?? item['likesCount'] ?? item['likes'] ?? 0) as int? ?? 0;
-          final bool isLiked = (item['isLiked'] ?? item['liked'] ?? false) as bool? ?? false;
+          final String commentId = (item['id'] ?? item['_id'] ?? '').toString();
+
+          bool isLiked = (item['isLiked'] ??
+                  item['liked'] ??
+                  item['hasLiked'] ??
+                  item['likedByMe'] ??
+                  item['isLikedByMe'] ??
+                  item['userLiked'] ??
+                  false) as bool? ??
+              false;
+
+          final dynamic rawLikes = item['likes'] ?? item['commentLikes'] ?? item['userLikes'];
+          if (rawLikes is List && myUserId != null && myUserId.isNotEmpty) {
+            for (final dynamic l in rawLikes) {
+              if (l is String && l == myUserId) {
+                isLiked = true;
+                break;
+              } else if (l is Map) {
+                final String? uid = (l['userId'] ?? l['user_id'] ?? l['id'] ?? l['authorId'])?.toString();
+                if (uid == myUserId) {
+                  isLiked = true;
+                  break;
+                }
+              }
+            }
+          }
+
+          isLiked = CommentLikesTracker.isCommentLiked(commentId, serverStatus: isLiked);
 
           final CommentItemModel model = CommentItemModel(
-            id: (item['id'] ?? item['_id'] ?? '').toString(),
+            id: commentId,
             authorId: authorId,
             avatarAsset: avatar,
             username: username,
@@ -232,37 +293,34 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
   void _toggleLikeComment(CommentItemModel comment) {
     final bool wasLiked = comment.isLiked;
+    final bool newLiked = !wasLiked;
+    CommentLikesTracker.setLiked(comment.id, newLiked);
+
     setState(() {
-      comment.isLiked = !wasLiked;
-      if (comment.isLiked) {
+      comment.isLiked = newLiked;
+      if (newLiked) {
         comment.likesCount += 1;
       } else {
         comment.likesCount = (comment.likesCount - 1).clamp(0, 999999);
       }
     });
 
-    if (comment.id.contains('-')) {
+    final bool isRealCommentId = comment.id.isNotEmpty &&
+        !comment.id.startsWith('mock_');
+    if (isRealCommentId) {
       final PostContentService service =
           PostContentService(context.read<ApiClient>());
       if (!wasLiked) {
-        service.likeComment(comment.id).catchError((e) {
-          debugPrint('Error liking comment ${comment.id}: $e');
-          if (mounted) {
-            setState(() {
-              comment.isLiked = false;
-              comment.likesCount = (comment.likesCount - 1).clamp(0, 999999);
-            });
-          }
+        service
+            .likeComment(comment.id, postId: widget.postId)
+            .catchError((Object e) {
+          debugPrint('⚠️ [CommentsBottomSheet] Failed to like comment ${comment.id}: $e');
         });
       } else {
-        service.unlikeComment(comment.id).catchError((e) {
-          debugPrint('Error unliking comment ${comment.id}: $e');
-          if (mounted) {
-            setState(() {
-              comment.isLiked = true;
-              comment.likesCount += 1;
-            });
-          }
+        service
+            .unlikeComment(comment.id, postId: widget.postId)
+            .catchError((Object e) {
+          debugPrint('⚠️ [CommentsBottomSheet] Failed to unlike comment ${comment.id}: $e');
         });
       }
     }
@@ -308,7 +366,11 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
           comment.parentId != null ? 'Reply deleted' : '$typeName deleted',
     );
 
-    if (comment.id.contains('-')) {
+    final bool isRealCommentId = comment.id.isNotEmpty &&
+        !comment.id.startsWith('c1') &&
+        !comment.id.startsWith('c2') &&
+        !comment.id.startsWith('mock_');
+    if (isRealCommentId) {
       try {
         final PostContentService service =
             PostContentService(context.read<ApiClient>());
@@ -328,10 +390,16 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
     final AuthProvider auth = context.read<AuthProvider>();
     final String? currentUserId = auth.userId;
-    final bool isOwnComment = currentUserId != null &&
-        comment.authorId != null &&
-        (currentUserId.trim().toLowerCase() ==
-            comment.authorId!.trim().toLowerCase());
+    final String? currentUsername = auth.user?.displayName;
+    final bool isOwnComment = (currentUserId != null &&
+            comment.authorId != null &&
+            (currentUserId.trim().toLowerCase() ==
+                comment.authorId!.trim().toLowerCase())) ||
+        (currentUsername != null &&
+            currentUsername.trim().isNotEmpty &&
+            comment.username.isNotEmpty &&
+            (currentUsername.replaceAll('@', '').trim().toLowerCase() ==
+                comment.username.replaceAll('@', '').trim().toLowerCase()));
     final bool isPostAuthor = currentUserId != null &&
         widget.postAuthorId != null &&
         (currentUserId.trim().toLowerCase() ==
@@ -830,15 +898,26 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
     widget.onCommentAdded?.call();
 
-    if (widget.postId != null && widget.postId!.contains('-')) {
+    final bool isRealPostId = widget.postId != null &&
+        widget.postId!.isNotEmpty &&
+        !widget.postId!.startsWith('mock_');
+    if (isRealPostId) {
       try {
         final PostContentService service =
             PostContentService(context.read<ApiClient>());
-        await service.createComment(
+        final dynamic res = await service.createComment(
           postId: widget.postId!,
           content: text,
           parentId: parentId,
         );
+        if (res is Map) {
+          final dynamic data = res['data'] ?? res;
+          final String? realId =
+              (data is Map ? (data['id'] ?? data['_id']) : null)?.toString();
+          if (realId != null && realId.isNotEmpty) {
+            optimistic.id = realId;
+          }
+        }
       } catch (e) {
         debugPrint('Error posting comment: $e');
       } finally {
@@ -851,13 +930,30 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     }
   }
 
+  int get _totalCommentsCount {
+    int count = 0;
+    for (final CommentItemModel c in _comments) {
+      count += 1;
+      count += c.replies.length;
+      if (c.isAuthorReply &&
+          c.authorReplyText != null &&
+          c.authorReplyText!.isNotEmpty) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
+    final int displayCount = _isLoadingComments
+        ? widget.totalComments
+        : _totalCommentsCount;
     final String titleText = widget.isAnswers
-        ? '${_comments.length} answers'
-        : '${_comments.length} ${l10n.commentsTitle.toLowerCase()}';
+        ? '$displayCount ${displayCount == 1 ? 'answer' : 'answers'}'
+        : '$displayCount ${displayCount == 1 ? 'comment' : l10n.commentsTitle.toLowerCase()}';
 
     final String placeholderText = widget.isAnswers
         ? 'Add a your answer...'
@@ -1114,87 +1210,124 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
               ),
 
             // ── Bottom Fixed Input Bar ────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Row(
-                children: <Widget>[
-                  // Current User Avatar
-                  Builder(
-                    builder: (BuildContext context) {
-                      final String? currentAvatarUrl =
-                          context.read<AuthProvider>().user?.avatarUrl;
-                      return ClipOval(
-                        child: currentAvatarUrl != null &&
-                                currentAvatarUrl.startsWith('http')
-                            ? Image.network(
-                                currentAvatarUrl,
-                                width: 36,
-                                height: 36,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Image.asset(
+            if (widget.allowComments)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                child: Row(
+                  children: <Widget>[
+                    // Current User Avatar
+                    Builder(
+                      builder: (BuildContext context) {
+                        final String? currentAvatarUrl =
+                            context.read<AuthProvider>().user?.avatarUrl;
+                        return ClipOval(
+                          child: currentAvatarUrl != null &&
+                                  currentAvatarUrl.startsWith('http')
+                              ? Image.network(
+                                  currentAvatarUrl,
+                                  width: 36,
+                                  height: 36,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Image.asset(
+                                    AppImages.user4,
+                                    width: 36,
+                                    height: 36,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Image.asset(
                                   AppImages.user4,
                                   width: 36,
                                   height: 36,
                                   fit: BoxFit.cover,
                                 ),
-                              )
-                            : Image.asset(
-                                AppImages.user4,
-                                width: 36,
-                                height: 36,
-                                fit: BoxFit.cover,
-                              ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 10),
-
-                  // Reusable AppTextField Widget
-                  Expanded(
-                    child: AppTextField(
-                      controller: _commentInputController,
-                      focusNode: _commentFocusNode,
-                      hintText: placeholderText,
+                        );
+                      },
                     ),
-                  ),
+                    const SizedBox(width: 10),
 
-                  const SizedBox(width: 10),
-
-                  // Send Button with Secondary Gradient (Cyan to Pink)
-                  GestureDetector(
-                    onTap: _addNewComment,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: AppColors.secondaryGradientButton,
-                      ),
-                      child: Center(
-                        child: _isSubmittingComment
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : SvgPicture.asset(
-                                AppIcons.send,
-                                width: 18,
-                                height: 18,
-                                colorFilter: const ColorFilter.mode(
-                                  Colors.white,
-                                  BlendMode.srcIn,
-                                ),
-                              ),
+                    // Reusable AppTextField Widget
+                    Expanded(
+                      child: AppTextField(
+                        controller: _commentInputController,
+                        focusNode: _commentFocusNode,
+                        hintText: placeholderText,
                       ),
                     ),
-                  ),
-                ],
+
+                    const SizedBox(width: 10),
+
+                    // Send Button with Secondary Gradient (Cyan to Pink)
+                    GestureDetector(
+                      onTap: _addNewComment,
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: AppColors.secondaryGradientButton,
+                        ),
+                        child: Center(
+                          child: _isSubmittingComment
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : SvgPicture.asset(
+                                  AppIcons.send,
+                                  width: 18,
+                                  height: 18,
+                                  colorFilter: const ColorFilter.mode(
+                                    Colors.white,
+                                    BlendMode.srcIn,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                margin: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: 8,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: context.isDarkMode
+                      ? Colors.white.withValues(alpha: 0.05)
+                      : Colors.black.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Icon(
+                      Icons.comments_disabled_outlined,
+                      size: 18,
+                      color: context.themeTextMuted,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Comments are disabled for this post.',
+                      style: TextStyle(
+                        color: context.themeTextMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),

@@ -15,7 +15,11 @@ class PostItemModel {
     this.communityId,
     this.isLiked = false,
     this.isSaved = false,
+    this.allowComments = true,
     this.allowDownloads = true,
+    this.hideLikes = false,
+    this.viewsCount = 0,
+    this.visibility,
   });
 
   final String id;
@@ -33,7 +37,11 @@ class PostItemModel {
   final String? communityId;
   final bool isLiked;
   final bool isSaved;
+  final bool allowComments;
   final bool allowDownloads;
+  final bool hideLikes;
+  final int viewsCount;
+  final String? visibility;
 
   String? get videoUrl => (postType.toUpperCase() == 'VIDEO' ||
           postType.toLowerCase() == 'reel' ||
@@ -54,13 +62,17 @@ class PostItemModel {
     String? content,
     bool? isLiked,
     bool? isSaved,
+    bool? allowComments,
     bool? allowDownloads,
+    bool? hideLikes,
     int? likesCount,
     int? commentsCount,
+    int? viewsCount,
     String? postImageAsset,
     String? postImageUrl,
     String? postType,
     String? communityId,
+    String? visibility,
   }) {
     return PostItemModel(
       id: id,
@@ -72,13 +84,17 @@ class PostItemModel {
       content: content ?? this.content,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
+      viewsCount: viewsCount ?? this.viewsCount,
       postImageAsset: postImageAsset ?? this.postImageAsset,
       postImageUrl: postImageUrl ?? this.postImageUrl,
       postType: postType ?? this.postType,
       communityId: communityId ?? this.communityId,
       isLiked: isLiked ?? this.isLiked,
       isSaved: isSaved ?? this.isSaved,
+      allowComments: allowComments ?? this.allowComments,
       allowDownloads: allowDownloads ?? this.allowDownloads,
+      hideLikes: hideLikes ?? this.hideLikes,
+      visibility: visibility ?? this.visibility,
     );
   }
 }

@@ -1,6 +1,41 @@
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_images.dart';
 
+DateTime? parseUtcToLocal(dynamic raw) {
+  if (raw == null) return null;
+  if (raw is DateTime) return raw.toLocal();
+  if (raw is num) {
+    final int val = raw.toInt();
+    if (val > 1000000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(val).toLocal();
+    } else if (val > 1000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(val * 1000).toLocal();
+    }
+  }
+  final String str = raw.toString().trim();
+  if (str.isEmpty || str == 'null') return null;
+
+  try {
+    DateTime? dt = DateTime.tryParse(str);
+    if (dt == null) return null;
+    if (!dt.isUtc && !str.endsWith('Z') && !RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(str)) {
+      dt = DateTime.utc(
+        dt.year,
+        dt.month,
+        dt.day,
+        dt.hour,
+        dt.minute,
+        dt.second,
+        dt.millisecond,
+        dt.microsecond,
+      );
+    }
+    return dt.toLocal();
+  } catch (_) {
+    return null;
+  }
+}
+
 enum MessageType {
   text,
   gradientText,
@@ -58,6 +93,7 @@ class ChatMessageModel {
     this.mediaUrl,
     this.postThumbnailAsset,
     this.postAuthor,
+    this.postAuthorId,
     this.postAuthorAvatarUrl,
     this.postCaption,
     this.postType,
@@ -87,6 +123,7 @@ class ChatMessageModel {
   final String? mediaUrl;
   final String? postThumbnailAsset;
   final String? postAuthor;
+  final String? postAuthorId;
   final String? postAuthorAvatarUrl;
   final String? postCaption;
   final String? postType;
@@ -246,13 +283,19 @@ class ChatMessageModel {
 
     // Parse timestamp
     final DateTime? created =
-        DateTime.tryParse(json['createdAt']?.toString() ?? '');
+        parseUtcToLocal(json['createdAt'] ?? json['created_at']);
     String timeFormatted = json['timestamp']?.toString() ?? '';
-    if (timeFormatted.isEmpty && created != null) {
+    if (timeFormatted.isNotEmpty && timeFormatted != 'null') {
+      final DateTime? parsedTs = parseUtcToLocal(timeFormatted);
+      if (parsedTs != null) {
+        timeFormatted =
+            '${parsedTs.hour.toString().padLeft(2, '0')}:${parsedTs.minute.toString().padLeft(2, '0')}';
+      }
+    } else if (created != null) {
       timeFormatted =
           '${created.hour.toString().padLeft(2, '0')}:${created.minute.toString().padLeft(2, '0')}';
     }
-    if (timeFormatted.isEmpty) {
+    if (timeFormatted.isEmpty || timeFormatted == 'null') {
       timeFormatted = 'Just now';
     }
 
@@ -365,11 +408,34 @@ class ChatMessageModel {
         postAuthorAvatar = sharedContent['authorAvatar'].toString().trim();
       }
 
+      final dynamic rawViews = sharedContent['viewCount'] ??
+          sharedContent['viewsCount'] ??
+          sharedContent['views'] ??
+          sharedContent['playCount'] ??
+          sharedContent['playsCount'] ??
+          sharedContent['plays'] ??
+          (sharedContent['_count'] is Map
+              ? (sharedContent['_count']['views'] ??
+                  sharedContent['_count']['plays'])
+              : null);
+      if (rawViews != null) {
+        final int v = (rawViews is num)
+            ? rawViews.toInt()
+            : int.tryParse(rawViews.toString()) ?? 0;
+        if (v >= 1000000) {
+          postViews = '${(v / 1000000).toStringAsFixed(1)}M';
+        } else if (v >= 1000) {
+          postViews = '${(v / 1000).toStringAsFixed(1)}K';
+        } else {
+          postViews = '$v';
+        }
+      }
+
       if (postViews == null) {
-        if (postLikes != null && postLikes > 0) {
+        if (postType == 'reel') {
+          postViews = '0';
+        } else if (postLikes != null && postLikes > 0) {
           postViews = '$postLikes ${postLikes == 1 ? 'like' : 'likes'}';
-        } else if (postType == 'reel') {
-          postViews = 'Reel';
         }
       }
     }
@@ -477,6 +543,7 @@ class ChatMessageModel {
     String? mediaUrl,
     String? postThumbnailAsset,
     String? postAuthor,
+    String? postAuthorId,
     String? postAuthorAvatarUrl,
     String? postCaption,
     String? postType,
@@ -507,6 +574,7 @@ class ChatMessageModel {
       mediaUrl: mediaUrl ?? this.mediaUrl,
       postThumbnailAsset: postThumbnailAsset ?? this.postThumbnailAsset,
       postAuthor: postAuthor ?? this.postAuthor,
+      postAuthorId: postAuthorId ?? this.postAuthorId,
       postAuthorAvatarUrl: postAuthorAvatarUrl ?? this.postAuthorAvatarUrl,
       postCaption: postCaption ?? this.postCaption,
       postType: postType ?? this.postType,
@@ -566,6 +634,62 @@ class ConversationModel {
   final String? lastMessageSenderId;
   final List<ChatMessageModel> messages;
   final DateTime? lastMessageAt;
+
+  String get formattedLocalTime {
+    final DateTime? dt = lastMessageAt ??
+        (messages.isNotEmpty && messages.last.createdAt != null
+            ? messages.last.createdAt
+            : null);
+
+    if (dt != null) {
+      final DateTime local = dt.toLocal();
+      final DateTime now = DateTime.now();
+      final bool isToday = local.year == now.year &&
+          local.month == now.month &&
+          local.day == now.day;
+      if (isToday) {
+        final String hour = local.hour.toString().padLeft(2, '0');
+        final String minute = local.minute.toString().padLeft(2, '0');
+        return '$hour:$minute';
+      }
+      final DateTime yesterday = now.subtract(const Duration(days: 1));
+      final bool isYesterday = local.year == yesterday.year &&
+          local.month == yesterday.month &&
+          local.day == yesterday.day;
+      if (isYesterday) {
+        return 'Yesterday';
+      }
+      final Duration diff = now.difference(local);
+      if (diff.inDays < 7) {
+        return '${diff.inDays}d';
+      }
+      return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}';
+    }
+
+    if (timeAgo.isNotEmpty && timeAgo != 'null') {
+      final DateTime? parsed = parseUtcToLocal(timeAgo);
+      if (parsed != null) {
+        final DateTime now = DateTime.now();
+        final bool isToday = parsed.year == now.year &&
+            parsed.month == now.month &&
+            parsed.day == now.day;
+        if (isToday) {
+          final String hour = parsed.hour.toString().padLeft(2, '0');
+          final String minute = parsed.minute.toString().padLeft(2, '0');
+          return '$hour:$minute';
+        }
+        final DateTime yesterday = now.subtract(const Duration(days: 1));
+        if (parsed.year == yesterday.year &&
+            parsed.month == yesterday.month &&
+            parsed.day == yesterday.day) {
+          return 'Yesterday';
+        }
+        return '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}';
+      }
+      return timeAgo;
+    }
+    return '';
+  }
 
   factory ConversationModel.fromJson(
     Map<String, dynamic> rawJson, {
@@ -683,8 +807,8 @@ class ConversationModel {
               lastMsgRaw['sender']?['_id'])
           ?.toString();
       final bool isMe = (currentUserId != null && lastSender == currentUserId);
-      lastMsgTime = DateTime.tryParse(
-          (lastMsgRaw['createdAt'] ?? lastMsgRaw['created_at'])?.toString() ?? '');
+      lastMsgTime = parseUtcToLocal(
+          lastMsgRaw['createdAt'] ?? lastMsgRaw['created_at']);
 
       if (isLastUnsent) {
         lastMsgText = isMe
@@ -727,8 +851,8 @@ class ConversationModel {
                 lastItem['sender']?['_id'])
             ?.toString();
         final bool isMe = (currentUserId != null && lastSender == currentUserId);
-        lastMsgTime = DateTime.tryParse(
-            (lastItem['createdAt'] ?? lastItem['created_at'])?.toString() ?? '');
+        lastMsgTime = parseUtcToLocal(
+            lastItem['createdAt'] ?? lastItem['created_at']);
 
         if (isLastUnsent) {
           lastMsgText = isMe
@@ -758,22 +882,58 @@ class ConversationModel {
     }
 
     // Fallback time to updatedAt
-    lastMsgTime ??= DateTime.tryParse(
-        (json['updatedAt'] ?? json['updated_at'])?.toString() ?? '');
+    lastMsgTime ??= parseUtcToLocal(
+        json['updatedAt'] ?? json['updated_at']);
 
     String timeStr = (json['timeAgo'] ?? json['time_ago'])?.toString() ?? '';
-    if (timeStr.isEmpty && lastMsgTime != null) {
-      final Duration diff = DateTime.now().difference(lastMsgTime);
-      if (diff.inMinutes < 1) {
-        timeStr = 'Just now';
-      } else if (diff.inMinutes < 60) {
-        timeStr = '${diff.inMinutes}m';
-      } else if (diff.inHours < 24) {
-        timeStr = '${diff.inHours}h';
-      } else if (diff.inDays < 7) {
-        timeStr = '${diff.inDays}d';
+    if (timeStr.isNotEmpty && timeStr != 'null') {
+      final DateTime? parsed = parseUtcToLocal(timeStr);
+      if (parsed != null) {
+        lastMsgTime ??= parsed;
+        final DateTime now = DateTime.now();
+        if (parsed.year == now.year &&
+            parsed.month == now.month &&
+            parsed.day == now.day) {
+          timeStr =
+              '${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')}';
+        } else {
+          final DateTime yesterday = now.subtract(const Duration(days: 1));
+          if (parsed.year == yesterday.year &&
+              parsed.month == yesterday.month &&
+              parsed.day == yesterday.day) {
+            timeStr = 'Yesterday';
+          } else {
+            final Duration diff = now.difference(parsed);
+            if (diff.inDays < 7) {
+              timeStr = '${diff.inDays}d';
+            } else {
+              timeStr = '${(diff.inDays / 7).floor()}w';
+            }
+          }
+        }
+      }
+    } else if (lastMsgTime != null) {
+      final DateTime localTime = lastMsgTime;
+      final DateTime now = DateTime.now();
+      if (localTime.year == now.year &&
+          localTime.month == now.month &&
+          localTime.day == now.day) {
+        timeStr =
+            '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
       } else {
-        timeStr = '${(diff.inDays / 7).floor()}w';
+        final DateTime yesterday = now.subtract(const Duration(days: 1));
+        if (localTime.year == yesterday.year &&
+            localTime.month == yesterday.month &&
+            localTime.day == yesterday.day) {
+          timeStr = 'Yesterday';
+        } else {
+          final Duration diff = now.difference(localTime);
+          if (diff.inDays < 7) {
+            timeStr = '${diff.inDays}d';
+          } else {
+            timeStr = '${(diff.inDays / 7).floor()}w';
+          }
+        }
       }
     }
 

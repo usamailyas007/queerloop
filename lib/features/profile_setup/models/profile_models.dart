@@ -97,7 +97,13 @@ class UserProfile {
       interests: (json['interests'] as List<dynamic>?)
           ?.map((dynamic e) => e as String)
           .toList(),
-      isPrivate: json['isPrivate'] as bool? ?? false,
+      isPrivate: json['isPrivate'] as bool? ??
+          (json['private'] as bool?) ??
+          (json['privacySettings'] is Map
+              ? (json['privacySettings']['isPrivate'] ??
+                      json['privacySettings']['private']) as bool?
+              : null) ??
+          false,
       showInDiscover: json['showInDiscover'] as bool?,
       allowMessagesFrom: json['allowMessagesFrom'] as String?,
       allowCommentsFrom: json['allowCommentsFrom'] as String?,

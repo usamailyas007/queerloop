@@ -4,6 +4,8 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/reel_item_model.dart';
+import '../../../core/utils/video_size_logger.dart';
+import 'video_cache_service.dart';
 
 /// Custom cache manager for reel videos.
 /// Stores up to 200 video files on disk for up to 7 days.
@@ -40,6 +42,26 @@ class ReelVideoPreloader {
   final Set<String> _activeReelIds = <String>{};
   final Map<String, String> _diskCachePathMap = <String, String>{};
   final Set<String> _cachingUrls = <String>{};
+  bool _isFeedVisible = true;
+
+  /// Whether the feed is currently active and visible to the user
+  bool get isFeedVisible => _isFeedVisible;
+
+  /// Set whether the feed is visible on screen. If false, pauses and mutes all controllers.
+  void setFeedVisible(bool visible) {
+    _isFeedVisible = visible;
+    if (!visible) {
+      pauseAll();
+      muteAll();
+    }
+  }
+
+  /// Only flip the feed-visible flag — without triggering async pause/mute calls.
+  /// Use this inside dispose()/deactivate() where async platform-channel ops
+  /// would look up deactivated ancestors and throw a FlutterError.
+  void markFeedInvisible() {
+    _isFeedVisible = false;
+  }
 
   /// Mark a reel as actively viewed on screen so its controller is never disposed
   void markActive(String id) {
@@ -91,54 +113,10 @@ class ReelVideoPreloader {
 
   // ── Internal: resolve to cached file or network URL ──────────────────────
 
-  /// Downloads the video to disk (if not already cached) and returns the
-  /// local [File]. Falls back to streaming if caching fails.
-  Future<_VideoSource> _resolveSource(ReelItemModel reel) async {
-    final String? filePath = reel.videoFilePath;
-    if (filePath != null && filePath.isNotEmpty) {
-      return _VideoSource.file(File(filePath));
-    }
-
-    final String? videoUrl = reel.videoUrl;
-    if (videoUrl != null && videoUrl.isNotEmpty) {
-      final bool isHls =
-          videoUrl.contains('.m3u8') || videoUrl.contains('m3u8');
-      if (!isHls) {
-        // 1. Fast in-memory path check
-        if (_diskCachePathMap.containsKey(videoUrl)) {
-          final File f = File(_diskCachePathMap[videoUrl]!);
-          if (f.existsSync()) {
-            return _VideoSource.file(f);
-          }
-        }
-
-        // 2. Disk cache lookup
-        try {
-          final FileInfo? info =
-              await ReelVideoCacheManager().getFileFromCache(videoUrl);
-          if (info != null && info.file.existsSync()) {
-            _diskCachePathMap[videoUrl] = info.file.path;
-            debugPrint('✅ [ReelCache] Disk-cache hit: ${reel.id}');
-            return _VideoSource.file(info.file);
-          }
-        } catch (_) {}
-
-        // 3. Cache miss: Stream via network immediately without blocking!
-        // Concurrently cache to disk in background for subsequent zero-lag hits
-        _cacheVideoInBackground(videoUrl);
-      }
-      final Uri uri = Uri.parse(videoUrl);
-      return _VideoSource.network(
-        uri,
-        formatHint: isHls ? VideoFormat.hls : null,
-      );
-    }
-
-    if (reel.videoAsset.isNotEmpty) {
-      return _VideoSource.asset(reel.videoAsset);
-    }
-
-    return _VideoSource.none();
+  /// Resolves video source via VideoCacheService (checks local disk cache first,
+  /// then adaptive streaming URL based on internet speed).
+  Future<ResolvedVideoSource> _resolveSource(ReelItemModel reel) async {
+    return VideoCacheService.instance.resolveVideoSource(reel);
   }
 
   // ── Public API ────────────────────────────────────────────────────────────
@@ -153,6 +131,18 @@ class ReelVideoPreloader {
         try {
           _initializing.add(key);
           await existing.initialize();
+          if (!_isFeedVisible || !_activeReelIds.contains(reel.id)) {
+            existing.pause();
+            existing.setVolume(0);
+          }
+          VideoSizeLogger.logFeedVideoSize(
+            id: reel.id,
+            title: reel.username.isNotEmpty ? '@${reel.username}' : reel.caption,
+            videoUrl: reel.videoUrl,
+            assetPath: reel.videoAsset.isNotEmpty ? reel.videoAsset : null,
+            controller: existing,
+            stage: 'Feed Reel Active',
+          );
         } catch (e) {
           debugPrint(
               '⚠️ [ReelVideoPreloader] Error re-initializing controller $key: $e');
@@ -177,29 +167,81 @@ class ReelVideoPreloader {
     try {
       _initializing.add(key);
 
-      final _VideoSource source = await _resolveSource(reel);
-      if (source.type == _SourceType.none) return null;
+      final ResolvedVideoSource source = await _resolveSource(reel);
+      bool initializedSuccessfully = false;
 
-      switch (source.type) {
-        case _SourceType.file:
-          controller = VideoPlayerController.file(source.file!);
-        case _SourceType.network:
-          controller = VideoPlayerController.networkUrl(
-            source.uri!,
-            formatHint: source.formatHint,
-          );
-        case _SourceType.asset:
-          controller = VideoPlayerController.asset(source.assetPath!);
-        case _SourceType.none:
-          return null;
+      if (source.type != VideoSourceType.none) {
+        try {
+          switch (source.type) {
+            case VideoSourceType.file:
+              controller = VideoPlayerController.file(source.file!);
+            case VideoSourceType.network:
+              controller = VideoPlayerController.networkUrl(
+                source.uri!,
+                formatHint: source.formatHint,
+              );
+            case VideoSourceType.asset:
+              controller = VideoPlayerController.asset(source.assetPath!);
+            case VideoSourceType.none:
+              break;
+          }
+
+          if (controller != null) {
+            _controllers[key] = controller;
+            await controller.initialize();
+            initializedSuccessfully = true;
+          }
+        } catch (initErr) {
+          debugPrint('⚠️ [ReelVideoPreloader] Primary source init failed for $key: $initErr');
+          _controllers.remove(key);
+          try {
+            await controller?.dispose();
+          } catch (_) {}
+          controller = null;
+        }
       }
 
-      _controllers[key] = controller;
-      await controller.initialize();
-      controller.setLooping(true);
-      controller.setVolume(1.0);
+      // If primary source was an explicit asset specified by the reel
+      if (!initializedSuccessfully && reel.videoAsset.isNotEmpty) {
+        try {
+          controller = VideoPlayerController.asset(reel.videoAsset);
+          _controllers[key] = controller;
+          await controller.initialize();
+          initializedSuccessfully = true;
+          debugPrint('🎬 [ReelVideoPreloader] Asset loaded for $key: ${reel.videoAsset}');
+        } catch (assetErr) {
+          debugPrint('⚠️ [ReelVideoPreloader] Asset failed for $key: $assetErr');
+          _controllers.remove(key);
+          try {
+            await controller?.dispose();
+          } catch (_) {}
+          controller = null;
+        }
+      }
 
-      return controller;
+      if (controller != null && initializedSuccessfully) {
+        controller.setLooping(true);
+        if (_isFeedVisible && _activeReelIds.contains(reel.id)) {
+          controller.setVolume(1.0);
+        } else {
+          controller.pause();
+          controller.setVolume(0);
+        }
+        VideoSizeLogger.logFeedVideoSize(
+          id: reel.id,
+          title: reel.username.isNotEmpty ? '@${reel.username}' : reel.caption,
+          videoUrl: reel.videoUrl,
+          file: source.file,
+          assetPath: source.assetPath ??
+              (reel.videoAsset.isNotEmpty ? reel.videoAsset : null),
+          controller: controller,
+          stage: source.isLocalCache
+              ? 'Local Disk Cache (Offline/Instant)'
+              : 'Feed Reel Loaded (Adaptive)',
+        );
+        return controller;
+      }
+      return null;
     } catch (e) {
       debugPrint('⚠️ [ReelVideoPreloader] Failed to initialize reel $key: $e');
       _controllers.remove(key);
@@ -214,13 +256,14 @@ class ReelVideoPreloader {
 
   /// Preload adjacent reels and dispose distant ones.
   ///
-  /// Preloads: next 4 + prev 2. Keep-alive window: ±10 items.
+  /// Priority: current reel first → next 2 → prev 1.
+  /// All background-preloaded controllers are paused + muted immediately.
   void preloadSurrounding(List<ReelItemModel> reels, int currentIndex) {
-    if (reels.isEmpty) return;
+    if (reels.isEmpty || !_isFeedVisible) return;
 
-    // 1. Background disk-cache upcoming 5 videos + previous 3 videos
-    for (int i = currentIndex - 3; i <= currentIndex + 5; i++) {
-      if (i >= 0 && i < reels.length) {
+    // 1. Background disk-cache for smooth future loads (non-blocking)
+    for (int i = currentIndex - 2; i <= currentIndex + 4; i++) {
+      if (i >= 0 && i < reels.length && i != currentIndex) {
         final String? url = reels[i].videoUrl;
         if (url != null && url.isNotEmpty) {
           _cacheVideoInBackground(url);
@@ -228,22 +271,37 @@ class ReelVideoPreloader {
       }
     }
 
-    // 2. Preload next 4 (highest priority for forward scrolling)
+    // 2. Preload next 2 reels — init controller but keep paused + muted
     for (int i = currentIndex + 1;
-        i <= currentIndex + 4 && i < reels.length;
+        i <= currentIndex + 2 && i < reels.length;
         i++) {
-      getOrCreate(reels[i]);
-    }
-    // 3. Preload prev 2 (for scroll-back without re-buffering)
-    for (int i = currentIndex - 1;
-        i >= currentIndex - 2 && i >= 0;
-        i--) {
-      getOrCreate(reels[i]);
+      final ReelItemModel reel = reels[i];
+      getOrCreate(reel).then((VideoPlayerController? c) {
+        if (c != null && c.value.isInitialized) {
+          try {
+            c.pause();
+            c.setVolume(0);
+          } catch (_) {}
+        }
+      });
     }
 
-    // 4. Dispose controllers outside the generous ±10 keep-alive window
+    // 3. Preload prev 1 reel — init but keep paused + muted
+    if (currentIndex - 1 >= 0) {
+      final ReelItemModel reel = reels[currentIndex - 1];
+      getOrCreate(reel).then((VideoPlayerController? c) {
+        if (c != null && c.value.isInitialized) {
+          try {
+            c.pause();
+            c.setVolume(0);
+          } catch (_) {}
+        }
+      });
+    }
+
+    // 4. Dispose controllers outside the ±5 keep-alive window
     final Set<String> keepKeys = <String>{};
-    for (int i = currentIndex - 10; i <= currentIndex + 10; i++) {
+    for (int i = currentIndex - 5; i <= currentIndex + 5; i++) {
       if (i >= 0 && i < reels.length) {
         keepKeys.add(reels[i].id);
       }
@@ -264,11 +322,48 @@ class ReelVideoPreloader {
     }
   }
 
-  /// Pause all active video controllers immediately.
+  /// Pause all active video controllers immediately and mute them.
   void pauseAll() {
     for (final VideoPlayerController c in _controllers.values) {
       try {
-        if (c.value.isInitialized) c.pause();
+        c.pause();
+        c.setVolume(0);
+      } catch (_) {}
+    }
+  }
+
+  /// Mute all controllers (set volume to 0) without pausing.
+  void muteAll() {
+    for (final VideoPlayerController c in _controllers.values) {
+      try {
+        c.setVolume(0);
+      } catch (_) {}
+    }
+  }
+
+  /// Restore volume on all controllers.
+  void unmuteAll() {
+    if (!_isFeedVisible) return;
+    for (final VideoPlayerController c in _controllers.values) {
+      try {
+        if (c.value.isInitialized) c.setVolume(1.0);
+      } catch (_) {}
+    }
+  }
+
+  /// Mute every controller EXCEPT the one for [activeId].
+  /// Ensures only the currently-visible reel can produce audio.
+  void muteAllExcept(String activeId) {
+    if (!_isFeedVisible) {
+      pauseAll();
+      muteAll();
+      return;
+    }
+    for (final MapEntry<String, VideoPlayerController> entry in _controllers.entries) {
+      try {
+        if (entry.value.value.isInitialized) {
+          entry.value.setVolume(entry.key == activeId ? 1.0 : 0.0);
+        }
       } catch (_) {}
     }
   }
@@ -292,38 +387,17 @@ class ReelVideoPreloader {
     _controllers.clear();
     _initializing.clear();
   }
-}
 
-// ── Internal helpers ──────────────────────────────────────────────────────────
-
-enum _SourceType { file, network, asset, none }
-
-class _VideoSource {
-  const _VideoSource._({
-    required this.type,
-    this.file,
-    this.uri,
-    this.formatHint,
-    this.assetPath,
-  });
-
-  factory _VideoSource.file(File f) =>
-      _VideoSource._(type: _SourceType.file, file: f);
-
-  factory _VideoSource.network(Uri uri, {VideoFormat? formatHint}) =>
-      _VideoSource._(
-          type: _SourceType.network, uri: uri, formatHint: formatHint);
-
-  factory _VideoSource.asset(String path) =>
-      _VideoSource._(type: _SourceType.asset, assetPath: path);
-
-  factory _VideoSource.none() => const _VideoSource._(type: _SourceType.none);
-
-  final _SourceType type;
-  final File? file;
-  final Uri? uri;
-  final VideoFormat? formatHint;
-  final String? assetPath;
+  /// Clear ALL caches — call on logout to free memory + disk.
+  Future<void> clearAllCaches() async {
+    disposeAll();
+    _diskCachePathMap.clear();
+    _cachingUrls.clear();
+    _activeReelIds.clear();
+    try {
+      await ReelVideoCacheManager().emptyCache();
+    } catch (_) {}
+  }
 }
 
 

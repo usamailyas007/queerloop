@@ -12,6 +12,7 @@ import '../../auth/auth_provider.dart';
 import '../../create_post/models/create_post_models.dart';
 import '../../create_post/services/post_content_service.dart';
 import '../../messages/models/message_models.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../models/post_item_model.dart';
 import '../models/reel_item_model.dart';
 import '../provider/home_feed_provider.dart';
@@ -155,6 +156,7 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
             postType: isVideoType ? 'VIDEO' : 'IMAGE',
             isLiked: raw.isLiked,
             isSaved: raw.isSaved,
+            allowComments: raw.allowComments,
             allowDownloads: raw.allowDownloads,
           );
           _isLoading = false;
@@ -192,7 +194,7 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
     }
   }
 
-  void _openFullscreenReel() {
+  void _openFullscreenReel() async {
     if (_post == null) return;
     final ReelItemModel reel = ReelItemModel(
       id: _post!.id,
@@ -210,7 +212,7 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
       isSaved: _post!.isSaved,
     );
 
-    Navigator.push<void>(
+    await Navigator.push<void>(
       context,
       MaterialPageRoute<void>(
         builder: (_) => Scaffold(
@@ -254,16 +256,36 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
         ),
       ),
     );
+
+    if (mounted && _post != null) {
+      final HomeFeedProvider hFeed = context.read<HomeFeedProvider>();
+      setState(() {
+        _post = _post!.copyWith(
+          isLiked: hFeed.isPostLiked(_post!.id),
+          isSaved: hFeed.isPostSaved(_post!.id),
+        );
+      });
+    }
   }
 
-  void _openFullscreenImage() {
+  void _openFullscreenImage() async {
     if (_post == null) return;
-    Navigator.push<void>(
+    await Navigator.push<void>(
       context,
       MaterialPageRoute<void>(
         builder: (_) => PostFullscreenImageViewerScreen(post: _post!),
       ),
     );
+
+    if (mounted && _post != null) {
+      final HomeFeedProvider hFeed = context.read<HomeFeedProvider>();
+      setState(() {
+        _post = _post!.copyWith(
+          isLiked: hFeed.isPostLiked(_post!.id),
+          isSaved: hFeed.isPostSaved(_post!.id),
+        );
+      });
+    }
   }
 
   @override
@@ -320,6 +342,7 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
                   context: context,
                   mediaUrl: _resolvedVideoUrl ?? _post?.postImageUrl ?? _post?.postImageAsset,
                   title: _post?.username ?? 'queerloop_post',
+                  authorId: _post?.authorId,
                   isVideo: _isReel,
                   allowDownloads: _post?.allowDownloads ?? true,
                   isCreator: isCreator,
@@ -381,23 +404,46 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
                           PostFeedCard(
                             post: _post!,
                             onLikeToggle: () {
+                              final bool nowLiked = !_post!.isLiked;
+                              final int newCount = _post!.likesCount + (nowLiked ? 1 : -1);
                               setState(() {
-                                final bool nowLiked = !_post!.isLiked;
                                 _post = _post!.copyWith(
                                   isLiked: nowLiked,
-                                  likesCount: _post!.likesCount + (nowLiked ? 1 : -1),
+                                  likesCount: newCount,
                                 );
                               });
                               try {
-                                context.read<HomeFeedProvider>().toggleLikePost(_post!.id);
+                                context.read<HomeFeedProvider>().toggleLikePost(
+                                  _post!.id,
+                                  fallbackPost: _post,
+                                );
+                              } catch (_) {}
+                              try {
+                                context.read<ProfileProvider>().updateLikedPost(
+                                  _post!.id,
+                                  isLiked: nowLiked,
+                                  likesCount: newCount,
+                                  fallbackPost: _post,
+                                );
                               } catch (_) {}
                             },
                             onSaveToggle: () {
+                              final bool nowSaved = !_post!.isSaved;
                               setState(() {
-                                _post = _post!.copyWith(isSaved: !_post!.isSaved);
+                                _post = _post!.copyWith(isSaved: nowSaved);
                               });
                               try {
-                                context.read<HomeFeedProvider>().toggleSavePost(_post!.id);
+                                context.read<HomeFeedProvider>().toggleSavePost(
+                                  _post!.id,
+                                  fallbackPost: _post,
+                                );
+                              } catch (_) {}
+                              try {
+                                context.read<ProfileProvider>().updateSavedPost(
+                                  _post!.id,
+                                  isSaved: nowSaved,
+                                  fallbackPost: _post,
+                                );
                               } catch (_) {}
                             },
                             onOpenComments: () {
@@ -409,6 +455,7 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
                                   postId: _post!.id,
                                   postAuthorId: _post!.authorId,
                                   totalComments: _post!.commentsCount,
+                                  allowComments: _post?.allowComments ?? true,
                                   onCommentAdded: () {
                                     setState(() {
                                       _post = _post!.copyWith(

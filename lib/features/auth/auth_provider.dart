@@ -6,7 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_exception.dart';
+import '../../core/cache/user_relationship_cache.dart';
 import '../../core/services/push_notification_service.dart';
+import '../home/services/reel_video_preloader.dart';
 import 'auth_service.dart';
 import 'user.dart';
 
@@ -626,6 +628,9 @@ class AuthProvider extends ChangeNotifier {
     _status = AuthStatus.signedOut;
     _error = null;
     _service.clearAllLocalData();
+    // Clear video + shared-post caches so next user starts fresh
+    ReelVideoPreloader.instance.clearAllCaches().ignore();
+    UserRelationshipCache.clear();
     notifyListeners();
   }
 

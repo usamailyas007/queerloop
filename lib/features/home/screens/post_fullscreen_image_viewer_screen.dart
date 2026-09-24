@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
@@ -5,7 +7,6 @@ import 'package:provider/provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
-import '../../../core/theme/app_images.dart';
 import '../../../core/widgets/app_follow_button.dart';
 import '../../../core/widgets/app_user_avatar.dart';
 import '../../auth/auth_provider.dart';
@@ -19,6 +20,7 @@ import '../widgets/comments_bottom_sheet.dart';
 import '../widgets/safety_bottom_sheet.dart';
 import '../widgets/send_to_bottom_sheet.dart';
 import '../widgets/share_this_post_bottom_sheet.dart';
+import '../../create_post/models/create_post_models.dart';
 import 'profile_tab_screen.dart';
 
 class PostFullscreenImageViewerScreen extends StatefulWidget {
@@ -115,13 +117,14 @@ class _PostFullscreenImageViewerScreenState
     });
 
     try {
-      homeFeed.toggleLikePost(_post.id);
-      profile.updateLikedPost(_post.id, isLiked: newLiked, likesCount: newCount);
+      homeFeed.toggleLikePost(_post.id, fallbackPost: _post);
+      profile.updateLikedPost(_post.id, isLiked: newLiked, likesCount: newCount, fallbackPost: _post);
     } catch (_) {}
   }
 
   void _handleSaveToggle() {
     final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    final ProfileProvider profile = context.read<ProfileProvider>();
     final bool newSaved = !_post.isSaved;
 
     setState(() {
@@ -129,7 +132,8 @@ class _PostFullscreenImageViewerScreenState
     });
 
     try {
-      homeFeed.toggleSavePost(_post.id);
+      homeFeed.toggleSavePost(_post.id, fallbackPost: _post);
+      profile.updateSavedPost(_post.id, isSaved: newSaved, fallbackPost: _post);
     } catch (_) {}
   }
 
@@ -142,6 +146,7 @@ class _PostFullscreenImageViewerScreenState
         postId: _post.id,
         postAuthorId: _post.authorId,
         totalComments: _post.commentsCount,
+        allowComments: _post.allowComments,
         onCommentAdded: () {
           setState(() {
             _post = _post.copyWith(commentsCount: _post.commentsCount + 1);
@@ -202,10 +207,13 @@ class _PostFullscreenImageViewerScreenState
     final bool isCreator = (_post.authorId != null &&
         auth.userId != null &&
         _post.authorId!.toLowerCase() == auth.userId!.toLowerCase());
+    final String resolvedImg =
+        _resolveImageUrl(_post.postImageUrl ?? _post.postImageAsset ?? '');
     MediaDownloadService.downloadMedia(
       context: context,
-      mediaUrl: _post.videoUrl ?? _post.postImageUrl ?? _post.postImageAsset,
+      mediaUrl: _post.videoUrl ?? (resolvedImg.isNotEmpty ? resolvedImg : (_post.postImageUrl ?? _post.postImageAsset)),
       title: _post.username,
+      authorId: _post.authorId,
       isVideo: _post.videoUrl != null,
       allowDownloads: _post.allowDownloads,
       isCreator: isCreator,
@@ -309,6 +317,18 @@ class _PostFullscreenImageViewerScreenState
       username: _post.username,
     );
 
+    final String authorId = (_post.authorId ?? '').trim().toLowerCase();
+    final AuthorInfo? cachedAuthor =
+        authorId.isNotEmpty ? AuthorProfileCache.get(authorId) : null;
+    final bool authorHidesLikes = _post.hideLikes || (cachedAuthor?.hideMyLikes == true);
+    final bool myProfileHidesLikes = profileProvider.hideMyLikes;
+    final bool shouldHideLikes = !isCurrentUser &&
+        (authorHidesLikes ||
+            (authorId.isNotEmpty &&
+                currentUserId != null &&
+                authorId == currentUserId.trim().toLowerCase() &&
+                myProfileHidesLikes));
+
     final String imageSource =
         _resolveImageUrl(_post.postImageUrl ?? _post.postImageAsset ?? '');
 
@@ -328,17 +348,33 @@ class _PostFullscreenImageViewerScreenState
                 maxScale: 4.0,
                 clipBehavior: Clip.none,
                 child: imageSource.isEmpty
-                    ? Image.asset(AppImages.forYouImg, fit: BoxFit.contain)
+                    ? const Center(
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: Colors.white24,
+                          size: 48,
+                        ),
+                      )
                     : imageSource.startsWith('assets/')
                         ? Image.asset(
                             imageSource,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, _, _) => Image.asset(
-                              AppImages.forYouImg,
-                              fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => const Center(
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                color: Colors.white24,
+                                size: 48,
+                              ),
                             ),
                           )
-                        : Image.network(
+                        : (!imageSource.startsWith('http://') &&
+                                !imageSource.startsWith('https://') &&
+                                File(imageSource).existsSync())
+                            ? Image.file(
+                                File(imageSource),
+                                fit: BoxFit.contain,
+                              )
+                            : Image.network(
                             imageSource,
                             fit: BoxFit.contain,
                             loadingBuilder: (
@@ -354,24 +390,27 @@ class _PostFullscreenImageViewerScreenState
                                 ),
                               );
                             },
-                            errorBuilder: (_, _, _) => Image.asset(
-                              AppImages.searchResult1,
-                              fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => const Center(
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                color: Colors.white38,
+                                size: 54,
+                              ),
                             ),
                           ),
               ),
             ),
           ),
 
-          // ── 2. Double-Tap Animated Heart ───────────────────────────────────
+          // ── 2. Double-Tap Animated Logo ───────────────────────────────────
           if (_showDoubleTapHeart)
             Center(
               child: ScaleTransition(
                 scale: _heartScaleAnim,
-                child: const Icon(
-                  Icons.favorite_rounded,
-                  color: Colors.redAccent,
-                  size: 110,
+                child: Image.asset(
+                  AppIcons.likedLogo,
+                  width: 90,
+                  height: 90,
                 ),
               ),
             ),
@@ -484,7 +523,7 @@ class _PostFullscreenImageViewerScreenState
                   // Like Button
                   _ViewerActionButton(
                     onTap: _handleLikeToggle,
-                    label: '${_post.likesCount}',
+                    label: shouldHideLikes ? '' : '${_post.likesCount}',
                     child: Image.asset(
                       _post.isLiked ? AppIcons.likedLogo : AppIcons.unlikeLogo,
                       width: 28,
@@ -492,22 +531,24 @@ class _PostFullscreenImageViewerScreenState
                     ),
                   ),
 
-                  const SizedBox(height: 18),
+                  if (_post.allowComments) ...<Widget>[
+                    const SizedBox(height: 18),
 
-                  // Comment Button
-                  _ViewerActionButton(
-                    onTap: _handleOpenComments,
-                    label: '${_post.commentsCount}',
-                    child: SvgPicture.asset(
-                      AppIcons.comment,
-                      width: 26,
-                      height: 26,
-                      colorFilter: const ColorFilter.mode(
-                        Colors.white,
-                        BlendMode.srcIn,
+                    // Comment Button
+                    _ViewerActionButton(
+                      onTap: _handleOpenComments,
+                      label: '${_post.commentsCount}',
+                      child: SvgPicture.asset(
+                        AppIcons.comment,
+                        width: 26,
+                        height: 26,
+                        colorFilter: const ColorFilter.mode(
+                          Colors.white,
+                          BlendMode.srcIn,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
 
                   if (_post.allowDownloads) ...<Widget>[
                     const SizedBox(height: 18),
@@ -546,15 +587,11 @@ class _PostFullscreenImageViewerScreenState
                   // Save Button
                   _ViewerActionButton(
                     onTap: _handleSaveToggle,
-                    label: 'Save',
-                    child: SvgPicture.asset(
-                      AppIcons.save,
-                      width: 24,
-                      height: 24,
-                      colorFilter: ColorFilter.mode(
-                        _post.isSaved ? AppColors.gradientCyan : Colors.white,
-                        BlendMode.srcIn,
-                      ),
+                    label: _post.isSaved ? 'Saved' : 'Save',
+                    child: Icon(
+                      _post.isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                      color: _post.isSaved ? AppColors.gradientCyan : Colors.white,
+                      size: 26,
                     ),
                   ),
 

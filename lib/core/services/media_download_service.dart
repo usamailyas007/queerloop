@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 
+import '../config/app_config.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/download_banner_overlay.dart';
 
@@ -18,6 +19,7 @@ class MediaDownloadService {
     required BuildContext context,
     required String? mediaUrl,
     String? title,
+    String? authorId,
     bool isVideo = false,
     bool allowDownloads = true,
     bool isCreator = false,
@@ -43,13 +45,37 @@ class MediaDownloadService {
       return false;
     }
 
-    final String cleanUrl = mediaUrl.trim();
-    final bool detectedVideo = isVideo ||
-        cleanUrl.endsWith('.mp4') ||
-        cleanUrl.endsWith('.mov') ||
-        cleanUrl.endsWith('.m3u8') ||
-        cleanUrl.contains('video') ||
-        cleanUrl.contains('/videos/');
+    // Resolve non-full URL if an ID/key was passed
+    String cleanUrl = mediaUrl.trim();
+    if (!cleanUrl.startsWith('http://') &&
+        !cleanUrl.startsWith('https://') &&
+        !cleanUrl.startsWith('assets/')) {
+      final File checkLocal = File(cleanUrl);
+      if (!checkLocal.existsSync()) {
+        final String cleanId = cleanUrl
+            .replaceAll(RegExp(r'^/+'), '')
+            .replaceAll(RegExp(r'^media/'), '');
+        if (cleanId.isNotEmpty) {
+          if (authorId != null && authorId.isNotEmpty) {
+            cleanUrl = '${AppConfig.cdnUrl}/images/original/$authorId/$cleanId.jpg';
+          } else {
+            final String base = AppConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
+            cleanUrl = '$base/media/$cleanId';
+          }
+        }
+      }
+    }
+
+    final String lowerUrl = cleanUrl.toLowerCase();
+    final bool hasVideoExt = lowerUrl.endsWith('.mp4') ||
+        lowerUrl.endsWith('.mov') ||
+        lowerUrl.endsWith('.m3u8') ||
+        lowerUrl.endsWith('.webm') ||
+        lowerUrl.contains('.m3u8?') ||
+        lowerUrl.contains('.mp4?') ||
+        lowerUrl.contains('/videos/');
+
+    final bool detectedVideo = isVideo || hasVideoExt;
 
     // Show non-blocking floating banner (TikTok style)
     // Scrolling, swiping and interactions are NOT blocked!
@@ -64,7 +90,16 @@ class MediaDownloadService {
           .replaceAll(RegExp(r'[^\w\-]'), '_')
           .trim();
       final int timestamp = DateTime.now().millisecondsSinceEpoch;
-      final String extension = detectedVideo ? 'mp4' : 'jpg';
+      final String extension;
+      if (detectedVideo) {
+        extension = 'mp4';
+      } else if (lowerUrl.endsWith('.png') || lowerUrl.contains('.png?')) {
+        extension = 'png';
+      } else if (lowerUrl.endsWith('.webp') || lowerUrl.contains('.webp?')) {
+        extension = 'webp';
+      } else {
+        extension = 'jpg';
+      }
       final String fileName = '${safeTitle}_$timestamp.$extension';
 
       final Directory tempDir = await getTemporaryDirectory();
@@ -171,8 +206,19 @@ class MediaDownloadService {
       );
 
       if (!kIsWeb) {
-        final PermissionState ps =
+        PermissionState ps =
             await PhotoManager.requestPermissionExtend();
+        if (!ps.isAuth && !ps.hasAccess) {
+          ps = await PhotoManager.requestPermissionExtend(
+            requestOption: const PermissionRequestOption(
+              androidPermission: AndroidPermission(
+                type: RequestType.common,
+                mediaLocation: false,
+              ),
+            ),
+          );
+        }
+
         if (ps.isAuth || ps.hasAccess) {
           if (detectedVideo) {
             await PhotoManager.editor.saveVideo(
@@ -180,10 +226,24 @@ class MediaDownloadService {
               title: fileName,
             );
           } else {
-            await PhotoManager.editor.saveImage(
-              await tempFile.readAsBytes(),
-              filename: fileName,
-            );
+            bool saved = false;
+            try {
+              await PhotoManager.editor.saveImageWithPath(
+                tempFile.path,
+                title: fileName,
+              );
+              saved = true;
+            } catch (e) {
+              debugPrint('⚠️ [MediaDownloadService] saveImageWithPath failed: $e, falling back to saveImage');
+            }
+
+            if (!saved) {
+              await PhotoManager.editor.saveImage(
+                await tempFile.readAsBytes(),
+                filename: fileName,
+                title: fileName,
+              );
+            }
           }
         } else {
           // Fallback to Documents Directory

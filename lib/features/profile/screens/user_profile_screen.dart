@@ -3,8 +3,10 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/config/api_endpoints.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
@@ -25,6 +27,7 @@ import '../../../core/widgets/app_snackbar.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../home/provider/home_feed_provider.dart';
+import '../../home/services/reel_video_preloader.dart';
 import '../../home/screens/single_post_view_screen.dart';
 import '../../home/widgets/comments_bottom_sheet.dart';
 import '../../home/widgets/post_feed_card.dart';
@@ -90,7 +93,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   void initState() {
     super.initState();
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ReelVideoPreloader.instance.pauseAll();
       if (mounted) {
         context.read<MessagesProvider>().loadBlockedUsers();
         context.read<ProfileProvider>().loadBlockedAccounts();
@@ -130,19 +137,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       String? thumbUrl;
 
       if (post.mediaRefs.isNotEmpty) {
-        final String firstRef = post.mediaRefs.first;
+        final String firstRef = post.mediaRefs.first.trim();
         if (firstRef.startsWith('http://') || firstRef.startsWith('https://')) {
+          // Already a full CDN/HTTP URL
           videoUrl = firstRef;
+          thumbUrl = post.postImageUrl?.isNotEmpty == true ? post.postImageUrl : firstRef;
         } else {
-          try {
-            final dynamic mediaData =
-                await client.get(ApiEndpoints.mediaStatus(firstRef));
-            if (mediaData is Map<String, dynamic>) {
-              videoUrl = mediaData['url'] as String? ??
-                  mediaData['downloadUrl'] as String?;
-              thumbUrl = mediaData['thumbnailUrl'] as String?;
-            }
-          } catch (_) {}
+          // Raw UUID from upload — build HLS URL directly (same as For You feed, no extra API call)
+          final String clean = firstRef
+              .replaceAll(RegExp(r'^/+'), '')
+              .replaceAll(RegExp(r'^media/'), '');
+          videoUrl = '${AppConfig.cdnUrl}/videos/processed/$clean/master.m3u8';
+          // Use backend-supplied postImageUrl as thumbnail (already verified CDN URL)
+          thumbUrl = (post.postImageUrl != null && post.postImageUrl!.isNotEmpty)
+              ? post.postImageUrl
+              : '${AppConfig.cdnUrl}/videos/processed/$clean/thumbnail.jpg';
         }
       }
 
@@ -174,9 +183,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           caption: post.body.isNotEmpty ? post.body : post.caption,
           likesCount: post.likesCount,
           commentsCount: post.commentsCount,
+          viewsCount: post.viewsCount,
           isLiked: post.isLiked,
           isSaved: post.isSaved,
+          allowComments: post.allowComments,
+          allowDownloads: post.allowDownloads,
+          hideLikes: _profile?.hideMyLikes ?? false,
           tags: post.tags,
+          communityId: post.communityId,
           durationText: (post.duration != null && post.duration!.isNotEmpty)
               ? post.duration!
               : '0:30',
@@ -221,6 +235,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     });
 
     final ApiClient client = context.read<ApiClient>();
+    final AuthProvider auth = context.read<AuthProvider>();
+    final ProfileProvider profileProvider = context.read<ProfileProvider>();
     final UserRelationshipService relService = UserRelationshipService(client);
 
     // 1. Fetch user profile
@@ -232,6 +248,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
       if (data is Map<String, dynamic>) {
         loadedProfile = UserProfile.fromJson(data);
+        AuthorProfileCache.set(
+          loadedProfile.id,
+          AuthorInfo(
+            id: loadedProfile.id,
+            username: loadedProfile.username ?? '',
+            displayName: loadedProfile.displayName ?? '',
+            avatarUrl: loadedProfile.avatarUrl,
+            hideMyLikes: loadedProfile.hideMyLikes,
+          ),
+        );
       }
     } catch (e) {
       debugPrint('❌ [UserProfile] Failed to fetch user profile: $e');
@@ -254,31 +280,82 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       debugPrint('⚠️ [UserProfile] Could not fetch followers/following: $e');
     }
 
-    // 3. Fetch author posts with resilient list parsing
+    // 3. Check privacy before fetching author posts
+    final String? curUserId = auth.userId ?? profileProvider.profile?.id;
+    final String? curUsername = profileProvider.profile?.username ?? auth.user?.displayName;
+    final bool isGuest = auth.isGuest;
+
+    final bool isOwnProfile = (curUserId != null &&
+            curUserId.isNotEmpty &&
+            userId == curUserId) ||
+        (curUsername != null &&
+            curUsername.isNotEmpty &&
+            widget.username.replaceAll('@', '').toLowerCase() ==
+                curUsername.replaceAll('@', '').toLowerCase());
+
+    final bool isFollowedInCache = profileProvider.isFollowingUser(
+      userId: loadedProfile?.id ?? userId,
+      username: loadedProfile?.username ?? widget.username,
+    );
+
+    final bool amIFollower = curUserId != null &&
+        curUserId.isNotEmpty &&
+        followersList.any((UserRelationItem f) => f.userId == curUserId);
+
+    final bool isCurrentlyFollowing = isFollowedInCache ||
+        amIFollower ||
+        loadedProfile?.isFollowing == true ||
+        loadedProfile?.relationship == 'following';
+
+    final bool isPrivateAccount = (loadedProfile?.isPrivate ?? false) ||
+        widget.isPrivate ||
+        widget.username.contains('kit.lumen');
+
+    final bool shouldHideContent = isPrivateAccount && !isOwnProfile && !isCurrentlyFollowing;
+
+    // 3. Fetch author posts ONLY if user is not private (or viewer is following / is own profile)
     List<PostResponseModel> allPosts = <PostResponseModel>[];
-    try {
-      final dynamic postsData =
-          await client.get(ApiEndpoints.postsByAuthor(userId));
-      List<dynamic> rawList = <dynamic>[];
-      if (postsData is List) {
-        rawList = postsData;
-      } else if (postsData is Map<String, dynamic>) {
-        if (postsData['data'] is List) {
-          rawList = postsData['data'] as List<dynamic>;
-        } else if (postsData['posts'] is List) {
-          rawList = postsData['posts'] as List<dynamic>;
-        } else if (postsData['items'] is List) {
-          rawList = postsData['items'] as List<dynamic>;
-        } else if (postsData['results'] is List) {
-          rawList = postsData['results'] as List<dynamic>;
+    if (!shouldHideContent) {
+      try {
+        debugPrint('🚀 [UserProfile] Calling GET ${ApiEndpoints.postsByAuthor(userId)}');
+        final dynamic postsData =
+            await client.get(ApiEndpoints.postsByAuthor(userId));
+        List<dynamic> rawList = <dynamic>[];
+        if (postsData is List) {
+          rawList = postsData;
+        } else if (postsData is Map<String, dynamic>) {
+          if (postsData['data'] is List) {
+            rawList = postsData['data'] as List<dynamic>;
+          } else if (postsData['posts'] is List) {
+            rawList = postsData['posts'] as List<dynamic>;
+          } else if (postsData['items'] is List) {
+            rawList = postsData['items'] as List<dynamic>;
+          } else if (postsData['results'] is List) {
+            rawList = postsData['results'] as List<dynamic>;
+          }
         }
+        allPosts = rawList
+            .whereType<Map<String, dynamic>>()
+            .map(PostResponseModel.fromJson)
+            .where((PostResponseModel p) => !p.isDeleted)
+            .toList();
+      } catch (e) {
+        debugPrint('⚠️ [UserProfile] Could not fetch author posts: $e');
       }
-      allPosts = rawList
-          .whereType<Map<String, dynamic>>()
-          .map(PostResponseModel.fromJson)
-          .toList();
-    } catch (e) {
-      debugPrint('⚠️ [UserProfile] Could not fetch author posts: $e');
+
+      allPosts = allPosts.where((PostResponseModel p) {
+        return PostVisibilityFilter.canViewPost(
+          visibility: p.visibility,
+          authorId: p.authorId ?? userId,
+          authorUsername: p.authorName ?? widget.username,
+          currentUserId: curUserId,
+          currentUsername: curUsername,
+          isGuest: isGuest,
+          isFollowing: isCurrentlyFollowing,
+        );
+      }).toList();
+    } else {
+      debugPrint('🔒 [UserProfile] User $userId is private and not followed; skipping post fetch.');
     }
 
     // Separate posts into text/photo posts vs video reels
@@ -298,25 +375,26 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     // Resolve post image URLs for text/photo posts
     final Map<String, String> postImages = <String, String>{};
     for (final PostResponseModel post in textPosts) {
-      if (post.mediaRefs.isNotEmpty) {
-        final String firstRef = post.mediaRefs.first;
+      if (post.postImageUrl != null && post.postImageUrl!.isNotEmpty) {
+        postImages[post.id] = post.postImageUrl!;
+      } else if (post.mediaRefs.isNotEmpty) {
+        final String firstRef = post.mediaRefs.first.trim();
         if (firstRef.startsWith('http://') ||
             firstRef.startsWith('https://') ||
             firstRef.startsWith('assets/')) {
           postImages[post.id] = firstRef;
         } else {
-          try {
-            final dynamic mediaData =
-                await client.get(ApiEndpoints.mediaStatus(firstRef));
-            if (mediaData is Map<String, dynamic>) {
-              final String? url = mediaData['url'] as String? ??
-                  mediaData['downloadUrl'] as String? ??
-                  mediaData['thumbnailUrl'] as String?;
-              if (url != null && url.isNotEmpty) {
-                postImages[post.id] = url;
-              }
-            }
-          } catch (_) {}
+          final String clean = firstRef
+              .replaceAll(RegExp(r'^/+'), '')
+              .replaceAll(RegExp(r'^media/'), '');
+          final String author = post.authorId ?? _effectiveUserId ?? userId;
+          if (author.isNotEmpty) {
+            postImages[post.id] =
+                '${AppConfig.cdnUrl}/images/original/$author/$clean.jpg';
+          } else {
+            postImages[post.id] =
+                '${AppConfig.cdnUrl}/images/original/$clean.jpg';
+          }
         }
       }
     }
@@ -357,19 +435,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     if (!mounted) return;
 
-    final ProfileProvider profileProvider = context.read<ProfileProvider>();
-    final AuthProvider auth = context.read<AuthProvider>();
-    final String? myId = auth.userId;
-
-    final bool isFollowedInCache = profileProvider.isFollowingUser(
-      userId: loadedProfile?.id ?? userId,
-      username: loadedProfile?.username ?? widget.username,
-    );
-
-    final bool amIFollower = myId != null &&
-        myId.isNotEmpty &&
-        followersList.any((UserRelationItem f) => f.userId == myId);
-
     final int calculatedFollowers = (loadedProfile?.followersCount != null &&
             loadedProfile!.followersCount! > followersList.length)
         ? loadedProfile.followersCount!
@@ -391,10 +456,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       _userCommunities = comms;
       _followersCount = calculatedFollowers;
       _followingCount = calculatedFollowing;
-      _isFollowing = isFollowedInCache ||
-          amIFollower ||
-          loadedProfile?.isFollowing == true ||
-          loadedProfile?.relationship == 'following';
+      _isFollowing = isCurrentlyFollowing;
       _isRequested = loadedProfile?.isPending == true ||
           loadedProfile?.relationship == 'pending';
       _isLoading = false;
@@ -991,9 +1053,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   else ...<Widget>[
                     ProfileFeedTabsWidget(
                       selectedIndex: _selectedTabIndex,
-                      isOwnProfile: false,
+                      isOwnProfile: isOwnProfile,
                       onTabSelected: (int index) {
                         setState(() => _selectedTabIndex = index);
+                        if (index == 2) {
+                          context.read<ProfileProvider>().fetchSavedPosts();
+                        } else if (index == 3) {
+                          context.read<ProfileProvider>().fetchLikedPosts();
+                        }
                       },
                     ),
 
@@ -1027,13 +1094,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 likesCount: post.likesCount,
                                 commentsCount: post.commentsCount,
                                 postImageUrl: _postImageUrls[post.id] ??
-                                    (post.mediaRefs.isNotEmpty
-                                        ? post.mediaRefs.first
-                                        : null),
+                                    (post.postImageUrl != null && post.postImageUrl!.isNotEmpty
+                                        ? post.postImageUrl
+                                        : (post.mediaRefs.isNotEmpty
+                                            ? (post.mediaRefs.first.startsWith('http') || post.mediaRefs.first.startsWith('assets/')
+                                                ? post.mediaRefs.first
+                                                : '${AppConfig.cdnUrl}/images/original/${post.authorId ?? _effectiveUserId ?? ''}/${post.mediaRefs.first.replaceAll(RegExp(r"^/+"), "").replaceAll(RegExp(r"^media/"), "")}.jpg')
+                                            : null)),
                                 postType: post.type,
                                 communityId: post.communityId,
-                                isLiked: post.isLiked,
-                                isSaved: post.isSaved,
+                                isLiked: context.watch<HomeFeedProvider>().isPostLiked(post.id) || post.isLiked,
+                                isSaved: context.watch<HomeFeedProvider>().isPostSaved(post.id) || post.isSaved,
+                                allowComments: post.allowComments,
+                                allowDownloads: post.allowDownloads,
+                                hideLikes: _profile?.hideMyLikes ?? false,
                               );
                               return PostFeedCard(
                                 post: postItem,
@@ -1041,8 +1115,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 onFollowToggle: () => _handleFollowToggle(
                                   isPrivateAccount: widget.isPrivate,
                                 ),
-                                onCardTap: () {
-                                  Navigator.push<void>(
+                                onCardTap: () async {
+                                  final HomeFeedProvider hFeed = context.read<HomeFeedProvider>();
+                                  await Navigator.push<void>(
                                     context,
                                     MaterialPageRoute<void>(
                                       builder: (_) => SinglePostViewScreen(
@@ -1051,44 +1126,79 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       ),
                                     ),
                                   );
+                                  if (!mounted) return;
+                                  setState(() {
+                                    final int idx = _authorTextPosts.indexWhere((PostResponseModel p) => p.id == post.id);
+                                    if (idx != -1) {
+                                      _authorTextPosts[idx] = _authorTextPosts[idx].copyWith(
+                                        isLiked: hFeed.isPostLiked(post.id),
+                                        isSaved: hFeed.isPostSaved(post.id),
+                                      );
+                                    }
+                                  });
                                 },
                                 onLikeToggle: () {
-                                  context
-                                      .read<HomeFeedProvider>()
-                                      .toggleLikePost(post.id);
-                                  setState(() {
-                                    final int idx = _authorTextPosts
-                                        .indexWhere((PostResponseModel p) => p.id == post.id);
-                                    if (idx != -1) {
-                                      final bool newLiked =
-                                          !_authorTextPosts[idx].isLiked;
-                                      final int newCount = newLiked
-                                          ? _authorTextPosts[idx].likesCount + 1
-                                          : (_authorTextPosts[idx].likesCount > 0
-                                              ? _authorTextPosts[idx].likesCount - 1
-                                              : 0);
+                                  final int idx = _authorTextPosts
+                                      .indexWhere((PostResponseModel p) => p.id == post.id);
+                                  if (idx != -1) {
+                                    final bool currentLiked =
+                                        context.read<HomeFeedProvider>().isPostLiked(post.id) ||
+                                        _authorTextPosts[idx].isLiked;
+                                    final bool newLiked = !currentLiked;
+                                    final int newCount = newLiked
+                                        ? _authorTextPosts[idx].likesCount + 1
+                                        : (_authorTextPosts[idx].likesCount > 0
+                                            ? _authorTextPosts[idx].likesCount - 1
+                                            : 0);
+                                    setState(() {
                                       _authorTextPosts[idx] =
                                           _authorTextPosts[idx].copyWith(
                                         isLiked: newLiked,
                                         likesCount: newCount,
                                       );
-                                    }
-                                  });
+                                    });
+                                    context.read<HomeFeedProvider>().toggleLikePost(
+                                      post.id,
+                                      fallbackPost: postItem.copyWith(
+                                        isLiked: newLiked,
+                                        likesCount: newCount,
+                                      ),
+                                    );
+                                    context.read<ProfileProvider>().updateLikedPost(
+                                      post.id,
+                                      isLiked: newLiked,
+                                      likesCount: newCount,
+                                      fallbackPost: postItem.copyWith(
+                                        isLiked: newLiked,
+                                        likesCount: newCount,
+                                      ),
+                                    );
+                                  }
                                 },
                                 onSaveToggle: () {
-                                  context
-                                      .read<HomeFeedProvider>()
-                                      .toggleSavePost(post.id);
-                                  setState(() {
-                                    final int idx = _authorTextPosts
-                                        .indexWhere((PostResponseModel p) => p.id == post.id);
-                                    if (idx != -1) {
+                                  final int idx = _authorTextPosts
+                                      .indexWhere((PostResponseModel p) => p.id == post.id);
+                                  if (idx != -1) {
+                                    final bool currentSaved =
+                                        context.read<HomeFeedProvider>().isPostSaved(post.id) ||
+                                        _authorTextPosts[idx].isSaved;
+                                    final bool newSaved = !currentSaved;
+                                    setState(() {
                                       _authorTextPosts[idx] =
                                           _authorTextPosts[idx].copyWith(
-                                        isSaved: !_authorTextPosts[idx].isSaved,
+                                        isSaved: newSaved,
                                       );
-                                    }
-                                  });
+                                    });
+                                    context.read<HomeFeedProvider>().toggleSavePost(
+                                      post.id,
+                                      fallbackPost: postItem.copyWith(isSaved: newSaved),
+                                    );
+                                    context.read<ProfileProvider>().updateSavedPost(
+                                      post.id,
+                                      isSaved: newSaved,
+                                      fallbackPost: postItem.copyWith(isSaved: newSaved),
+                                    );
+                                  }
                                 },
                                 onOpenComments: () {
                                   showModalBottomSheet<void>(
@@ -1100,6 +1210,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       postId: post.id,
                                       postAuthorId: post.authorId,
                                       communityId: post.communityId,
+                                      allowComments: post.allowComments,
+                                      onCommentAdded: () {
+                                        context.read<HomeFeedProvider>().incrementCommentCount(post.id);
+                                        setState(() {
+                                          final int idx = _authorTextPosts.indexWhere((PostResponseModel p) => p.id == post.id);
+                                          if (idx != -1) {
+                                            _authorTextPosts[idx] = _authorTextPosts[idx].copyWith(
+                                              commentsCount: _authorTextPosts[idx].commentsCount + 1,
+                                            );
+                                          }
+                                        });
+                                      },
                                     ),
                                   );
                                 },
@@ -1134,7 +1256,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                     // Tab 2: Saved Grid (Only on own profile)
                     if (_selectedTabIndex == 2 && isOwnProfile)
-                      const ProfileMediaGridWidget(showPlayCounts: false),
+                      ProfileMediaGridWidget(
+                        showPlayCounts: false,
+                        customReels: profile.savedReels,
+                        emptyTitle: 'No saved reels yet',
+                        emptySubtitle: 'Reels you save will appear here.',
+                        emptyIcon: Icons.bookmark_border_rounded,
+                      ),
 
                     // Tab 3: Liked Grid (Only on own profile)
                     if (_selectedTabIndex == 3 && isOwnProfile)
