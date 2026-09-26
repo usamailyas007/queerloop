@@ -1,5 +1,7 @@
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_images.dart';
+import '../../create_post/models/create_post_models.dart';
+import '../services/shared_post_cache.dart';
 
 DateTime? parseUtcToLocal(dynamic raw) {
   if (raw == null) return null;
@@ -315,6 +317,7 @@ class ChatMessageModel {
     String? postThumbnail =
         (json['postThumbnailAsset'] ?? json['thumbnailUrl'] ?? json['mediaUrl'])?.toString();
     String? postAuthorName = json['postAuthor']?.toString();
+    String? postAuthorId = json['postAuthorId']?.toString();
     String? postAuthorAvatar = json['postAuthorAvatar']?.toString();
     String? postCaption = json['postCaption']?.toString();
     String? postType = json['postType']?.toString();
@@ -399,10 +402,18 @@ class ChatMessageModel {
         }
         postAuthorAvatar ??=
             (author['avatarUrl'] ?? author['avatar'] ?? author['profilePicture'])?.toString();
+        postAuthorId ??= (author['id'] ?? author['_id'] ?? author['userId'] ?? author['authorId'])?.toString();
       } else if (sharedContent['authorName'] != null) {
         final String an = sharedContent['authorName'].toString().trim();
         postAuthorName = an.startsWith('@') ? an : '@$an';
       }
+
+      postAuthorId ??= (sharedContent['authorId'] ??
+              sharedContent['author_id'] ??
+              sharedContent['userId'] ??
+              sharedContent['user_id'] ??
+              sharedContent['creatorId'])
+          ?.toString();
 
       if (postAuthorAvatar == null && sharedContent['authorAvatar'] != null) {
         postAuthorAvatar = sharedContent['authorAvatar'].toString().trim();
@@ -422,12 +433,33 @@ class ChatMessageModel {
         final int v = (rawViews is num)
             ? rawViews.toInt()
             : int.tryParse(rawViews.toString()) ?? 0;
-        if (v >= 1000000) {
-          postViews = '${(v / 1000000).toStringAsFixed(1)}M';
-        } else if (v >= 1000) {
-          postViews = '${(v / 1000).toStringAsFixed(1)}K';
-        } else {
-          postViews = '$v';
+        if (v > 0) {
+          if (v >= 1000000) {
+            postViews = '${(v / 1000000).toStringAsFixed(1)}M';
+          } else if (v >= 1000) {
+            postViews = '${(v / 1000).toStringAsFixed(1)}K';
+          } else {
+            postViews = '$v';
+          }
+        }
+      }
+
+      if (postViews == null || postViews == '0') {
+        final String? cleanId = (sharedPostId != null && sharedPostId.isNotEmpty)
+            ? sharedPostId
+            : sharedContent['id']?.toString() ?? sharedContent['_id']?.toString();
+        if (cleanId != null && cleanId.isNotEmpty) {
+          final SharedPostData? cached = SharedPostCache.get(cleanId);
+          if (cached != null && cached.views > 0) {
+            final int v = cached.views;
+            if (v >= 1000000) {
+              postViews = '${(v / 1000000).toStringAsFixed(1)}M';
+            } else if (v >= 1000) {
+              postViews = '${(v / 1000).toStringAsFixed(1)}K';
+            } else {
+              postViews = '$v';
+            }
+          }
         }
       }
 
@@ -512,6 +544,7 @@ class ChatMessageModel {
       mediaUrl: media,
       postThumbnailAsset: postThumbnail,
       postAuthor: postAuthorName,
+      postAuthorId: postAuthorId,
       postAuthorAvatarUrl: postAuthorAvatar,
       postCaption: postCaption,
       postType: postType,
@@ -725,6 +758,28 @@ class ConversationModel {
       pUsername = (part['username'] ?? part['name'] ?? 'User').toString();
       pDisplayName = part['displayName']?.toString();
       pAvatarUrl = (part['avatarUrl'] ?? part['avatar'])?.toString();
+    } else if (json['participantA'] is Map<String, dynamic> || json['participantB'] is Map<String, dynamic>) {
+      final Map<String, dynamic>? partA = json['participantA'] as Map<String, dynamic>?;
+      final Map<String, dynamic>? partB = json['participantB'] as Map<String, dynamic>?;
+      final String? idA = (partA?['id'] ?? partA?['_id'] ?? partA?['userId'])?.toString();
+      final String? idB = (partB?['id'] ?? partB?['_id'] ?? partB?['userId'])?.toString();
+      final Map<String, dynamic>? target = (currentUserId != null && idA == currentUserId)
+          ? partB
+          : ((currentUserId != null && idB == currentUserId) ? partA : (partB ?? partA));
+      if (target != null) {
+        pId = (target['id'] ?? target['_id'] ?? target['userId'])?.toString();
+        pUsername = (target['username'] ?? target['name'] ?? target['handle'] ?? 'User').toString();
+        pDisplayName = (target['displayName'] ?? target['name'])?.toString();
+        pAvatarUrl = (target['avatarUrl'] ?? target['avatar'] ?? target['profilePicture'])?.toString();
+      }
+    } else if (json['otherUser'] is Map<String, dynamic> ||
+        json['user'] is Map<String, dynamic> ||
+        json['recipient'] is Map<String, dynamic>) {
+      final Map<String, dynamic> uObj = (json['otherUser'] ?? json['user'] ?? json['recipient']) as Map<String, dynamic>;
+      pId = (uObj['id'] ?? uObj['_id'] ?? uObj['userId'] ?? uObj['user_id'])?.toString();
+      pUsername = (uObj['username'] ?? uObj['name'] ?? uObj['handle'] ?? 'User').toString();
+      pDisplayName = (uObj['displayName'] ?? uObj['name'])?.toString();
+      pAvatarUrl = (uObj['avatarUrl'] ?? uObj['avatar'] ?? uObj['profilePicture'])?.toString();
     } else if (json['participants'] is List) {
       final List<dynamic> parts = json['participants'] as List<dynamic>;
       // Find the other user
@@ -775,6 +830,18 @@ class ConversationModel {
       pId = null;
     } else if (pId != null) {
       pId = pId.trim();
+    }
+
+    // Hydrate from AuthorProfileCache if available
+    if (pId != null && pId.isNotEmpty) {
+      final AuthorInfo? cached = AuthorProfileCache.get(pId);
+      if (cached != null) {
+        if (pUsername == 'User' || pUsername.isEmpty) {
+          pUsername = cached.username;
+        }
+        pDisplayName ??= cached.displayName;
+        pAvatarUrl ??= cached.avatarUrl;
+      }
     }
 
     // Last message extraction
@@ -1069,6 +1136,26 @@ class ConversationModel {
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
     );
   }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'participantId': participantId,
+        'username': username,
+        'displayName': displayName,
+        'avatarUrl': avatarUrl,
+        'avatarAsset': avatarAsset,
+        'lastMessage': lastMessage,
+        'timeAgo': timeAgo,
+        'unreadCount': unreadCount,
+        'isTyping': isTyping,
+        'isOnline': isOnline,
+        'lastActive': lastActive?.toString(),
+        'isMuted': isMuted,
+        'mutedUntil': mutedUntil,
+        'hasStoryRing': hasStoryRing,
+        'lastMessageSenderId': lastMessageSenderId,
+        'lastMessageAt': lastMessageAt?.toIso8601String(),
+      };
 }
 
 class MessageRequestModel {
@@ -1081,6 +1168,7 @@ class MessageRequestModel {
     this.displayName,
     this.avatarUrl,
     this.createdAt,
+    this.isOutgoing = false,
   });
 
   final String id;
@@ -1091,6 +1179,7 @@ class MessageRequestModel {
   final String avatarAsset;
   final String previewMessage;
   final DateTime? createdAt;
+  final bool isOutgoing;
 
   factory MessageRequestModel.fromJson(
     Map<String, dynamic> json, {
@@ -1188,7 +1277,16 @@ class MessageRequestModel {
 
     String preview = 'Sent you a message request';
     final dynamic lastMsgRaw = json['lastMessage'] ?? json['message'];
+    String? lastSenderId;
     if (lastMsgRaw is Map<String, dynamic>) {
+      lastSenderId = (lastMsgRaw['senderId'] ??
+              lastMsgRaw['sender_id'] ??
+              lastMsgRaw['userId'] ??
+              (lastMsgRaw['sender'] is Map
+                  ? (lastMsgRaw['sender']['id'] ??
+                      lastMsgRaw['sender']['_id'])
+                  : null))
+          ?.toString();
       preview = (lastMsgRaw['body'] ??
               lastMsgRaw['text'] ??
               lastMsgRaw['content'] ??
@@ -1199,6 +1297,23 @@ class MessageRequestModel {
     } else if (json['previewMessage'] != null) {
       preview = json['previewMessage'].toString();
     }
+
+    final String? initiatorId = (json['initiatorId'] ??
+            json['initiator_id'] ??
+            json['senderId'] ??
+            json['sender_id'])
+        ?.toString();
+
+    final bool isOutgoing = (currentUserId != null &&
+            currentUserId.trim().isNotEmpty) &&
+        ((lastSenderId != null &&
+                lastSenderId.trim().toLowerCase() ==
+                    currentUserId.trim().toLowerCase()) ||
+            (initiatorId != null &&
+                initiatorId.trim().toLowerCase() ==
+                    currentUserId.trim().toLowerCase()) ||
+            json['isOutgoing'] == true ||
+            json['isSender'] == true);
 
     return MessageRequestModel(
       id: reqId,
@@ -1211,6 +1326,7 @@ class MessageRequestModel {
           : AppImages.user1,
       previewMessage: preview,
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+      isOutgoing: isOutgoing,
     );
   }
 }

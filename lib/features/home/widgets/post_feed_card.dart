@@ -51,13 +51,119 @@ class PostFeedCard extends StatelessWidget {
   final VoidCallback? onCardTap;
   final VoidCallback? onPostDeleted;
 
+  static void openFullscreen(BuildContext context, PostItemModel post) {
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    final ProfileProvider profile = context.read<ProfileProvider>();
+    final bool isLiked = homeFeed.isPostLiked(post.id) || profile.isPostLiked(post.id) || post.isLiked;
+    final bool isSaved = homeFeed.isPostSaved(post.id) || profile.isPostSaved(post.id) || post.isSaved;
+    final int commentsCount = homeFeed.getCommentCount(post.id) ?? profile.getCommentCount(post.id) ?? post.commentsCount;
+    final int likesCount = post.likesCount;
+    final PostItemModel resolvedPost = post.copyWith(
+      isLiked: isLiked,
+      isSaved: isSaved,
+      likesCount: likesCount,
+      commentsCount: commentsCount,
+    );
+
+    final bool isVideo = post.videoUrl != null ||
+        post.postType.toUpperCase() == 'VIDEO' ||
+        post.postType.toLowerCase() == 'reel';
+    if (isVideo) {
+      final String clean = post.videoUrl ?? post.postImageUrl ?? '';
+      final ReelItemModel reel = ReelItemModel(
+        id: post.id,
+        authorId: post.authorId,
+        authorDisplayName: post.authorDisplayName ?? post.username,
+        username: post.username,
+        pronounsTime: post.pronounsTime,
+        avatarAsset: post.avatarAsset,
+        videoAsset: '',
+        videoUrl: clean.startsWith('http') ? clean : post.postImageUrl,
+        thumbnailUrl: (post.postImageUrl != null &&
+                post.postImageUrl!.startsWith('http'))
+            ? post.postImageUrl
+            : (clean.startsWith('http') ? clean : null),
+        caption: post.content,
+        likesCount: likesCount,
+        commentsCount: commentsCount,
+        isLiked: isLiked,
+        isSaved: isSaved,
+        hideLikes: post.hideLikes,
+        communityId: post.communityId,
+      );
+      Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (BuildContext routeContext) => Scaffold(
+            backgroundColor: Colors.black,
+            body: Stack(
+              children: <Widget>[
+                ReelsFeedView(
+                  initialPage: 0,
+                  customReels: <ReelItemModel>[reel],
+                  hasBottomBar: false,
+                ),
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => Navigator.of(routeContext).pop(),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: const Icon(
+                          Icons.chevron_left_rounded,
+                          color: Colors.white,
+                          size: 26,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else {
+      Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => PostFullscreenImageViewerScreen(post: resolvedPost),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool isDark = context.isDarkMode;
 
     final AuthProvider auth = context.read<AuthProvider>();
-    final ProfileProvider profileProvider = context.read<ProfileProvider>();
+    final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+    final HomeFeedProvider homeFeed = context.watch<HomeFeedProvider>();
+    final bool effectiveLiked =
+        homeFeed.isPostLiked(post.id) || profileProvider.isPostLiked(post.id) || post.isLiked;
+    final bool effectiveSaved =
+        homeFeed.isPostSaved(post.id) || profileProvider.isPostSaved(post.id) || post.isSaved;
+    final int effectiveLikesCount = (!post.isLiked && effectiveLiked)
+        ? (post.likesCount > 0 ? post.likesCount + 1 : 1)
+        : (post.isLiked && !effectiveLiked
+            ? (post.likesCount > 0 ? post.likesCount - 1 : 0)
+            : post.likesCount);
+    final int effectiveCommentsCount =
+        homeFeed.getCommentCount(post.id) ?? profileProvider.getCommentCount(post.id) ?? post.commentsCount;
+
     final String? currentUserId = auth.userId ?? profileProvider.profile?.id;
     final String? authorId = post.authorId;
     final String myUsername = (auth.user?.displayName ?? profileProvider.username)
@@ -118,6 +224,7 @@ class PostFeedCard extends StatelessWidget {
                           ? post.authorDisplayName!.trim()
                           : post.username.replaceAll('@', '').split('.').first,
                       avatarAsset: post.avatarAsset,
+                      initialPost: post,
                     ),
                   ),
                 );
@@ -356,14 +463,14 @@ class PostFeedCard extends StatelessWidget {
                 child: Row(
                   children: <Widget>[
                     Image.asset(
-                      post.isLiked ? AppIcons.likedLogo : AppIcons.unlikeLogo,
+                      effectiveLiked ? AppIcons.likedLogo : AppIcons.unlikeLogo,
                       width: 22,
                       height: 22,
                     ),
-                    if (!shouldHideLikes) ...<Widget>[
+                    if (!shouldHideLikes && post.hasLikeCount && effectiveLikesCount > 0) ...<Widget>[
                       const SizedBox(width: 6),
                       Text(
-                        '${post.likesCount > 1000 ? '${(post.likesCount / 1000).toStringAsFixed(1)}K' : post.likesCount}',
+                        '${effectiveLikesCount > 1000 ? '${(effectiveLikesCount / 1000).toStringAsFixed(1)}K' : effectiveLikesCount}',
                         style: TextStyle(
                           color: context.themeTextSecondary,
                           fontSize: 12,
@@ -394,7 +501,7 @@ class PostFeedCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${post.commentsCount}',
+                        '$effectiveCommentsCount',
                         style: TextStyle(
                           color: context.themeTextSecondary,
                           fontSize: 12,
@@ -428,11 +535,11 @@ class PostFeedCard extends StatelessWidget {
               GestureDetector(
                 onTap: onSaveToggle,
                 child: Icon(
-                  post.isSaved
+                  effectiveSaved
                       ? Icons.bookmark_rounded
                       : Icons.bookmark_border_rounded,
                   size: 22,
-                  color: post.isSaved
+                  color: effectiveSaved
                       ? AppColors.gradientCyan
                       : context.themeTextSecondary,
                 ),
@@ -504,14 +611,11 @@ class PostFeedCard extends StatelessWidget {
       ),
     );
 
-    if (onCardTap != null) {
-      return GestureDetector(
-        onTap: onCardTap,
-        behavior: HitTestBehavior.opaque,
-        child: card,
-      );
-    }
-    return card;
+    return GestureDetector(
+      onTap: onCardTap ?? () => openFullscreen(context, post),
+      behavior: HitTestBehavior.opaque,
+      child: card,
+    );
   }
 
   void _openShareBottomSheet(BuildContext context) {
@@ -643,7 +747,10 @@ class PostFeedCard extends StatelessWidget {
         clean.startsWith('http://') ||
         clean.startsWith('https://')) {
       if (clean.contains('/videos/processed/') && clean.endsWith('/master.m3u8')) {
-        return clean.replaceAll('/master.m3u8', '/thumbnail.jpg');
+        return clean.replaceAll('/master.m3u8', '/thumb.0000000.jpg');
+      }
+      if (clean.contains('/videos/processed/') && clean.endsWith('/thumbnail.jpg')) {
+        return clean.replaceAll('/thumbnail.jpg', '/thumb.0000000.jpg');
       }
       return clean;
     }
@@ -657,7 +764,7 @@ class PostFeedCard extends StatelessWidget {
         clean.contains('/videos/');
 
     if (isVid) {
-      return '${AppConfig.cdnUrl}/videos/processed/$cleanId/thumbnail.jpg';
+      return '${AppConfig.cdnUrl}/videos/processed/$cleanId/thumb.0000000.jpg';
     }
 
     if (post.authorId != null && post.authorId!.isNotEmpty) {
@@ -753,80 +860,7 @@ class PostFeedCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.md),
       child: GestureDetector(
-        onTap: () {
-          if (isVideo) {
-            final ReelItemModel reel = ReelItemModel(
-              id: post.id,
-              authorId: post.authorId,
-              authorDisplayName: post.authorDisplayName ?? post.username,
-              username: post.username,
-              pronounsTime: post.pronounsTime,
-              avatarAsset: post.avatarAsset,
-              videoAsset: '',
-              videoUrl: clean.startsWith('http') ? clean : post.postImageUrl,
-              thumbnailUrl: (post.postImageUrl != null &&
-                      post.postImageUrl!.startsWith('http'))
-                  ? post.postImageUrl
-                  : (clean.startsWith('http') ? clean : null),
-              caption: post.content,
-              likesCount: post.likesCount,
-              commentsCount: post.commentsCount,
-              isLiked: post.isLiked,
-              isSaved: post.isSaved,
-              hideLikes: post.hideLikes,
-              communityId: post.communityId,
-            );
-            Navigator.push<void>(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => Scaffold(
-                  backgroundColor: Colors.black,
-                  body: Stack(
-                    children: <Widget>[
-                      ReelsFeedView(
-                        initialPage: 0,
-                        customReels: <ReelItemModel>[reel],
-                        hasBottomBar: false,
-                      ),
-                      SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          child: GestureDetector(
-                            onTap: () => Navigator.pop(context),
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.5),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white24),
-                              ),
-                              child: const Icon(
-                                Icons.chevron_left_rounded,
-                                color: Colors.white,
-                                size: 26,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          } else {
-            Navigator.push<void>(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => PostFullscreenImageViewerScreen(post: post),
-              ),
-            );
-          }
-        },
+        onTap: () => openFullscreen(context, post),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: Stack(

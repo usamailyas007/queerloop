@@ -9,8 +9,10 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/auth_provider.dart';
+import '../../messages/provider/messages_provider.dart';
 import '../../messages/widgets/block_user_modal_dialog.dart';
 import '../../messages/widgets/report_conversation_bottom_sheet.dart';
+import '../../profile/models/user_relationship_models.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../../profile/services/user_relationship_service.dart';
 import '../../reports/models/report_models.dart';
@@ -110,8 +112,8 @@ class SafetyBottomSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String cleanUsername =
-        username.startsWith('@') ? username : '@$username';
+    final String cleanUsername = username.replaceAll(RegExp(r'^@+'), '').trim();
+    final String displayAtUsername = '@$cleanUsername';
 
     final AuthProvider auth = context.read<AuthProvider>();
     final ProfileProvider profileProvider = context.read<ProfileProvider>();
@@ -213,7 +215,7 @@ class SafetyBottomSheet extends StatelessWidget {
             Text(
               creator
                   ? 'Manage safety and deletion options for your $itemType.'
-                  : l10n.safetySub,
+                  : 'Choose what happens with $displayAtUsername and this post. We never tell them you used these tools.',
               style: TextStyle(
                 color: context.themeTextMuted,
                 fontSize: 13,
@@ -270,39 +272,207 @@ class SafetyBottomSheet extends StatelessWidget {
 
               const SizedBox(height: AppSpacing.md),
 
-              // ── 2. Block User Tile ───────────────────────────────────────────
-              _SafetyActionTile(
-                iconChild: Icon(
-                  Icons.block_rounded,
-                  color: context.themeTextSecondary,
-                  size: 20,
-                ),
-                title: l10n.safetyBlockTitle,
-                subtitle: l10n.safetyBlockSub,
-                onTap: () {
-                  final ApiClient client = context.read<ApiClient>();
-                  final UserRelationshipService relService =
-                      UserRelationshipService(client);
-                  Navigator.pop(context);
-                  BlockUserModalDialog.show(
-                    context,
-                    username: username,
-                    onConfirmBlock: () async {
-                      String? targetId = authorId;
-                      if (targetId == null || targetId.isEmpty) {
-                        targetId = await relService.resolveUserId(username);
+              // ── 2. Block / Unblock User Tile ──────────────────────────────
+              Builder(
+                builder: (BuildContext ctx) {
+                  final MessagesProvider msgProv = ctx.watch<MessagesProvider>();
+                  final ProfileProvider profProv = ctx.watch<ProfileProvider>();
+                  final String cleanAuthor =
+                      authorId?.replaceAll(RegExp(r'^@+'), '').trim().toLowerCase() ?? '';
+                  final String cleanUname = cleanUsername.toLowerCase();
+
+                  final bool alreadyBlocked =
+                      (authorId != null &&
+                          authorId!.trim().isNotEmpty &&
+                          (msgProv.isBlocked(authorId) || profProv.isBlocked(authorId))) ||
+                      (cleanAuthor.isNotEmpty &&
+                          (msgProv.isBlocked(cleanAuthor) || profProv.isBlocked(cleanAuthor))) ||
+                      msgProv.isBlocked(username) ||
+                      msgProv.isBlocked(cleanUname) ||
+                      msgProv.isBlocked(displayAtUsername) ||
+                      profProv.isBlocked(username) ||
+                      profProv.isBlocked(cleanUname) ||
+                      profProv.isBlocked(displayAtUsername) ||
+                      profProv.blockedAccounts.any((BlockedAccountItem b) =>
+                          (b.userId.isNotEmpty &&
+                              ((authorId != null && b.userId.toLowerCase() == authorId!.toLowerCase()) ||
+                               (cleanAuthor.isNotEmpty && b.userId.toLowerCase() == cleanAuthor))) ||
+                          b.username.replaceAll('@', '').trim().toLowerCase() == cleanUname);
+
+                  return _SafetyActionTile(
+                    iconChild: Icon(
+                      alreadyBlocked
+                          ? Icons.lock_open_rounded
+                          : Icons.block_rounded,
+                      color: alreadyBlocked
+                          ? AppColors.gradientCyan
+                          : context.themeTextSecondary,
+                      size: 20,
+                    ),
+                    title: alreadyBlocked
+                        ? 'Unblock $displayAtUsername'
+                        : 'Block $displayAtUsername',
+                    titleColor: alreadyBlocked ? AppColors.gradientCyan : null,
+                    subtitle: alreadyBlocked
+                        ? 'Allow them to interact with you again'
+                        : 'They won\'t be able to message you or see your posts',
+                    borderColor: alreadyBlocked
+                        ? AppColors.gradientCyan.withValues(alpha: 0.35)
+                        : null,
+                    onTap: () {
+                      final ApiClient client = context.read<ApiClient>();
+                      final UserRelationshipService relService =
+                          UserRelationshipService(client);
+                      final MessagesProvider messagesProvider =
+                          context.read<MessagesProvider>();
+                      final ProfileProvider profileProvider =
+                          context.read<ProfileProvider>();
+                      final ScaffoldMessengerState messenger =
+                          ScaffoldMessenger.of(context);
+
+                      final String fastTargetId = (authorId != null &&
+                              authorId!.trim().isNotEmpty &&
+                              !authorId!.startsWith('@') &&
+                              authorId != 'you')
+                          ? authorId!.trim()
+                          : cleanUsername;
+
+                      Future<String> resolveEffectiveTargetId() async {
+                        if (fastTargetId != cleanUsername) {
+                          return fastTargetId;
+                        }
+                        try {
+                          final String? resolved =
+                              await relService.resolveUserId(cleanUsername);
+                          if (resolved != null && resolved.trim().isNotEmpty) {
+                            return resolved.trim();
+                          }
+                        } catch (_) {}
+                        return cleanUsername;
                       }
-                      if (targetId != null && targetId.isNotEmpty) {
-                        await relService.blockUser(targetId);
-                      }
-                    },
-                    onConfirmUnblock: () async {
-                      String? targetId = authorId;
-                      if (targetId == null || targetId.isEmpty) {
-                        targetId = await relService.resolveUserId(username);
-                      }
-                      if (targetId != null && targetId.isNotEmpty) {
-                        await relService.unblockUser(targetId);
+
+                      if (alreadyBlocked) {
+                        // 1. Immediately update UI state in providers
+                        messagesProvider.unblockUser(
+                          fastTargetId,
+                          username: cleanUsername,
+                        );
+                        profileProvider.unblockUser(
+                          fastTargetId,
+                          username: cleanUsername,
+                        );
+
+                        // 2. Show feedback SnackBar before closing bottom sheet
+                        AppSnackBar.show(
+                          context,
+                          messenger: messenger,
+                          title: '$displayAtUsername unblocked',
+                          subtitle: 'You can now interact with each other again',
+                          actionLabel: 'Undo',
+                          onAction: () async {
+                            final String targetId = await resolveEffectiveTargetId();
+                            messagesProvider.blockUser(
+                              targetId,
+                              username: cleanUsername,
+                            );
+                            profileProvider.blockUser(
+                              targetId,
+                              username: cleanUsername,
+                            );
+                            try {
+                              await relService.blockUser(targetId);
+                            } catch (e) {
+                              debugPrint('⚠️ [SafetyBottomSheet] Undo re-block error: $e');
+                            }
+                          },
+                        );
+
+                        // 3. Pop bottom sheet
+                        Navigator.pop(context);
+
+                        // 4. Background network unblock call
+                        () async {
+                          final String targetId = await resolveEffectiveTargetId();
+                          if (targetId != fastTargetId) {
+                            messagesProvider.unblockUser(
+                              targetId,
+                              username: cleanUsername,
+                            );
+                            profileProvider.unblockUser(
+                              targetId,
+                              username: cleanUsername,
+                            );
+                          }
+                          try {
+                            await relService.unblockUser(targetId);
+                          } catch (e) {
+                            debugPrint('⚠️ [SafetyBottomSheet] Unblock error: $e');
+                          }
+                        }();
+                      } else {
+                        Navigator.pop(context);
+                        BlockUserModalDialog.show(
+                          context,
+                          username: displayAtUsername,
+                          onConfirmBlock: () async {
+                            // Immediately update providers
+                            messagesProvider.blockUser(
+                              fastTargetId,
+                              username: cleanUsername,
+                            );
+                            profileProvider.blockUser(
+                              fastTargetId,
+                              username: cleanUsername,
+                            );
+
+                            final String targetId = await resolveEffectiveTargetId();
+                            if (targetId != fastTargetId) {
+                              messagesProvider.blockUser(
+                                targetId,
+                                username: cleanUsername,
+                              );
+                              profileProvider.blockUser(
+                                targetId,
+                                username: cleanUsername,
+                              );
+                            }
+
+                            try {
+                              await relService.blockUser(targetId);
+                            } catch (e) {
+                              debugPrint('⚠️ [SafetyBottomSheet] Block error: $e');
+                            }
+                          },
+                          onConfirmUnblock: () async {
+                            // Immediately update providers
+                            messagesProvider.unblockUser(
+                              fastTargetId,
+                              username: cleanUsername,
+                            );
+                            profileProvider.unblockUser(
+                              fastTargetId,
+                              username: cleanUsername,
+                            );
+
+                            final String targetId = await resolveEffectiveTargetId();
+                            if (targetId != fastTargetId) {
+                              messagesProvider.unblockUser(
+                                targetId,
+                                username: cleanUsername,
+                              );
+                              profileProvider.unblockUser(
+                                targetId,
+                                username: cleanUsername,
+                              );
+                            }
+
+                            try {
+                              await relService.unblockUser(targetId);
+                            } catch (e) {
+                              debugPrint('⚠️ [SafetyBottomSheet] Unblock error: $e');
+                            }
+                          },
+                        );
                       }
                     },
                   );

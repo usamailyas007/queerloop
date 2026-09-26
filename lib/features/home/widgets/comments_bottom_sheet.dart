@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_colors.dart';
@@ -11,20 +12,57 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../core/cache/cache_manager.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../auth/auth_provider.dart';
 import '../../create_post/services/post_content_service.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../../profile/screens/user_profile_screen.dart';
+import '../models/post_item_model.dart';
+import '../models/reel_item_model.dart';
+import '../provider/home_feed_provider.dart';
 import '../screens/profile_tab_screen.dart';
 import 'report_comment_bottom_sheet.dart';
 
-/// Global in-memory tracker for comment likes across all screens.
-/// Guarantees that if a user likes a comment on screen A, opening comments on
-/// screen B (e.g. profile, feed, hashtag, discover) will preserve the liked state.
+/// Global persistent tracker for comment likes across all screens and app restarts.
+/// Guarantees that if a user likes a comment, the state survives app restarts and tab switches.
 class CommentLikesTracker {
   CommentLikesTracker._();
 
   static final Set<String> _likedCommentIds = <String>{};
   static final Set<String> _unlikedCommentIds = <String>{};
+  static bool _initialized = false;
+  static String? _loadedUserId;
+
+  static Future<void> ensureInitialized({String? userId}) async {
+    if (_initialized && _loadedUserId == userId) return;
+    _loadedUserId = userId;
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String key = userId != null && userId.isNotEmpty
+          ? 'user_liked_comments_$userId'
+          : 'user_liked_comments_global';
+      final List<String>? saved = prefs.getStringList(key);
+      if (saved != null) {
+        _likedCommentIds.addAll(saved);
+      }
+      _initialized = true;
+    } catch (e) {
+      debugPrint('⚠️ [CommentLikesTracker] Failed to load persisted likes: $e');
+    }
+  }
+
+  static void _persist() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String key = _loadedUserId != null && _loadedUserId!.isNotEmpty
+          ? 'user_liked_comments_$_loadedUserId'
+          : 'user_liked_comments_global';
+      await prefs.setStringList(key, _likedCommentIds.toList());
+    } catch (e) {
+      debugPrint('⚠️ [CommentLikesTracker] Failed to save persisted likes: $e');
+    }
+  }
 
   static bool isCommentLiked(String id, {bool serverStatus = false}) {
     if (id.isEmpty) return serverStatus;
@@ -42,6 +80,7 @@ class CommentLikesTracker {
       _unlikedCommentIds.add(id);
       _likedCommentIds.remove(id);
     }
+    _persist();
   }
 }
 
@@ -89,7 +128,11 @@ class CommentsBottomSheet extends StatefulWidget {
     this.communityId,
     this.isAnswers = false,
     this.allowComments = true,
+    this.allowCommentsFrom = 'everyone',
+    this.authorUsername,
     this.onCommentAdded,
+    this.onCommentDeleted,
+    this.onCommentCountChanged,
     super.key,
   });
 
@@ -99,7 +142,11 @@ class CommentsBottomSheet extends StatefulWidget {
   final String? communityId;
   final bool isAnswers;
   final bool allowComments;
+  final String allowCommentsFrom;
+  final String? authorUsername;
   final VoidCallback? onCommentAdded;
+  final void Function(int deletedCount, int remainingCount)? onCommentDeleted;
+  final void Function(int totalCount)? onCommentCountChanged;
 
   @override
   State<CommentsBottomSheet> createState() => _CommentsBottomSheetState();
@@ -116,9 +163,118 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
   final List<CommentItemModel> _hiddenComments = <CommentItemModel>[];
   CommentItemModel? _replyingToComment;
 
+  void _syncGlobalCommentCount(int count) {
+    if (widget.postId != null && widget.postId!.isNotEmpty) {
+      try {
+        context.read<HomeFeedProvider>().setCommentCount(widget.postId!, count);
+      } catch (_) {}
+      try {
+        context.read<ProfileProvider>().updatePostCommentCount(widget.postId!, count);
+      } catch (_) {}
+    }
+  }
+
+  String? _resolveCurrentUserAvatar({BuildContext? watchContext}) {
+    try {
+      final ProfileProvider profile = watchContext != null
+          ? watchContext.watch<ProfileProvider>()
+          : context.read<ProfileProvider>();
+      if (profile.avatarUrl.isNotEmpty &&
+          profile.avatarUrl != 'https://picsum.photos/seed/ash/400') {
+        return profile.avatarUrl;
+      }
+    } catch (_) {}
+
+    try {
+      final AuthProvider auth = watchContext != null
+          ? watchContext.watch<AuthProvider>()
+          : context.read<AuthProvider>();
+      if (auth.user?.avatarUrl != null &&
+          auth.user!.avatarUrl!.trim().isNotEmpty &&
+          auth.user!.avatarUrl != 'https://picsum.photos/seed/ash/400') {
+        return auth.user!.avatarUrl!.trim();
+      }
+      final String? uid = auth.userId;
+      if (uid != null && uid.isNotEmpty) {
+        final dynamic cached = CacheManager.instance.get('profile_details_$uid');
+        if (cached is Map<String, dynamic>) {
+          final String? cachedAvatar = (cached['avatarUrl'] ??
+                  cached['avatar'] ??
+                  cached['profilePic'])
+              ?.toString();
+          if (cachedAvatar != null &&
+              cachedAvatar.isNotEmpty &&
+              cachedAvatar != 'https://picsum.photos/seed/ash/400') {
+            return cachedAvatar;
+          }
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  String _resolveCurrentUserName({BuildContext? watchContext}) {
+    try {
+      final ProfileProvider profile = watchContext != null
+          ? watchContext.watch<ProfileProvider>()
+          : context.read<ProfileProvider>();
+      if (profile.username.isNotEmpty && profile.username != 'ashinorbit') {
+        return profile.username;
+      }
+      if (profile.displayName.isNotEmpty && profile.displayName != 'Ash Mercado') {
+        return profile.displayName;
+      }
+    } catch (_) {}
+
+    try {
+      final AuthProvider auth = watchContext != null
+          ? watchContext.watch<AuthProvider>()
+          : context.read<AuthProvider>();
+      if (auth.user?.displayName != null &&
+          auth.user!.displayName!.trim().isNotEmpty &&
+          auth.user!.displayName != 'Ash Mercado') {
+        return auth.user!.displayName!.trim();
+      }
+      final String? uid = auth.userId;
+      if (uid != null && uid.isNotEmpty) {
+        final dynamic cached = CacheManager.instance.get('profile_details_$uid');
+        if (cached is Map<String, dynamic>) {
+          final String? name = (cached['username'] ??
+                  cached['displayName'] ??
+                  cached['name'])
+              ?.toString();
+          if (name != null &&
+              name.isNotEmpty &&
+              name != 'ashinorbit' &&
+              name != 'Ash Mercado') {
+            return name;
+          }
+        }
+      }
+      if (auth.user?.email.isNotEmpty == true) {
+        return auth.user!.email.split('@').first;
+      }
+    } catch (_) {}
+
+    return 'you';
+  }
+
   @override
   void initState() {
     super.initState();
+    final String mode = widget.allowCommentsFrom.toLowerCase().trim();
+    if (mode == 'following' || mode == 'mutual') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final ProfileProvider profile = context.read<ProfileProvider>();
+        if (profile.followers.isEmpty) {
+          profile.loadFollowers().then((_) {
+            if (mounted) setState(() {});
+          });
+        }
+      });
+    }
     final bool isRealPostId = widget.postId != null &&
         widget.postId!.isNotEmpty &&
         !widget.postId!.startsWith('mock_');
@@ -161,6 +317,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
       final PostContentService service =
           PostContentService(context.read<ApiClient>());
       final String? myUserId = context.read<AuthProvider>().userId;
+      await CommentLikesTracker.ensureInitialized(userId: myUserId);
       final List<dynamic> raw = await service.getComments(widget.postId!);
       final Map<String, CommentItemModel> allMap = <String, CommentItemModel>{};
       final List<CommentItemModel> topLevel = <CommentItemModel>[];
@@ -168,10 +325,21 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
       for (final dynamic item in raw) {
         if (item is Map<String, dynamic>) {
-          final dynamic author = item['author'];
+          final dynamic author = item['author'] ?? item['user'];
           final String? authorId = (item['authorId'] ??
+                  item['author_id'] ??
                   item['userId'] ??
-                  (author is Map ? (author['userId'] ?? author['id']) : null))
+                  item['user_id'] ??
+                  item['creatorId'] ??
+                  item['creator_id'] ??
+                  (author is String
+                      ? author
+                      : (author is Map
+                          ? (author['id'] ??
+                              author['_id'] ??
+                              author['userId'] ??
+                              author['user_id'])
+                          : null)))
               ?.toString();
           final String username = author is Map
               ? (author['username'] ?? author['name'] ?? '@user').toString()
@@ -186,24 +354,39 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
           final int likesCount = (item['likeCount'] ?? item['likesCount'] ?? item['likes'] ?? 0) as int? ?? 0;
           final String commentId = (item['id'] ?? item['_id'] ?? '').toString();
 
-          bool isLiked = (item['isLiked'] ??
-                  item['liked'] ??
-                  item['hasLiked'] ??
-                  item['likedByMe'] ??
-                  item['isLikedByMe'] ??
-                  item['userLiked'] ??
-                  false) as bool? ??
-              false;
+          final dynamic rawIsLiked = item['isLiked'] ??
+              item['is_liked'] ??
+              item['liked'] ??
+              item['hasLiked'] ??
+              item['has_liked'] ??
+              item['likedByMe'] ??
+              item['liked_by_me'] ??
+              item['isLikedByMe'] ??
+              item['is_liked_by_me'] ??
+              item['userLiked'] ??
+              item['user_liked'] ??
+              (item['viewer'] is Map ? (item['viewer']['isLiked'] ?? item['viewer']['liked']) : null) ??
+              (item['metadata'] is Map ? (item['metadata']['isLiked'] ?? item['metadata']['is_liked']) : null);
 
-          final dynamic rawLikes = item['likes'] ?? item['commentLikes'] ?? item['userLikes'];
+          bool isLiked = rawIsLiked == true || rawIsLiked == 1 || rawIsLiked == 'true';
+
+          final dynamic rawLikes = item['likes'] ??
+              item['commentLikes'] ??
+              item['comment_likes'] ??
+              item['userLikes'] ??
+              item['user_likes'] ??
+              item['likedBy'] ??
+              item['liked_by'] ??
+              item['likesList'] ??
+              item['likes_users'];
           if (rawLikes is List && myUserId != null && myUserId.isNotEmpty) {
             for (final dynamic l in rawLikes) {
-              if (l is String && l == myUserId) {
+              if (l is String && l.trim().toLowerCase() == myUserId.trim().toLowerCase()) {
                 isLiked = true;
                 break;
               } else if (l is Map) {
                 final String? uid = (l['userId'] ?? l['user_id'] ?? l['id'] ?? l['authorId'])?.toString();
-                if (uid == myUserId) {
+                if (uid != null && uid.trim().toLowerCase() == myUserId.trim().toLowerCase()) {
                   isLiked = true;
                   break;
                 }
@@ -212,6 +395,9 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
           }
 
           isLiked = CommentLikesTracker.isCommentLiked(commentId, serverStatus: isLiked);
+          if (isLiked) {
+            CommentLikesTracker.setLiked(commentId, true);
+          }
 
           final CommentItemModel model = CommentItemModel(
             id: commentId,
@@ -239,7 +425,15 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
         if (parent != null) {
           parent.replies.add(reply);
         } else {
-          topLevel.add(reply);
+          // Parent comment was deleted, so this reply is an orphaned reply.
+          // Do not display it, and clean it up from backend in background.
+          final bool isReal = reply.id.isNotEmpty &&
+              !reply.id.startsWith('c1') &&
+              !reply.id.startsWith('c2') &&
+              !reply.id.startsWith('mock_');
+          if (isReal) {
+            service.deleteComment(reply.id).catchError((Object _) {});
+          }
         }
       }
 
@@ -248,6 +442,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
           _comments = topLevel;
           _isLoadingComments = false;
         });
+        widget.onCommentCountChanged?.call(_totalCommentsCount);
+        _syncGlobalCommentCount(_totalCommentsCount);
       }
     } catch (e) {
       debugPrint('Error fetching comments for ${widget.postId}: $e');
@@ -347,34 +543,254 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     });
   }
 
+  bool _isUserOwnComment(CommentItemModel comment) {
+    if (comment.id.startsWith('c_')) return true;
+    try {
+      final AuthProvider auth = context.read<AuthProvider>();
+      final ProfileProvider profile = context.read<ProfileProvider>();
+      final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+      final String? authUid = auth.userId;
+      final String? profileId = profile.profile?.id;
+      final String? authUserObjId = auth.user?.id;
+      final String? feedUserId = homeFeed.currentUserId;
+      final String myUsername = _resolveCurrentUserName();
+
+      final Set<String> myIds = <String>{
+        if (authUid != null && authUid.trim().isNotEmpty) authUid.trim().toLowerCase(),
+        if (profileId != null && profileId.trim().isNotEmpty) profileId.trim().toLowerCase(),
+        if (authUserObjId != null && authUserObjId.trim().isNotEmpty) authUserObjId.trim().toLowerCase(),
+        if (feedUserId != null && feedUserId.trim().isNotEmpty) feedUserId.trim().toLowerCase(),
+      };
+
+      final String? authorId = comment.authorId;
+      if (authorId != null && authorId.isNotEmpty) {
+        if (myIds.contains(authorId.trim().toLowerCase())) {
+          return true;
+        }
+      }
+
+      final String cleanCommentUser =
+          comment.username.replaceAll('@', '').trim().toLowerCase();
+      if (cleanCommentUser.isEmpty) return false;
+
+      final Set<String> myNames = <String>{
+        myUsername.replaceAll('@', '').trim().toLowerCase(),
+        profile.username.replaceAll('@', '').trim().toLowerCase(),
+        profile.displayName.replaceAll('@', '').trim().toLowerCase(),
+        if (auth.user?.displayName != null)
+          auth.user!.displayName!.replaceAll('@', '').trim().toLowerCase(),
+        if (auth.user != null && auth.user!.email.isNotEmpty)
+          auth.user!.email.split('@').first.trim().toLowerCase(),
+      }..removeWhere((String s) =>
+          s.isEmpty || s == 'ashinorbit' || s == 'ash mercado');
+
+      if (myNames.contains(cleanCommentUser)) {
+        return true;
+      }
+      for (final String n in myNames) {
+        if (n == cleanCommentUser ||
+            cleanCommentUser.contains(n) ||
+            n.contains(cleanCommentUser)) {
+          return true;
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  bool _isPostAuthor() {
+    try {
+      final AuthProvider auth = context.read<AuthProvider>();
+      final ProfileProvider profile = context.read<ProfileProvider>();
+      final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+      final String? authUid = auth.userId;
+      final String? profileId = profile.profile?.id;
+      final String? authUserObjId = auth.user?.id;
+      final String? feedUserId = homeFeed.currentUserId;
+      final String myUsername = _resolveCurrentUserName();
+
+      final Set<String> myIds = <String>{
+        if (authUid != null && authUid.trim().isNotEmpty) authUid.trim().toLowerCase(),
+        if (profileId != null && profileId.trim().isNotEmpty) profileId.trim().toLowerCase(),
+        if (authUserObjId != null && authUserObjId.trim().isNotEmpty) authUserObjId.trim().toLowerCase(),
+        if (feedUserId != null && feedUserId.trim().isNotEmpty) feedUserId.trim().toLowerCase(),
+      };
+
+      if (widget.postAuthorId != null && widget.postAuthorId!.isNotEmpty) {
+        final String targetId = widget.postAuthorId!.trim().toLowerCase();
+        if (myIds.contains(targetId)) return true;
+      }
+
+      if (widget.authorUsername != null && widget.authorUsername!.isNotEmpty) {
+        final String targetUser = widget.authorUsername!.replaceAll('@', '').trim().toLowerCase();
+        final Set<String> myNames = <String>{
+          myUsername.replaceAll('@', '').trim().toLowerCase(),
+          profile.username.replaceAll('@', '').trim().toLowerCase(),
+          profile.displayName.replaceAll('@', '').trim().toLowerCase(),
+          if (auth.user?.displayName != null)
+            auth.user!.displayName!.replaceAll('@', '').trim().toLowerCase(),
+        }..removeWhere((String s) => s.isEmpty);
+        if (myNames.contains(targetUser)) return true;
+      }
+
+      // Check if widget.postId belongs to the current user's profile posts or reels
+      if (widget.postId != null && widget.postId!.isNotEmpty) {
+        if (profile.userPosts.any((PostItemModel p) => p.id == widget.postId)) {
+          return true;
+        }
+        if (profile.userReels.any((ReelItemModel r) => r.id == widget.postId)) {
+          return true;
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  bool _canDeleteComment(CommentItemModel comment) =>
+      _isUserOwnComment(comment) || _isPostAuthor();
+
+  void _confirmDeleteComment(CommentItemModel comment,
+      {CommentItemModel? parentComment}) {
+    final String typeName = widget.isAnswers ? 'answer' : 'comment';
+    final String itemType = comment.parentId != null ? 'reply' : typeName;
+    final int repliesCount = parentComment == null ? comment.replies.length : 0;
+    final bool hasReplies = repliesCount > 0;
+
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          backgroundColor: ctx.themeCardBackground,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            hasReplies
+                ? 'Delete $typeName & replies?'
+                : 'Delete ${itemType[0].toUpperCase()}${itemType.substring(1)}?',
+            style: TextStyle(
+              color: ctx.themeTextPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: Text(
+            hasReplies
+                ? 'Are you sure you want to delete this $typeName? All $repliesCount replies will also be permanently deleted. This action cannot be undone.'
+                : 'Are you sure you want to delete this $itemType? This action cannot be undone.',
+            style: TextStyle(
+              color: ctx.themeTextSecondary,
+              fontSize: 14,
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: ctx.themeTextMuted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _deleteComment(comment, parentComment: parentComment);
+              },
+              child: Text(
+                hasReplies ? 'Delete All (${repliesCount + 1})' : 'Delete',
+                style: const TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _deleteComment(CommentItemModel comment,
       {CommentItemModel? parentComment}) async {
     final String typeName = widget.isAnswers ? 'Answer' : 'Comment';
+
+    // Collect all child reply IDs that must also be deleted on the backend
+    final List<String> replyIdsToDelete = <String>[];
+    if (parentComment == null) {
+      for (final CommentItemModel r in comment.replies) {
+        final bool isRealReply = r.id.isNotEmpty &&
+            !r.id.startsWith('c1') &&
+            !r.id.startsWith('c2') &&
+            !r.id.startsWith('c_') &&
+            !r.id.startsWith('mock_');
+        if (isRealReply && !replyIdsToDelete.contains(r.id)) {
+          replyIdsToDelete.add(r.id);
+        }
+      }
+      for (final CommentItemModel c in _comments) {
+        if (c.parentId == comment.id) {
+          final bool isRealReply = c.id.isNotEmpty &&
+              !c.id.startsWith('c1') &&
+              !c.id.startsWith('c2') &&
+              !c.id.startsWith('c_') &&
+              !c.id.startsWith('mock_');
+          if (isRealReply && !replyIdsToDelete.contains(c.id)) {
+            replyIdsToDelete.add(c.id);
+          }
+        }
+      }
+    }
+
+    final int deletedCount =
+        1 + (parentComment == null ? comment.replies.length : 0);
+
     setState(() {
       if (parentComment != null) {
         parentComment.replies
             .removeWhere((CommentItemModel c) => c.id == comment.id);
       } else {
-        _comments.removeWhere((CommentItemModel c) => c.id == comment.id);
+        _comments.removeWhere((CommentItemModel c) =>
+            c.id == comment.id || c.parentId == comment.id);
       }
     });
+
+    final int remainingCount = _totalCommentsCount;
+    widget.onCommentDeleted?.call(deletedCount, remainingCount);
+    widget.onCommentCountChanged?.call(remainingCount);
+    _syncGlobalCommentCount(remainingCount);
 
     AppSnackBar.showSuccess(
       context,
       title: 'Deleted',
-      subtitle:
-          comment.parentId != null ? 'Reply deleted' : '$typeName deleted',
+      subtitle: comment.parentId != null
+          ? 'Reply deleted'
+          : (comment.replies.isNotEmpty
+              ? '$typeName and ${comment.replies.length} replies deleted'
+              : '$typeName deleted'),
     );
 
     final bool isRealCommentId = comment.id.isNotEmpty &&
         !comment.id.startsWith('c1') &&
         !comment.id.startsWith('c2') &&
+        !comment.id.startsWith('c_') &&
         !comment.id.startsWith('mock_');
     if (isRealCommentId) {
       try {
         final PostContentService service =
             PostContentService(context.read<ApiClient>());
-        await service.deleteComment(comment.id);
+        // Delete parent comment with postId support
+        await service.deleteComment(comment.id, postId: widget.postId);
+
+        // Cascade delete child replies on server so they don't remain in DB
+        for (final String replyId in replyIdsToDelete) {
+          try {
+            await service.deleteComment(replyId, postId: widget.postId);
+          } catch (err) {
+            debugPrint('Error cascade deleting reply $replyId: $err');
+          }
+        }
       } catch (e) {
         debugPrint('Error deleting comment ${comment.id}: $e');
       }
@@ -388,23 +804,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     final String typeNamePluralLower =
         widget.isAnswers ? 'answers' : 'comments';
 
-    final AuthProvider auth = context.read<AuthProvider>();
-    final String? currentUserId = auth.userId;
-    final String? currentUsername = auth.user?.displayName;
-    final bool isOwnComment = (currentUserId != null &&
-            comment.authorId != null &&
-            (currentUserId.trim().toLowerCase() ==
-                comment.authorId!.trim().toLowerCase())) ||
-        (currentUsername != null &&
-            currentUsername.trim().isNotEmpty &&
-            comment.username.isNotEmpty &&
-            (currentUsername.replaceAll('@', '').trim().toLowerCase() ==
-                comment.username.replaceAll('@', '').trim().toLowerCase()));
-    final bool isPostAuthor = currentUserId != null &&
-        widget.postAuthorId != null &&
-        (currentUserId.trim().toLowerCase() ==
-            widget.postAuthorId!.trim().toLowerCase());
-    final bool canDelete = isOwnComment || isPostAuthor;
+    final bool isOwnComment = _isUserOwnComment(comment);
+    final bool canDelete = _canDeleteComment(comment);
 
     showModalBottomSheet<void>(
       context: context,
@@ -480,9 +881,11 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                       ),
                     ),
                     subtitle: Text(
-                      isOwnComment
-                          ? 'Permanently delete your ${comment.parentId != null ? 'reply' : typeNameLower}'
-                          : 'Remove this $typeNameLower from your post',
+                      comment.replies.isNotEmpty
+                          ? 'Delete this $typeNameLower and its ${comment.replies.length} replies'
+                          : (isOwnComment
+                              ? 'Permanently delete your ${comment.parentId != null ? 'reply' : typeNameLower}'
+                              : 'Remove this $typeNameLower from your post'),
                       style: TextStyle(
                         color: ctx.themeTextMuted,
                         fontSize: 12,
@@ -490,9 +893,31 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                     ),
                     onTap: () {
                       Navigator.pop(ctx);
-                      _deleteComment(comment, parentComment: parentComment);
+                      _confirmDeleteComment(comment, parentComment: parentComment);
                     },
                   ),
+
+                // Option: Copy Text
+                ListTile(
+                  leading: Icon(
+                    Icons.copy_rounded,
+                    color: ctx.themeIcon,
+                    size: 22,
+                  ),
+                  title: Text(
+                    'Copy text',
+                    style: TextStyle(
+                      color: ctx.themeTextPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Clipboard.setData(ClipboardData(text: comment.content));
+                    AppSnackBar.showSuccess(context, title: 'Copied to clipboard');
+                  },
+                ),
 
                 // Option 1: Hide Comment / Answer
                 ListTile(
@@ -853,7 +1278,97 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     );
   }
 
+  bool _canCurrentUserComment() {
+    final AuthProvider auth = context.read<AuthProvider>();
+    final ProfileProvider profile = context.read<ProfileProvider>();
+    final String? currentUserId = auth.userId;
+    final String? currentUsername =
+        profile.profile?.username ?? auth.username;
+    final bool isGuest =
+        auth.isGuest || currentUserId == null || currentUserId.trim().isEmpty;
+    if (isGuest) {
+      return false;
+    }
+
+    // 1. Author can ALWAYS comment on their own post
+    final bool isAuthor = (widget.postAuthorId != null &&
+            widget.postAuthorId!.trim().isNotEmpty &&
+            currentUserId.trim().toLowerCase() ==
+                widget.postAuthorId!.trim().toLowerCase()) ||
+        (widget.authorUsername != null &&
+            widget.authorUsername!.trim().isNotEmpty &&
+            currentUsername != null &&
+            currentUsername.trim().isNotEmpty &&
+            widget.authorUsername!.replaceAll('@', '').trim().toLowerCase() ==
+                currentUsername.replaceAll('@', '').trim().toLowerCase());
+
+    if (isAuthor) {
+      return true;
+    }
+
+    // 2. If allowComments is false, no one else can comment
+    if (!widget.allowComments) {
+      return false;
+    }
+
+    final String mode = widget.allowCommentsFrom.toLowerCase().trim();
+
+    // 3. Mode: "nobody" -> only author can comment
+    if (mode == 'nobody') {
+      return false;
+    }
+
+    // 4. Mode: "everyone" -> all authenticated users can comment
+    if (mode.isEmpty || mode == 'everyone') {
+      return true;
+    }
+
+    final bool isViewerFollowingAuthor = profile.isFollowingUser(
+            userId: widget.postAuthorId, username: widget.authorUsername) ||
+        UserRelationshipCache.isFollowing(
+            userId: widget.postAuthorId, username: widget.authorUsername);
+
+    final bool isAuthorFollowingViewer = profile.isFollower(
+            userId: widget.postAuthorId, username: widget.authorUsername) ||
+        UserRelationshipCache.isFollowedBy(
+            userId: widget.postAuthorId, username: widget.authorUsername);
+
+    // 5. Mode: "following" -> users followed by author can comment
+    if (mode == 'following') {
+      return isAuthorFollowingViewer;
+    }
+
+    // 6. Mode: "mutual" -> mutual followers can comment
+    if (mode == 'mutual') {
+      return isAuthorFollowingViewer && isViewerFollowingAuthor;
+    }
+
+    return true;
+  }
+
+  String _getCommentsRestrictionMessage() {
+    final AuthProvider auth = context.read<AuthProvider>();
+    if (auth.isGuest || auth.userId == null || auth.userId!.trim().isEmpty) {
+      return 'Sign in to join the conversation.';
+    }
+    if (!widget.allowComments) {
+      return 'Comments are disabled for this post.';
+    }
+    final String mode = widget.allowCommentsFrom.toLowerCase().trim();
+    if (mode == 'nobody') {
+      return 'Comments are turned off for this post.';
+    }
+    if (mode == 'following') {
+      return 'Only users followed by the author can comment.';
+    }
+    if (mode == 'mutual') {
+      return 'Only mutual followers can comment on this post.';
+    }
+    return 'Comments are restricted for this post.';
+  }
+
   Future<void> _addNewComment() async {
+    if (!_canCurrentUserComment()) return;
     final String text = _commentInputController.text.trim();
     if (text.isEmpty || _isSubmittingComment) return;
 
@@ -865,8 +1380,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     final String tempId = 'c_${DateTime.now().millisecondsSinceEpoch}';
     final AuthProvider auth = context.read<AuthProvider>();
     final String myUserId = auth.userId ?? '';
-    final String myUsername = auth.user?.displayName ?? 'you';
-    final String myAvatar = auth.user?.avatarUrl ?? AppImages.user4;
+    final String myUsername = _resolveCurrentUserName();
+    final String myAvatar = _resolveCurrentUserAvatar() ?? '';
 
     final CommentItemModel optimistic = CommentItemModel(
       id: tempId,
@@ -897,6 +1412,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     });
 
     widget.onCommentAdded?.call();
+    widget.onCommentCountChanged?.call(_totalCommentsCount);
+    _syncGlobalCommentCount(_totalCommentsCount);
 
     final bool isRealPostId = widget.postId != null &&
         widget.postId!.isNotEmpty &&
@@ -1047,7 +1564,11 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                 onLikeToggle: () => _toggleLikeComment(item),
                                 onLongPress: () =>
                                     _showCommentOptionsModal(item),
-                                onReplyTap: () => _startReply(item),
+                                onReplyTap: _canCurrentUserComment()
+                                    ? () => _startReply(item)
+                                    : null,
+                                canDelete: _canDeleteComment(item),
+                                onDeleteTap: () => _confirmDeleteComment(item),
                                 replyLabel: l10n.commentReply,
                                 reportLabel: l10n.commentReport,
                                 authorLabel: l10n.commentAuthor,
@@ -1067,8 +1588,12 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                                           onLongPress: () =>
                                               _showCommentOptionsModal(reply,
                                                   parentComment: item),
-                                          onReplyTap: () =>
-                                              _startReply(item),
+                                          onReplyTap: _canCurrentUserComment()
+                                              ? () => _startReply(item)
+                                              : null,
+                                          canDelete: _canDeleteComment(reply),
+                                          onDeleteTap: () => _confirmDeleteComment(reply,
+                                              parentComment: item),
                                           replyLabel: l10n.commentReply,
                                           reportLabel: l10n.commentReport,
                                           authorLabel: l10n.commentAuthor,
@@ -1210,41 +1735,48 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
               ),
 
             // ── Bottom Fixed Input Bar ────────────────────────────────
-            if (widget.allowComments)
+            if (_canCurrentUserComment())
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                 child: Row(
                   children: <Widget>[
                     // Current User Avatar
                     Builder(
-                      builder: (BuildContext context) {
-                        final String? currentAvatarUrl =
-                            context.read<AuthProvider>().user?.avatarUrl;
-                        return ClipOval(
-                          child: currentAvatarUrl != null &&
-                                  currentAvatarUrl.startsWith('http')
-                              ? Image.network(
-                                  currentAvatarUrl,
-                                  width: 36,
-                                  height: 36,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => Image.asset(
-                                    AppImages.user4,
+                      builder: (BuildContext ctx) {
+                        final String? avatar =
+                            _resolveCurrentUserAvatar(watchContext: ctx);
+                        if (avatar == null || avatar.trim().isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        final String cleanAvatar = avatar.trim();
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child: ClipOval(
+                            child: cleanAvatar.startsWith('http')
+                                ? Image.network(
+                                    cleanAvatar,
                                     width: 36,
                                     height: 36,
+                                    cacheWidth: 108,
+                                    cacheHeight: 108,
                                     fit: BoxFit.cover,
-                                  ),
-                                )
-                              : Image.asset(
-                                  AppImages.user4,
-                                  width: 36,
-                                  height: 36,
-                                  fit: BoxFit.cover,
-                                ),
+                                    errorBuilder: (_, _, _) =>
+                                        const SizedBox.shrink(),
+                                  )
+                                : (cleanAvatar.startsWith('assets/')
+                                    ? Image.asset(
+                                        cleanAvatar,
+                                        width: 36,
+                                        height: 36,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) =>
+                                            const SizedBox.shrink(),
+                                      )
+                                    : const SizedBox.shrink()),
+                          ),
                         );
                       },
                     ),
-                    const SizedBox(width: 10),
 
                     // Reusable AppTextField Widget
                     Expanded(
@@ -1317,12 +1849,15 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                       color: context.themeTextMuted,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'Comments are disabled for this post.',
-                      style: TextStyle(
-                        color: context.themeTextMuted,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
+                    Flexible(
+                      child: Text(
+                        _getCommentsRestrictionMessage(),
+                        style: TextStyle(
+                          color: context.themeTextMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ],
@@ -1341,6 +1876,8 @@ class _CommentItemTile extends StatelessWidget {
     required this.onLikeToggle,
     required this.onLongPress,
     this.onReplyTap,
+    this.canDelete = false,
+    this.onDeleteTap,
     required this.replyLabel,
     required this.reportLabel,
     required this.authorLabel,
@@ -1352,6 +1889,8 @@ class _CommentItemTile extends StatelessWidget {
   final VoidCallback onLikeToggle;
   final VoidCallback onLongPress;
   final VoidCallback? onReplyTap;
+  final bool canDelete;
+  final VoidCallback? onDeleteTap;
   final String replyLabel;
   final String reportLabel;
   final String authorLabel;
@@ -1394,7 +1933,10 @@ class _CommentItemTile extends StatelessWidget {
     final double avatarSize = isReply ? 28 : 36;
 
     return GestureDetector(
-      onLongPress: onLongPress,
+      onLongPress: () {
+        HapticFeedback.mediumImpact();
+        onLongPress();
+      },
       behavior: HitTestBehavior.opaque,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1474,18 +2016,21 @@ class _CommentItemTile extends StatelessWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: <Widget>[
-                        GestureDetector(
-                          onTap: onReplyTap,
-                          child: Text(
-                            replyLabel,
-                            style: TextStyle(
-                              color: context.themeTextMuted,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                        if (onReplyTap != null) ...<Widget>[
+                          GestureDetector(
+                            onTap: onReplyTap,
+                            child: Text(
+                              replyLabel,
+                              style: TextStyle(
+                                color: context.themeTextMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
+                          const SizedBox(width: 16),
+                        ],
+
                         GestureDetector(
                           onTap: () {
                             ReportCommentBottomSheet.show(
@@ -1507,6 +2052,21 @@ class _CommentItemTile extends StatelessWidget {
                             ),
                           ),
                         ),
+
+                        if (canDelete && onDeleteTap != null) ...<Widget>[
+                          const SizedBox(width: 16),
+                          GestureDetector(
+                            onTap: onDeleteTap,
+                            child: Text(
+                              'Delete',
+                              style: TextStyle(
+                                color: Colors.redAccent.withValues(alpha: 0.9),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -1527,19 +2087,21 @@ class _CommentItemTile extends StatelessWidget {
                       width: 22,
                       height: 22,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${comment.likesCount}',
-                      style: TextStyle(
-                        color: comment.isLiked
-                            ? AppColors.gradientPink
-                            : context.themeTextMuted,
-                        fontSize: 11,
-                        fontWeight: comment.isLiked
-                            ? FontWeight.w700
-                            : FontWeight.normal,
+                    if (comment.likesCount > 0) ...<Widget>[
+                      const SizedBox(height: 2),
+                      Text(
+                        '${comment.likesCount}',
+                        style: TextStyle(
+                          color: comment.isLiked
+                              ? AppColors.gradientPink
+                              : context.themeTextMuted,
+                          fontSize: 11,
+                          fontWeight: comment.isLiked
+                              ? FontWeight.w700
+                              : FontWeight.normal,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),

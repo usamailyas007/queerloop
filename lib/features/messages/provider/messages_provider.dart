@@ -6,11 +6,15 @@ import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/config/api_endpoints.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/theme/app_images.dart';
 import '../../create_post/models/create_post_models.dart';
 import '../../create_post/services/media_upload_service.dart';
 import '../../create_post/services/post_content_service.dart';
 import '../models/message_models.dart';
+import '../../home/models/post_item_model.dart';
+import '../../home/models/reel_item_model.dart';
 import '../services/chat_socket_service.dart';
 import '../services/conversations_service.dart';
 import '../services/shared_post_cache.dart';
@@ -26,6 +30,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         _currentUserId = currentUserId {
     _loadPersistedReadStates();
     _loadPersistedPrivacySettings();
+    _loadPersistedConversations();
     _attachSocketListeners();
     loadBlockedUsers();
     loadRestrictedUsers();
@@ -292,6 +297,44 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _loadPersistedConversations() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String userSuffix = _currentUserId ?? 'guest';
+      final String? raw = prefs.getString('cached_conversations_$userSuffix');
+      if (raw != null && raw.isNotEmpty) {
+        final dynamic decoded = jsonDecode(raw);
+        if (decoded is List) {
+          final List<ConversationModel> cached = decoded
+              .whereType<Map<String, dynamic>>()
+              .map((Map<String, dynamic> item) =>
+                  ConversationModel.fromJson(item, currentUserId: _currentUserId))
+              .toList();
+          if (cached.isNotEmpty && _conversations.isEmpty) {
+            _conversations.addAll(cached);
+            _sortConversations();
+            notifyListeners();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [MessagesProvider] Error loading persisted conversations: $e');
+    }
+  }
+
+  Future<void> _persistConversations() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String userSuffix = _currentUserId ?? 'guest';
+      final List<Map<String, dynamic>> rawList =
+          _conversations.map((ConversationModel c) => c.toJson()).toList();
+      await prefs.setString('cached_conversations_$userSuffix', jsonEncode(rawList));
+    } catch (e) {
+      debugPrint('⚠️ [MessagesProvider] Error persisting conversations: $e');
+    }
+  }
+
+
   List<ChatMessageModel> _applyReadStatesToMessages(
     String conversationId,
     List<ChatMessageModel> rawMessages,
@@ -305,6 +348,17 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (processed.sharedPostId != null && processed.sharedPostId!.trim().isNotEmpty) {
         final SharedPostData? cached = SharedPostCache.get(processed.sharedPostId);
         if (cached != null) {
+          String? cachedViews;
+          if (cached.views > 0) {
+            final int v = cached.views;
+            if (v >= 1000000) {
+              cachedViews = '${(v / 1000000).toStringAsFixed(1)}M';
+            } else if (v >= 1000) {
+              cachedViews = '${(v / 1000).toStringAsFixed(1)}K';
+            } else {
+              cachedViews = '$v';
+            }
+          }
           processed = processed.copyWith(
             postThumbnailAsset: (cached.thumbnailUrl != null && cached.thumbnailUrl!.isNotEmpty)
                 ? cached.thumbnailUrl
@@ -321,6 +375,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
             postType: cached.type.isNotEmpty ? cached.type : processed.postType,
             postLikes: cached.likes > 0 ? cached.likes : processed.postLikes,
             postComments: cached.comments > 0 ? cached.comments : processed.postComments,
+            postViews: cachedViews ?? (processed.postViews != '0' ? processed.postViews : null),
           );
         }
       }
@@ -1430,6 +1485,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
   String get searchQuery => _searchQuery;
 
   void setSearchQuery(String query) {
+    if (_searchQuery == query) return;
     _searchQuery = query;
     notifyListeners();
   }
@@ -2076,14 +2132,18 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     final SharedPostData? cached = SharedPostCache.get(cleanPostId);
     if (cached != null &&
         cached.thumbnailUrl != null &&
-        cached.thumbnailUrl!.isNotEmpty) {
-      // Re-hydrate any matching messages in memory that lack thumbnail
+        cached.thumbnailUrl!.isNotEmpty &&
+        (cached.views > 0 || cached.type != 'reel')) {
+      // Re-hydrate any matching messages in memory that lack thumbnail or views
       bool anyUpdated = false;
       for (final MapEntry<String, List<ChatMessageModel>> entry in _messagesByConvId.entries) {
         final List<ChatMessageModel> list = entry.value;
         for (int i = 0; i < list.length; i++) {
           if (list[i].sharedPostId == cleanPostId &&
-              (list[i].postThumbnailAsset == null || list[i].postThumbnailAsset!.isEmpty)) {
+              (list[i].postThumbnailAsset == null ||
+                  list[i].postThumbnailAsset!.isEmpty ||
+                  list[i].postViews == null ||
+                  list[i].postViews == '0')) {
             // Format views
             String? cachedViews;
             if (cached.views > 0) {
@@ -2097,7 +2157,9 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
               }
             }
             list[i] = list[i].copyWith(
-              postThumbnailAsset: cached.thumbnailUrl,
+              postThumbnailAsset: (cached.thumbnailUrl != null && cached.thumbnailUrl!.isNotEmpty)
+                  ? cached.thumbnailUrl
+                  : list[i].postThumbnailAsset,
               postCaption: cached.caption ?? list[i].postCaption,
               postAuthor: cached.author ?? list[i].postAuthor,
               postAuthorAvatarUrl: cached.authorAvatarUrl ?? list[i].postAuthorAvatarUrl,
@@ -2142,16 +2204,32 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         final String firstRef = post.mediaRefs.first.trim();
         if (firstRef.startsWith('http://') || firstRef.startsWith('https://')) {
           mediaUrl = firstRef;
-          thumbUrl = firstRef;
+          if (pType == 'reel') {
+            if (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty) {
+              thumbUrl = post.thumbnailUrl;
+            } else if (firstRef.contains('/videos/processed/')) {
+              thumbUrl = firstRef.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+            } else if (post.postImageUrl != null &&
+                !post.postImageUrl!.endsWith('.mp4') &&
+                !post.postImageUrl!.endsWith('.m3u8')) {
+              thumbUrl = post.postImageUrl;
+            }
+          } else {
+            thumbUrl = firstRef;
+          }
         } else {
           final String cleanRef = firstRef
               .replaceAll(RegExp(r'^/+'), '')
               .replaceAll(RegExp(r'^media/'), '');
           if (pType == 'reel') {
             mediaUrl = '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
-            if (post.authorId != null && post.authorId!.isNotEmpty) {
-              thumbUrl = '${AppConfig.cdnUrl}/images/original/${post.authorId}/$cleanRef.jpg';
-            }
+            thumbUrl = (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty)
+                ? post.thumbnailUrl
+                : (post.postImageUrl != null &&
+                        !post.postImageUrl!.endsWith('.mp4') &&
+                        !post.postImageUrl!.endsWith('.m3u8'))
+                    ? post.postImageUrl
+                    : '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumb.0000000.jpg';
           } else {
             if (post.authorId != null && post.authorId!.isNotEmpty) {
               mediaUrl = '${AppConfig.cdnUrl}/images/original/${post.authorId}/$cleanRef.jpg';
@@ -2321,8 +2399,9 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    // Filter out blocked users from requests
+    // Filter out blocked users and outgoing requests from requests
     result.removeWhere((MessageRequestModel r) =>
+        r.isOutgoing ||
         isBlocked(r.id) ||
         isBlocked(r.participantId) ||
         isBlocked(r.username));
@@ -2345,7 +2424,34 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       final List<MessageRequestModel> items =
           await _service!.getMessageRequests(currentUserId: _currentUserId);
       _messageRequests.clear();
-      _messageRequests.addAll(items);
+      // Only keep incoming requests in the requests list
+      _messageRequests.addAll(items.where((MessageRequestModel r) => !r.isOutgoing));
+
+      // For any outgoing requests, ensure they appear in _conversations so the user sees them in their Inbox
+      for (final MessageRequestModel req in items.where((MessageRequestModel r) => r.isOutgoing)) {
+        final bool alreadyInConv = _conversations.any((ConversationModel c) =>
+            c.id == req.id ||
+            (req.participantId != null &&
+                req.participantId!.isNotEmpty &&
+                c.participantId == req.participantId));
+        if (!alreadyInConv) {
+          _conversations.insert(
+            0,
+            ConversationModel(
+              id: req.id,
+              participantId: req.participantId,
+              username: req.username,
+              displayName: req.displayName ?? req.username,
+              avatarUrl: req.avatarUrl,
+              avatarAsset: req.avatarAsset,
+              lastMessage: req.previewMessage,
+              timeAgo: 'Just now',
+              lastMessageAt: req.createdAt ?? DateTime.now(),
+              unreadCount: 0,
+            ),
+          );
+        }
+      }
     } catch (e) {
       debugPrint('Error loading message requests: $e');
     } finally {
@@ -2681,6 +2787,64 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       _sortConversations();
+      _persistConversations();
+
+      // Hydrate any conversations that are missing participant info (e.g. username == 'User' or missing avatar)
+      for (int i = 0; i < _conversations.length; i++) {
+        final ConversationModel c = _conversations[i];
+        if (c.participantId != null &&
+            c.participantId!.isNotEmpty &&
+            (c.username == 'User' ||
+                c.username.isEmpty ||
+                c.displayName == null ||
+                c.avatarAsset == AppImages.user1)) {
+          final AuthorInfo? cachedAuthor = AuthorProfileCache.get(c.participantId!);
+          if (cachedAuthor != null) {
+            _conversations[i] = c.copyWith(
+              username: cachedAuthor.username.isNotEmpty ? cachedAuthor.username : c.username,
+              displayName: cachedAuthor.displayName.isNotEmpty ? cachedAuthor.displayName : c.displayName,
+              avatarUrl: cachedAuthor.avatarUrl ?? c.avatarUrl,
+              avatarAsset: cachedAuthor.avatarUrl ?? c.avatarAsset,
+            );
+          } else if (_service != null) {
+            _service!.client.get(ApiEndpoints.user(c.participantId!)).then((dynamic userRes) {
+              if (userRes is Map<String, dynamic>) {
+                final Map<String, dynamic> uData = (userRes['data'] is Map<String, dynamic>)
+                    ? userRes['data'] as Map<String, dynamic>
+                    : ((userRes['user'] is Map<String, dynamic>)
+                        ? userRes['user'] as Map<String, dynamic>
+                        : userRes);
+                final String? uName = (uData['username'] ?? uData['name'])?.toString();
+                final String? dName = uData['displayName']?.toString();
+                final String? av = (uData['avatarUrl'] ?? uData['avatar'] ?? uData['profilePicture'])?.toString();
+                if (uName != null && uName.isNotEmpty) {
+                  AuthorProfileCache.set(
+                    c.participantId!,
+                    AuthorInfo(
+                      id: c.participantId!,
+                      username: uName,
+                      displayName: dName ?? uName,
+                      avatarUrl: av,
+                    ),
+                  );
+                  final int idx = _conversations.indexWhere((ConversationModel x) => x.id == c.id);
+                  if (idx != -1) {
+                    _conversations[idx] = _conversations[idx].copyWith(
+                      username: uName,
+                      displayName: dName ?? _conversations[idx].displayName,
+                      avatarUrl: av ?? _conversations[idx].avatarUrl,
+                      avatarAsset: av ?? _conversations[idx].avatarAsset,
+                    );
+                    _persistConversations();
+                    notifyListeners();
+                  }
+                }
+              }
+            }).catchError((_) {});
+          }
+        }
+      }
+
       if (_isLoadingConversations) {
         _isLoadingConversations = false;
         notifyListeners();
@@ -2739,6 +2903,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (syncTasks.isNotEmpty) {
         Future.wait(syncTasks).then((_) {
           _sortConversations();
+          _persistConversations();
           notifyListeners();
         });
       }
@@ -2746,6 +2911,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint('Error loading conversations: $e');
     } finally {
       _sortConversations();
+      _persistConversations();
       _isLoadingConversations = false;
       notifyListeners();
     }
@@ -2972,11 +3138,14 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       _messagesByConvId[conversationId] = msgs;
 
       for (final ChatMessageModel m in fetched) {
-        if (m.sharedPostId != null &&
-            m.sharedPostId!.isNotEmpty &&
-            (m.postThumbnailAsset == null || !m.postThumbnailAsset!.startsWith('http'))) {
+        if (m.sharedPostId != null && m.sharedPostId!.isNotEmpty) {
           final SharedPostData? cached = SharedPostCache.get(m.sharedPostId);
-          if (cached == null || cached.thumbnailUrl == null) {
+          final bool missingThumb = (m.postThumbnailAsset == null || !m.postThumbnailAsset!.startsWith('http')) &&
+              (cached == null || cached.thumbnailUrl == null);
+          final bool missingViews = m.postType == 'reel' &&
+              (m.postViews == null || m.postViews == '0') &&
+              (cached == null || cached.views == 0);
+          if (missingThumb || missingViews) {
             resolveSharedPost(m.sharedPostId!);
           }
         }
@@ -3594,11 +3763,55 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     List<String>? recipientUserIds,
     String? message,
     String? contentType,
+    ReelItemModel? reel,
+    PostItemModel? post,
+    int? postViews,
+    String? postAuthorId,
   }) async {
     if (sharedPostId.trim().isEmpty) {
       debugPrint('⚠️ [MessagesProvider] sharePost: sharedPostId is empty.');
       return false;
     }
+
+    // Pre-seed SharedPostCache so plays/views and media are instantly available
+    final int effectiveViews = postViews ?? reel?.viewsCount ?? post?.viewsCount ?? 0;
+    final String effectiveType = contentType ?? (reel != null ? 'reel' : 'post');
+    String? effectiveThumb = reel?.thumbnailUrl;
+    if (effectiveThumb == null || effectiveThumb.isEmpty) {
+      if (reel?.videoUrl != null && reel!.videoUrl!.contains('/videos/processed/')) {
+        effectiveThumb = reel.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+      }
+    }
+    if (effectiveThumb != null) {
+      if (effectiveThumb.contains('/videos/processed/') && effectiveThumb.endsWith('/thumbnail.jpg')) {
+        effectiveThumb = effectiveThumb.replaceAll('/thumbnail.jpg', '/thumb.0000000.jpg');
+      }
+    }
+    effectiveThumb ??= post?.postImageUrl ?? post?.postImageAsset;
+    final String? effectiveCaption = reel?.caption ?? post?.content;
+    final String? effectiveAuthor = reel?.username ?? post?.username;
+    final String? effectiveAvatar = reel?.avatarAsset ?? post?.avatarAsset;
+    final int effectiveLikes = reel?.likesCount ?? post?.likesCount ?? 0;
+    final int effectiveComments = reel?.commentsCount ?? post?.commentsCount ?? 0;
+
+    final String? effectiveAuthorId = postAuthorId ?? reel?.authorId ?? post?.authorId;
+
+    SharedPostCache.put(
+      sharedPostId,
+      SharedPostData(
+        postId: sharedPostId,
+        authorId: effectiveAuthorId,
+        thumbnailUrl: effectiveThumb,
+        videoUrl: reel?.videoUrl,
+        caption: effectiveCaption,
+        author: effectiveAuthor,
+        authorAvatarUrl: effectiveAvatar,
+        type: effectiveType,
+        likes: effectiveLikes,
+        comments: effectiveComments,
+        views: effectiveViews,
+      ),
+    );
 
     // ── 1. Resolve recipient user IDs → conversation IDs ────────────────────
     final Set<String> targetConvIds = <String>{};
@@ -3682,6 +3895,31 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
           lastMessageAt: DateTime.now(),
           timeAgo: 'Just now',
         );
+      }
+      if (_messagesByConvId.containsKey(cId)) {
+        final String tempId = 'temp_share_${DateTime.now().millisecondsSinceEpoch}';
+        final ChatMessageModel optimisticMsg = ChatMessageModel(
+          id: tempId,
+          senderUsername: 'You',
+          isMe: true,
+          timestamp: 'Just now',
+          text: message ?? 'Shared a post',
+          type: MessageType.postShare,
+          createdAt: DateTime.now(),
+          sharedPostId: sharedPostId,
+          postThumbnailAsset: effectiveThumb,
+          postCaption: effectiveCaption,
+          postAuthor: effectiveAuthor,
+          postAuthorId: effectiveAuthorId,
+          postAuthorAvatarUrl: effectiveAvatar,
+          postType: effectiveType,
+          postLikes: effectiveLikes,
+          postComments: effectiveComments,
+          postViews: effectiveViews > 0 ? '$effectiveViews' : null,
+        );
+        final List<ChatMessageModel> msgs = List<ChatMessageModel>.from(_messagesByConvId[cId]!);
+        msgs.add(optimisticMsg);
+        _messagesByConvId[cId] = msgs;
       }
     }
     notifyListeners();

@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../core/api/api_exception.dart';
@@ -48,10 +50,10 @@ class CreatePostProvider extends ChangeNotifier {
   bool _isLoadingDevicePhotos = false;
   bool get isLoadingDevicePhotos => _isLoadingDevicePhotos;
 
-  // ── Gallery Items (Recent 4 Videos, Recent 8 Photos) ─────────────────
-  List<GalleryMediaItem> _videoGallery = <GalleryMediaItem>[];
+  // ── Gallery Items ────────────────────────────────────────────────────
+  final List<GalleryMediaItem> _videoGallery = <GalleryMediaItem>[];
   List<GalleryMediaItem> get videoGallery =>
-      List<GalleryMediaItem>.unmodifiable(_videoGallery.take(4));
+      List<GalleryMediaItem>.unmodifiable(_videoGallery);
 
   List<GalleryMediaItem> _photoGallery = <GalleryMediaItem>[];
   List<GalleryMediaItem> get photoGallery =>
@@ -443,7 +445,7 @@ class CreatePostProvider extends ChangeNotifier {
   String? _selectedCommunityId;
   String? get selectedCommunityId => _selectedCommunityId;
 
-  PostVisibility _visibility = PostVisibility.followers;
+  PostVisibility _visibility = PostVisibility.everyone;
   PostVisibility get visibility => _visibility;
 
   bool _allowComments = true;
@@ -647,7 +649,7 @@ class CreatePostProvider extends ChangeNotifier {
     _tags.clear();
     _selectedCommunity = 'Transgender';
     _selectedCommunityId = null;
-    _visibility = PostVisibility.followers;
+    _visibility = PostVisibility.everyone;
     _allowComments = true;
     _allowDownloads = false;
     _trimStart = 0.0;
@@ -657,10 +659,72 @@ class CreatePostProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  static const String _recentVideosPrefKey = 'create_post_recent_videos';
+
+  Future<void> _persistRecentVideos() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final List<Map<String, dynamic>> data = _videoGallery
+          .where((GalleryMediaItem item) =>
+              item.filePath != null && item.filePath!.isNotEmpty)
+          .take(30)
+          .map((GalleryMediaItem item) => item.toJson())
+          .toList();
+      await prefs.setString(_recentVideosPrefKey, jsonEncode(data));
+    } catch (e) {
+      debugPrint('Error persisting recent videos: $e');
+    }
+  }
+
+  Future<void> _loadPersistedRecentVideos() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? raw = prefs.getString(_recentVideosPrefKey);
+      if (raw == null || raw.isEmpty) return;
+
+      final dynamic decoded = jsonDecode(raw);
+      if (decoded is List<dynamic>) {
+        final List<GalleryMediaItem> loaded = <GalleryMediaItem>[];
+        for (final dynamic entry in decoded) {
+          if (entry is Map<String, dynamic>) {
+            final GalleryMediaItem item = GalleryMediaItem.fromJson(entry);
+            if (item.filePath != null &&
+                item.filePath!.isNotEmpty &&
+                File(item.filePath!).existsSync()) {
+              loaded.add(item);
+            }
+          }
+        }
+        if (loaded.isNotEmpty) {
+          final Set<String> existingKeys = _videoGallery
+              .map((GalleryMediaItem e) => e.filePath ?? e.id)
+              .toSet();
+
+          for (final GalleryMediaItem item in loaded) {
+            final String key = item.filePath ?? item.id;
+            if (!existingKeys.contains(key)) {
+              _videoGallery.add(item);
+              existingKeys.add(key);
+            }
+          }
+          if (_selectedMedia == null && _videoGallery.isNotEmpty) {
+            selectMedia(_videoGallery.first);
+          }
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading persisted recent videos: $e');
+    }
+  }
+
   // ── Load Most Recent Videos from Phone Gallery (Newest First) ────────
   Future<void> loadDeviceVideos() async {
     _isLoadingDeviceVideos = true;
     notifyListeners();
+
+    // 1. Immediately restore any persisted recent videos across app restarts
+    await _loadPersistedRecentVideos();
 
     try {
       final PermissionState ps = await PhotoManager.requestPermissionExtend();
@@ -674,15 +738,23 @@ class CreatePostProvider extends ChangeNotifier {
           ],
         );
 
-        final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
+        List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
           type: RequestType.video,
           onlyAll: true,
           filterOption: filterOption,
         );
 
+        if (albums.isEmpty) {
+          albums = await PhotoManager.getAssetPathList(
+            type: RequestType.video,
+            onlyAll: false,
+            filterOption: filterOption,
+          );
+        }
+
         if (albums.isNotEmpty) {
           final List<AssetEntity> entities =
-              await albums.first.getAssetListRange(start: 0, end: 4);
+              await albums.first.getAssetListRange(start: 0, end: 50);
 
           if (entities.isNotEmpty) {
             final List<GalleryMediaItem> realItems = <GalleryMediaItem>[];
@@ -721,8 +793,18 @@ class CreatePostProvider extends ChangeNotifier {
             }
 
             if (realItems.isNotEmpty) {
-              _videoGallery = realItems;
-              selectMedia(realItems.first);
+              final Set<String> existingKeys = _videoGallery
+                  .map((GalleryMediaItem e) => e.filePath ?? e.id)
+                  .toSet();
+
+              for (final GalleryMediaItem item in realItems) {
+                final String key = item.filePath ?? item.id;
+                if (!existingKeys.contains(key)) {
+                  _videoGallery.add(item);
+                  existingKeys.add(key);
+                }
+              }
+              await _persistRecentVideos();
             }
           }
         }
@@ -730,6 +812,9 @@ class CreatePostProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error loading recent videos: $e');
     } finally {
+      if (_selectedMedia == null && _videoGallery.isNotEmpty) {
+        selectMedia(_videoGallery.first);
+      }
       _isLoadingDeviceVideos = false;
       notifyListeners();
     }
@@ -842,6 +927,7 @@ class CreatePostProvider extends ChangeNotifier {
           );
           _videoGallery.insert(0, newItem);
           selectMedia(newItem);
+          await _persistRecentVideos();
         }
       } else {
         final XFile? file =

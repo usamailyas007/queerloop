@@ -34,6 +34,7 @@ class SpotlightsProvider extends ChangeNotifier {
   bool get isSaving => _isSaving;
   String? get error => _error;
   String get search => _search;
+  bool get hasLoadedOnce => _hasLoadedOnce;
   bool get isEmpty =>
       _hasLoadedOnce && !_isLoading && _spotlights.isEmpty;
   bool isRerunning(String id) => _rerunningIds.contains(id);

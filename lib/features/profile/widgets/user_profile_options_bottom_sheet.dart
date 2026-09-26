@@ -135,8 +135,12 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
         profileProvider.isRestricted(userId) || profileProvider.isRestricted(username);
     final bool isCurrentlyMuted =
         profileProvider.isMuted(userId) || profileProvider.isMuted(username);
+    final MessagesProvider msgProvider = context.watch<MessagesProvider>();
     final bool isCurrentlyBlocked =
-        profileProvider.isBlocked(userId) || profileProvider.isBlocked(username);
+        profileProvider.isBlocked(userId) ||
+        profileProvider.isBlocked(username) ||
+        msgProvider.isBlocked(userId) ||
+        msgProvider.isBlocked(username);
 
     return Container(
       decoration: BoxDecoration(
@@ -340,7 +344,7 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                     final String effectiveId =
                         (targetId != null && targetId.isNotEmpty) ? targetId : username;
 
-                    await profileProvider.unmuteUser(effectiveId);
+                    await profileProvider.unmuteUser(effectiveId, username: username);
                     if (!context.mounted) return;
                     AppSnackBar.show(
                       context,
@@ -391,7 +395,7 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                         subtitle: "You won't see their posts in your feed",
                         actionLabel: 'Undo',
                         onAction: () async {
-                          await profileProvider.unmuteUser(effectiveId);
+                          await profileProvider.unmuteUser(effectiveId, username: username);
                         },
                       );
                     },
@@ -432,7 +436,7 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                     final String effectiveId =
                         (targetId != null && targetId.isNotEmpty) ? targetId : username;
 
-                    await profileProvider.unblockUser(effectiveId);
+                    await profileProvider.unblockUser(effectiveId, username: username);
                     try {
                       if (context.mounted) {
                         context.read<MessagesProvider>().unblockUser(effectiveId, username: username);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
@@ -198,7 +199,10 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
           videoAsset: item?.videoAsset ?? '',
           videoFilePath: item?.filePath,
           videoUrl: provider.uploadResult?.downloadUrl ?? provider.uploadResult?.url,
-          thumbnailUrl: provider.uploadResult?.thumbnailUrl,
+          thumbnailUrl: provider.uploadResult?.thumbnailUrl ??
+              (provider.uploadedMediaId != null && provider.uploadedMediaId!.isNotEmpty
+                  ? '${AppConfig.cdnUrl}/videos/processed/${provider.uploadedMediaId}/thumb.0000000.jpg'
+                  : null),
           caption: provider.caption,
           likesCount: 0,
           commentsCount: 0,

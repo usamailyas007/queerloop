@@ -465,6 +465,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         username: handle,
                         avatarAsset: currentAvatar,
                         onConfirmLogout: () async {
+                          ReelVideoPreloader.instance.setFeedVisible(false);
+                          ReelVideoPreloader.instance.pauseAll();
+                          ReelVideoPreloader.instance.muteAll();
+                          ReelVideoPreloader.instance.disposeAll();
                           try {
                             await context.read<NotificationsProvider>().unregisterDeviceToken();
                           } catch (_) {}

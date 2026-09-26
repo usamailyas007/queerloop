@@ -45,9 +45,11 @@ class _SearchScreenState extends State<SearchScreen> {
     _controller = TextEditingController();
     _focusNode = FocusNode();
     _focusNode.addListener(_onFocusChange);
+    // Reset any previous search query so returning to screen starts clean
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
       if (mounted) {
+        context.read<DiscoverProvider>().clearSearchQuery();
+        _focusNode.requestFocus();
         final AuthProvider auth = context.read<AuthProvider>();
         final ProfileProvider profile = context.read<ProfileProvider>();
         final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
@@ -83,7 +85,14 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget build(BuildContext context) {
     final DiscoverProvider provider = context.watch<DiscoverProvider>();
 
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (bool didPop, _) {
+        if (didPop) {
+          context.read<DiscoverProvider>().clearSearchQuery();
+        }
+      },
+      child: Scaffold(
       backgroundColor: context.themeBackground,
       body: SafeArea(
         child: Column(
@@ -134,7 +143,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -375,7 +384,12 @@ class _SearchResultsBody extends StatelessWidget {
                             postImageAsset: (!isText && isAsset) ? img : null,
                             postType: isText ? 'TEXT' : (res.type ?? 'PHOTO'),
                             communityId: res.communityId,
-                            isLiked: res.isLiked,
+                            isLiked: context.watch<HomeFeedProvider>().isPostLiked(res.id ?? '') ||
+                                context.watch<ProfileProvider>().isPostLiked(res.id ?? '') ||
+                                res.isLiked,
+                            isSaved: context.watch<HomeFeedProvider>().isPostSaved(res.id ?? '') ||
+                                context.watch<ProfileProvider>().isPostSaved(res.id ?? '') ||
+                                res.isSaved,
                           ),
                           onPostDeleted: () {
                             if (res.id != null) {
@@ -383,14 +397,30 @@ class _SearchResultsBody extends StatelessWidget {
                             }
                           },
                           onLikeToggle: () {
-                            context
-                                .read<HomeFeedProvider>()
-                                .toggleLikePost(res.id ?? '');
+                            final String pid = res.id ?? '';
+                            if (pid.isNotEmpty) {
+                              final HomeFeedProvider hf = context.read<HomeFeedProvider>();
+                              final ProfileProvider pp = context.read<ProfileProvider>();
+                              final bool currentlyLiked = hf.isPostLiked(pid) || pp.isPostLiked(pid) || res.isLiked;
+                              final bool newLiked = !currentlyLiked;
+                              hf.toggleLikePost(pid, explicitLiked: newLiked);
+                              final int curCount = res.likesCount ?? 0;
+                              final int nextCount = newLiked ? curCount + 1 : (curCount > 0 ? curCount - 1 : 0);
+                              pp.updateLikedPost(pid, isLiked: newLiked, likesCount: nextCount);
+                            }
                           },
                           onSaveToggle: () {
-                            context
-                                .read<HomeFeedProvider>()
-                                .toggleSavePost(res.id ?? '');
+                            final String pid = res.id ?? '';
+                            if (pid.isNotEmpty) {
+                              final HomeFeedProvider hf = context.read<HomeFeedProvider>();
+                              final ProfileProvider pp = context.read<ProfileProvider>();
+                              final bool currentlySaved = hf.isPostSaved(pid) || pp.isPostSaved(pid) || res.isSaved;
+                              final bool newSaved = !currentlySaved;
+                              hf.toggleSavePost(pid, explicitSaved: newSaved);
+                              try {
+                                pp.updateSavedPost(pid, isSaved: newSaved);
+                              } catch (_) {}
+                            }
                           },
                           onOpenComments: () {
                             showModalBottomSheet<void>(
@@ -402,6 +432,33 @@ class _SearchResultsBody extends StatelessWidget {
                                 postAuthorId: res.authorId,
                                 communityId: res.communityId,
                                 totalComments: res.commentsCount ?? 0,
+                                allowComments: res.allowComments,
+                                allowCommentsFrom: res.allowCommentsFrom,
+                                authorUsername: res.authorUsername,
+                                onCommentAdded: () {
+                                  if (res.id != null) {
+                                    context.read<HomeFeedProvider>().incrementCommentCount(res.id!);
+                                    try {
+                                      context.read<ProfileProvider>().incrementCommentCount(res.id!);
+                                    } catch (_) {}
+                                  }
+                                },
+                                onCommentDeleted: (int deletedCount, int remainingCount) {
+                                  if (res.id != null) {
+                                    context.read<HomeFeedProvider>().setCommentCount(res.id!, remainingCount);
+                                    try {
+                                      context.read<ProfileProvider>().updatePostCommentCount(res.id!, remainingCount);
+                                    } catch (_) {}
+                                  }
+                                },
+                                onCommentCountChanged: (int count) {
+                                  if (res.id != null) {
+                                    context.read<HomeFeedProvider>().setCommentCount(res.id!, count);
+                                    try {
+                                      context.read<ProfileProvider>().updatePostCommentCount(res.id!, count);
+                                    } catch (_) {}
+                                  }
+                                },
                               ),
                             );
                           },
@@ -586,7 +643,12 @@ class _SearchResultsBody extends StatelessWidget {
                             postImageAsset: (!isText && isAsset) ? img : null,
                             postType: isText ? 'TEXT' : (res.type ?? 'PHOTO'),
                             communityId: res.communityId,
-                            isLiked: res.isLiked,
+                            isLiked: context.watch<HomeFeedProvider>().isPostLiked(res.id ?? '') ||
+                                context.watch<ProfileProvider>().isPostLiked(res.id ?? '') ||
+                                res.isLiked,
+                            isSaved: context.watch<HomeFeedProvider>().isPostSaved(res.id ?? '') ||
+                                context.watch<ProfileProvider>().isPostSaved(res.id ?? '') ||
+                                res.isSaved,
                           ),
                           onPostDeleted: () {
                             if (res.id != null) {
@@ -594,14 +656,30 @@ class _SearchResultsBody extends StatelessWidget {
                             }
                           },
                           onLikeToggle: () {
-                            context
-                                .read<HomeFeedProvider>()
-                                .toggleLikePost(res.id ?? '');
+                            final String pid = res.id ?? '';
+                            if (pid.isNotEmpty) {
+                              final HomeFeedProvider hf = context.read<HomeFeedProvider>();
+                              final ProfileProvider pp = context.read<ProfileProvider>();
+                              final bool currentlyLiked = hf.isPostLiked(pid) || pp.isPostLiked(pid) || res.isLiked;
+                              final bool newLiked = !currentlyLiked;
+                              hf.toggleLikePost(pid, explicitLiked: newLiked);
+                              final int curCount = res.likesCount ?? 0;
+                              final int nextCount = newLiked ? curCount + 1 : (curCount > 0 ? curCount - 1 : 0);
+                              pp.updateLikedPost(pid, isLiked: newLiked, likesCount: nextCount);
+                            }
                           },
                           onSaveToggle: () {
-                            context
-                                .read<HomeFeedProvider>()
-                                .toggleSavePost(res.id ?? '');
+                            final String pid = res.id ?? '';
+                            if (pid.isNotEmpty) {
+                              final HomeFeedProvider hf = context.read<HomeFeedProvider>();
+                              final ProfileProvider pp = context.read<ProfileProvider>();
+                              final bool currentlySaved = hf.isPostSaved(pid) || pp.isPostSaved(pid) || res.isSaved;
+                              final bool newSaved = !currentlySaved;
+                              hf.toggleSavePost(pid, explicitSaved: newSaved);
+                              try {
+                                pp.updateSavedPost(pid, isSaved: newSaved);
+                              } catch (_) {}
+                            }
                           },
                           onOpenComments: () {
                             showModalBottomSheet<void>(
@@ -613,6 +691,33 @@ class _SearchResultsBody extends StatelessWidget {
                                 postAuthorId: res.authorId,
                                 communityId: res.communityId,
                                 totalComments: res.commentsCount ?? 0,
+                                allowComments: res.allowComments,
+                                allowCommentsFrom: res.allowCommentsFrom,
+                                authorUsername: res.authorUsername,
+                                onCommentAdded: () {
+                                  if (res.id != null) {
+                                    context.read<HomeFeedProvider>().incrementCommentCount(res.id!);
+                                    try {
+                                      context.read<ProfileProvider>().incrementCommentCount(res.id!);
+                                    } catch (_) {}
+                                  }
+                                },
+                                onCommentDeleted: (int deletedCount, int remainingCount) {
+                                  if (res.id != null) {
+                                    context.read<HomeFeedProvider>().setCommentCount(res.id!, remainingCount);
+                                    try {
+                                      context.read<ProfileProvider>().updatePostCommentCount(res.id!, remainingCount);
+                                    } catch (_) {}
+                                  }
+                                },
+                                onCommentCountChanged: (int count) {
+                                  if (res.id != null) {
+                                    context.read<HomeFeedProvider>().setCommentCount(res.id!, count);
+                                    try {
+                                      context.read<ProfileProvider>().updatePostCommentCount(res.id!, count);
+                                    } catch (_) {}
+                                  }
+                                },
                               ),
                             );
                           },

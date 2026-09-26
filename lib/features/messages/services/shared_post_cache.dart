@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SharedPostData {
   const SharedPostData({
     required this.postId,
+    this.authorId,
     this.thumbnailUrl,
     this.videoUrl,
     this.caption,
@@ -18,6 +19,7 @@ class SharedPostData {
   });
 
   final String postId;
+  final String? authorId;
   final String? thumbnailUrl;
   final String? videoUrl;
   final String? caption;
@@ -30,6 +32,7 @@ class SharedPostData {
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'postId': postId,
+        if (authorId != null) 'authorId': authorId,
         if (thumbnailUrl != null) 'thumbnailUrl': thumbnailUrl,
         if (videoUrl != null) 'videoUrl': videoUrl,
         if (caption != null) 'caption': caption,
@@ -44,6 +47,7 @@ class SharedPostData {
   factory SharedPostData.fromJson(Map<String, dynamic> json) {
     return SharedPostData(
       postId: (json['postId'] ?? '').toString(),
+      authorId: json['authorId']?.toString(),
       thumbnailUrl: json['thumbnailUrl'] as String?,
       videoUrl: json['videoUrl'] as String?,
       caption: json['caption'] as String?,

@@ -21,6 +21,9 @@ class ReelItemModel {
     this.communityId,
     this.allowComments = true,
     this.allowDownloads = true,
+    this.isAuthorPrivate = false,
+    this.allowCommentsFrom = 'everyone',
+    this.hasLikeCount = true,
     this.hideLikes = false,
     this.viewsCount = 0,
     this.visibility,
@@ -42,6 +45,9 @@ class ReelItemModel {
   final bool isLiked;
   final bool isSaved;
   final bool isFollowing;
+  final bool isAuthorPrivate;
+  final String allowCommentsFrom;
+  final bool hasLikeCount;
   final List<String> tags;
   final String durationText;
   final String? communityId;
@@ -60,6 +66,9 @@ class ReelItemModel {
     bool? isLiked,
     bool? isSaved,
     bool? isFollowing,
+    bool? isAuthorPrivate,
+    String? allowCommentsFrom,
+    bool? hasLikeCount,
     bool? allowComments,
     bool? allowDownloads,
     bool? hideLikes,
@@ -92,6 +101,9 @@ class ReelItemModel {
       isLiked: isLiked ?? this.isLiked,
       isSaved: isSaved ?? this.isSaved,
       isFollowing: isFollowing ?? this.isFollowing,
+      isAuthorPrivate: isAuthorPrivate ?? this.isAuthorPrivate,
+      allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
+      hasLikeCount: hasLikeCount ?? this.hasLikeCount,
       tags: tags ?? this.tags,
       durationText: durationText ?? this.durationText,
       communityId: communityId ?? this.communityId,

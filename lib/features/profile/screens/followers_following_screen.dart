@@ -853,54 +853,9 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                 child: Row(
                   children: <Widget>[
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push<void>(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => UserProfileScreen(
-                              userId: user.userId,
-                              username: user.username,
-                              name: user.displayName,
-                              avatarAsset: avatar.isNotEmpty ? avatar : AppImages.user1,
-                            ),
-                          ),
-                        );
-                      },
-                      child: ClipOval(
-                        child: (avatar.startsWith('http://') ||
-                                avatar.startsWith('https://'))
-                            ? Image.network(
-                                avatar,
-                                width: 44,
-                                height: 44,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Image.asset(
-                                  AppImages.user1,
-                                  width: 44,
-                                  height: 44,
-                                  fit: BoxFit.cover,
-                                ),
-                              )
-                            : Image.asset(
-                                avatar.trim().startsWith('assets/')
-                                    ? avatar.trim()
-                                    : AppImages.user1,
-                                width: 44,
-                                height: 44,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Image.asset(
-                                  AppImages.user1,
-                                  width: 44,
-                                  height: 44,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () {
                           Navigator.push<void>(
                             context,
@@ -914,23 +869,60 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
                             ),
                           );
                         },
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: <Widget>[
-                            Text(
-                              '@${user.username}',
-                              style: AppTextStyles.titleSmall.copyWith(
-                                color: context.themeTextPrimary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                              ),
+                            ClipOval(
+                              child: (avatar.startsWith('http://') ||
+                                      avatar.startsWith('https://'))
+                                  ? Image.network(
+                                      avatar,
+                                      width: 44,
+                                      height: 44,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Image.asset(
+                                        AppImages.user1,
+                                        width: 44,
+                                        height: 44,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    )
+                                  : Image.asset(
+                                      avatar.trim().startsWith('assets/')
+                                          ? avatar.trim()
+                                          : AppImages.user1,
+                                      width: 44,
+                                      height: 44,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Image.asset(
+                                        AppImages.user1,
+                                        width: 44,
+                                        height: 44,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              subtitle,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: context.themeTextSecondary,
-                                fontSize: 12,
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    '@${user.username}',
+                                    style: AppTextStyles.titleSmall.copyWith(
+                                      color: context.themeTextPrimary,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    subtitle,
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: context.themeTextSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],

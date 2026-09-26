@@ -67,7 +67,11 @@ class _SelectVideoScreenState extends State<SelectVideoScreen> {
 
     _currentMediaId = item.id;
 
-    final String? filePath = item.filePath;
+    String? filePath = item.filePath;
+    if ((filePath == null || filePath.isEmpty) && item.assetEntity != null) {
+      final File? f = await item.assetEntity!.file;
+      filePath = f?.path;
+    }
     final String? videoAsset = item.videoAsset;
 
     VideoPlayerController newCtrl;

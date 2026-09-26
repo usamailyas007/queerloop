@@ -23,7 +23,6 @@ import '../widgets/comments_bottom_sheet.dart';
 import '../widgets/post_feed_card.dart';
 import '../models/post_item_model.dart';
 import '../services/reel_video_preloader.dart';
-import 'single_post_view_screen.dart';
 
 class ProfileTabScreen extends StatefulWidget {
   const ProfileTabScreen({this.showBackButton = false, super.key});
@@ -268,13 +267,16 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                   children: <Widget>[
                     // Profile Header & Stats Widget with Dynamic API Data
                     ProfileHeaderStatsWidget(
-                      avatarAsset: profileProvider.avatarUrl,
+                      avatarAsset: (profileProvider.avatarUrl.isNotEmpty)
+                          ? profileProvider.avatarUrl
+                          : (context.watch<AuthProvider>().user?.avatarUrl ?? ''),
                       name: profileProvider.displayName,
                       bio: profileProvider.bio,
                       pronounsPill: profileProvider.pronounsFormatted,
                       pronounsList: profileProvider.pronouns,
                       interestsList: profileProvider.interests,
                       communitiesList: profileProvider.userCommunities,
+                      identityList: profileProvider.identities,
                       postsCount: profileProvider.postsCount,
                       followersCount: profileProvider.followersCount,
                       followingCount: profileProvider.followingCount,
@@ -402,25 +404,18 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
 
                           return PostFeedCard(
                             post: resolvedPost,
-                            onCardTap: () async {
-                              await Navigator.push<void>(
-                                context,
-                                MaterialPageRoute<void>(
-                                  builder: (_) => SinglePostViewScreen(
-                                    postId: post.id,
-                                    initialPost: resolvedPost,
-                                  ),
-                                ),
-                              );
-                              if (mounted) setState(() {});
+                            onCardTap: () {
+                              PostFeedCard.openFullscreen(context, resolvedPost);
                             },
                             onLikeToggle: () {
                               final bool currentLiked =
                                   context.read<HomeFeedProvider>().isPostLiked(post.id) || post.isLiked;
                               final bool newLiked = !currentLiked;
-                              final int newCount = newLiked
-                                  ? post.likesCount + 1
-                                  : (post.likesCount > 0 ? post.likesCount - 1 : 0);
+                              final int newCount = post.hasLikeCount
+                                  ? (newLiked
+                                      ? post.likesCount + 1
+                                      : (post.likesCount > 0 ? post.likesCount - 1 : 0))
+                                  : post.likesCount;
                               context.read<ProfileProvider>().updateLikedPost(
                                 post.id,
                                 isLiked: newLiked,
@@ -430,6 +425,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                               context.read<HomeFeedProvider>().toggleLikePost(
                                 post.id,
                                 fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                                explicitLiked: newLiked,
                               );
                             },
                             onSaveToggle: () {
@@ -444,6 +440,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                               context.read<HomeFeedProvider>().toggleSavePost(
                                 post.id,
                                 fallbackPost: post.copyWith(isSaved: newSaved),
+                                explicitSaved: newSaved,
                               );
                             },
                           onOpenComments: () {
@@ -454,14 +451,33 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                               builder: (_) => CommentsBottomSheet(
                                 totalComments: post.commentsCount,
                                 postId: post.id,
-                                postAuthorId: post.authorId,
+                                postAuthorId: post.authorId ??
+                                    context.read<AuthProvider>().userId ??
+                                    context.read<ProfileProvider>().profile?.id,
                                 communityId: post.communityId,
                                 allowComments: post.allowComments,
+                                allowCommentsFrom: post.allowCommentsFrom,
+                                authorUsername: post.authorName ??
+                                    context.read<ProfileProvider>().username,
                                 onCommentAdded: () {
                                   context.read<HomeFeedProvider>().incrementCommentCount(post.id);
                                   context.read<ProfileProvider>().updatePostCommentCount(
                                     post.id,
                                     post.commentsCount + 1,
+                                  );
+                                },
+                                onCommentDeleted: (int deletedCount, int remainingCount) {
+                                  context.read<HomeFeedProvider>().setCommentCount(post.id, remainingCount);
+                                  context.read<ProfileProvider>().updatePostCommentCount(
+                                    post.id,
+                                    remainingCount,
+                                  );
+                                },
+                                onCommentCountChanged: (int count) {
+                                  context.read<HomeFeedProvider>().setCommentCount(post.id, count);
+                                  context.read<ProfileProvider>().updatePostCommentCount(
+                                    post.id,
+                                    count,
                                   );
                                 },
                               ),
@@ -533,7 +549,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       if (profileProvider.savedReels.isNotEmpty)
                         ProfileMediaGridWidget(
                           customReels: profileProvider.savedReels,
-                          showPlayCounts: false,
+                          showPlayCounts: true,
                           emptyTitle: 'No saved reels yet',
                           emptySubtitle: 'Reels you save will appear here.',
                           emptyIcon: Icons.bookmark_border_rounded,
@@ -548,25 +564,18 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
 
                             return PostFeedCard(
                               post: resolvedPost,
-                              onCardTap: () async {
-                                await Navigator.push<void>(
-                                  context,
-                                  MaterialPageRoute<void>(
-                                    builder: (_) => SinglePostViewScreen(
-                                      postId: post.id,
-                                      initialPost: resolvedPost,
-                                    ),
-                                  ),
-                                );
-                                if (mounted) setState(() {});
+                              onCardTap: () {
+                                PostFeedCard.openFullscreen(context, resolvedPost);
                               },
                               onLikeToggle: () {
                                 final bool currentLiked =
                                     context.read<HomeFeedProvider>().isPostLiked(post.id) || post.isLiked;
                                 final bool newLiked = !currentLiked;
-                                final int newCount = newLiked
-                                    ? post.likesCount + 1
-                                    : (post.likesCount > 0 ? post.likesCount - 1 : 0);
+                                final int newCount = post.hasLikeCount
+                                    ? (newLiked
+                                        ? post.likesCount + 1
+                                        : (post.likesCount > 0 ? post.likesCount - 1 : 0))
+                                    : post.likesCount;
                                 context.read<ProfileProvider>().updateLikedPost(
                                   post.id,
                                   isLiked: newLiked,
@@ -576,6 +585,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                 context.read<HomeFeedProvider>().toggleLikePost(
                                   post.id,
                                   fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                                  explicitLiked: newLiked,
                                 );
                               },
                               onSaveToggle: () {
@@ -590,6 +600,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                 context.read<HomeFeedProvider>().toggleSavePost(
                                   post.id,
                                   fallbackPost: post.copyWith(isSaved: newSaved),
+                                  explicitSaved: newSaved,
                                 );
                               },
                             onOpenComments: () {
@@ -600,14 +611,33 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                 builder: (_) => CommentsBottomSheet(
                                   totalComments: post.commentsCount,
                                   postId: post.id,
-                                  postAuthorId: post.authorId,
+                                  postAuthorId: post.authorId ??
+                                      context.read<AuthProvider>().userId ??
+                                      context.read<ProfileProvider>().profile?.id,
                                   communityId: post.communityId,
                                   allowComments: post.allowComments,
+                                  allowCommentsFrom: post.allowCommentsFrom,
+                                  authorUsername: post.authorName ??
+                                      context.read<ProfileProvider>().username,
                                   onCommentAdded: () {
                                     context.read<HomeFeedProvider>().incrementCommentCount(post.id);
                                     context.read<ProfileProvider>().updatePostCommentCount(
                                       post.id,
                                       post.commentsCount + 1,
+                                    );
+                                  },
+                                  onCommentDeleted: (int deletedCount, int remainingCount) {
+                                    context.read<HomeFeedProvider>().setCommentCount(post.id, remainingCount);
+                                    context.read<ProfileProvider>().updatePostCommentCount(
+                                      post.id,
+                                      remainingCount,
+                                    );
+                                  },
+                                  onCommentCountChanged: (int count) {
+                                    context.read<HomeFeedProvider>().setCommentCount(post.id, count);
+                                    context.read<ProfileProvider>().updatePostCommentCount(
+                                      post.id,
+                                      count,
                                     );
                                   },
                                 ),
@@ -674,7 +704,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       if (profileProvider.likedReels.isNotEmpty)
                         ProfileMediaGridWidget(
                           customReels: profileProvider.likedReels,
-                          showPlayCounts: false,
+                          showPlayCounts: true,
                           emptyTitle: 'No liked reels yet',
                           emptySubtitle: 'Reels you like will appear here.',
                           emptyIcon: Icons.favorite_border_rounded,
@@ -689,25 +719,18 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
 
                             return PostFeedCard(
                               post: resolvedPost,
-                              onCardTap: () async {
-                                await Navigator.push<void>(
-                                  context,
-                                  MaterialPageRoute<void>(
-                                    builder: (_) => SinglePostViewScreen(
-                                      postId: post.id,
-                                      initialPost: resolvedPost,
-                                    ),
-                                  ),
-                                );
-                                if (mounted) setState(() {});
+                              onCardTap: () {
+                                PostFeedCard.openFullscreen(context, resolvedPost);
                               },
                               onLikeToggle: () {
                                 final bool currentLiked =
                                     context.read<HomeFeedProvider>().isPostLiked(post.id) || post.isLiked;
                                 final bool newLiked = !currentLiked;
-                                final int newCount = newLiked
-                                    ? post.likesCount + 1
-                                    : (post.likesCount > 0 ? post.likesCount - 1 : 0);
+                                final int newCount = post.hasLikeCount
+                                    ? (newLiked
+                                        ? post.likesCount + 1
+                                        : (post.likesCount > 0 ? post.likesCount - 1 : 0))
+                                    : post.likesCount;
                                 context.read<ProfileProvider>().updateLikedPost(
                                   post.id,
                                   isLiked: newLiked,
@@ -717,6 +740,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                 context.read<HomeFeedProvider>().toggleLikePost(
                                   post.id,
                                   fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                                  explicitLiked: newLiked,
                                 );
                               },
                               onSaveToggle: () {
@@ -731,6 +755,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                 context.read<HomeFeedProvider>().toggleSavePost(
                                   post.id,
                                   fallbackPost: post.copyWith(isSaved: newSaved),
+                                  explicitSaved: newSaved,
                                 );
                               },
                             onOpenComments: () {
@@ -741,14 +766,33 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                 builder: (_) => CommentsBottomSheet(
                                   totalComments: post.commentsCount,
                                   postId: post.id,
-                                  postAuthorId: post.authorId,
+                                  postAuthorId: post.authorId ??
+                                      context.read<AuthProvider>().userId ??
+                                      context.read<ProfileProvider>().profile?.id,
                                   communityId: post.communityId,
                                   allowComments: post.allowComments,
+                                  allowCommentsFrom: post.allowCommentsFrom,
+                                  authorUsername: post.authorName ??
+                                      context.read<ProfileProvider>().username,
                                   onCommentAdded: () {
                                     context.read<HomeFeedProvider>().incrementCommentCount(post.id);
                                     context.read<ProfileProvider>().updatePostCommentCount(
                                       post.id,
                                       post.commentsCount + 1,
+                                    );
+                                  },
+                                  onCommentDeleted: (int deletedCount, int remainingCount) {
+                                    context.read<HomeFeedProvider>().setCommentCount(post.id, remainingCount);
+                                    context.read<ProfileProvider>().updatePostCommentCount(
+                                      post.id,
+                                      remainingCount,
+                                    );
+                                  },
+                                  onCommentCountChanged: (int count) {
+                                    context.read<HomeFeedProvider>().setCommentCount(post.id, count);
+                                    context.read<ProfileProvider>().updatePostCommentCount(
+                                      post.id,
+                                      count,
                                     );
                                   },
                                 ),

@@ -25,14 +25,19 @@ class MessagesScreen extends StatefulWidget {
 
 class _MessagesScreenState extends State<MessagesScreen> {
   late final TextEditingController _searchController;
+  MessagesProvider? _messagesProvider;
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    _searchController.addListener(() {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final MessagesProvider provider = context.read<MessagesProvider>();
+        provider.setSearchQuery('');
         provider.loadConversations();
         provider.loadMessageRequests();
       }
@@ -40,8 +45,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _messagesProvider = Provider.of<MessagesProvider>(context, listen: false);
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
+    _messagesProvider?.setSearchQuery('');
     super.dispose();
   }
 
@@ -118,6 +130,24 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         color: context.themeIconMuted,
                         size: 20,
                       ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
+                                _searchController.clear();
+                                provider.setSearchQuery('');
+                                setState(() {});
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  color: context.themeIconMuted,
+                                  size: 18,
+                                ),
+                              ),
+                            )
+                          : null,
                       onChanged: provider.setSearchQuery,
                     ),
                   ),

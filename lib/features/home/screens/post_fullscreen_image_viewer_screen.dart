@@ -68,11 +68,22 @@ class _PostFullscreenImageViewerScreenState
       ),
     );
 
-    // Record view if available
+    // Record view & sync like/save state
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      try {
-        context.read<HomeFeedProvider>().recordView(_post.id);
-      } catch (_) {}
+      if (mounted) {
+        final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+        final bool isLiked = homeFeed.isPostLiked(_post.id) || _post.isLiked;
+        final bool isSaved = homeFeed.isPostSaved(_post.id) || _post.isSaved;
+        final int likes = _post.likesCount;
+        if (isLiked != _post.isLiked || isSaved != _post.isSaved || likes != _post.likesCount) {
+          setState(() {
+            _post = _post.copyWith(isLiked: isLiked, isSaved: isSaved, likesCount: likes);
+          });
+        }
+        try {
+          homeFeed.recordView(_post.id);
+        } catch (_) {}
+      }
     });
   }
 
@@ -90,7 +101,9 @@ class _PostFullscreenImageViewerScreenState
   }
 
   void _onDoubleTap() {
-    if (!_post.isLiked) {
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    final bool isLiked = homeFeed.isPostLiked(_post.id) || _post.isLiked;
+    if (!isLiked) {
       _handleLikeToggle();
     }
     setState(() => _showDoubleTapHeart = true);
@@ -105,9 +118,11 @@ class _PostFullscreenImageViewerScreenState
     final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
     final ProfileProvider profile = context.read<ProfileProvider>();
 
-    final bool newLiked = !_post.isLiked;
+    final bool currentlyLiked = homeFeed.isPostLiked(_post.id) || _post.isLiked;
+    final bool newLiked = !currentlyLiked;
+    final int baseCount = _post.likesCount;
     final int newCount =
-        newLiked ? _post.likesCount + 1 : (_post.likesCount > 0 ? _post.likesCount - 1 : 0);
+        newLiked ? baseCount + 1 : (baseCount > 0 ? baseCount - 1 : 0);
 
     setState(() {
       _post = _post.copyWith(
@@ -117,7 +132,7 @@ class _PostFullscreenImageViewerScreenState
     });
 
     try {
-      homeFeed.toggleLikePost(_post.id, fallbackPost: _post);
+      homeFeed.toggleLikePost(_post.id, fallbackPost: _post, explicitLiked: newLiked);
       profile.updateLikedPost(_post.id, isLiked: newLiked, likesCount: newCount, fallbackPost: _post);
     } catch (_) {}
   }
@@ -125,14 +140,15 @@ class _PostFullscreenImageViewerScreenState
   void _handleSaveToggle() {
     final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
     final ProfileProvider profile = context.read<ProfileProvider>();
-    final bool newSaved = !_post.isSaved;
+    final bool currentlySaved = homeFeed.isPostSaved(_post.id) || _post.isSaved;
+    final bool newSaved = !currentlySaved;
 
     setState(() {
       _post = _post.copyWith(isSaved: newSaved);
     });
 
     try {
-      homeFeed.toggleSavePost(_post.id, fallbackPost: _post);
+      homeFeed.toggleSavePost(_post.id, fallbackPost: _post, explicitSaved: newSaved);
       profile.updateSavedPost(_post.id, isSaved: newSaved, fallbackPost: _post);
     } catch (_) {}
   }
@@ -147,12 +163,39 @@ class _PostFullscreenImageViewerScreenState
         postAuthorId: _post.authorId,
         totalComments: _post.commentsCount,
         allowComments: _post.allowComments,
+        allowCommentsFrom: _post.allowCommentsFrom,
+        authorUsername: _post.authorName,
         onCommentAdded: () {
           setState(() {
             _post = _post.copyWith(commentsCount: _post.commentsCount + 1);
           });
           try {
             context.read<HomeFeedProvider>().incrementCommentCount(_post.id);
+          } catch (_) {}
+          try {
+            context.read<ProfileProvider>().incrementCommentCount(_post.id);
+          } catch (_) {}
+        },
+        onCommentDeleted: (int deletedCount, int remainingCount) {
+          setState(() {
+            _post = _post.copyWith(commentsCount: remainingCount);
+          });
+          try {
+            context.read<HomeFeedProvider>().setCommentCount(_post.id, remainingCount);
+          } catch (_) {}
+          try {
+            context.read<ProfileProvider>().updatePostCommentCount(_post.id, remainingCount);
+          } catch (_) {}
+        },
+        onCommentCountChanged: (int count) {
+          setState(() {
+            _post = _post.copyWith(commentsCount: count);
+          });
+          try {
+            context.read<HomeFeedProvider>().setCommentCount(_post.id, count);
+          } catch (_) {}
+          try {
+            context.read<ProfileProvider>().updatePostCommentCount(_post.id, count);
           } catch (_) {}
         },
       ),
@@ -279,6 +322,7 @@ class _PostFullscreenImageViewerScreenState
             username: _post.username.replaceAll('@', ''),
             name: _post.username.replaceAll('@', '').split('.').first,
             avatarAsset: _post.avatarAsset,
+            initialPost: _post,
           ),
         ),
       );
@@ -306,7 +350,11 @@ class _PostFullscreenImageViewerScreenState
   @override
   Widget build(BuildContext context) {
     final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+    final HomeFeedProvider homeFeed = context.watch<HomeFeedProvider>();
     final AuthProvider authProvider = context.watch<AuthProvider>();
+    final int effectiveCommentsCount = homeFeed.getCommentCount(_post.id) ??
+        profileProvider.getCommentCount(_post.id) ??
+        _post.commentsCount;
     final String? currentUserId = authProvider.userId;
     final bool isCurrentUser = _post.authorId != null &&
         currentUserId != null &&
@@ -537,7 +585,7 @@ class _PostFullscreenImageViewerScreenState
                     // Comment Button
                     _ViewerActionButton(
                       onTap: _handleOpenComments,
-                      label: '${_post.commentsCount}',
+                      label: '$effectiveCommentsCount',
                       child: SvgPicture.asset(
                         AppIcons.comment,
                         width: 26,

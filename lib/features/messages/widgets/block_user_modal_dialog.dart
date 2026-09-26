@@ -48,8 +48,9 @@ class _BlockUserModalDialogState extends State<BlockUserModalDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final String cleanUsername =
-        widget.username.startsWith('@') ? widget.username : '@${widget.username}';
+    final String rawClean =
+        widget.username.replaceAll(RegExp(r'^@+'), '').trim();
+    final String cleanUsername = '@$rawClean';
 
     return Dialog(
       backgroundColor: Colors.transparent,

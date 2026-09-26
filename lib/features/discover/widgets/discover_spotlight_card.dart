@@ -10,12 +10,55 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_shimmer.dart';
 
 /// "Community Spotlight" card — pixel-perfect match to design screenshot.
 class DiscoverSpotlightCard extends StatelessWidget {
   const DiscoverSpotlightCard({this.spotlight, super.key});
 
   final Spotlight? spotlight;
+
+  Widget _buildSkeleton(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+    return AppShimmer(
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? context.themeCardBackground : const Color(0xFFEDEDF2),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : const Color(0xFFEBEBF0),
+            width: 1.5,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            ShimmerBox(
+              width: double.infinity,
+              height: 145,
+              borderRadius: 0,
+            ),
+            Padding(
+              padding: EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  ShimmerBox(width: 160, height: 18, borderRadius: 4),
+                  SizedBox(height: 8),
+                  ShimmerBox(width: double.infinity, height: 12, borderRadius: 4),
+                  SizedBox(height: 6),
+                  ShimmerBox(width: 220, height: 12, borderRadius: 4),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildCoverImage(String? imageUrl) {
     final Widget fallbackAsset = Image.asset(
@@ -61,6 +104,18 @@ class DiscoverSpotlightCard extends StatelessWidget {
       width: double.infinity,
       height: 145,
       fit: BoxFit.cover,
+      loadingBuilder: (
+        BuildContext context,
+        Widget child,
+        ImageChunkEvent? loadingProgress,
+      ) {
+        if (loadingProgress == null) return child;
+        return const ShimmerBox(
+          width: double.infinity,
+          height: 145,
+          borderRadius: 0,
+        );
+      },
       errorBuilder: (_, _, _) => fallbackAsset,
     );
   }
@@ -69,13 +124,19 @@ class DiscoverSpotlightCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isDark = context.isDarkMode;
     Spotlight? activeSpotlight = spotlight;
+    bool isSpotlightLoading = false;
     if (activeSpotlight == null) {
       try {
         final SpotlightsProvider provider = context.watch<SpotlightsProvider>();
         activeSpotlight = provider.liveSpotlight;
+        isSpotlightLoading = provider.isLoading || !provider.hasLoadedOnce;
       } catch (_) {
         // Fallback to static content if provider is not in context.
       }
+    }
+
+    if (activeSpotlight == null && isSpotlightLoading) {
+      return _buildSkeleton(context);
     }
 
     final String title = (activeSpotlight?.title.isNotEmpty == true)

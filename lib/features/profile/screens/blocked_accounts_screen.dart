@@ -35,7 +35,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
     final ProfileProvider provider = context.read<ProfileProvider>();
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
 
-    provider.unblockUser(user.userId);
+    provider.unblockUser(user.userId, username: user.username);
 
     AppSnackBar.show(
       context,

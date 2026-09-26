@@ -28,6 +28,9 @@ class DiscoverSearchResult {
     this.thumbnailUrl,
     this.mediaRefs = const <String>[],
     this.visibility,
+    this.allowComments = true,
+    this.allowCommentsFrom = 'everyone',
+    this.isAuthorPrivate = false,
   });
 
   final String imageAsset;
@@ -49,6 +52,9 @@ class DiscoverSearchResult {
   final String? thumbnailUrl;
   final List<String> mediaRefs;
   final String? visibility;
+  final bool allowComments;
+  final String allowCommentsFrom;
+  final bool isAuthorPrivate;
 
   bool get isReel {
     final String t = (type ?? '').toUpperCase().trim();
@@ -92,6 +98,9 @@ class DiscoverSearchResult {
     List<String>? mediaRefs,
     String? visibility,
     int? viewsCount,
+    bool? allowComments,
+    String? allowCommentsFrom,
+    bool? isAuthorPrivate,
   }) {
     return DiscoverSearchResult(
       imageAsset: imageAsset ?? this.imageAsset,
@@ -113,6 +122,9 @@ class DiscoverSearchResult {
       isSaved: isSaved ?? this.isSaved,
       mediaRefs: mediaRefs ?? this.mediaRefs,
       visibility: visibility ?? this.visibility,
+      allowComments: allowComments ?? this.allowComments,
+      allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
+      isAuthorPrivate: isAuthorPrivate ?? this.isAuthorPrivate,
     );
   }
 
@@ -138,19 +150,22 @@ class DiscoverSearchResult {
   }
 
   factory DiscoverSearchResult.fromReelItem(ReelItemModel reel) {
-    final String thumb = reel.thumbnailUrl ??
-        (reel.videoUrl != null &&
-                !reel.videoUrl!.endsWith('.mp4') &&
-                !reel.videoUrl!.endsWith('.m3u8')
-            ? reel.videoUrl!
-            : '');
+    String thumb = (reel.thumbnailUrl != null && reel.thumbnailUrl!.isNotEmpty)
+        ? reel.thumbnailUrl!
+        : '';
+    if (thumb.isEmpty && reel.videoUrl != null && reel.videoUrl!.contains('/videos/processed/')) {
+      thumb = reel.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+    }
+    if (thumb.contains('/videos/processed/') && thumb.endsWith('/thumbnail.jpg')) {
+      thumb = thumb.replaceAll('/thumbnail.jpg', '/thumb.0000000.jpg');
+    }
     return DiscoverSearchResult(
       id: reel.id,
       refId: null,
       authorId: reel.authorId,
       imageAsset: thumb.isNotEmpty ? thumb : (reel.videoUrl ?? reel.videoAsset),
       videoUrl: reel.videoUrl,
-      thumbnailUrl: reel.thumbnailUrl,
+      thumbnailUrl: thumb.isNotEmpty ? thumb : null,
       caption: reel.caption,
       authorUsername: reel.username,
       authorAvatar: reel.avatarAsset,
@@ -332,7 +347,7 @@ class DiscoverSearchResult {
         resolvedVideoUrl ??=
             '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
         resolvedThumbnailUrl ??=
-            '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumbnail.jpg';
+            '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumb.0000000.jpg';
         directUrl = resolvedThumbnailUrl;
         if (!extractedMediaRefs.contains(cleanRef)) {
           extractedMediaRefs.add(cleanRef);
@@ -422,15 +437,85 @@ class DiscoverSearchResult {
           .toString(),
       authorUsername: resolvedAuthorUsername,
       authorAvatar: resolvedAuthorAvatar,
-      likesCount:
-          json['likesCount'] is num ? (json['likesCount'] as num).toInt() : null,
+      likesCount: (json['likesCount'] is num)
+          ? (json['likesCount'] as num).toInt()
+          : ((json['likeCount'] is num)
+              ? (json['likeCount'] as num).toInt()
+              : (json['likes'] is num ? (json['likes'] as num).toInt() : null)),
       commentsCount: json['commentsCount'] is num
           ? (json['commentsCount'] as num).toInt()
           : null,
       type: postType.isNotEmpty ? postType : null,
       communityId: json['communityId']?.toString(),
-      isLiked: json['isLiked'] == true,
+      isLiked: () {
+        final dynamic raw = json['isLiked'] ??
+            json['is_liked'] ??
+            json['userLiked'] ??
+            json['user_liked'] ??
+            json['liked'] ??
+            json['hasLiked'] ??
+            json['has_liked'] ??
+            json['likedByMe'] ??
+            json['liked_by_me'] ??
+            json['isLikedByMe'] ??
+            json['is_liked_by_me'] ??
+            (json['viewer'] is Map
+                ? (json['viewer']['isLiked'] ?? json['viewer']['liked'])
+                : null) ??
+            (json['metadata'] is Map
+                ? (json['metadata']['isLiked'] ??
+                    json['metadata']['is_liked'])
+                : null);
+        return raw == true || raw == 1 || raw == 'true';
+      }(),
+      isSaved: () {
+        final dynamic raw = json['isSaved'] ??
+            json['is_saved'] ??
+            json['userSaved'] ??
+            json['user_saved'] ??
+            json['saved'] ??
+            json['hasSaved'] ??
+            json['has_saved'] ??
+            json['savedByMe'] ??
+            json['saved_by_me'] ??
+            json['isSavedByMe'] ??
+            json['is_saved_by_me'] ??
+            (json['viewer'] is Map
+                ? (json['viewer']['isSaved'] ?? json['viewer']['saved'])
+                : null) ??
+            (json['metadata'] is Map
+                ? (json['metadata']['isSaved'] ??
+                    json['metadata']['is_saved'])
+                : null);
+        return raw == true || raw == 1 || raw == 'true';
+      }(),
       visibility: json['visibility']?.toString(),
+      allowComments: (json['allowComments'] ?? json['allowComment']) as bool? ?? true,
+      allowCommentsFrom: ((json['allowCommentsFrom'] ??
+                  json['allow_comments_from'] ??
+                  (json['author'] is Map
+                      ? (json['author']['allowCommentsFrom'] ??
+                          json['author']['allow_comments_from'])
+                      : null) ??
+                  (json['user'] is Map
+                      ? (json['user']['allowCommentsFrom'] ??
+                          json['user']['allow_comments_from'])
+                      : null) ??
+                  'everyone')
+              .toString())
+          .trim()
+          .toLowerCase(),
+      isAuthorPrivate: (json['author'] is Map
+              ? (json['author']['isPrivate'] ?? json['author']['is_private'])
+              : null) ==
+          true ||
+          (json['user'] is Map
+              ? (json['user']['isPrivate'] ?? json['user']['is_private'])
+              : null) ==
+          true ||
+          json['isPrivate'] == true ||
+          json['is_private'] == true ||
+          json['isAuthorPrivate'] == true,
     );
   }
 }

@@ -136,6 +136,8 @@ class PostContentService {
                 ?.toString();
             final bool? hideLikes =
                 (userObj['hideMyLikes'] ?? userObj['hideLikes']) as bool?;
+            final bool isPrivate = (userObj['isPrivate'] ?? userObj['is_private']) == true;
+            final String allowCommentsFrom = (userObj['allowCommentsFrom'] ?? userObj['allow_comments_from'] ?? 'everyone').toString().trim().toLowerCase();
             final AuthorInfo info = AuthorInfo(
               id: cleanId,
               username: u.trim(),
@@ -143,6 +145,8 @@ class PostContentService {
                   (d != null && d.trim().isNotEmpty) ? d.trim() : u.trim(),
               avatarUrl: a,
               hideMyLikes: hideLikes,
+              isPrivate: isPrivate,
+              allowCommentsFrom: allowCommentsFrom,
             );
             AuthorProfileCache.set(cleanId, info);
             return info;
@@ -177,6 +181,8 @@ class PostContentService {
                 ?.toString();
             final bool? hideLikes =
                 (userObj['hideMyLikes'] ?? userObj['hideLikes']) as bool?;
+            final bool isPrivate = (userObj['isPrivate'] ?? userObj['is_private']) == true;
+            final String allowCommentsFrom = (userObj['allowCommentsFrom'] ?? userObj['allow_comments_from'] ?? 'everyone').toString().trim().toLowerCase();
             final AuthorInfo info = AuthorInfo(
               id: cleanId,
               username: u.trim(),
@@ -184,6 +190,8 @@ class PostContentService {
                   (d != null && d.trim().isNotEmpty) ? d.trim() : u.trim(),
               avatarUrl: a,
               hideMyLikes: hideLikes,
+              isPrivate: isPrivate,
+              allowCommentsFrom: allowCommentsFrom,
             );
             AuthorProfileCache.set(cleanId, info);
             CacheManager.instance.put('profile_details_$cleanId', data,
@@ -365,6 +373,14 @@ class PostContentService {
           rawList = dataMap['posts'] as List<dynamic>;
         } else if (dataMap['items'] is List) {
           rawList = dataMap['items'] as List<dynamic>;
+        } else if (dataMap['saved'] is List) {
+          rawList = dataMap['saved'] as List<dynamic>;
+        } else if (dataMap['likes'] is List) {
+          rawList = dataMap['likes'] as List<dynamic>;
+        } else if (dataMap['savedPosts'] is List) {
+          rawList = dataMap['savedPosts'] as List<dynamic>;
+        } else if (dataMap['likedPosts'] is List) {
+          rawList = dataMap['likedPosts'] as List<dynamic>;
         } else if (dataMap['feed'] is List) {
           rawList = dataMap['feed'] as List<dynamic>;
         } else if (dataMap['results'] is List) {
@@ -376,6 +392,14 @@ class PostContentService {
         rawList = response['posts'] as List<dynamic>;
       } else if (response['items'] is List) {
         rawList = response['items'] as List<dynamic>;
+      } else if (response['saved'] is List) {
+        rawList = response['saved'] as List<dynamic>;
+      } else if (response['likes'] is List) {
+        rawList = response['likes'] as List<dynamic>;
+      } else if (response['savedPosts'] is List) {
+        rawList = response['savedPosts'] as List<dynamic>;
+      } else if (response['likedPosts'] is List) {
+        rawList = response['likedPosts'] as List<dynamic>;
       } else if (response['feed'] is List) {
         rawList = response['feed'] as List<dynamic>;
       } else if (response['results'] is List) {
@@ -388,6 +412,10 @@ class PostContentService {
     }
     final List<PostResponseModel> result = <PostResponseModel>[];
     for (final dynamic item in rawList) {
+      if (item is String && item.trim().isNotEmpty) {
+        result.add(PostResponseModel(id: item.trim()));
+        continue;
+      }
       if (item is Map) {
         try {
           if (item['deletedAt'] != null || item['deleted_at'] != null) {
@@ -397,9 +425,15 @@ class PostContentService {
           if (status == 'deleted' || status == 'removed') {
             continue;
           }
-          final Map<String, dynamic> typed = item.map<String, dynamic>(
+          final Map<String, dynamic> rawMap = item.map<String, dynamic>(
             (dynamic k, dynamic v) => MapEntry<String, dynamic>(k.toString(), v),
           );
+          final dynamic nested = rawMap['post'] ?? rawMap['item'] ?? rawMap['savedPost'];
+          final Map<String, dynamic> typed = (nested is Map)
+              ? nested.map<String, dynamic>(
+                  (dynamic k, dynamic v) => MapEntry<String, dynamic>(k.toString(), v),
+                )
+              : rawMap;
           result.add(PostResponseModel.fromJson(typed));
         } catch (e) {
           debugPrint('⚠️ [PostContent] Error parsing post item: $e');
@@ -546,17 +580,36 @@ class PostContentService {
   }
 
   // ── Delete Comment or Reply ───────────────────────────────────────────────
-  // DELETE /comment/:id
-  Future<void> deleteComment(String commentId) async {
+  // DELETE /comment/:id or /comments/:id or /posts/:postId/comments/:id
+  Future<void> deleteComment(String commentId, {String? postId}) async {
     if (AppConfig.useMockApi) return;
     try {
       await _client.delete(ApiEndpoints.comment(commentId));
+      return;
     } catch (e) {
-      debugPrint('⚠️ [PostContent] DELETE /comment/$commentId failed: $e, trying fallback');
+      debugPrint('⚠️ [PostContent] DELETE /comment/$commentId failed: $e, trying /comments/$commentId');
+    }
+
+    try {
+      await _client.delete('/comments/$commentId');
+      return;
+    } catch (e) {
+      debugPrint('⚠️ [PostContent] DELETE /comments/$commentId failed: $e');
+    }
+
+    if (postId != null && postId.isNotEmpty) {
       try {
-        await _client.delete('/comments/$commentId');
-      } catch (_) {
-        rethrow;
+        await _client.delete('/posts/$postId/comments/$commentId');
+        return;
+      } catch (e) {
+        debugPrint('⚠️ [PostContent] DELETE /posts/$postId/comments/$commentId failed: $e');
+      }
+
+      try {
+        await _client.delete('/posts/$postId/comment/$commentId');
+        return;
+      } catch (e) {
+        debugPrint('⚠️ [PostContent] DELETE /posts/$postId/comment/$commentId failed: $e');
       }
     }
   }

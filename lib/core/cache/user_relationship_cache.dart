@@ -6,6 +6,8 @@ class UserRelationshipCache {
 
   static final Set<String> _followingUserIds = <String>{};
   static final Set<String> _followingUsernames = <String>{};
+  static final Set<String> _followerUserIds = <String>{};
+  static final Set<String> _followerUsernames = <String>{};
 
   /// Adds a user to the following cache.
   static void add({String? userId, String? username}) {
@@ -40,6 +42,39 @@ class UserRelationshipCache {
     return false;
   }
 
+  /// Adds a user who follows the current user.
+  static void addFollower({String? userId, String? username}) {
+    if (userId != null && userId.trim().isNotEmpty) {
+      _followerUserIds.add(userId.trim().toLowerCase());
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      _followerUsernames.add(username.replaceAll('@', '').trim().toLowerCase());
+    }
+  }
+
+  /// Removes a user who was following the current user.
+  static void removeFollower({String? userId, String? username}) {
+    if (userId != null && userId.trim().isNotEmpty) {
+      _followerUserIds.remove(userId.trim().toLowerCase());
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      _followerUsernames.remove(username.replaceAll('@', '').trim().toLowerCase());
+    }
+  }
+
+  /// Checks if another user is following the current user (author follows viewer).
+  static bool isFollowedBy({String? userId, String? username}) {
+    if (userId != null && userId.trim().isNotEmpty) {
+      if (_followerUserIds.contains(userId.trim().toLowerCase())) return true;
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      final String cleanUsername =
+          username.replaceAll('@', '').trim().toLowerCase();
+      if (_followerUsernames.contains(cleanUsername)) return true;
+    }
+    return false;
+  }
+
   /// Syncs an entire batch of following user IDs/usernames.
   static void sync({
     Iterable<String>? ids,
@@ -61,15 +96,38 @@ class UserRelationshipCache {
     }
   }
 
+  /// Syncs an entire batch of follower user IDs/usernames.
+  static void syncFollowers({
+    Iterable<String>? ids,
+    Iterable<String>? usernames,
+  }) {
+    if (ids != null) {
+      for (final String id in ids) {
+        if (id.trim().isNotEmpty) {
+          _followerUserIds.add(id.trim().toLowerCase());
+        }
+      }
+    }
+    if (usernames != null) {
+      for (final String uname in usernames) {
+        if (uname.trim().isNotEmpty) {
+          _followerUsernames.add(uname.replaceAll('@', '').trim().toLowerCase());
+        }
+      }
+    }
+  }
+
   /// Clears cache on logout.
   static void clear() {
     _followingUserIds.clear();
     _followingUsernames.clear();
+    _followerUserIds.clear();
+    _followerUsernames.clear();
   }
 }
 
 /// Evaluates post visibility according to the backend schema:
-/// - "EVERYONE": visible to all users.
+/// - "EVERYONE": visible to all users (unless author is private).
 /// - "FOLLOWERS": visible ONLY if current user follows the author OR is the author.
 /// - "COMMUNITY_ONLY": visible within communities.
 /// - other/private: visible only to author.
@@ -84,15 +142,9 @@ class PostVisibilityFilter {
     String? currentUsername,
     bool isGuest = false,
     bool isFollowing = false,
+    bool isAuthorPrivate = false,
   }) {
-    final String vis = (visibility ?? 'EVERYONE').trim().toUpperCase();
-
-    // 1. Everyone / Public / Default
-    if (vis.isEmpty || vis == 'EVERYONE' || vis == 'PUBLIC') {
-      return true;
-    }
-
-    // 2. Author can ALWAYS see their own post (even if FOLLOWERS only)
+    // 1. Author can ALWAYS see their own post (even if private or FOLLOWERS only)
     final bool isCurrentUserAuthor = !isGuest && (
       (currentUserId != null &&
           currentUserId.trim().isNotEmpty &&
@@ -109,7 +161,30 @@ class PostVisibilityFilter {
       return true;
     }
 
-    // 3. Followers-only visibility
+    // 2. Private Account Enforcement:
+    // If the author's account is private, it must NEVER be shown to non-followers or guests,
+    // even if post-level visibility was set to 'EVERYONE'.
+    if (isAuthorPrivate) {
+      if (isGuest || currentUserId == null || currentUserId.trim().isEmpty) {
+        return false;
+      }
+      if (isFollowing) {
+        return true;
+      }
+      return UserRelationshipCache.isFollowing(
+        userId: authorId,
+        username: authorUsername,
+      );
+    }
+
+    final String vis = (visibility ?? 'EVERYONE').trim().toUpperCase();
+
+    // 3. Everyone / Public / Default
+    if (vis.isEmpty || vis == 'EVERYONE' || vis == 'PUBLIC') {
+      return true;
+    }
+
+    // 4. Followers-only visibility
     if (vis == 'FOLLOWERS') {
       // Guests cannot see followers-only content
       if (isGuest || currentUserId == null || currentUserId.trim().isEmpty) {
@@ -128,7 +203,7 @@ class PostVisibilityFilter {
       );
     }
 
-    // 4. Community-only visibility
+    // 5. Community-only visibility
     if (vis == 'COMMUNITY_ONLY') {
       return true;
     }

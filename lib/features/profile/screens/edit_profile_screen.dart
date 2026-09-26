@@ -7,7 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/routes.dart';
-import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -15,8 +14,6 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../auth/auth_provider.dart';
-import '../../profile_setup/models/community_model.dart';
-import '../../profile_setup/profile_setup_service.dart';
 import '../../profile_setup/provider/profile_setup_provider.dart';
 import '../provider/profile_provider.dart';
 import '../widgets/identity_bottom_sheet.dart';
@@ -57,7 +54,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _pronouns = List<String>.from(provider.pronouns);
     }
     _interests = List<String>.from(provider.interests);
-    if (provider.userCommunities.isNotEmpty) {
+    if (provider.identities.isNotEmpty) {
+      _identity = List<String>.from(provider.identities);
+    } else if (provider.userCommunities.isNotEmpty) {
       _identity = provider.userCommunities.map((c) => c.name).toList();
     } else {
       _identity = <String>[];
@@ -264,7 +263,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
     final ProfileProvider profileProvider = context.read<ProfileProvider>();
-    final ApiClient apiClient = context.read<ApiClient>();
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     final NavigatorState navigator = Navigator.of(context);
 
@@ -300,10 +298,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
     }
 
-    final List<String> currentCommunityNames =
-        profileProvider.userCommunities.map((c) => c.name).toList();
-    final bool communitiesChanged =
-        !_areListsEqual(_identity, currentCommunityNames);
+    final List<String> currentIdentities = profileProvider.identities.isNotEmpty
+        ? profileProvider.identities
+        : profileProvider.userCommunities.map((c) => c.name).toList();
+    final bool identitiesChanged =
+        !_areListsEqual(_identity, currentIdentities);
 
     final bool hasChanges = updateDisplayName != null ||
         updateUsername != null ||
@@ -311,7 +310,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         updatePronouns != null ||
         updateInterests != null ||
         updateAvatarBase64 != null ||
-        communitiesChanged;
+        identitiesChanged;
 
     if (!hasChanges) {
       navigator.pop();
@@ -337,43 +336,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
     }
 
-    if (communitiesChanged) {
-      try {
-        final ProfileSetupService setupService =
-            ProfileSetupService(apiClient);
-        final List<CommunityModel> allComms =
-            await setupService.getCommunities();
-        final Set<String> targetIds = <String>{};
-        for (final String idName in _identity) {
-          final CommunityModel match = allComms.firstWhere(
-            (c) => c.name.trim().toLowerCase() == idName.trim().toLowerCase(),
-            orElse: () => const CommunityModel(id: '', name: '', description: ''),
-          );
-          if (match.id.isNotEmpty) {
-            targetIds.add(match.id);
-          }
-        }
-        final Set<String> currentIds = profileProvider.userCommunities
-            .map((c) => c.id)
-            .where((id) => id.isNotEmpty)
-            .toSet();
-
-        final Set<String> toJoin = targetIds.difference(currentIds);
-        final Set<String> toLeave = currentIds.difference(targetIds);
-
-        if (toLeave.isNotEmpty) {
-          debugPrint('🚀 [EditProfile] Leaving ${toLeave.length} communities: $toLeave');
-          await setupService.leaveCommunities(toLeave);
-        }
-
-        if (toJoin.isNotEmpty) {
-          debugPrint('🚀 [EditProfile] Joining ${toJoin.length} communities: $toJoin');
-          await setupService.joinCommunities(toJoin);
-        }
-        await profileProvider.fetchUserCommunities(userId, forceRefresh: true);
-      } catch (e) {
-        debugPrint('⚠️ [EditProfile] Failed to update communities: $e');
-      }
+    if (identitiesChanged) {
+      await profileProvider.saveIdentities(userId, _identity);
     }
 
     if (!mounted) return;
@@ -419,58 +383,67 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 horizontal: AppSpacing.lg,
                 vertical: AppSpacing.md,
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Text(
-                      'Cancel',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: context.themeTextMuted,
-                        fontSize: 14,
+              child: SizedBox(
+                height: 38,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: <Widget>[
+                    Center(
+                      child: Text(
+                        'Edit profile',
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: context.themeTextPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 17,
+                        ),
                       ),
                     ),
-                  ),
-                  Text(
-                    'Edit profile',
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: context.themeTextPrimary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 17,
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: _isSaving ? null : _handleSave,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradientButton,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: _isSaving
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              'Save',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: <Widget>[
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Text(
+                            'Cancel',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: context.themeTextMuted,
+                              fontSize: 14,
                             ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: _isSaving ? null : _handleSave,
+                          child: Container(
+                            width: 68,
+                            height: 34,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              gradient: AppColors.primaryGradientButton,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: _isSaving
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    'Save',
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
@@ -729,9 +702,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         await profileProv.fetchUserCommunities(uid, forceRefresh: true);
                         if (mounted) {
                           setState(() {
-                            _identity = profileProv.userCommunities
-                                .map((c) => c.name)
-                                .toList();
+                            _identity = profileProv.identities.isNotEmpty
+                                ? List<String>.from(profileProv.identities)
+                                : profileProv.userCommunities
+                                    .map((c) => c.name)
+                                    .toList();
                           });
                         }
                       }

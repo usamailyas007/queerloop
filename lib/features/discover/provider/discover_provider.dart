@@ -100,6 +100,10 @@ class DiscoverProvider extends ChangeNotifier {
 
   List<DiscoverSearchResult> _filterVisiblePosts(List<DiscoverSearchResult> list) {
     return list.where((DiscoverSearchResult p) {
+      final bool isFollowing = UserRelationshipCache.isFollowing(
+        userId: p.authorId,
+        username: p.authorUsername,
+      );
       return PostVisibilityFilter.canViewPost(
         visibility: p.visibility,
         authorId: p.authorId,
@@ -107,6 +111,8 @@ class DiscoverProvider extends ChangeNotifier {
         currentUserId: _currentUserId,
         currentUsername: _currentUsername,
         isGuest: _currentUserId == null || _currentUserId!.isEmpty,
+        isFollowing: isFollowing,
+        isAuthorPrivate: p.isAuthorPrivate,
       );
     }).toList();
   }
@@ -487,12 +493,14 @@ class DiscoverProvider extends ChangeNotifier {
       int liveMatchCount = 0;
       final Set<String> seen = <String>{};
       for (final PostItemModel p in _liveHomePosts) {
+        if (DeletedPostsRegistry.isDeleted(p.id)) continue;
         final String cLower = p.content.toLowerCase();
         if (cLower.contains('#$clean') || cLower.contains(clean)) {
           if (seen.add(p.id)) liveMatchCount++;
         }
       }
       for (final ReelItemModel r in _liveHomeReels) {
+        if (DeletedPostsRegistry.isDeleted(r.id)) continue;
         final String cLower = r.caption.toLowerCase();
         final bool hasTag = r.tags.any(
           (String t) => t.toLowerCase().replaceAll('#', '') == clean,
@@ -508,13 +516,20 @@ class DiscoverProvider extends ChangeNotifier {
         existingCount = int.tryParse(m.group(1)!) ?? 0;
       }
 
-      final int bestCount =
-          liveMatchCount > existingCount ? liveMatchCount : existingCount;
-      if (bestCount > existingCount) {
+      int countToUse = existingCount;
+      if (_liveHomePosts.isNotEmpty || _liveHomeReels.isNotEmpty) {
+        if (DeletedPostsRegistry.allDeletedIds.isNotEmpty) {
+          countToUse = liveMatchCount;
+        } else {
+          countToUse = liveMatchCount > existingCount ? liveMatchCount : existingCount;
+        }
+      }
+
+      final String countText = countToUse > 1000
+          ? '${(countToUse / 1000).toStringAsFixed(1)}K posts'
+          : '$countToUse ${countToUse == 1 ? 'post' : 'posts'}';
+      if (countText != item.postsCount) {
         changed = true;
-        final String countText = bestCount > 1000
-            ? '${(bestCount / 1000).toStringAsFixed(1)}K posts'
-            : '$bestCount ${bestCount == 1 ? 'post' : 'posts'}';
         return item.copyWith(postsCount: countText);
       }
       return item;

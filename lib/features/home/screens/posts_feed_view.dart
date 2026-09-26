@@ -66,6 +66,8 @@ class PostsFeedView extends StatelessWidget {
     int totalComments, {
     String? postAuthorId,
     bool allowComments = true,
+    String allowCommentsFrom = 'everyone',
+    String? authorUsername,
   }) {
     showModalBottomSheet<void>(
       context: context,
@@ -77,8 +79,31 @@ class PostsFeedView extends StatelessWidget {
           postAuthorId: postAuthorId,
           totalComments: totalComments,
           allowComments: allowComments,
+          allowCommentsFrom: allowCommentsFrom,
+          authorUsername: authorUsername,
           onCommentAdded: () {
             context.read<HomeFeedProvider>().incrementCommentCount(postId);
+            try {
+              context.read<ProfileProvider>().incrementCommentCount(postId);
+            } catch (_) {}
+          },
+          onCommentDeleted: (int deletedCount, int remainingCount) {
+            context
+                .read<HomeFeedProvider>()
+                .setCommentCount(postId, remainingCount);
+            try {
+              context
+                  .read<ProfileProvider>()
+                  .updatePostCommentCount(postId, remainingCount);
+            } catch (_) {}
+          },
+          onCommentCountChanged: (int count) {
+            context.read<HomeFeedProvider>().setCommentCount(postId, count);
+            try {
+              context
+                  .read<ProfileProvider>()
+                  .updatePostCommentCount(postId, count);
+            } catch (_) {}
           },
         );
       },
@@ -336,6 +361,8 @@ class PostsFeedView extends StatelessWidget {
                   item.commentsCount,
                   postAuthorId: item.authorId,
                   allowComments: item.allowComments,
+                  allowCommentsFrom: item.allowCommentsFrom,
+                  authorUsername: item.username,
                 );
               }
             },

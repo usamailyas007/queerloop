@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/cache/user_relationship_cache.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
+import '../../home/provider/home_feed_provider.dart';
 import '../../home/screens/reels_feed_view.dart';
-import '../../home/widgets/comments_bottom_sheet.dart';
 import '../../home/widgets/post_feed_card.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../models/discover_models.dart';
 
 /// 3-column grid of search result cards with dynamic image/video thumbnails and playback.
@@ -36,7 +37,7 @@ class SearchPostsGrid extends StatelessWidget {
       final String? thumb = (res.thumbnailUrl != null && res.thumbnailUrl!.isNotEmpty)
           ? res.thumbnailUrl
           : (res.videoUrl != null && res.videoUrl!.contains('/videos/processed/')
-              ? res.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumbnail.jpg')
+              ? res.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg')
               : (isVideoUrl ? null : (img.startsWith('http') ? img : null)));
 
       return ReelItemModel(
@@ -56,19 +57,31 @@ class SearchPostsGrid extends StatelessWidget {
         likesCount: res.likesCount ?? 0,
         commentsCount: res.commentsCount ?? 0,
         viewsCount: res.viewsCount,
+        isLiked: res.isLiked,
+        isSaved: res.isSaved,
         tags: const <String>[],
       );
     }).toList();
   }
 
   void _openReelPlayer(BuildContext context, int initialIndex) {
-    final List<ReelItemModel> searchReels = _buildSearchReels();
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    final ProfileProvider profile = context.read<ProfileProvider>();
+    final List<ReelItemModel> searchReels = _buildSearchReels().map((ReelItemModel r) {
+      final bool liked = homeFeed.isPostLiked(r.id) || profile.isPostLiked(r.id) || r.isLiked;
+      final bool saved = homeFeed.isPostSaved(r.id) || profile.isPostSaved(r.id) || r.isSaved;
+      return r.copyWith(
+        isLiked: liked,
+        isSaved: saved,
+        likesCount: r.likesCount,
+      );
+    }).toList();
     if (searchReels.isEmpty) return;
 
     Navigator.push<void>(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => Scaffold(
+        builder: (BuildContext routeContext) => Scaffold(
           backgroundColor: Colors.black,
           body: Stack(
             children: <Widget>[
@@ -84,7 +97,8 @@ class SearchPostsGrid extends StatelessWidget {
                     vertical: 12,
                   ),
                   child: GestureDetector(
-                    onTap: () => Navigator.pop(context),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.of(routeContext).pop(),
                     child: Container(
                       width: 38,
                       height: 38,
@@ -114,78 +128,42 @@ class SearchPostsGrid extends StatelessWidget {
     final bool isHttp = img.startsWith('http://') || img.startsWith('https://');
     final bool isAsset = img.startsWith('assets/');
     final bool isText = item.type == 'TEXT' || (img.isEmpty && item.mediaRefs.isEmpty);
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    final ProfileProvider profile = context.read<ProfileProvider>();
+    final String postId = item.id ?? 'search_${item.caption.hashCode}';
+    final bool isLiked = homeFeed.isPostLiked(postId) || profile.isPostLiked(postId) || item.isLiked;
+    final bool isSaved = homeFeed.isPostSaved(postId) || profile.isPostSaved(postId) || item.isSaved;
+    final int rawLikes = item.likesCount ?? 0;
+    final int likesCount = rawLikes;
 
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.8,
-        minChildSize: 0.4,
-        maxChildSize: 0.95,
-        builder: (_, ScrollController scrollController) => Container(
-          decoration: BoxDecoration(
-            color: ctx.themeBackground,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: ListView(
-            controller: scrollController,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            children: <Widget>[
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: ctx.themeBorderStrong,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              PostFeedCard(
-                post: PostItemModel(
-                  id: item.id ?? 'search_${item.caption.hashCode}',
-                  authorId: item.authorId,
-                  username: (item.authorUsername != null && item.authorUsername!.trim().isNotEmpty)
-                      ? item.authorUsername!.trim()
-                      : '@creator',
-                  pronounsTime: 'they/them · recent',
-                  avatarAsset: (item.authorAvatar != null && item.authorAvatar!.trim().isNotEmpty)
-                      ? item.authorAvatar!.trim()
-                      : AppImages.user1,
-                  content: (item.caption != null && item.caption!.trim().isNotEmpty)
-                      ? item.caption!
-                      : 'Shared post',
-                  likesCount: item.likesCount ?? 0,
-                  commentsCount: item.commentsCount ?? 0,
-                  postImageUrl: (!isText && isHttp) ? img : null,
-                  postImageAsset: (!isText && isAsset) ? img : null,
-                  postType: isText ? 'TEXT' : (item.type ?? 'PHOTO'),
-                  communityId: item.communityId,
-                  isLiked: item.isLiked,
-                ),
-                onLikeToggle: () {},
-                onSaveToggle: () {},
-                onOpenComments: () {
-                  showModalBottomSheet<void>(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => CommentsBottomSheet(
-                      postId: item.id,
-                      postAuthorId: item.authorId,
-                      communityId: item.communityId,
-                      totalComments: item.commentsCount ?? 0,
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+    final PostItemModel post = PostItemModel(
+      id: postId,
+      authorId: item.authorId,
+      username: (item.authorUsername != null && item.authorUsername!.trim().isNotEmpty)
+          ? item.authorUsername!.trim()
+          : '@creator',
+      pronounsTime: 'they/them · recent',
+      avatarAsset: (item.authorAvatar != null && item.authorAvatar!.trim().isNotEmpty)
+          ? item.authorAvatar!.trim()
+          : AppImages.user1,
+      content: (item.caption != null && item.caption!.trim().isNotEmpty)
+          ? item.caption!
+          : 'Shared post',
+      likesCount: likesCount,
+      commentsCount: homeFeed.getCommentCount(postId) ??
+          profile.getCommentCount(postId) ??
+          item.commentsCount ??
+          0,
+      viewsCount: item.viewsCount,
+      postImageUrl: (!isText && isHttp) ? img : null,
+      postImageAsset: (!isText && isAsset) ? img : null,
+      postType: isText ? 'TEXT' : (item.type ?? 'PHOTO'),
+      communityId: item.communityId,
+      isLiked: isLiked,
+      isSaved: isSaved,
     );
+
+    PostFeedCard.openFullscreen(context, post);
   }
 
   void _handleTap(BuildContext context, int index) {
@@ -294,9 +272,20 @@ class SearchPostsGrid extends StatelessWidget {
   }
 
   Widget _buildThumbnail(DiscoverSearchResult item) {
-    final String url = (item.thumbnailUrl != null && item.thumbnailUrl!.trim().isNotEmpty)
+    String url = (item.thumbnailUrl != null && item.thumbnailUrl!.trim().isNotEmpty)
         ? item.thumbnailUrl!.trim()
         : item.imageAsset.trim();
+
+    if (url.contains('/videos/processed/') && url.endsWith('/thumbnail.jpg')) {
+      url = url.replaceAll('/thumbnail.jpg', '/thumb.0000000.jpg');
+    } else if (url.contains('/videos/processed/') && url.endsWith('/master.m3u8')) {
+      url = url.replaceAll('/master.m3u8', '/thumb.0000000.jpg');
+    } else if (item.isReel &&
+        item.videoUrl != null &&
+        item.videoUrl!.contains('/videos/processed/') &&
+        (url.isEmpty || url.endsWith('.mp4') || url.endsWith('.m3u8'))) {
+      url = item.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+    }
 
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return Image.network(

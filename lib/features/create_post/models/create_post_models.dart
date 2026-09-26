@@ -11,6 +11,8 @@ class AuthorInfo {
     required this.displayName,
     this.avatarUrl,
     this.hideMyLikes,
+    this.isPrivate = false,
+    this.allowCommentsFrom = 'everyone',
   });
 
   final String id;
@@ -18,6 +20,8 @@ class AuthorInfo {
   final String displayName;
   final String? avatarUrl;
   final bool? hideMyLikes;
+  final bool isPrivate;
+  final String allowCommentsFrom;
 }
 
 class AuthorProfileCache {
@@ -28,6 +32,17 @@ class AuthorProfileCache {
     final String clean = userId.trim();
     if (clean.isEmpty) return null;
     return _cache[clean];
+  }
+
+  static AuthorInfo? getByName(String username) {
+    final String clean = username.replaceAll('@', '').trim().toLowerCase();
+    if (clean.isEmpty) return null;
+    for (final AuthorInfo info in _cache.values) {
+      if (info.username.replaceAll('@', '').trim().toLowerCase() == clean) {
+        return info;
+      }
+    }
+    return null;
   }
 
   static void set(String userId, AuthorInfo info) {
@@ -69,6 +84,30 @@ class GalleryMediaItem {
   final AssetEntity? assetEntity;
   final String? mediaUrl;
   final String? thumbnailUrl;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'id': id,
+    'assetPath': assetPath,
+    'videoAsset': videoAsset,
+    'isVideo': isVideo,
+    'duration': duration,
+    'durationSeconds': durationSeconds,
+    'filePath': filePath,
+    'mediaUrl': mediaUrl,
+    'thumbnailUrl': thumbnailUrl,
+  };
+
+  factory GalleryMediaItem.fromJson(Map<String, dynamic> json) => GalleryMediaItem(
+    id: json['id'] as String? ?? '',
+    assetPath: json['assetPath'] as String? ?? '',
+    videoAsset: json['videoAsset'] as String?,
+    isVideo: json['isVideo'] as bool? ?? false,
+    duration: json['duration'] as String? ?? '',
+    durationSeconds: json['durationSeconds'] as int? ?? 0,
+    filePath: json['filePath'] as String?,
+    mediaUrl: json['mediaUrl'] as String?,
+    thumbnailUrl: json['thumbnailUrl'] as String?,
+  );
 }
 
 enum MediaUploadStatus {
@@ -228,6 +267,9 @@ class PostResponseModel {
     this.visibility,
     this.allowComments = true,
     this.allowDownloads = true,
+    this.isAuthorPrivate = false,
+    this.allowCommentsFrom = 'everyone',
+    this.hasLikeCount = true,
     this.likesCount = 0,
     this.commentsCount = 0,
     this.viewsCount = 0,
@@ -236,6 +278,7 @@ class PostResponseModel {
     this.hideLikes = false,
     this.duration,
     this.postImageUrl,
+    this.thumbnailUrl,
     this.status,
     this.deletedAt,
   });
@@ -255,6 +298,9 @@ class PostResponseModel {
   final String? visibility;
   final bool allowComments;
   final bool allowDownloads;
+  final bool isAuthorPrivate;
+  final String allowCommentsFrom;
+  final bool hasLikeCount;
   final int likesCount;
   final int commentsCount;
   final int viewsCount;
@@ -263,6 +309,7 @@ class PostResponseModel {
   final bool hideLikes;
   final String? duration;
   final String? postImageUrl;
+  final String? thumbnailUrl;
   final String? status;
   final String? deletedAt;
 
@@ -288,6 +335,9 @@ class PostResponseModel {
     String? visibility,
     bool? allowComments,
     bool? allowDownloads,
+    bool? isAuthorPrivate,
+    String? allowCommentsFrom,
+    bool? hasLikeCount,
     int? likesCount,
     int? commentsCount,
     int? viewsCount,
@@ -296,6 +346,7 @@ class PostResponseModel {
     bool? hideLikes,
     String? duration,
     String? postImageUrl,
+    String? thumbnailUrl,
     String? status,
     String? deletedAt,
   }) {
@@ -315,6 +366,9 @@ class PostResponseModel {
       visibility: visibility ?? this.visibility,
       allowComments: allowComments ?? this.allowComments,
       allowDownloads: allowDownloads ?? this.allowDownloads,
+      isAuthorPrivate: isAuthorPrivate ?? this.isAuthorPrivate,
+      allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
+      hasLikeCount: hasLikeCount ?? this.hasLikeCount,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
       viewsCount: viewsCount ?? this.viewsCount,
@@ -323,6 +377,7 @@ class PostResponseModel {
       hideLikes: hideLikes ?? this.hideLikes,
       duration: duration ?? this.duration,
       postImageUrl: postImageUrl ?? this.postImageUrl,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       status: status ?? this.status,
       deletedAt: deletedAt ?? this.deletedAt,
     );
@@ -586,6 +641,8 @@ class PostResponseModel {
                     ?.toString();
                 final bool? hideLikes =
                     (userObj['hideMyLikes'] ?? userObj['hideLikes']) as bool?;
+                final bool isPriv = (userObj['isPrivate'] ?? userObj['is_private']) == true;
+                final String acf = (userObj['allowCommentsFrom'] ?? userObj['allow_comments_from'] ?? 'everyone').toString().trim().toLowerCase();
                 final AuthorInfo info = AuthorInfo(
                   id: finalAuthorId,
                   username: u.trim(),
@@ -594,6 +651,8 @@ class PostResponseModel {
                       : u.trim(),
                   avatarUrl: a,
                   hideMyLikes: hideLikes,
+                  isPrivate: isPriv,
+                  allowCommentsFrom: acf,
                 );
                 AuthorProfileCache.set(finalAuthorId, info);
                 cachedAuthor = info;
@@ -644,6 +703,51 @@ class PostResponseModel {
             ? parsedRawType
             : (extractedMediaRefs.isNotEmpty ? 'PHOTO' : 'TEXT'));
 
+    final String? rootAllowCommentsFrom =
+        map['allowCommentsFrom']?.toString() ??
+        map['allow_comments_from']?.toString();
+    final String? authorAllowCommentsFrom = (map['author'] is Map
+            ? (map['author']['allowCommentsFrom'] ?? map['author']['allow_comments_from'])
+            : null)?.toString() ??
+        (map['user'] is Map
+            ? (map['user']['allowCommentsFrom'] ?? map['user']['allow_comments_from'])
+            : null)?.toString();
+
+    final String resolvedAllowCommentsFrom = (rootAllowCommentsFrom ??
+            authorAllowCommentsFrom ??
+            cachedAuthor?.allowCommentsFrom ??
+            'everyone')
+        .trim()
+        .toLowerCase();
+
+    final bool resolvedIsAuthorPrivate = (map['author'] is Map
+            ? (map['author']['isPrivate'] ?? map['author']['is_private'])
+            : null) == true ||
+        (map['user'] is Map
+            ? (map['user']['isPrivate'] ?? map['user']['is_private'])
+            : null) == true ||
+        map['isPrivate'] == true ||
+        map['is_private'] == true ||
+        map['isAuthorPrivate'] == true ||
+        cachedAuthor?.isPrivate == true;
+
+    if (finalAuthorId != null && finalAuthorId.isNotEmpty) {
+      if (cachedAuthor == null && (finalAuthorName != null || finalAuthorDisplayName != null)) {
+        AuthorProfileCache.set(
+          finalAuthorId,
+          AuthorInfo(
+            id: finalAuthorId,
+            username: finalAuthorName ?? '',
+            displayName: finalAuthorDisplayName ?? finalAuthorName ?? '',
+            avatarUrl: finalAuthorAvatar,
+            hideMyLikes: (map['hideLikes'] ?? map['hideMyLikes']) as bool?,
+            isPrivate: resolvedIsAuthorPrivate,
+            allowCommentsFrom: resolvedAllowCommentsFrom,
+          ),
+        );
+      }
+    }
+
     return PostResponseModel(
       id: (map['id'] ?? map['_id'] ?? '').toString(),
       caption: (map['body'] ??
@@ -667,20 +771,91 @@ class PostResponseModel {
       visibility: map['visibility']?.toString(),
       allowComments: (map['allowComments'] ?? map['allowComment']) as bool? ?? true,
       allowDownloads: (map['allowDownloads'] ?? map['allowSharing'] ?? map['allowDownload']) as bool? ?? true,
-      likesCount: rawLikes is num ? rawLikes.toInt() : int.tryParse(rawLikes?.toString() ?? '0') ?? 0,
-      commentsCount: rawComments is num ? rawComments.toInt() : int.tryParse(rawComments?.toString() ?? '0') ?? 0,
+      isAuthorPrivate: resolvedIsAuthorPrivate,
+      allowCommentsFrom: resolvedAllowCommentsFrom,
+      hasLikeCount: rawLikes != null,
+      likesCount: () {
+        if (rawLikes is num) return rawLikes.toInt();
+        if (rawLikes is List) return rawLikes.length;
+        if (rawLikes != null) return int.tryParse(rawLikes.toString()) ?? 0;
+        return 0;
+      }(),
+      commentsCount: () {
+        if (rawComments is num) return rawComments.toInt();
+        if (rawComments is List) return rawComments.length;
+        if (rawComments != null) return int.tryParse(rawComments.toString()) ?? 0;
+        return 0;
+      }(),
       viewsCount: () {
         final dynamic rawViews = map['viewCount'] ??
             map['viewsCount'] ??
+            map['view_count'] ??
+            map['views_count'] ??
             map['views'] ??
             map['playCount'] ??
             map['playsCount'] ??
+            map['play_count'] ??
+            map['plays_count'] ??
             map['plays'] ??
-            (map['_count'] is Map ? (map['_count']['views'] ?? map['_count']['plays']) : null);
-        return rawViews is num ? rawViews.toInt() : int.tryParse(rawViews?.toString() ?? '0') ?? 0;
+            map['impressions'] ??
+            map['totalViews'] ??
+            map['totalPlays'] ??
+            (map['metadata'] is Map
+                ? (map['metadata']['views'] ??
+                    map['metadata']['plays'] ??
+                    map['metadata']['viewCount'] ??
+                    map['metadata']['playCount'])
+                : null) ??
+            (map['_count'] is Map
+                ? (map['_count']['views'] ??
+                    map['_count']['plays'] ??
+                    map['_count']['viewCount'] ??
+                    map['_count']['playCount'])
+                : null);
+        return rawViews is num
+            ? rawViews.toInt()
+            : int.tryParse(rawViews?.toString() ?? '0') ?? 0;
       }(),
-      isLiked: (map['isLiked'] ?? map['liked'] ?? false) == true,
-      isSaved: (map['isSaved'] ?? map['saved'] ?? false) == true,
+      isLiked: () {
+        final dynamic raw = map['isLiked'] ??
+            map['is_liked'] ??
+            map['liked'] ??
+            map['hasLiked'] ??
+            map['has_liked'] ??
+            map['userLiked'] ??
+            map['user_liked'] ??
+            map['likedByMe'] ??
+            map['liked_by_me'] ??
+            map['isLikedByMe'] ??
+            map['is_liked_by_me'] ??
+            (map['viewer'] is Map
+                ? (map['viewer']['isLiked'] ?? map['viewer']['liked'])
+                : null) ??
+            (map['metadata'] is Map
+                ? (map['metadata']['isLiked'] ?? map['metadata']['is_liked'])
+                : null);
+        return raw == true || raw == 1 || raw == 'true';
+      }(),
+      isSaved: () {
+        final dynamic raw = map['isSaved'] ??
+            map['is_saved'] ??
+            map['saved'] ??
+            map['hasSaved'] ??
+            map['has_saved'] ??
+            map['userSaved'] ??
+            map['user_saved'] ??
+            map['savedByMe'] ??
+            map['saved_by_me'] ??
+            map['isSavedByMe'] ??
+            map['is_saved_by_me'] ??
+            (map['viewer'] is Map
+                ? (map['viewer']['isSaved'] ?? map['viewer']['saved'])
+                : null) ??
+            (map['metadata'] is Map
+                ? (map['metadata']['isSaved'] ?? map['metadata']['is_saved'])
+                : null);
+        return raw == true || raw == 1 || raw == 'true';
+      }(),
       hideLikes: (map['hideLikes'] ??
               map['hideMyLikes'] ??
               (map['author'] is Map
@@ -693,16 +868,79 @@ class PostResponseModel {
               false) ==
           true,
       duration: durationStr,
-      postImageUrl: explicitImageUrl ??
-          (extractedMediaRefs.isNotEmpty && !isVideoType
-              ? ((extractedMediaRefs.first.startsWith('http://') ||
-                      extractedMediaRefs.first.startsWith('https://') ||
-                      extractedMediaRefs.first.startsWith('assets/'))
-                  ? extractedMediaRefs.first
-                  : (finalAuthorId != null && finalAuthorId.isNotEmpty
-                      ? '${AppConfig.cdnUrl}/images/original/$finalAuthorId/${extractedMediaRefs.first.replaceAll(RegExp(r"^/+"), "").replaceAll(RegExp(r"^media/"), "")}.jpg'
-                      : '${AppConfig.cdnUrl}/images/original/${extractedMediaRefs.first.replaceAll(RegExp(r"^/+"), "").replaceAll(RegExp(r"^media/"), "")}.jpg'))
-              : null),
+      postImageUrl: () {
+        final dynamic rawThumb = map['thumbnailUrl'] ??
+            map['thumbnail_url'] ??
+            map['thumbUrl'] ??
+            map['thumbnail'] ??
+            map['posterUrl'] ??
+            map['previewUrl'] ??
+            (map['media'] is Map ? (map['media']['thumbnailUrl'] ?? map['media']['thumbUrl']) : null) ??
+            (map['media'] is List && (map['media'] as List).isNotEmpty && (map['media'] as List).first is Map
+                ? ((map['media'] as List).first['thumbnailUrl'] ?? (map['media'] as List).first['thumbUrl'])
+                : null);
+        String? resolvedThumb = rawThumb?.toString().trim();
+
+        if ((resolvedThumb == null || resolvedThumb.isEmpty) && isVideoType && extractedMediaRefs.isNotEmpty) {
+          final String firstRef = extractedMediaRefs.first.trim();
+          if (!firstRef.startsWith('http://') && !firstRef.startsWith('https://')) {
+            final String clean = firstRef
+                .replaceAll(RegExp(r'^/+'), '')
+                .replaceAll(RegExp(r'^media/'), '');
+            resolvedThumb = '${AppConfig.cdnUrl}/videos/processed/$clean/thumb.0000000.jpg';
+          } else if (firstRef.contains('/videos/processed/')) {
+            resolvedThumb = firstRef.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+          }
+        }
+
+        if (isVideoType) {
+          if (resolvedThumb != null && resolvedThumb.isNotEmpty) {
+            return resolvedThumb;
+          }
+          if (explicitImageUrl != null &&
+              !explicitImageUrl!.endsWith('.mp4') &&
+              !explicitImageUrl!.endsWith('.m3u8')) {
+            return explicitImageUrl;
+          }
+          return null;
+        }
+        return explicitImageUrl ??
+            (extractedMediaRefs.isNotEmpty
+                ? ((extractedMediaRefs.first.startsWith('http://') ||
+                        extractedMediaRefs.first.startsWith('https://') ||
+                        extractedMediaRefs.first.startsWith('assets/'))
+                    ? extractedMediaRefs.first
+                    : (finalAuthorId != null && finalAuthorId.isNotEmpty
+                        ? '${AppConfig.cdnUrl}/images/original/$finalAuthorId/${extractedMediaRefs.first.replaceAll(RegExp(r"^/+"), "").replaceAll(RegExp(r"^media/"), "")}.jpg'
+                        : '${AppConfig.cdnUrl}/images/original/${extractedMediaRefs.first.replaceAll(RegExp(r"^/+"), "").replaceAll(RegExp(r"^media/"), "")}.jpg'))
+                : null);
+      }(),
+      thumbnailUrl: () {
+        final dynamic rawThumb = map['thumbnailUrl'] ??
+            map['thumbnail_url'] ??
+            map['thumbUrl'] ??
+            map['thumbnail'] ??
+            map['posterUrl'] ??
+            map['previewUrl'] ??
+            (map['media'] is Map ? (map['media']['thumbnailUrl'] ?? map['media']['thumbUrl']) : null) ??
+            (map['media'] is List && (map['media'] as List).isNotEmpty && (map['media'] as List).first is Map
+                ? ((map['media'] as List).first['thumbnailUrl'] ?? (map['media'] as List).first['thumbUrl'])
+                : null);
+        String? resolvedThumb = rawThumb?.toString().trim();
+
+        if ((resolvedThumb == null || resolvedThumb.isEmpty) && isVideoType && extractedMediaRefs.isNotEmpty) {
+          final String firstRef = extractedMediaRefs.first.trim();
+          if (!firstRef.startsWith('http://') && !firstRef.startsWith('https://')) {
+            final String clean = firstRef
+                .replaceAll(RegExp(r'^/+'), '')
+                .replaceAll(RegExp(r'^media/'), '');
+            resolvedThumb = '${AppConfig.cdnUrl}/videos/processed/$clean/thumb.0000000.jpg';
+          } else if (firstRef.contains('/videos/processed/')) {
+            resolvedThumb = firstRef.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+          }
+        }
+        return resolvedThumb;
+      }(),
       status: map['status']?.toString(),
       deletedAt: map['deletedAt']?.toString() ?? map['deleted_at']?.toString(),
     );

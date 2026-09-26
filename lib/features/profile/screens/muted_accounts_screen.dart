@@ -36,7 +36,7 @@ class _MutedAccountsScreenState extends State<MutedAccountsScreen> {
     final ProfileProvider provider = context.read<ProfileProvider>();
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
 
-    provider.unmuteUser(user.userId);
+    provider.unmuteUser(user.userId, username: user.username);
 
     AppSnackBar.show(
       context,

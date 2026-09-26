@@ -80,6 +80,7 @@ class AuthProvider extends ChangeNotifier {
   AuthStatus get status => _status;
   User? get user => _user;
   String? get userId => _user?.id;
+  String? get username => _user?.displayName;
   String? get error => _error;
   String? get errorCode => _errorCode;
   dynamic get errorData => _errorData;
@@ -482,6 +483,10 @@ class AuthProvider extends ChangeNotifier {
   // ── Sign out ──────────────────────────────────────────────────────────────
 
   Future<void> signOut() async {
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
+    ReelVideoPreloader.instance.disposeAll();
     final String? currentToken = _client.authToken;
     try {
       // 1. Unregister push notification device token on backend while authenticated
@@ -628,7 +633,11 @@ class AuthProvider extends ChangeNotifier {
     _status = AuthStatus.signedOut;
     _error = null;
     _service.clearAllLocalData();
-    // Clear video + shared-post caches so next user starts fresh
+    // Silence and clear video + shared-post caches so next user starts fresh
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
+    ReelVideoPreloader.instance.disposeAll();
     ReelVideoPreloader.instance.clearAllCaches().ignore();
     UserRelationshipCache.clear();
     notifyListeners();

@@ -341,6 +341,7 @@ class DiscoverService {
               commentsCount: lp.commentsCount,
               viewsCount: lp.viewsCount,
               isLiked: lp.isLiked,
+              isSaved: lp.isSaved,
               communityId: lp.communityId,
             ));
             existingIds.add(lp.id);
@@ -402,7 +403,7 @@ class DiscoverService {
               }
 
               final String resolvedVid = url ?? '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
-              final String resolvedThumb = thumb ?? '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumbnail.jpg';
+              final String resolvedThumb = thumb ?? '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumb.0000000.jpg';
 
               _mediaStatusCache[cleanRef] = <String, String>{
                 'exists': 'true',
@@ -430,8 +431,8 @@ class DiscoverService {
           // Reel exists in live posts!
           final String resolvedVid = matchingLive.postImageUrl ??
               '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
-          final String resolvedThumb =
-              '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumbnail.jpg';
+          final String resolvedThumb = matchingLive.thumbnailUrl ??
+              '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumb.0000000.jpg';
 
           _mediaStatusCache[cleanRef] = <String, String>{
             'exists': 'true',
@@ -449,6 +450,7 @@ class DiscoverService {
             commentsCount: matchingLive.commentsCount,
             viewsCount: matchingLive.viewsCount,
             isLiked: matchingLive.isLiked,
+            isSaved: matchingLive.isSaved,
             authorId: matchingLive.authorId ?? r.authorId,
             authorUsername: matchingLive.authorName ?? matchingLive.authorDisplayName ?? r.authorUsername,
             authorAvatar: matchingLive.authorAvatar ?? r.authorAvatar,
@@ -468,7 +470,7 @@ class DiscoverService {
                 continue;
               }
               final String resolvedVid = url ?? '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
-              final String resolvedThumb = thumb ?? '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumbnail.jpg';
+              final String resolvedThumb = thumb ?? '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumb.0000000.jpg';
               _mediaStatusCache[cleanRef] = <String, String>{
                 'exists': 'true',
                 'url': resolvedVid,

@@ -10,6 +10,7 @@ import '../widgets/home_top_header_tabs.dart';
 import '../../auth/auth_provider.dart';
 import '../../create_post/widgets/create_post_type_bottom_sheet.dart';
 import '../../discover/screens/discover_screen.dart';
+import '../../messages/provider/messages_provider.dart';
 import '../../messages/screens/messages_screen.dart';
 import '../../profile/provider/profile_provider.dart';
 import 'discover_tab_screen.dart';
@@ -132,6 +133,11 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
       ReelVideoPreloader.instance.muteAll();
     } else {
       ReelVideoPreloader.instance.setFeedVisible(true);
+    }
+    if (index == 3) {
+      try {
+        context.read<MessagesProvider>().setSearchQuery('');
+      } catch (_) {}
     }
     provider.setBottomNavIndex(index);
   }

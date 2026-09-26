@@ -165,6 +165,8 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     int totalComments, {
     String? postAuthorId,
     bool allowComments = true,
+    String allowCommentsFrom = 'everyone',
+    String? authorUsername,
   }) {
     showModalBottomSheet<void>(
       context: context,
@@ -176,8 +178,31 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
           postAuthorId: postAuthorId,
           totalComments: totalComments,
           allowComments: allowComments,
+          allowCommentsFrom: allowCommentsFrom,
+          authorUsername: authorUsername,
           onCommentAdded: () {
             context.read<HomeFeedProvider>().incrementCommentCount(postId);
+            try {
+              context.read<ProfileProvider>().incrementCommentCount(postId);
+            } catch (_) {}
+          },
+          onCommentDeleted: (int deletedCount, int remainingCount) {
+            context
+                .read<HomeFeedProvider>()
+                .setCommentCount(postId, remainingCount);
+            try {
+              context
+                  .read<ProfileProvider>()
+                  .updatePostCommentCount(postId, remainingCount);
+            } catch (_) {}
+          },
+          onCommentCountChanged: (int count) {
+            context.read<HomeFeedProvider>().setCommentCount(postId, count);
+            try {
+              context
+                  .read<ProfileProvider>()
+                  .updatePostCommentCount(postId, count);
+            } catch (_) {}
           },
         );
       },
@@ -415,6 +440,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
 
           final bool isItemLiked = provider.isPostLiked(item.id) || item.isLiked;
           final bool isItemSaved = provider.isPostSaved(item.id) || item.isSaved;
+          final int itemLikesCount = item.likesCount;
 
           return ReelFeedCard(
             key: ValueKey<String>(item.id),
@@ -422,6 +448,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
               isFollowing: isAuthorFollowed,
               isLiked: isItemLiked,
               isSaved: isItemSaved,
+              likesCount: itemLikesCount,
             ),
             isActive: isVisuallyActive,
             hasBottomBar: widget.hasBottomBar,
@@ -434,9 +461,12 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                 final bool currentlyLiked =
                     provider.isPostLiked(item.id) || item.isLiked;
                 final bool newLiked = !currentlyLiked;
-                final int newCount = newLiked
-                    ? item.likesCount + 1
-                    : (item.likesCount > 0 ? item.likesCount - 1 : 0);
+                final int currentCount = item.likesCount;
+                final int newCount = item.hasLikeCount
+                    ? (newLiked
+                        ? currentCount + 1
+                        : (currentCount > 0 ? currentCount - 1 : 0))
+                    : currentCount;
 
                 if (widget.customReels != null) {
                   final int idx = _localReels.indexWhere((r) => r.id == item.id);
@@ -536,6 +566,8 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                   item.commentsCount,
                   postAuthorId: item.authorId,
                   allowComments: item.allowComments,
+                  allowCommentsFrom: item.allowCommentsFrom,
+                  authorUsername: item.username,
                 );
               }
             },

@@ -84,7 +84,7 @@ class ChatBubble extends StatelessWidget {
 
   Widget _buildSharedPostThumbnail(BuildContext context) {
     final SharedPostData? cached = SharedPostCache.get(message.sharedPostId);
-    final String? thumb = (cached != null &&
+    String? thumb = (cached != null &&
             cached.thumbnailUrl != null &&
             cached.thumbnailUrl!.isNotEmpty)
         ? cached.thumbnailUrl
@@ -92,6 +92,21 @@ class ChatBubble extends StatelessWidget {
                 message.postThumbnailAsset!.trim().isNotEmpty)
             ? message.postThumbnailAsset!.trim()
             : message.mediaUrl?.trim());
+
+    if (thumb != null) {
+      if (thumb.contains('/videos/processed/') && thumb.endsWith('/thumbnail.jpg')) {
+        thumb = thumb.replaceAll('/thumbnail.jpg', '/thumb.0000000.jpg');
+      } else if (thumb.contains('/videos/processed/') && thumb.endsWith('/master.m3u8')) {
+        thumb = thumb.replaceAll('/master.m3u8', '/thumb.0000000.jpg');
+      } else if (thumb.contains('/images/original/') && message.postType == 'reel') {
+        final RegExp reg = RegExp(r'/([0-9a-fA-F-]{36})\.jpg$');
+        final Match? m = reg.firstMatch(thumb);
+        if (m != null) {
+          final String mediaId = m.group(1)!;
+          thumb = '${AppConfig.cdnUrl}/videos/processed/$mediaId/thumb.0000000.jpg';
+        }
+      }
+    }
 
     if (thumb != null && thumb.startsWith('http')) {
       return Image.network(
@@ -144,9 +159,12 @@ class ChatBubble extends StatelessWidget {
       );
     }
 
-    // If thumbnail not resolved yet and not in cache, trigger background resolution
+    // If thumbnail or views not resolved yet and not in cache, trigger background resolution
     if (message.sharedPostId != null && message.sharedPostId!.isNotEmpty) {
-      if (cached == null || cached.thumbnailUrl == null) {
+      final bool needsThumb = cached == null || cached.thumbnailUrl == null;
+      final bool needsViews = message.postType == 'reel' &&
+          (message.postViews == null || message.postViews == '0' || cached == null || cached.views == 0);
+      if (needsThumb || needsViews) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           try {
             context.read<MessagesProvider>().resolveSharedPost(
@@ -211,7 +229,9 @@ class ChatBubble extends StatelessWidget {
       int comments = cached?.comments ?? message.postComments ?? 0;
       String? authorId = (message.postAuthorId != null && message.postAuthorId!.isNotEmpty)
           ? message.postAuthorId
-          : null;
+          : (cached?.authorId != null && cached!.authorId!.isNotEmpty
+              ? cached.authorId
+              : null);
 
       // If videoUrl is not resolved yet, fetch the post from backend
       if (resolvedVideo == null || resolvedVideo.isEmpty) {
@@ -234,15 +254,17 @@ class ChatBubble extends StatelessWidget {
             final String firstRef = raw.mediaRefs.first.trim();
             if (firstRef.startsWith('http://') || firstRef.startsWith('https://')) {
               resolvedVideo = firstRef;
-              resolvedThumb ??= firstRef;
+              if (raw.thumbnailUrl != null && raw.thumbnailUrl!.isNotEmpty) {
+                resolvedThumb ??= raw.thumbnailUrl;
+              } else if (firstRef.contains('/videos/processed/')) {
+                resolvedThumb ??= firstRef.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+              }
             } else {
               final String cleanRef = firstRef
                   .replaceAll(RegExp(r'^/+'), '')
                   .replaceAll(RegExp(r'^media/'), '');
               resolvedVideo = '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
-              if (authorId != null && authorId.isNotEmpty) {
-                resolvedThumb ??= '${AppConfig.cdnUrl}/images/original/$authorId/$cleanRef.jpg';
-              }
+              resolvedThumb ??= raw.thumbnailUrl ?? '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumb.0000000.jpg';
             }
           }
         } catch (e) {
@@ -271,7 +293,7 @@ class ChatBubble extends StatelessWidget {
       Navigator.push<void>(
         context,
         MaterialPageRoute<void>(
-          builder: (_) => Scaffold(
+          builder: (BuildContext routeContext) => Scaffold(
             backgroundColor: Colors.black,
             body: Stack(
               children: <Widget>[
@@ -287,7 +309,8 @@ class ChatBubble extends StatelessWidget {
                       vertical: 12,
                     ),
                     child: GestureDetector(
-                      onTap: () => Navigator.pop(context),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => Navigator.of(routeContext).pop(),
                       child: Container(
                         width: 38,
                         height: 38,
@@ -677,16 +700,20 @@ class ChatBubble extends StatelessWidget {
                   ],
 
                   // 2. Shared Post Template Card (Tap to open Post / Reel)
-                  GestureDetector(
-                    onTap: () => _openSharedPostOrReel(context),
-                    child: Container(
-                      width: 220,
-                      decoration: BoxDecoration(
-                        color: context.themeCardBackground,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: context.themeBorder.withValues(alpha: 0.6),
-                        ),
+                  Builder(
+                    builder: (BuildContext context) {
+                      final SharedPostData? cachedPost =
+                          SharedPostCache.get(message.sharedPostId);
+                      return GestureDetector(
+                        onTap: () => _openSharedPostOrReel(context),
+                        child: Container(
+                          width: 220,
+                          decoration: BoxDecoration(
+                            color: context.themeCardBackground,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: context.themeBorder.withValues(alpha: 0.6),
+                            ),
                         boxShadow: <BoxShadow>[
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.08),
@@ -760,10 +787,14 @@ class ChatBubble extends StatelessWidget {
                                           ),
                                           const SizedBox(width: 3),
                                           Text(
-                                            message.postViews ??
-                                                (message.postLikes != null
-                                                    ? '${message.postLikes}'
-                                                    : '0'),
+                                            (message.postViews != null && message.postViews != '0')
+                                                ? message.postViews!
+                                                : (cachedPost != null && cachedPost.views > 0
+                                                    ? '${cachedPost.views}'
+                                                    : (message.postViews ??
+                                                        (message.postLikes != null
+                                                            ? '${message.postLikes}'
+                                                            : '0'))),
                                             style: AppTextStyles.caption
                                                 .copyWith(
                                                   color: Colors.white,
@@ -841,7 +872,9 @@ class ChatBubble extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ),
+                  );
+                },
+              ),
                   if (message.reactionEmoji != null || message.reactions.isNotEmpty)
                     _buildReactions(context),
                 ],

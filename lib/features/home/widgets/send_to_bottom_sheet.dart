@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -21,6 +22,7 @@ class SendToBottomSheet extends StatefulWidget {
     this.reel,
     this.postId,
     this.postAuthor,
+    this.postAuthorId,
     this.postThumbnail,
     this.postCaption,
     super.key,
@@ -29,6 +31,7 @@ class SendToBottomSheet extends StatefulWidget {
   final ReelItemModel? reel;
   final String? postId;
   final String? postAuthor;
+  final String? postAuthorId;
   final String? postThumbnail;
   final String? postCaption;
 
@@ -139,7 +142,19 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
     final String postDescDisplay = widget.reel != null
         ? (widget.reel!.caption.isNotEmpty ? widget.reel!.caption : 'Reel')
         : (widget.postCaption ?? 'Post');
-    final String? postThumb = widget.reel?.thumbnailUrl ?? widget.postThumbnail;
+    String? postThumb = widget.reel?.thumbnailUrl ?? widget.postThumbnail;
+    if (postThumb == null || postThumb.isEmpty) {
+      if (widget.reel?.videoUrl != null && widget.reel!.videoUrl!.contains('/videos/processed/')) {
+        postThumb = widget.reel!.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+      }
+    }
+    if (postThumb != null) {
+      if (postThumb.contains('/videos/processed/') && postThumb.endsWith('/thumbnail.jpg')) {
+        postThumb = postThumb.replaceAll('/thumbnail.jpg', '/thumb.0000000.jpg');
+      } else if (postThumb.contains('/videos/processed/') && postThumb.endsWith('/master.m3u8')) {
+        postThumb = postThumb.replaceAll('/master.m3u8', '/thumb.0000000.jpg');
+      }
+    }
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.82,
@@ -387,26 +402,34 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                         }
                       }
 
+                      final ScaffoldMessengerState messenger =
+                          ScaffoldMessenger.of(context);
+                      final int recipientCount = _selectedUserIds.length;
+
+                      AppSnackBar.showSuccess(
+                        context,
+                        messenger: messenger,
+                        title: 'Sent',
+                        subtitle: 'Shared with $recipientCount recipient(s)!',
+                      );
+
                       Navigator.pop(context);
 
                       if (shareTargetId.isNotEmpty) {
-                        await msgProvider.sharePost(
-                          sharedPostId: shareTargetId,
-                          conversationIds: targetConvIds.isNotEmpty ? targetConvIds : null,
-                          recipientUserIds: targetUserIds.isNotEmpty ? targetUserIds : null,
-                          message: _messageController.text.trim().isNotEmpty
-                              ? _messageController.text.trim()
-                              : null,
-                          contentType: widget.reel != null ? 'reel' : 'post',
+                        unawaited(
+                          msgProvider.sharePost(
+                            sharedPostId: shareTargetId,
+                            conversationIds: targetConvIds.isNotEmpty ? targetConvIds : null,
+                            recipientUserIds: targetUserIds.isNotEmpty ? targetUserIds : null,
+                            message: _messageController.text.trim().isNotEmpty
+                                ? _messageController.text.trim()
+                                : null,
+                            contentType: widget.reel != null ? 'reel' : 'post',
+                            reel: widget.reel,
+                            postAuthorId: widget.reel?.authorId ?? widget.postAuthorId,
+                          ),
                         );
                       }
-
-                      if (!context.mounted) return;
-                      AppSnackBar.showSuccess(
-                        context,
-                        title: 'Sent',
-                        subtitle: 'Shared with ${_selectedUserIds.length} recipient(s)!',
-                      );
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(

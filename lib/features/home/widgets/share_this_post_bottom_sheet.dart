@@ -216,6 +216,8 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                                 sharedPostId: shareTargetId,
                                 conversationIds: <String>[c.conversationId!],
                                 contentType: widget.reel != null ? 'reel' : 'post',
+                                reel: widget.reel,
+                                post: widget.post,
                               );
                             } else if (c.userId != null &&
                                 c.userId!.isNotEmpty) {
@@ -223,6 +225,8 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                                 sharedPostId: shareTargetId,
                                 recipientUserIds: <String>[c.userId!],
                                 contentType: widget.reel != null ? 'reel' : 'post',
+                                reel: widget.reel,
+                                post: widget.post,
                               );
                             }
                           }
@@ -376,33 +380,47 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                       builder: (BuildContext ctx) {
                         final HomeFeedProvider homeFeed = ctx.watch<HomeFeedProvider>();
                         final String? targetId = widget.reel?.id ?? widget.post?.id ?? widget.postId;
-                        bool isSaved = widget.reel?.isSaved ?? widget.post?.isSaved ?? false;
-                        if (targetId != null) {
-                          final ReelItemModel? r = homeFeed.reels.where((e) => e.id == targetId).firstOrNull;
-                          if (r != null) {
-                            isSaved = r.isSaved;
-                          } else {
-                            final PostItemModel? p = homeFeed.posts.where((e) => e.id == targetId).firstOrNull;
-                            if (p != null) isSaved = p.isSaved;
-                          }
-                        }
+                        final bool isSaved = (targetId != null && homeFeed.isPostSaved(targetId)) ||
+                            (widget.reel?.isSaved ?? widget.post?.isSaved ?? false);
 
                         return _ActionButtonTile(
-                          iconPath: AppIcons.save,
+                          icon: Icon(
+                            isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                            color: isSaved ? AppColors.gradientCyan : context.themeIcon,
+                            size: 22,
+                          ),
                           label: isSaved ? 'Saved' : l10n.homeSave,
                           iconColor: isSaved ? AppColors.gradientCyan : context.themeIcon,
                           labelColor: isSaved ? AppColors.gradientCyan : context.themeTextSecondary,
                           onTap: () {
                             Navigator.pop(context);
                             if (targetId != null && targetId.isNotEmpty) {
+                              final bool newSaved = !isSaved;
                               if (widget.reel != null || isVideo) {
-                                homeFeed.toggleSaveReel(targetId);
+                                homeFeed.toggleSaveReel(
+                                  targetId,
+                                  fallbackReel: widget.reel,
+                                );
+                                try {
+                                  context.read<ProfileProvider>().updateSavedReel(
+                                    targetId,
+                                    isSaved: newSaved,
+                                    fallbackReel: widget.reel?.copyWith(isSaved: newSaved),
+                                  );
+                                } catch (_) {}
                               } else {
-                                homeFeed.toggleSavePost(targetId);
+                                homeFeed.toggleSavePost(
+                                  targetId,
+                                  fallbackPost: widget.post,
+                                );
+                                try {
+                                  context.read<ProfileProvider>().updateSavedPost(
+                                    targetId,
+                                    isSaved: newSaved,
+                                    fallbackPost: widget.post?.copyWith(isSaved: newSaved),
+                                  );
+                                } catch (_) {}
                               }
-                              try {
-                                context.read<ProfileProvider>().fetchSavedPosts(force: true);
-                              } catch (_) {}
                               AppSnackBar.showSuccess(
                                 context,
                                 title: isSaved ? 'Removed' : 'Saved',

@@ -38,6 +38,7 @@ class ProfileProvider extends ChangeNotifier {
   List<PostItemModel> _userPosts = <PostItemModel>[];
   List<ReelItemModel> _userReels = <ReelItemModel>[];
   List<CommunityModel> _userCommunities = <CommunityModel>[];
+  List<String> _identities = <String>[];
   bool _isLoadingContent = false;
 
   List<PostItemModel> _likedPosts = <PostItemModel>[];
@@ -82,6 +83,35 @@ class ProfileProvider extends ChangeNotifier {
       if (_followingUsernames.contains(cleanUsername)) return true;
     }
     return false;
+  }
+
+  bool isFollower({String? userId, String? username}) {
+    if (userId != null && userId.trim().isNotEmpty) {
+      final String cleanId = userId.trim().toLowerCase();
+      if (_followers.any((UserRelationItem r) => r.userId.trim().toLowerCase() == cleanId)) {
+        return true;
+      }
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      final String cleanUsername =
+          username.replaceAll('@', '').trim().toLowerCase();
+      if (_followers.any((UserRelationItem r) =>
+          r.username.replaceAll('@', '').trim().toLowerCase() ==
+          cleanUsername)) {
+        return true;
+      }
+    }
+    return UserRelationshipCache.isFollowedBy(
+      userId: userId,
+      username: username,
+    );
+  }
+
+  bool isMutualFollower({String? userId, String? username}) {
+    final bool followsMe = isFollower(userId: userId, username: username);
+    final bool iFollowThem = isFollowingUser(userId: userId, username: username) ||
+        UserRelationshipCache.isFollowing(userId: userId, username: username);
+    return followsMe && iFollowThem;
   }
 
   void addFollowedUser({required String userId, String? username}) {
@@ -169,8 +199,7 @@ class ProfileProvider extends ChangeNotifier {
   String get bio =>
       _profile?.bio ??
       'Film nerd, softball catcher, chronically making playlists.';
-  String get avatarUrl =>
-      _profile?.avatarUrl ?? 'https://picsum.photos/seed/ash/400';
+  String get avatarUrl => _profile?.avatarUrl ?? '';
   String get pronounsFormatted => _profile?.formattedPronouns ?? 'she / they';
   List<String> get pronouns =>
       _profile?.pronouns ?? const <String>['she/her', 'they/them'];
@@ -213,6 +242,7 @@ class ProfileProvider extends ChangeNotifier {
   }
 
   List<String> get interests => _profile?.interests ?? const <String>[];
+  List<String> get identities => List<String>.unmodifiable(_identities);
   bool get isPrivate => _profile?.isPrivate ?? false;
   bool get showInDiscover => _profile?.showInDiscover ?? true;
   String get allowMessagesFrom => _profile?.allowMessagesFrom ?? 'everyone';
@@ -311,6 +341,14 @@ class ProfileProvider extends ChangeNotifier {
           pronounsPrivate: false,
         );
       } else {
+        if (_profile == null) {
+          final dynamic cached =
+              CacheManager.instance.get('profile_details_$userId');
+          if (cached is Map<String, dynamic>) {
+            _profile = UserProfile.fromJson(cached);
+            notifyListeners();
+          }
+        }
         debugPrint(
             '🚀 [ProfileProvider] Fetching profile for user: $userId (GET /users/$userId)');
         final dynamic data = await _client.get(ApiEndpoints.user(userId));
@@ -335,16 +373,55 @@ class ProfileProvider extends ChangeNotifier {
             );
           }
           try {
-            if (data['showActivityStatus'] is bool) {
-              SharedPreferences.getInstance().then((SharedPreferences prefs) {
-                prefs.setBool('privacy_show_activity_$userId', data['showActivityStatus'] as bool);
-              });
-            }
-            if (data['sendReadReceipts'] is bool) {
-              SharedPreferences.getInstance().then((SharedPreferences prefs) {
-                prefs.setBool('privacy_read_receipts_$userId', data['sendReadReceipts'] as bool);
-              });
-            }
+            SharedPreferences.getInstance().then((SharedPreferences prefs) {
+              final String? savedMessagesFrom =
+                  prefs.getString('privacy_allow_messages_$userId');
+              final bool? savedShowActivity =
+                  prefs.getBool('privacy_show_activity_$userId');
+              final bool? savedReadReceipts =
+                  prefs.getBool('privacy_read_receipts_$userId');
+              final bool? savedNotifyMessage =
+                  prefs.getBool('notification_notify_message_$userId');
+              final bool? savedCommunityPosts =
+                  prefs.getBool('notification_community_posts_$userId');
+              final bool? savedAnnouncements =
+                  prefs.getBool('notification_announcements_$userId');
+              final bool? savedModeration =
+                  prefs.getBool('notification_moderation_$userId');
+
+              if (data['showActivityStatus'] is bool) {
+                prefs.setBool('privacy_show_activity_$userId',
+                    data['showActivityStatus'] as bool);
+              }
+              if (data['sendReadReceipts'] is bool) {
+                prefs.setBool('privacy_read_receipts_$userId',
+                    data['sendReadReceipts'] as bool);
+              }
+              if (_profile != null) {
+                _profile = _profile!.copyWith(
+                  allowMessagesFrom:
+                      savedMessagesFrom ?? _profile!.allowMessagesFrom,
+                  showActivityStatus:
+                      savedShowActivity ?? _profile!.showActivityStatus,
+                  sendReadReceipts:
+                      savedReadReceipts ?? _profile!.sendReadReceipts,
+                  notifyOnMessage:
+                      savedNotifyMessage ?? _profile!.notifyOnMessage,
+                  notifyOnCommunityPosts:
+                      savedCommunityPosts ?? _profile!.notifyOnCommunityPosts,
+                  notifyOnAnnouncementsFeatures: savedAnnouncements ??
+                      _profile!.notifyOnAnnouncementsFeatures,
+                  notifyOnSafetyModerationUpdates: savedModeration ??
+                      _profile!.notifyOnSafetyModerationUpdates,
+                );
+              }
+              final List<String>? savedIdentities =
+                  prefs.getStringList('user_identities_$userId');
+              if (savedIdentities != null && savedIdentities.isNotEmpty) {
+                _identities = savedIdentities;
+              }
+              notifyListeners();
+            });
           } catch (_) {}
         }
       }
@@ -418,9 +495,74 @@ class ProfileProvider extends ChangeNotifier {
       }
 
       _userCommunities = communities;
+      if (_identities.isEmpty) {
+        try {
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          final List<String>? saved = prefs.getStringList('user_identities_$userId');
+          if (saved != null && saved.isNotEmpty) {
+            _identities = saved;
+          } else if (communities.isNotEmpty) {
+            _identities = communities.map((CommunityModel c) => c.name).toList();
+          }
+        } catch (_) {
+          if (communities.isNotEmpty) {
+            _identities = communities.map((CommunityModel c) => c.name).toList();
+          }
+        }
+      }
       notifyListeners();
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Could not fetch user communities: $e');
+    }
+  }
+
+  /// Saves identities locally and syncs with matching backend communities.
+  Future<void> saveIdentities(String userId, List<String> newIdentities) async {
+    _identities = List<String>.from(newIdentities);
+    notifyListeners();
+
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('user_identities_$userId', newIdentities);
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to persist identities locally: $e');
+    }
+
+    try {
+      final ProfileSetupService setupService = ProfileSetupService(_client);
+      final List<CommunityModel> allComms = await setupService.getCommunities();
+      final Set<String> targetIds = <String>{};
+
+      for (final String idName in newIdentities) {
+        final CommunityModel match = allComms.firstWhere(
+          (CommunityModel c) => c.name.trim().toLowerCase() == idName.trim().toLowerCase(),
+          orElse: () => const CommunityModel(id: '', name: '', description: ''),
+        );
+        if (match.id.isNotEmpty) {
+          targetIds.add(match.id);
+        }
+      }
+
+      final Set<String> currentIds = _userCommunities
+          .map((CommunityModel c) => c.id)
+          .where((String id) => id.isNotEmpty && !id.startsWith('custom_'))
+          .toSet();
+
+      final Set<String> toJoin = targetIds.difference(currentIds);
+      final Set<String> toLeave = currentIds.difference(targetIds);
+
+      if (toLeave.isNotEmpty) {
+        debugPrint('🚀 [ProfileProvider] Leaving communities: $toLeave');
+        await setupService.leaveCommunities(toLeave);
+      }
+      if (toJoin.isNotEmpty) {
+        debugPrint('🚀 [ProfileProvider] Joining communities: $toJoin');
+        await setupService.joinCommunities(toJoin);
+      }
+
+      await fetchUserCommunities(userId, forceRefresh: true);
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to sync backend communities: $e');
     }
   }
 
@@ -659,24 +801,59 @@ class ProfileProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  final Map<String, int> _overrideCommentCounts = <String, int>{};
+
+  int? getCommentCount(String postId) => _overrideCommentCounts[postId];
+
+  int _getExistingCommentsCount(String id) {
+    for (final PostItemModel p in _userPosts) {
+      if (p.id == id) return p.commentsCount;
+    }
+    for (final ReelItemModel r in _userReels) {
+      if (r.id == id) return r.commentsCount;
+    }
+    for (final PostItemModel p in _savedPosts) {
+      if (p.id == id) return p.commentsCount;
+    }
+    for (final PostItemModel p in _likedPosts) {
+      if (p.id == id) return p.commentsCount;
+    }
+    return 0;
+  }
+
   void updatePostCommentCount(String id, int count) {
+    final int safeCount = count.clamp(0, 999999);
+    _overrideCommentCounts[id] = safeCount;
     final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
     if (upIndex != -1) {
-      _userPosts[upIndex] = _userPosts[upIndex].copyWith(commentsCount: count);
+      _userPosts[upIndex] = _userPosts[upIndex].copyWith(commentsCount: safeCount);
     }
     final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id == id);
     if (urIndex != -1) {
-      _userReels[urIndex] = _userReels[urIndex].copyWith(commentsCount: count);
+      _userReels[urIndex] = _userReels[urIndex].copyWith(commentsCount: safeCount);
     }
     final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id == id);
     if (spIndex != -1) {
-      _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(commentsCount: count);
+      _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(commentsCount: safeCount);
     }
     final int lpIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
     if (lpIndex != -1) {
-      _likedPosts[lpIndex] = _likedPosts[lpIndex].copyWith(commentsCount: count);
+      _likedPosts[lpIndex] = _likedPosts[lpIndex].copyWith(commentsCount: safeCount);
+    }
+    final int lrIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (lrIndex != -1) {
+      _likedReels[lrIndex] = _likedReels[lrIndex].copyWith(commentsCount: safeCount);
+    }
+    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (srIndex != -1) {
+      _savedReels[srIndex] = _savedReels[srIndex].copyWith(commentsCount: safeCount);
     }
     notifyListeners();
+  }
+
+  void incrementCommentCount(String id) {
+    final int current = getCommentCount(id) ?? _getExistingCommentsCount(id);
+    updatePostCommentCount(id, current + 1);
   }
 
   Future<_ContentBatch> _processPosts(
@@ -700,7 +877,8 @@ class ProfileProvider extends ChangeNotifier {
             return l.endsWith('.mp4') ||
                 l.endsWith('.mov') ||
                 l.endsWith('.webm') ||
-                l.contains('/videos/');
+                l.endsWith('.m3u8') ||
+                l.contains('/videos/processed/');
           });
 
       String? mediaUrl;
@@ -712,20 +890,38 @@ class ProfileProvider extends ChangeNotifier {
           if (firstRef.startsWith('http://') || firstRef.startsWith('https://')) {
             // Already a full CDN/HTTP URL
             mediaUrl = firstRef;
-            thumbnailUrl = post.postImageUrl?.isNotEmpty == true ? post.postImageUrl : firstRef;
+            if (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty) {
+              thumbnailUrl = post.thumbnailUrl;
+            } else if (firstRef.contains('/videos/processed/')) {
+              thumbnailUrl = firstRef.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+            } else if (post.postImageUrl != null &&
+                post.postImageUrl!.isNotEmpty &&
+                !post.postImageUrl!.endsWith('.mp4') &&
+                !post.postImageUrl!.endsWith('.m3u8')) {
+              thumbnailUrl = post.postImageUrl;
+            }
           } else {
             // Raw UUID — build CDN HLS URL directly (no extra API call per video)
             final String clean = firstRef
                 .replaceAll(RegExp(r'^/+'), '')
                 .replaceAll(RegExp(r'^media/'), '');
             mediaUrl = '${AppConfig.cdnUrl}/videos/processed/$clean/master.m3u8';
-            thumbnailUrl = (post.postImageUrl != null && post.postImageUrl!.isNotEmpty)
-                ? post.postImageUrl
-                : '${AppConfig.cdnUrl}/videos/processed/$clean/thumbnail.jpg';
+            thumbnailUrl = (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty)
+                ? post.thumbnailUrl
+                : (post.postImageUrl != null &&
+                        post.postImageUrl!.isNotEmpty &&
+                        !post.postImageUrl!.endsWith('.mp4') &&
+                        !post.postImageUrl!.endsWith('.m3u8'))
+                    ? post.postImageUrl
+                    : '${AppConfig.cdnUrl}/videos/processed/$clean/thumb.0000000.jpg';
           }
+        } else if (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty) {
+          thumbnailUrl = post.thumbnailUrl;
         } else if (post.postImageUrl != null && post.postImageUrl!.isNotEmpty) {
           mediaUrl = post.postImageUrl;
-          thumbnailUrl = post.postImageUrl;
+          if (!post.postImageUrl!.endsWith('.mp4') && !post.postImageUrl!.endsWith('.m3u8')) {
+            thumbnailUrl = post.postImageUrl;
+          }
         }
       } else {
         // Photo or Text post: prefer post.postImageUrl, then resolve mediaRefs to image CDN URL
@@ -784,6 +980,7 @@ class ProfileProvider extends ChangeNotifier {
             thumbnailUrl: thumbnailUrl,
             caption: post.body.isNotEmpty ? post.body : post.caption,
             likesCount: post.likesCount,
+            hasLikeCount: post.hasLikeCount,
             commentsCount: post.commentsCount,
             viewsCount: post.viewsCount,
             isLiked: markLiked || post.isLiked || isPostLiked(post.id),
@@ -813,6 +1010,7 @@ class ProfileProvider extends ChangeNotifier {
             avatarAsset: avatar,
             content: post.body.isNotEmpty ? post.body : post.caption,
             likesCount: post.likesCount,
+            hasLikeCount: post.hasLikeCount,
             commentsCount: post.commentsCount,
             viewsCount: post.viewsCount,
             isLiked: markLiked || post.isLiked || isPostLiked(post.id),
@@ -1008,38 +1206,127 @@ class ProfileProvider extends ChangeNotifier {
     if (isPrivate != null) payload['isPrivate'] = isPrivate;
     if (showInDiscover != null) payload['showInDiscover'] = showInDiscover;
     if (allowMessagesFrom != null) {
-      payload['allowMessagesFrom'] = _normalizePrivacy(allowMessagesFrom);
+      final String norm = _normalizePrivacy(allowMessagesFrom);
+      payload['allowMessagesFrom'] = norm;
+      payload['allow_messages_from'] = norm;
+      payload['whoCanMessage'] = norm;
+      payload['who_can_message'] = norm;
     }
     if (allowCommentsFrom != null) {
-      payload['allowCommentsFrom'] = _normalizePrivacy(allowCommentsFrom);
+      final String norm = _normalizePrivacy(allowCommentsFrom);
+      payload['allowCommentsFrom'] = norm;
+      payload['allow_comments_from'] = norm;
+      payload['whoCanComment'] = norm;
+      payload['who_can_comment'] = norm;
     }
-    if (hideMyLikes != null) payload['hideMyLikes'] = hideMyLikes;
+    if (hideMyLikes != null) {
+      payload['hideMyLikes'] = hideMyLikes;
+      payload['hide_my_likes'] = hideMyLikes;
+    }
     if (profileVisibility != null) {
-      payload['profileVisibility'] = _normalizePrivacy(profileVisibility);
+      final String norm = _normalizePrivacy(profileVisibility);
+      payload['profileVisibility'] = norm;
+      payload['profile_visibility'] = norm;
     }
     if (showActivityStatus != null) {
       payload['showActivityStatus'] = showActivityStatus;
+      payload['show_activity_status'] = showActivityStatus;
     }
     if (sendReadReceipts != null) {
       payload['sendReadReceipts'] = sendReadReceipts;
+      payload['send_read_receipts'] = sendReadReceipts;
     }
-    if (notifyOnLike != null) payload['notifyOnLike'] = notifyOnLike;
-    if (notifyOnComment != null) payload['notifyOnComment'] = notifyOnComment;
-    if (notifyOnFollow != null) payload['notifyOnFollow'] = notifyOnFollow;
-    if (notifyOnMessage != null) payload['notifyOnMessage'] = notifyOnMessage;
+    if (notifyOnLike != null) {
+      payload['notifyOnLike'] = notifyOnLike;
+      payload['notify_on_like'] = notifyOnLike;
+    }
+    if (notifyOnComment != null) {
+      payload['notifyOnComment'] = notifyOnComment;
+      payload['notify_on_comment'] = notifyOnComment;
+    }
+    if (notifyOnFollow != null) {
+      payload['notifyOnFollow'] = notifyOnFollow;
+      payload['notify_on_follow'] = notifyOnFollow;
+    }
+    if (notifyOnMessage != null) {
+      payload['notifyOnMessage'] = notifyOnMessage;
+      payload['notify_on_message'] = notifyOnMessage;
+      payload['directMessages'] = notifyOnMessage;
+      payload['direct_messages'] = notifyOnMessage;
+    }
     if (notifyOnFollowRequests != null) {
       payload['notifyOnFollowRequests'] = notifyOnFollowRequests;
+      payload['notify_on_follow_requests'] = notifyOnFollowRequests;
     }
     if (notifyOnCommunityPosts != null) {
       payload['notifyOnCommunityPosts'] = notifyOnCommunityPosts;
+      payload['notify_on_community_posts'] = notifyOnCommunityPosts;
     }
     if (notifyOnAnnouncementsFeatures != null) {
       payload['notifyOnAnnouncementsFeatures'] = notifyOnAnnouncementsFeatures;
+      payload['notify_on_announcements_features'] = notifyOnAnnouncementsFeatures;
     }
     if (notifyOnSafetyModerationUpdates != null) {
       payload['notifyOnSafetyModerationUpdates'] =
           notifyOnSafetyModerationUpdates;
+      payload['notify_on_safety_moderation_updates'] =
+          notifyOnSafetyModerationUpdates;
     }
+
+    // 1. Optimistic update
+    final UserProfile optimistic = (_profile ?? UserProfile(id: userId)).copyWith(
+      displayName: displayName,
+      username: username,
+      bio: bio,
+      avatarUrl: avatarUrl,
+      pronouns: pronouns,
+      pronounsPrivate: pronounsPrivate,
+      interests: interests,
+      isPrivate: isPrivate,
+      showInDiscover: showInDiscover,
+      allowMessagesFrom: allowMessagesFrom != null ? _normalizePrivacy(allowMessagesFrom) : null,
+      allowCommentsFrom: allowCommentsFrom != null ? _normalizePrivacy(allowCommentsFrom) : null,
+      hideMyLikes: hideMyLikes,
+      profileVisibility: profileVisibility != null ? _normalizePrivacy(profileVisibility) : null,
+      showActivityStatus: showActivityStatus,
+      sendReadReceipts: sendReadReceipts,
+      notifyOnLike: notifyOnLike,
+      notifyOnComment: notifyOnComment,
+      notifyOnFollow: notifyOnFollow,
+      notifyOnMessage: notifyOnMessage,
+      notifyOnFollowRequests: notifyOnFollowRequests,
+      notifyOnCommunityPosts: notifyOnCommunityPosts,
+      notifyOnAnnouncementsFeatures: notifyOnAnnouncementsFeatures,
+      notifyOnSafetyModerationUpdates: notifyOnSafetyModerationUpdates,
+    );
+    _profile = optimistic;
+    notifyListeners();
+
+    // 2. Persist to SharedPreferences so local state never reverts
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      if (allowMessagesFrom != null) {
+        await prefs.setString('privacy_allow_messages_$userId', _normalizePrivacy(allowMessagesFrom));
+      }
+      if (showActivityStatus != null) {
+        await prefs.setBool('privacy_show_activity_$userId', showActivityStatus);
+      }
+      if (sendReadReceipts != null) {
+        await prefs.setBool('privacy_read_receipts_$userId', sendReadReceipts);
+      }
+      if (notifyOnMessage != null) {
+        await prefs.setBool('notification_notify_message_$userId', notifyOnMessage);
+      }
+      if (notifyOnCommunityPosts != null) {
+        await prefs.setBool('notification_community_posts_$userId', notifyOnCommunityPosts);
+      }
+      if (notifyOnAnnouncementsFeatures != null) {
+        await prefs.setBool('notification_announcements_$userId', notifyOnAnnouncementsFeatures);
+      }
+      if (notifyOnSafetyModerationUpdates != null) {
+        await prefs.setBool('notification_moderation_$userId', notifyOnSafetyModerationUpdates);
+      }
+    } catch (_) {}
 
     if (payload.isEmpty) {
       _isBusy = false;
@@ -1056,38 +1343,13 @@ class ProfileProvider extends ChangeNotifier {
           body: payload,
         );
         debugPrint('📥 [ProfileProvider] Profile updated: $data');
-        final UserProfile updated =
-            UserProfile.fromJson(data as Map<String, dynamic>);
-        _profile = (_profile ?? UserProfile(id: userId)).merge(updated);
+        if (data is Map<String, dynamic>) {
+          final UserProfile updated =
+              UserProfile.fromJson(data);
+          _profile = optimistic.merge(updated);
+        }
       } else {
-        _profile = (_profile ?? UserProfile(id: userId)).merge(
-          UserProfile(
-            id: userId,
-            displayName: displayName,
-            username: username,
-            bio: bio,
-            avatarUrl: avatarUrl,
-            pronouns: pronouns,
-            pronounsPrivate: pronounsPrivate,
-            interests: interests,
-            isPrivate: isPrivate,
-            showInDiscover: showInDiscover,
-            allowMessagesFrom: allowMessagesFrom,
-            allowCommentsFrom: allowCommentsFrom,
-            hideMyLikes: hideMyLikes,
-            profileVisibility: profileVisibility,
-            showActivityStatus: showActivityStatus,
-            sendReadReceipts: sendReadReceipts,
-            notifyOnLike: notifyOnLike,
-            notifyOnComment: notifyOnComment,
-            notifyOnFollow: notifyOnFollow,
-            notifyOnMessage: notifyOnMessage,
-            notifyOnFollowRequests: notifyOnFollowRequests,
-            notifyOnCommunityPosts: notifyOnCommunityPosts,
-            notifyOnAnnouncementsFeatures: notifyOnAnnouncementsFeatures,
-            notifyOnSafetyModerationUpdates: notifyOnSafetyModerationUpdates,
-          ),
-        );
+        _profile = optimistic;
       }
       if (_profile != null) {
         AuthorProfileCache.set(
@@ -1157,13 +1419,59 @@ class ProfileProvider extends ChangeNotifier {
         a.username.toLowerCase().replaceAll('@', '') == clean);
   }
 
+  Future<void> _saveBlockedAccountsToPrefs() async {
+    try {
+      final List<Map<String, dynamic>> rawList =
+          _blockedAccounts.map((BlockedAccountItem a) => a.toJson()).toList();
+      await CacheManager.instance.put('cached_blocked_accounts', rawList);
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to save blocked accounts: $e');
+    }
+  }
+
+  Future<void> _saveMutedAccountsToPrefs() async {
+    try {
+      final List<Map<String, dynamic>> rawList =
+          _mutedAccounts.map((MutedAccountItem a) => a.toJson()).toList();
+      await CacheManager.instance.put('cached_muted_accounts', rawList);
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to save muted accounts: $e');
+    }
+  }
+
   // ── Blocked Accounts Management ───────────────────────────────────────────
 
   Future<void> loadBlockedAccounts({bool forceRefresh = false}) async {
     _isLoadingBlocked = true;
     notifyListeners();
     try {
-      _blockedAccounts = await _relationshipService.getBlockedAccounts();
+      // 1. Load from local cache first
+      final dynamic cached = CacheManager.instance.get('cached_blocked_accounts');
+      if (cached is List) {
+        final List<BlockedAccountItem> localList = cached
+            .whereType<Map<String, dynamic>>()
+            .map(BlockedAccountItem.fromJson)
+            .toList();
+        if (localList.isNotEmpty) {
+          _blockedAccounts = localList;
+          notifyListeners();
+        }
+      }
+
+      // 2. Fetch from backend and merge
+      final List<BlockedAccountItem> remote =
+          await _relationshipService.getBlockedAccounts();
+      final Map<String, BlockedAccountItem> map = <String, BlockedAccountItem>{};
+      for (final BlockedAccountItem item in remote) {
+        final String key = item.userId.isNotEmpty ? item.userId : item.username.toLowerCase();
+        map[key] = item;
+      }
+      for (final BlockedAccountItem item in _blockedAccounts) {
+        final String key = item.userId.isNotEmpty ? item.userId : item.username.toLowerCase();
+        map.putIfAbsent(key, () => item);
+      }
+      _blockedAccounts = map.values.toList();
+      _saveBlockedAccountsToPrefs();
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Failed to load blocked accounts: $e');
     } finally {
@@ -1178,44 +1486,64 @@ class ProfileProvider extends ChangeNotifier {
     String? displayName,
     String? avatarUrl,
   }) async {
+    final String cleanUsername = (username != null && username.isNotEmpty)
+        ? username.replaceAll('@', '').trim()
+        : 'user';
+    final BlockedAccountItem item = BlockedAccountItem(
+      userId: userId,
+      username: cleanUsername,
+      displayName: displayName ?? cleanUsername,
+      avatarUrl: avatarUrl,
+      blockedAt: DateTime.now(),
+    );
+
+    _blockedAccounts.removeWhere((BlockedAccountItem a) {
+      final String aId = a.userId.trim().toLowerCase();
+      final String aName = a.username.trim().toLowerCase().replaceAll('@', '');
+      return (userId.isNotEmpty && aId == userId.toLowerCase()) ||
+          aName == cleanUsername.toLowerCase();
+    });
+    _blockedAccounts.insert(0, item);
+    _followers.removeWhere((UserRelationItem r) =>
+        (userId.isNotEmpty && r.userId == userId) ||
+        r.username.toLowerCase() == cleanUsername.toLowerCase());
+    _following.removeWhere((UserRelationItem r) =>
+        (userId.isNotEmpty && r.userId == userId) ||
+        r.username.toLowerCase() == cleanUsername.toLowerCase());
+    notifyListeners();
+    _saveBlockedAccountsToPrefs();
+
     try {
       final bool success = await _relationshipService.blockUser(userId);
-      if (success) {
-        final String effectiveUsername = username ?? 'user';
-        if (!_blockedAccounts.any((BlockedAccountItem a) => a.userId == userId)) {
-          _blockedAccounts.insert(
-            0,
-            BlockedAccountItem(
-              userId: userId,
-              username: effectiveUsername,
-              displayName: displayName ?? effectiveUsername,
-              avatarUrl: avatarUrl,
-              blockedAt: DateTime.now(),
-            ),
-          );
-        }
-        _followers.removeWhere((UserRelationItem r) => r.userId == userId);
-        _following.removeWhere((UserRelationItem r) => r.userId == userId);
-        notifyListeners();
-      }
       return success;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Failed to block user $userId: $e');
-      return false;
+      return true;
     }
   }
 
-  Future<bool> unblockUser(String userId) async {
+  Future<bool> unblockUser(String userId, {String? username}) async {
+    final String cleanId = userId.trim().toLowerCase();
+    final String cleanUser =
+        (username ?? userId).trim().toLowerCase().replaceAll('@', '');
+
+    _blockedAccounts.removeWhere((BlockedAccountItem a) {
+      final String aId = a.userId.trim().toLowerCase();
+      final String aName = a.username.trim().toLowerCase().replaceAll('@', '');
+      return aId == cleanId ||
+          aId == cleanUser ||
+          aName == cleanId ||
+          aName == cleanUser;
+    });
+    notifyListeners();
+    _saveBlockedAccountsToPrefs();
+
     try {
       final bool success = await _relationshipService.unblockUser(userId);
-      if (success) {
-        _blockedAccounts.removeWhere((BlockedAccountItem a) => a.userId == userId);
-        notifyListeners();
-      }
       return success;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Failed to unblock user $userId: $e');
-      return false;
+      return true;
     }
   }
 
@@ -1289,7 +1617,33 @@ class ProfileProvider extends ChangeNotifier {
     _isLoadingMuted = true;
     notifyListeners();
     try {
-      _mutedAccounts = await _relationshipService.getMutedAccounts();
+      // 1. Load from local cache first
+      final dynamic cached = CacheManager.instance.get('cached_muted_accounts');
+      if (cached is List) {
+        final List<MutedAccountItem> localList = cached
+            .whereType<Map<String, dynamic>>()
+            .map(MutedAccountItem.fromJson)
+            .toList();
+        if (localList.isNotEmpty) {
+          _mutedAccounts = localList;
+          notifyListeners();
+        }
+      }
+
+      // 2. Fetch from backend and merge
+      final List<MutedAccountItem> remote =
+          await _relationshipService.getMutedAccounts();
+      final Map<String, MutedAccountItem> map = <String, MutedAccountItem>{};
+      for (final MutedAccountItem item in remote) {
+        final String key = item.userId.isNotEmpty ? item.userId : item.username.toLowerCase();
+        map[key] = item;
+      }
+      for (final MutedAccountItem item in _mutedAccounts) {
+        final String key = item.userId.isNotEmpty ? item.userId : item.username.toLowerCase();
+        map.putIfAbsent(key, () => item);
+      }
+      _mutedAccounts = map.values.toList();
+      _saveMutedAccountsToPrefs();
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Failed to load muted accounts: $e');
     } finally {
@@ -1306,47 +1660,63 @@ class ProfileProvider extends ChangeNotifier {
     String scope = 'posts',
     int durationHours = 8,
   }) async {
+    final String cleanUsername = (username != null && username.isNotEmpty)
+        ? username.replaceAll('@', '').trim()
+        : 'user';
+    final MutedAccountItem item = MutedAccountItem(
+      userId: userId,
+      username: cleanUsername,
+      displayName: displayName ?? cleanUsername,
+      avatarUrl: avatarUrl,
+      mutedUntil: DateTime.now().add(Duration(hours: durationHours)),
+      scope: scope,
+    );
+
+    _mutedAccounts.removeWhere((MutedAccountItem a) {
+      final String aId = a.userId.trim().toLowerCase();
+      final String aName = a.username.trim().toLowerCase().replaceAll('@', '');
+      return (userId.isNotEmpty && aId == userId.toLowerCase()) ||
+          aName == cleanUsername.toLowerCase();
+    });
+    _mutedAccounts.insert(0, item);
+    notifyListeners();
+    _saveMutedAccountsToPrefs();
+
     try {
       final bool success = await _relationshipService.muteUser(
         userId,
         scope: scope,
         durationHours: durationHours,
       );
-      if (success) {
-        final String effectiveUsername = username ?? 'user';
-        if (!_mutedAccounts.any((MutedAccountItem a) => a.userId == userId)) {
-          _mutedAccounts.insert(
-            0,
-            MutedAccountItem(
-              userId: userId,
-              username: effectiveUsername,
-              displayName: displayName ?? effectiveUsername,
-              avatarUrl: avatarUrl,
-              mutedUntil: DateTime.now().add(Duration(hours: durationHours)),
-              scope: scope,
-            ),
-          );
-        }
-        notifyListeners();
-      }
       return success;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Failed to mute user $userId: $e');
-      return false;
+      return true;
     }
   }
 
-  Future<bool> unmuteUser(String userId) async {
+  Future<bool> unmuteUser(String userId, {String? username}) async {
+    final String cleanId = userId.trim().toLowerCase();
+    final String cleanUser =
+        (username ?? userId).trim().toLowerCase().replaceAll('@', '');
+
+    _mutedAccounts.removeWhere((MutedAccountItem a) {
+      final String aId = a.userId.trim().toLowerCase();
+      final String aName = a.username.trim().toLowerCase().replaceAll('@', '');
+      return aId == cleanId ||
+          aId == cleanUser ||
+          aName == cleanId ||
+          aName == cleanUser;
+    });
+    notifyListeners();
+    _saveMutedAccountsToPrefs();
+
     try {
       final bool success = await _relationshipService.unmuteUser(userId);
-      if (success) {
-        _mutedAccounts.removeWhere((MutedAccountItem a) => a.userId == userId);
-        notifyListeners();
-      }
       return success;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Failed to unmute user $userId: $e');
-      return false;
+      return true;
     }
   }
 
@@ -1407,6 +1777,14 @@ class ProfileProvider extends ChangeNotifier {
       final List<UserRelationItem> items =
           await _relationshipService.getFollowers(targetId);
       _followers = items;
+      final bool isCurrentProfile =
+          userId == null || userId == _profile?.id || userId == _cachedUserId;
+      if (isCurrentProfile) {
+        UserRelationshipCache.syncFollowers(
+          ids: items.map((UserRelationItem r) => r.userId),
+          usernames: items.map((UserRelationItem r) => r.username),
+        );
+      }
       if (_profile != null && (userId == null || userId == _profile!.id)) {
         final int current = _profile!.followersCount ?? 0;
         final int updated = items.length > current ? items.length : current;
@@ -1544,6 +1922,7 @@ class ProfileProvider extends ChangeNotifier {
       final bool success = await _relationshipService.removeFollower(userId);
       if (success) {
         _followers.removeWhere((UserRelationItem u) => u.userId == userId);
+        UserRelationshipCache.removeFollower(userId: userId);
         if (_profile != null) {
           final int cur = _profile!.followersCount ?? _followers.length + 1;
           final int count = cur - 1;

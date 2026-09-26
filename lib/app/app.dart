@@ -104,6 +104,13 @@ class App extends StatelessWidget {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   provider.updateUser(auth.userId);
                   provider.setGuestMode(auth.isGuest);
+                  if (auth.isSignedIn && auth.userId != null && !auth.isGuest) {
+                    try {
+                      final ProfileProvider profile = ctx.read<ProfileProvider>();
+                      profile.fetchSavedPosts();
+                      profile.fetchLikedPosts();
+                    } catch (_) {}
+                  }
                 });
                 return provider;
               },

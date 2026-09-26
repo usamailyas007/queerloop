@@ -15,6 +15,7 @@ import '../../auth/auth_provider.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../models/reel_item_model.dart';
+import '../provider/home_feed_provider.dart';
 import '../screens/profile_tab_screen.dart';
 import '../../create_post/models/create_post_models.dart';
 import '../services/reel_video_preloader.dart';
@@ -400,6 +401,9 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     final ReelItemModel item = widget.reel;
     final AuthProvider auth = context.watch<AuthProvider>();
     final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+    final HomeFeedProvider homeFeed = context.watch<HomeFeedProvider>();
+    final int effectiveCommentsCount =
+        homeFeed.getCommentCount(item.id) ?? profileProvider.getCommentCount(item.id) ?? item.commentsCount;
     final String? currentUserId = auth.userId ?? profileProvider.profile?.id;
     final String myUsername = (auth.user?.displayName ?? profileProvider.username)
         .replaceAll('@', '')
@@ -573,7 +577,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                   // Comment
                   _RightActionButton(
                     onTap: widget.onOpenComments,
-                    label: '${item.commentsCount}',
+                    label: '$effectiveCommentsCount',
                     child: SvgPicture.asset(
                       AppIcons.comment,
                       width: 26,

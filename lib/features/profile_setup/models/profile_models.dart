@@ -104,23 +104,116 @@ class UserProfile {
                       json['privacySettings']['private']) as bool?
               : null) ??
           false,
-      showInDiscover: json['showInDiscover'] as bool?,
-      allowMessagesFrom: json['allowMessagesFrom'] as String?,
-      allowCommentsFrom: json['allowCommentsFrom'] as String?,
-      hideMyLikes: json['hideMyLikes'] as bool?,
-      profileVisibility: json['profileVisibility'] as String?,
-      showActivityStatus: json['showActivityStatus'] as bool?,
-      sendReadReceipts: json['sendReadReceipts'] as bool?,
-      notifyOnLike: json['notifyOnLike'] as bool?,
-      notifyOnComment: json['notifyOnComment'] as bool?,
-      notifyOnFollow: json['notifyOnFollow'] as bool?,
-      notifyOnMessage: json['notifyOnMessage'] as bool?,
-      notifyOnFollowRequests: json['notifyOnFollowRequests'] as bool?,
-      notifyOnCommunityPosts: json['notifyOnCommunityPosts'] as bool?,
+      showInDiscover: json['showInDiscover'] as bool? ??
+          json['show_in_discover'] as bool?,
+      allowMessagesFrom: json['allowMessagesFrom'] as String? ??
+          json['allow_messages_from'] as String? ??
+          json['whoCanMessage'] as String? ??
+          json['who_can_message'] as String? ??
+          (json['privacySettings'] is Map
+              ? (json['privacySettings']['allowMessagesFrom'] ??
+                      json['privacySettings']['allow_messages_from'] ??
+                      json['privacySettings']['whoCanMessage'])
+                  as String?
+              : null),
+      allowCommentsFrom: json['allowCommentsFrom'] as String? ??
+          json['allow_comments_from'] as String? ??
+          json['whoCanComment'] as String? ??
+          (json['privacySettings'] is Map
+              ? (json['privacySettings']['allowCommentsFrom'] ??
+                      json['privacySettings']['allow_comments_from'])
+                  as String?
+              : null),
+      hideMyLikes: json['hideMyLikes'] as bool? ??
+          json['hide_my_likes'] as bool? ??
+          (json['privacySettings'] is Map
+              ? (json['privacySettings']['hideMyLikes'] ??
+                      json['privacySettings']['hide_my_likes'])
+                  as bool?
+              : null),
+      profileVisibility: json['profileVisibility'] as String? ??
+          json['profile_visibility'] as String? ??
+          (json['privacySettings'] is Map
+              ? (json['privacySettings']['profileVisibility'] ??
+                      json['privacySettings']['profile_visibility'])
+                  as String?
+              : null),
+      showActivityStatus: json['showActivityStatus'] as bool? ??
+          json['show_activity_status'] as bool? ??
+          (json['privacySettings'] is Map
+              ? (json['privacySettings']['showActivityStatus'] ??
+                      json['privacySettings']['show_activity_status'])
+                  as bool?
+              : null),
+      sendReadReceipts: json['sendReadReceipts'] as bool? ??
+          json['send_read_receipts'] as bool? ??
+          (json['privacySettings'] is Map
+              ? (json['privacySettings']['sendReadReceipts'] ??
+                      json['privacySettings']['send_read_receipts'])
+                  as bool?
+              : null),
+      notifyOnLike: json['notifyOnLike'] as bool? ??
+          json['notify_on_like'] as bool? ??
+          (json['notificationSettings'] is Map
+              ? (json['notificationSettings']['notifyOnLike'] ??
+                      json['notificationSettings']['notify_on_like'])
+                  as bool?
+              : null),
+      notifyOnComment: json['notifyOnComment'] as bool? ??
+          json['notify_on_comment'] as bool? ??
+          (json['notificationSettings'] is Map
+              ? (json['notificationSettings']['notifyOnComment'] ??
+                      json['notificationSettings']['notify_on_comment'])
+                  as bool?
+              : null),
+      notifyOnFollow: json['notifyOnFollow'] as bool? ??
+          json['notify_on_follow'] as bool? ??
+          (json['notificationSettings'] is Map
+              ? (json['notificationSettings']['notifyOnFollow'] ??
+                      json['notificationSettings']['notify_on_follow'])
+                  as bool?
+              : null),
+      notifyOnMessage: json['notifyOnMessage'] as bool? ??
+          json['notify_on_message'] as bool? ??
+          json['directMessages'] as bool? ??
+          json['direct_messages'] as bool? ??
+          (json['notificationSettings'] is Map
+              ? (json['notificationSettings']['notifyOnMessage'] ??
+                      json['notificationSettings']['notify_on_message'] ??
+                      json['notificationSettings']['directMessages'] ??
+                      json['notificationSettings']['direct_messages'])
+                  as bool?
+              : null),
+      notifyOnFollowRequests: json['notifyOnFollowRequests'] as bool? ??
+          json['notify_on_follow_requests'] as bool? ??
+          (json['notificationSettings'] is Map
+              ? (json['notificationSettings']['notifyOnFollowRequests'] ??
+                      json['notificationSettings']['notify_on_follow_requests'])
+                  as bool?
+              : null),
+      notifyOnCommunityPosts: json['notifyOnCommunityPosts'] as bool? ??
+          json['notify_on_community_posts'] as bool? ??
+          (json['notificationSettings'] is Map
+              ? (json['notificationSettings']['notifyOnCommunityPosts'] ??
+                      json['notificationSettings']['notify_on_community_posts'])
+                  as bool?
+              : null),
       notifyOnAnnouncementsFeatures:
-          json['notifyOnAnnouncementsFeatures'] as bool?,
+          json['notifyOnAnnouncementsFeatures'] as bool? ??
+              json['notify_on_announcements_features'] as bool? ??
+              (json['notificationSettings'] is Map
+                  ? (json['notificationSettings']['notifyOnAnnouncementsFeatures'] ??
+                          json['notificationSettings']['notify_on_announcements_features'])
+                      as bool?
+                  : null),
       notifyOnSafetyModerationUpdates:
-          json['notifyOnSafetyModerationUpdates'] as bool?,
+          json['notifyOnSafetyModerationUpdates'] as bool? ??
+              json['notify_on_safety_moderation_updates'] as bool? ??
+              (json['notificationSettings'] is Map
+                  ? (json['notificationSettings']['notifyOnSafetyModerationUpdates'] ??
+                          json['notificationSettings']['notify_on_safety_moderation_updates'])
+                      as bool?
+                  : null),
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String)
           : null,

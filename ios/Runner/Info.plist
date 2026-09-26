@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Structure</string>
+	<string>QueerLoop+</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>structure</string>
+	<string>QueerLoop+</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -24,6 +24,35 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+	<!-- Camera, Microphone, and Photo Library Permissions -->
+	<key>NSCameraUsageDescription</key>
+	<string>QueerLoop+ requires access to your camera to take profile photos and capture video reels.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>QueerLoop+ requires access to your photo library to select and upload photos and videos for your profile and posts.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>QueerLoop+ requires permission to save photos and videos to your photo library.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>QueerLoop+ requires access to your microphone to record audio when capturing video reels.</string>
+
+	<!-- App Transport Security (Allows backend and CDN traffic) -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+
+	<!-- Background Modes for Push Notifications -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+
+	<!-- TestFlight Export Compliance (Avoids manual prompt on every build) -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -45,6 +74,8 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

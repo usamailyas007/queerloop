@@ -164,6 +164,8 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
                           avatarAsset,
                           width: 76,
                           height: 76,
+                          cacheWidth: 228,
+                          cacheHeight: 228,
                           fit: BoxFit.cover,
                           errorBuilder: (
                             BuildContext ctx,
@@ -343,30 +345,31 @@ class ProfileHeaderStatsWidget extends StatelessWidget {
                 child: Wrap(
                   spacing: 4,
                   runSpacing: 6,
-                  children: communitiesList.isNotEmpty
-                      ? communitiesList
-                          .map(
-                            (CommunityModel comm) => _buildPillBadge(
-                              context,
-                              comm.name,
-                              AppColors.gradientCyan,
-                              AppColors.gradientCyan,
-                              cyanPillBg,
-                              imageUrl: comm.imageUrl,
-                            ),
-                          )
-                          .toList()
-                      : identityList
-                          .map(
-                            (String item) => _buildPillBadge(
-                              context,
-                              item,
-                              AppColors.gradientCyan,
-                              AppColors.gradientCyan,
-                              cyanPillBg,
-                            ),
-                          )
-                          .toList(),
+                  children: () {
+                    final List<String> allNames = <String>[];
+                    final Map<String, String?> images = <String, String?>{};
+                    for (final CommunityModel c in communitiesList) {
+                      if (!allNames.contains(c.name)) {
+                        allNames.add(c.name);
+                        images[c.name] = c.imageUrl;
+                      }
+                    }
+                    for (final String id in identityList) {
+                      if (!allNames.contains(id)) {
+                        allNames.add(id);
+                      }
+                    }
+                    return allNames.map(
+                      (String item) => _buildPillBadge(
+                        context,
+                        item,
+                        AppColors.gradientCyan,
+                        AppColors.gradientCyan,
+                        cyanPillBg,
+                        imageUrl: images[item],
+                      ),
+                    ).toList();
+                  }(),
                 ),
               ),
             ],

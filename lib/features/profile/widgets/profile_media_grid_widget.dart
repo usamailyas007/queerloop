@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_shimmer.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../home/screens/reels_feed_view.dart';
 
@@ -10,6 +11,7 @@ class ProfileMediaGridWidget extends StatelessWidget {
     this.videos = const <String>[],
     this.customReels,
     this.showPlayCounts = true,
+    this.isLoading = false,
     this.emptyTitle,
     this.emptySubtitle,
     this.emptyIcon,
@@ -19,6 +21,7 @@ class ProfileMediaGridWidget extends StatelessWidget {
   final List<String> videos;
   final List<ReelItemModel>? customReels;
   final bool showPlayCounts;
+  final bool isLoading;
   final String? emptyTitle;
   final String? emptySubtitle;
   final IconData? emptyIcon;
@@ -28,14 +31,14 @@ class ProfileMediaGridWidget extends StatelessWidget {
     Navigator.push<void>(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => Scaffold(
+        builder: (BuildContext routeContext) => Scaffold(
           backgroundColor: Colors.black,
           body: Stack(
             children: <Widget>[
               // Fullscreen interactive video reel player
               ReelsFeedView(
                 initialPage: initialIndex,
-                customReels: reelsList,
+                customReels: List<ReelItemModel>.from(reelsList),
                 hasBottomBar: false,
               ),
 
@@ -47,7 +50,8 @@ class ProfileMediaGridWidget extends StatelessWidget {
                     vertical: 12,
                   ),
                   child: GestureDetector(
-                    onTap: () => Navigator.pop(context),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.of(routeContext).pop(),
                     child: Container(
                       width: 38,
                       height: 38,
@@ -83,6 +87,27 @@ class ProfileMediaGridWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<ReelItemModel> reelList = customReels ?? const <ReelItemModel>[];
+
+    if (isLoading) {
+      return AppShimmer(
+        child: GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 0.75,
+          ),
+          itemCount: 6,
+          itemBuilder: (BuildContext context, int index) {
+            return const ShimmerBox(
+              borderRadius: 12,
+            );
+          },
+        ),
+      );
+    }
 
     if (reelList.isEmpty) {
       return Container(
@@ -134,11 +159,15 @@ class ProfileMediaGridWidget extends StatelessWidget {
         String? thumbUrl = (item.thumbnailUrl != null && item.thumbnailUrl!.startsWith('http'))
             ? item.thumbnailUrl
             : null;
-        if (thumbUrl == null &&
-            item.videoUrl != null &&
-            item.videoUrl!.contains('/videos/processed/') &&
-            item.videoUrl!.endsWith('/master.m3u8')) {
-          thumbUrl = item.videoUrl!.replaceAll('/master.m3u8', '/thumbnail.jpg');
+        if (thumbUrl != null) {
+          if (thumbUrl.contains('/videos/processed/') && thumbUrl.endsWith('/thumbnail.jpg')) {
+            thumbUrl = thumbUrl.replaceAll('/thumbnail.jpg', '/thumb.0000000.jpg');
+          } else if (thumbUrl.contains('/videos/processed/') && thumbUrl.endsWith('/master.m3u8')) {
+            thumbUrl = thumbUrl.replaceAll('/master.m3u8', '/thumb.0000000.jpg');
+          }
+        } else if (item.videoUrl != null &&
+            item.videoUrl!.contains('/videos/processed/')) {
+          thumbUrl = item.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
         }
 
         return GestureDetector(
