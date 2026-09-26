@@ -402,15 +402,17 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                         }
                       }
 
-                      final ScaffoldMessengerState messenger =
-                          ScaffoldMessenger.of(context);
                       final int recipientCount = _selectedUserIds.length;
+                      final String contentTypeLabel =
+                          widget.reel != null ? 'Reel' : 'Post';
+                      final String subtitleText = recipientCount == 1
+                          ? 'Shared to @${_selectedUserIds.first}!'
+                          : 'Shared with $recipientCount recipient(s)!';
 
                       AppSnackBar.showSuccess(
                         context,
-                        messenger: messenger,
-                        title: 'Sent',
-                        subtitle: 'Shared with $recipientCount recipient(s)!',
+                        title: '$contentTypeLabel shared',
+                        subtitle: subtitleText,
                       );
 
                       Navigator.pop(context);

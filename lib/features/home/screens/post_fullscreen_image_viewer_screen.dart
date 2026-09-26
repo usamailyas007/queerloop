@@ -72,12 +72,38 @@ class _PostFullscreenImageViewerScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+        final ProfileProvider profile = context.read<ProfileProvider>();
+        final AuthProvider auth = context.read<AuthProvider>();
+
+        String? resolvedAuthorId = _post.authorId;
+        if (resolvedAuthorId == null || resolvedAuthorId.isEmpty) {
+          final PostItemModel? feedMatch = homeFeed.posts.where((PostItemModel p) => p.id == _post.id).firstOrNull;
+          resolvedAuthorId = feedMatch?.authorId;
+        }
+        if (resolvedAuthorId == null || resolvedAuthorId.isEmpty) {
+          final PostItemModel? profMatch = profile.userPosts.where((PostItemModel p) => p.id == _post.id).firstOrNull;
+          resolvedAuthorId = profMatch?.authorId;
+        }
+        final String cleanPostUser = _post.username.replaceAll('@', '').trim().toLowerCase();
+        final String myProfUser = profile.username.replaceAll('@', '').trim().toLowerCase();
+        final String myDispName = profile.displayName.replaceAll('@', '').trim().toLowerCase();
+        final String myAuthName = (auth.user?.displayName ?? '').replaceAll('@', '').trim().toLowerCase();
+        if (cleanPostUser.isNotEmpty && (cleanPostUser == myProfUser || cleanPostUser == myDispName || cleanPostUser == myAuthName)) {
+          resolvedAuthorId ??= auth.userId ?? profile.profile?.id;
+        }
+
         final bool isLiked = homeFeed.isPostLiked(_post.id) || _post.isLiked;
         final bool isSaved = homeFeed.isPostSaved(_post.id) || _post.isSaved;
         final int likes = _post.likesCount;
-        if (isLiked != _post.isLiked || isSaved != _post.isSaved || likes != _post.likesCount) {
+        final bool authorChanged = resolvedAuthorId != null && resolvedAuthorId != _post.authorId;
+        if (isLiked != _post.isLiked || isSaved != _post.isSaved || likes != _post.likesCount || authorChanged) {
           setState(() {
-            _post = _post.copyWith(isLiked: isLiked, isSaved: isSaved, likesCount: likes);
+            _post = _post.copyWith(
+              isLiked: isLiked,
+              isSaved: isSaved,
+              likesCount: likes,
+              authorId: resolvedAuthorId ?? _post.authorId,
+            );
           });
         }
         try {
@@ -154,17 +180,43 @@ class _PostFullscreenImageViewerScreenState
   }
 
   void _handleOpenComments() {
+    final AuthProvider auth = context.read<AuthProvider>();
+    final ProfileProvider profile = context.read<ProfileProvider>();
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+
+    String? resolvedAuthorId = _post.authorId;
+    if (resolvedAuthorId == null || resolvedAuthorId.isEmpty) {
+      final PostItemModel? feedMatch =
+          homeFeed.posts.where((PostItemModel p) => p.id == _post.id).firstOrNull;
+      resolvedAuthorId = feedMatch?.authorId;
+    }
+    if (resolvedAuthorId == null || resolvedAuthorId.isEmpty) {
+      final PostItemModel? profMatch =
+          profile.userPosts.where((PostItemModel p) => p.id == _post.id).firstOrNull;
+      resolvedAuthorId = profMatch?.authorId;
+    }
+
+    final String cleanPostUser = _post.username.replaceAll('@', '').trim().toLowerCase();
+    final String myProfUser = profile.username.replaceAll('@', '').trim().toLowerCase();
+    final String myDispName = profile.displayName.replaceAll('@', '').trim().toLowerCase();
+    final String myAuthName = (auth.user?.displayName ?? '').replaceAll('@', '').trim().toLowerCase();
+    if (cleanPostUser.isNotEmpty &&
+        (cleanPostUser == myProfUser || cleanPostUser == myDispName || cleanPostUser == myAuthName)) {
+      resolvedAuthorId ??= auth.userId ?? profile.profile?.id;
+    }
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => CommentsBottomSheet(
         postId: _post.id,
-        postAuthorId: _post.authorId,
+        postAuthorId: resolvedAuthorId ?? _post.authorId,
         totalComments: _post.commentsCount,
         allowComments: _post.allowComments,
         allowCommentsFrom: _post.allowCommentsFrom,
-        authorUsername: _post.authorName,
+        authorUsername: _post.username.isNotEmpty ? _post.username : _post.authorName,
+        communityId: _post.communityId,
         onCommentAdded: () {
           setState(() {
             _post = _post.copyWith(commentsCount: _post.commentsCount + 1);
@@ -247,9 +299,17 @@ class _PostFullscreenImageViewerScreenState
 
   void _handleDownload() {
     final AuthProvider auth = context.read<AuthProvider>();
-    final bool isCreator = (_post.authorId != null &&
-        auth.userId != null &&
-        _post.authorId!.toLowerCase() == auth.userId!.toLowerCase());
+    final ProfileProvider profile = context.read<ProfileProvider>();
+    final String cleanPostUser = _post.username.replaceAll('@', '').trim().toLowerCase();
+    final String myProfUser = profile.username.replaceAll('@', '').trim().toLowerCase();
+    final String myDispName = profile.displayName.replaceAll('@', '').trim().toLowerCase();
+    final String myAuthName = (auth.user?.displayName ?? '').replaceAll('@', '').trim().toLowerCase();
+    final bool isUserMatch = cleanPostUser.isNotEmpty &&
+        (cleanPostUser == myProfUser || cleanPostUser == myDispName || cleanPostUser == myAuthName);
+    final bool isCreator = isUserMatch ||
+        (_post.authorId != null &&
+            auth.userId != null &&
+            _post.authorId!.toLowerCase() == auth.userId!.toLowerCase());
     final String resolvedImg =
         _resolveImageUrl(_post.postImageUrl ?? _post.postImageAsset ?? '');
     MediaDownloadService.downloadMedia(
@@ -356,9 +416,17 @@ class _PostFullscreenImageViewerScreenState
         profileProvider.getCommentCount(_post.id) ??
         _post.commentsCount;
     final String? currentUserId = authProvider.userId;
-    final bool isCurrentUser = _post.authorId != null &&
-        currentUserId != null &&
-        _post.authorId!.trim().toLowerCase() == currentUserId.trim().toLowerCase();
+    final String cleanPostUser = _post.username.replaceAll('@', '').trim().toLowerCase();
+    final String myProfUser = profileProvider.username.replaceAll('@', '').trim().toLowerCase();
+    final String myDispName = profileProvider.displayName.replaceAll('@', '').trim().toLowerCase();
+    final String myAuthName = (authProvider.user?.displayName ?? '').replaceAll('@', '').trim().toLowerCase();
+    final bool isUserMatch = cleanPostUser.isNotEmpty &&
+        (cleanPostUser == myProfUser || cleanPostUser == myDispName || cleanPostUser == myAuthName);
+
+    final bool isCurrentUser = isUserMatch ||
+        (_post.authorId != null &&
+            currentUserId != null &&
+            _post.authorId!.trim().toLowerCase() == currentUserId.trim().toLowerCase());
 
     final bool isFollowing = profileProvider.isFollowingUser(
       userId: _post.authorId,

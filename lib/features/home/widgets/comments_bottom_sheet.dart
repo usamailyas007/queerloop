@@ -428,11 +428,12 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
           // Parent comment was deleted, so this reply is an orphaned reply.
           // Do not display it, and clean it up from backend in background.
           final bool isReal = reply.id.isNotEmpty &&
-              !reply.id.startsWith('c1') &&
-              !reply.id.startsWith('c2') &&
+              reply.id != 'c1' &&
+              reply.id != 'c2' &&
+              !reply.id.startsWith('c_') &&
               !reply.id.startsWith('mock_');
           if (isReal) {
-            service.deleteComment(reply.id).catchError((Object _) {});
+            service.deleteComment(reply.id, postId: widget.postId).catchError((Object _) {});
           }
         }
       }
@@ -631,14 +632,25 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
             auth.user!.displayName!.replaceAll('@', '').trim().toLowerCase(),
         }..removeWhere((String s) => s.isEmpty);
         if (myNames.contains(targetUser)) return true;
+        for (final String n in myNames) {
+          if (n == targetUser || targetUser.contains(n) || n.contains(targetUser)) {
+            return true;
+          }
+        }
       }
 
-      // Check if widget.postId belongs to the current user's profile posts or reels
+      // Check if widget.postId belongs to the current user's profile posts, reels, or home feed posts
       if (widget.postId != null && widget.postId!.isNotEmpty) {
         if (profile.userPosts.any((PostItemModel p) => p.id == widget.postId)) {
           return true;
         }
         if (profile.userReels.any((ReelItemModel r) => r.id == widget.postId)) {
+          return true;
+        }
+        if (homeFeed.posts.any((PostItemModel p) =>
+            p.id == widget.postId &&
+            (myIds.contains(p.authorId?.trim().toLowerCase()) ||
+             p.username.replaceAll('@', '').trim().toLowerCase() == myUsername.replaceAll('@', '').trim().toLowerCase()))) {
           return true;
         }
       }
@@ -721,8 +733,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     if (parentComment == null) {
       for (final CommentItemModel r in comment.replies) {
         final bool isRealReply = r.id.isNotEmpty &&
-            !r.id.startsWith('c1') &&
-            !r.id.startsWith('c2') &&
+            r.id != 'c1' &&
+            r.id != 'c2' &&
             !r.id.startsWith('c_') &&
             !r.id.startsWith('mock_');
         if (isRealReply && !replyIdsToDelete.contains(r.id)) {
@@ -732,8 +744,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
       for (final CommentItemModel c in _comments) {
         if (c.parentId == comment.id) {
           final bool isRealReply = c.id.isNotEmpty &&
-              !c.id.startsWith('c1') &&
-              !c.id.startsWith('c2') &&
+              c.id != 'c1' &&
+              c.id != 'c2' &&
               !c.id.startsWith('c_') &&
               !c.id.startsWith('mock_');
           if (isRealReply && !replyIdsToDelete.contains(c.id)) {
@@ -772,8 +784,8 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     );
 
     final bool isRealCommentId = comment.id.isNotEmpty &&
-        !comment.id.startsWith('c1') &&
-        !comment.id.startsWith('c2') &&
+        comment.id != 'c1' &&
+        comment.id != 'c2' &&
         !comment.id.startsWith('c_') &&
         !comment.id.startsWith('mock_');
     if (isRealCommentId) {

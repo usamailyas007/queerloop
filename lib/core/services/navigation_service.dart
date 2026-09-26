@@ -4,6 +4,11 @@ import 'package:flutter/material.dart';
 /// (e.g. from push notification handlers, background isolates).
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+/// Global scaffold messenger key used for showing snackbars from anywhere,
+/// including after bottom sheets or dialogs have been popped.
+final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+
 /// Thin wrapper around the global [navigatorKey] that lets any service
 /// push routes without holding a [BuildContext].
 abstract final class NavigationService {

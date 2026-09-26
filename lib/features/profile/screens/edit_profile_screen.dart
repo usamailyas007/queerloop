@@ -693,10 +693,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         profileProv.userCommunities,
                         force: true,
                       );
+                      setupProv.setSearchQuery('');
 
                       await navigator.pushNamed(
                         AppRoutes.allCommunities,
                       );
+                      setupProv.setSearchQuery('');
 
                       if (uid != null && uid.isNotEmpty) {
                         await profileProv.fetchUserCommunities(uid, forceRefresh: true);

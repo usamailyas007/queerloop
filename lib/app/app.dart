@@ -223,6 +223,7 @@ class App extends StatelessWidget {
           return MaterialApp(
             title: 'QueerLoop+',
             navigatorKey: navigatorKey,
+            scaffoldMessengerKey: rootScaffoldMessengerKey,
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
             darkTheme: AppTheme.dark,

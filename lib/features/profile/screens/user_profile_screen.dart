@@ -1253,7 +1253,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   post.commentsCount;
                               final PostItemModel postItem = PostItemModel(
                                 id: post.id,
-                                authorId: post.authorId,
+                                authorId: post.authorId ?? _effectiveUserId,
                                 authorDisplayName: (post.authorDisplayName != null &&
                                         post.authorDisplayName!.isNotEmpty)
                                     ? post.authorDisplayName!

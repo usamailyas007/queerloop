@@ -381,19 +381,109 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     });
   }
 
-  String _getDurationText(ReelItemModel item) {
-    if (_videoInitialized && _videoController != null) {
-      final Duration d = _videoController!.value.duration;
-      if (d.inSeconds > 0) {
-        final int minutes = d.inMinutes;
-        final int seconds = d.inSeconds % 60;
-        return '$minutes:${seconds.toString().padLeft(2, '0')}';
-      }
+  String _formatDuration(Duration d) {
+    final int minutes = d.inMinutes;
+    final int seconds = d.inSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildDurationPill(ReelItemModel item) {
+    if (!_videoInitialized || _videoController == null) {
+      final String fallback = item.durationText.isNotEmpty ? item.durationText : '0:30';
+      return Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 5,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.25),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            SvgPicture.asset(
+              AppIcons.play,
+              width: 10,
+              height: 10,
+              colorFilter: const ColorFilter.mode(
+                Colors.white,
+                BlendMode.srcIn,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              fallback,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
     }
-    if (item.durationText.isNotEmpty) {
-      return item.durationText;
-    }
-    return '0:30';
+
+    return ValueListenableBuilder<VideoPlayerValue>(
+      valueListenable: _videoController!,
+      builder: (BuildContext context, VideoPlayerValue val, Widget? _) {
+        final bool isPlaying = val.isPlaying && !_isPaused;
+        final Duration pos = val.position;
+        final Duration dur = val.duration;
+
+        final String posText = _formatDuration(pos);
+        final String durText = dur.inSeconds > 0
+            ? _formatDuration(dur)
+            : (item.durationText.isNotEmpty ? item.durationText : '0:30');
+
+        final String timeLabel = '$posText / $durText';
+
+        return GestureDetector(
+          onTap: _handleTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            margin: const EdgeInsets.only(right: 6),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 5,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isPlaying
+                    ? AppColors.gradientCyan.withValues(alpha: 0.6)
+                    : Colors.white.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  size: 13,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  timeLabel,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -741,44 +831,8 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                         const SizedBox(width: 6),
                       ],
 
-                      // 2. Duration Pill (from video controller / API / fallback)
-                      Container(
-                        margin: const EdgeInsets.only(right: 6),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.25),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            SvgPicture.asset(
-                              AppIcons.play,
-                              width: 10,
-                              height: 10,
-                              colorFilter: const ColorFilter.mode(
-                                Colors.white,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              _getDurationText(item),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      // 2. Duration & Playback Pill (dynamic timer + play/pause toggle)
+                      _buildDurationPill(item),
 
                       // 3. All Tags from API response
                       for (final String tag in item.tags) ...<Widget>[

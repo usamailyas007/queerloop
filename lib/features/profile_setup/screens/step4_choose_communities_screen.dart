@@ -33,15 +33,25 @@ class Step4ChooseCommunitiesScreen extends StatefulWidget {
 class _Step4ChooseCommunitiesScreenState
     extends State<Step4ChooseCommunitiesScreen> {
   final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
+    _searchQuery = '';
+    _searchController.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        context.read<ProfileSetupProvider>().setSearchQuery('');
         context.read<ProfileSetupProvider>().fetchCommunities();
       }
     });
+  }
+
+  @override
+  void deactivate() {
+    context.read<ProfileSetupProvider>().setSearchQuery('');
+    super.deactivate();
   }
 
   @override
@@ -81,7 +91,13 @@ class _Step4ChooseCommunitiesScreenState
   Widget build(BuildContext context) {
     final ProfileSetupProvider provider =
         context.watch<ProfileSetupProvider>();
-    final List<CommunityModel> communities = provider.filteredCommunities;
+    final String query = _searchQuery.trim().toLowerCase();
+    final List<CommunityModel> communities = query.isEmpty
+        ? provider.allCommunities
+        : provider.allCommunities
+            .where((CommunityModel c) =>
+                c.name.toLowerCase().contains(query))
+            .toList();
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
@@ -130,7 +146,30 @@ class _Step4ChooseCommunitiesScreenState
                         controller: _searchController,
                         hintText: l10n.profileSearchCommunities,
                         prefixIconPath: AppIcons.searchSvg,
-                        onChanged: (String val) => provider.setSearchQuery(val),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(
+                                  Icons.clear_rounded,
+                                  color: context.themeIconMuted,
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+                                  context
+                                      .read<ProfileSetupProvider>()
+                                      .setSearchQuery('');
+                                },
+                              )
+                            : null,
+                        onChanged: (String val) {
+                          setState(() {
+                            _searchQuery = val.trim();
+                          });
+                          provider.setSearchQuery(val);
+                        },
                       ),
 
                       const SizedBox(height: AppSpacing.lg),
@@ -198,9 +237,17 @@ class _Step4ChooseCommunitiesScreenState
                       Align(
                         alignment: Alignment.centerRight,
                         child: GestureDetector(
-                          onTap: () {
-                            Navigator.pushNamed(
-                                context, AppRoutes.allCommunities);
+                          onTap: () async {
+                            final NavigatorState nav = Navigator.of(context);
+                            final ProfileSetupProvider setupProvider =
+                                context.read<ProfileSetupProvider>();
+                            await nav.pushNamed(AppRoutes.allCommunities);
+                            if (!mounted) return;
+                            _searchController.clear();
+                            setState(() {
+                              _searchQuery = '';
+                            });
+                            setupProvider.setSearchQuery('');
                           },
                           child: Row(
                             mainAxisSize: MainAxisSize.min,

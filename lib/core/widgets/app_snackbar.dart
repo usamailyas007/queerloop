@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/navigation_service.dart';
 import '../theme/app_colors.dart';
 
 enum SnackBarType { success, error, info }
@@ -18,51 +19,16 @@ class AppSnackBar {
     ScaffoldMessengerState? messenger,
     SnackBarType type = SnackBarType.info,
   }) {
-    final ScaffoldMessengerState? targetMessenger =
-        messenger ?? ScaffoldMessenger.maybeOf(context);
+    final ScaffoldMessengerState? targetMessenger = messenger ??
+        rootScaffoldMessengerKey.currentState ??
+        (context.mounted ? ScaffoldMessenger.maybeOf(context) : null) ??
+        (navigatorKey.currentContext != null
+            ? ScaffoldMessenger.maybeOf(navigatorKey.currentContext!)
+            : null);
 
     if (targetMessenger == null) return;
 
-    final bool isDark = context.isDarkMode;
-
     targetMessenger.hideCurrentSnackBar();
-
-    Color badgeBg;
-    Color badgeBorder;
-    Widget defaultIcon;
-
-    switch (type) {
-      case SnackBarType.success:
-        badgeBg = isDark
-            ? const Color(0xFF0F2F34)
-            : const Color(0xFFE6F8F6);
-        badgeBorder = AppColors.gradientCyan.withValues(alpha: isDark ? 0.2 : 0.35);
-        defaultIcon = const Icon(
-          Icons.check_circle_rounded,
-          color: AppColors.gradientCyan,
-          size: 18,
-        );
-      case SnackBarType.error:
-        badgeBg = isDark
-            ? const Color(0xFF331522)
-            : const Color(0xFFFFE8EE);
-        badgeBorder = AppColors.danger.withValues(alpha: isDark ? 0.3 : 0.4);
-        defaultIcon = const Icon(
-          Icons.error_outline_rounded,
-          color: AppColors.danger,
-          size: 18,
-        );
-      case SnackBarType.info:
-        badgeBg = isDark
-            ? const Color(0xFF192538)
-            : context.themeCyanBadgeBackground;
-        badgeBorder = AppColors.gradientCyan.withValues(alpha: isDark ? 0.2 : 0.35);
-        defaultIcon = const Icon(
-          Icons.info_outline_rounded,
-          color: AppColors.gradientCyan,
-          size: 18,
-        );
-    }
 
     targetMessenger.showSnackBar(
       SnackBar(
@@ -72,16 +38,57 @@ class AppSnackBar {
         duration: duration,
         padding: EdgeInsets.zero,
         margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
-        content: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF191622) : context.themeCardBackground,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.12)
-                  : context.themeBorder,
-            ),
+        content: Builder(
+          builder: (BuildContext snackCtx) {
+            final bool isDark = snackCtx.isDarkMode;
+
+            Color badgeBg;
+            Color badgeBorder;
+            Widget defaultIcon;
+
+            switch (type) {
+              case SnackBarType.success:
+                badgeBg = isDark
+                    ? const Color(0xFF0F2F34)
+                    : const Color(0xFFE6F8F6);
+                badgeBorder = AppColors.gradientCyan.withValues(alpha: isDark ? 0.2 : 0.35);
+                defaultIcon = const Icon(
+                  Icons.check_circle_rounded,
+                  color: AppColors.gradientCyan,
+                  size: 18,
+                );
+              case SnackBarType.error:
+                badgeBg = isDark
+                    ? const Color(0xFF331522)
+                    : const Color(0xFFFFE8EE);
+                badgeBorder = AppColors.danger.withValues(alpha: isDark ? 0.3 : 0.4);
+                defaultIcon = const Icon(
+                  Icons.error_outline_rounded,
+                  color: AppColors.danger,
+                  size: 18,
+                );
+              case SnackBarType.info:
+                badgeBg = isDark
+                    ? const Color(0xFF192538)
+                    : snackCtx.themeCyanBadgeBackground;
+                badgeBorder = AppColors.gradientCyan.withValues(alpha: isDark ? 0.2 : 0.35);
+                defaultIcon = const Icon(
+                  Icons.info_outline_rounded,
+                  color: AppColors.gradientCyan,
+                  size: 18,
+                );
+            }
+
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF191622) : snackCtx.themeCardBackground,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : snackCtx.themeBorder,
+                ),
             boxShadow: <BoxShadow>[
               BoxShadow(
                 color: Colors.black.withValues(alpha: isDark ? 0.5 : 0.08),
@@ -116,7 +123,7 @@ class AppSnackBar {
                     Text(
                       title,
                       style: TextStyle(
-                        color: isDark ? Colors.white : context.themeTextPrimary,
+                        color: isDark ? Colors.white : snackCtx.themeTextPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
@@ -126,7 +133,7 @@ class AppSnackBar {
                       Text(
                         subtitle,
                         style: TextStyle(
-                          color: isDark ? Colors.white54 : context.themeTextSecondary,
+                          color: isDark ? Colors.white54 : snackCtx.themeTextSecondary,
                           fontSize: 12,
                           height: 1.25,
                         ),
@@ -162,10 +169,12 @@ class AppSnackBar {
               ],
             ],
           ),
-        ),
-      ),
-    );
-  }
+        );
+      },
+    ),
+  ),
+);
+}
 
   static void showSuccess(
     BuildContext context, {

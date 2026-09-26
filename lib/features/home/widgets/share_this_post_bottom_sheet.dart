@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
@@ -207,35 +209,42 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                             ? c.avatarUrl!
                             : AppImages.user1,
                         name: c.username,
-                        onTap: () async {
+                        onTap: () {
+                          final String contentTypeLabel =
+                              widget.reel != null ? 'Reel' : 'Post';
+                          AppSnackBar.showSuccess(
+                            context,
+                            title: '$contentTypeLabel shared',
+                            subtitle: 'Shared to @${c.username}!',
+                          );
+
                           Navigator.pop(context);
+
                           if (shareTargetId.isNotEmpty) {
                             if (c.conversationId != null &&
                                 c.conversationId!.isNotEmpty) {
-                              await msgProvider.sharePost(
-                                sharedPostId: shareTargetId,
-                                conversationIds: <String>[c.conversationId!],
-                                contentType: widget.reel != null ? 'reel' : 'post',
-                                reel: widget.reel,
-                                post: widget.post,
+                              unawaited(
+                                msgProvider.sharePost(
+                                  sharedPostId: shareTargetId,
+                                  conversationIds: <String>[c.conversationId!],
+                                  contentType: widget.reel != null ? 'reel' : 'post',
+                                  reel: widget.reel,
+                                  post: widget.post,
+                                ),
                               );
                             } else if (c.userId != null &&
                                 c.userId!.isNotEmpty) {
-                              await msgProvider.sharePost(
-                                sharedPostId: shareTargetId,
-                                recipientUserIds: <String>[c.userId!],
-                                contentType: widget.reel != null ? 'reel' : 'post',
-                                reel: widget.reel,
-                                post: widget.post,
+                              unawaited(
+                                msgProvider.sharePost(
+                                  sharedPostId: shareTargetId,
+                                  recipientUserIds: <String>[c.userId!],
+                                  contentType: widget.reel != null ? 'reel' : 'post',
+                                  reel: widget.reel,
+                                  post: widget.post,
+                                ),
                               );
                             }
                           }
-                          if (!context.mounted) return;
-                          AppSnackBar.showSuccess(
-                            context,
-                            title: 'Sent',
-                            subtitle: 'Shared to @${c.username}!',
-                          );
                         },
                       ),
                     ),
@@ -342,11 +351,16 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                       iconColor: context.themeIcon,
                       labelColor: context.themeTextSecondary,
                       onTap: () {
+                        final String postUrl = resolvedMedia != null && resolvedMedia.isNotEmpty
+                            ? resolvedMedia
+                            : 'https://queerloop.com/post/$shareTargetId';
+                        Clipboard.setData(ClipboardData(text: postUrl));
                         AppSnackBar.showSuccess(
                           context,
                           title: 'Link Copied',
                           subtitle: 'Link copied to clipboard!',
                         );
+                        Navigator.pop(context);
                       },
                     ),
 
