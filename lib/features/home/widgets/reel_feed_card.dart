@@ -36,6 +36,7 @@ class ReelFeedCard extends StatefulWidget {
     this.isActive = true,
     this.hasBottomBar = true,
     this.isCustomView = false,
+    this.isProfileScreen = false,
     this.onDelete,
     super.key,
   });
@@ -55,6 +56,7 @@ class ReelFeedCard extends StatefulWidget {
   final bool isActive;
   final bool hasBottomBar;
   final bool isCustomView;
+  final bool isProfileScreen;
 
   @override
   State<ReelFeedCard> createState() => _ReelFeedCardState();
@@ -156,14 +158,16 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     if (existing != null && existing.value.isInitialized) {
       _videoController = existing;
       _videoInitialized = true;
-      if (_canPlayAudio) {
-        // Ensure only this reel has audio
-        ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
-        existing.play();
-      } else {
-        existing.pause();
-        existing.setVolume(0);
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isDisposed) return;
+        if (_canPlayAudio) {
+          ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
+          existing.play();
+        } else {
+          existing.pause();
+          existing.setVolume(0);
+        }
+      });
     } else {
       _initVideo();
     }
@@ -195,13 +199,16 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         if (mounted) {
           setState(() => _videoInitialized = true);
         }
-        if (_canPlayAudio) {
-          ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
-          controller.play();
-        } else {
-          controller.pause();
-          controller.setVolume(0);
-        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _isDisposed) return;
+          if (_canPlayAudio) {
+            ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
+            controller.play();
+          } else {
+            controller.pause();
+            controller.setVolume(0);
+          }
+        });
       } else {
         void onReady() {
           if (_isDisposed || !mounted) {
@@ -215,13 +222,16 @@ class _ReelFeedCardState extends State<ReelFeedCard>
           if (controller.value.isInitialized) {
             controller.removeListener(onReady);
             setState(() => _videoInitialized = true);
-            if (_canPlayAudio) {
-              ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
-              controller.play();
-            } else {
-              controller.pause();
-              controller.setVolume(0);
-            }
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted || _isDisposed) return;
+              if (_canPlayAudio) {
+                ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
+                controller.play();
+              } else {
+                controller.pause();
+                controller.setVolume(0);
+              }
+            });
           }
         }
         controller.addListener(onReady);
@@ -884,6 +894,10 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                         ReelVideoPreloader.instance.pauseAll();
                         ReelVideoPreloader.instance.muteAll();
                         if (isCurrentUser) {
+                          if (widget.isProfileScreen) {
+                            Navigator.pop(context);
+                            return;
+                          }
                           Navigator.push<void>(
                             context,
                             MaterialPageRoute<void>(

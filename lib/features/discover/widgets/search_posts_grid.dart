@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
-import '../../home/provider/home_feed_provider.dart';
 import '../../home/screens/reels_feed_view.dart';
 import '../../home/widgets/post_feed_card.dart';
-import '../../profile/provider/profile_provider.dart';
 import '../models/discover_models.dart';
 
 /// 3-column grid of search result cards with dynamic image/video thumbnails and playback.
@@ -20,13 +17,42 @@ class SearchPostsGrid extends StatelessWidget {
 
   final List<DiscoverSearchResult> results;
 
+  List<DiscoverSearchResult> _filterAndDeduplicate(List<DiscoverSearchResult> list) {
+    final List<DiscoverSearchResult> unique = <DiscoverSearchResult>[];
+    final Set<String> seen = <String>{};
+
+    for (final DiscoverSearchResult item in list) {
+      final String id = (item.id ?? '').trim().toLowerCase();
+      final String refId = (item.refId ?? '')
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'^/+|^media/'), '');
+
+      if (id.isNotEmpty && DeletedPostsRegistry.isDeleted(id)) continue;
+      if (refId.isNotEmpty && DeletedPostsRegistry.isDeleted(refId)) continue;
+
+      if (id.isNotEmpty && seen.contains('id:$id')) continue;
+      if (refId.isNotEmpty && seen.contains('id:$refId')) continue;
+
+      if (item.videoUrl != null && item.videoUrl!.trim().isNotEmpty) {
+        final String v = item.videoUrl!.trim().toLowerCase();
+        final RegExpMatch? m = RegExp(r'/videos/processed/([a-zA-Z0-9_\-]+)').firstMatch(v);
+        final String vKey = m != null ? m.group(1)! : v;
+        if (seen.contains('vid:$vKey')) continue;
+        seen.add('vid:$vKey');
+      }
+
+      if (id.isNotEmpty) seen.add('id:$id');
+      if (refId.isNotEmpty) seen.add('id:$refId');
+
+      unique.add(item);
+    }
+    return unique;
+  }
+
   List<ReelItemModel> _buildSearchReels() {
-    return results
-        .where((res) => !DeletedPostsRegistry.isDeleted(res.id ?? ''))
-        .toList()
-        .asMap()
-        .entries
-        .map((MapEntry<int, DiscoverSearchResult> entry) {
+    final List<DiscoverSearchResult> validResults = _filterAndDeduplicate(results);
+    return validResults.asMap().entries.map((MapEntry<int, DiscoverSearchResult> entry) {
       final int i = entry.key;
       final DiscoverSearchResult res = entry.value;
 
@@ -40,8 +66,12 @@ class SearchPostsGrid extends StatelessWidget {
               ? res.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg')
               : (isVideoUrl ? null : (img.startsWith('http') ? img : null)));
 
+      final String effectiveId = (res.refId != null && res.refId!.trim().isNotEmpty)
+          ? res.refId!.trim()
+          : (res.id ?? 'search_reel_$i');
+
       return ReelItemModel(
-        id: res.id ?? 'search_reel_$i',
+        id: effectiveId,
         authorId: res.authorId,
         username: (res.authorUsername != null && res.authorUsername!.trim().isNotEmpty)
             ? res.authorUsername!.trim()
@@ -59,21 +89,26 @@ class SearchPostsGrid extends StatelessWidget {
         viewsCount: res.viewsCount,
         isLiked: res.isLiked,
         isSaved: res.isSaved,
+        allowComments: res.allowComments,
+        allowDownloads: res.allowDownloads,
+        allowCommentsFrom: res.allowCommentsFrom,
+        isAuthorPrivate: res.isAuthorPrivate,
         tags: const <String>[],
       );
     }).toList();
   }
 
   void _openReelPlayer(BuildContext context, int initialIndex) {
-    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
-    final ProfileProvider profile = context.read<ProfileProvider>();
     final List<ReelItemModel> searchReels = _buildSearchReels().map((ReelItemModel r) {
-      final bool liked = homeFeed.isPostLiked(r.id) || profile.isPostLiked(r.id) || r.isLiked;
-      final bool saved = homeFeed.isPostSaved(r.id) || profile.isPostSaved(r.id) || r.isSaved;
+      final bool liked = PostInteractionRegistry.isLiked(r.id, fallback: r.isLiked);
+      final bool saved = PostInteractionRegistry.isSaved(r.id, fallback: r.isSaved);
+      final int likes = PostInteractionRegistry.getLikeCount(r.id, fallback: r.likesCount);
+      final int comments = CommentCountRegistry.getOr(r.id, r.commentsCount);
       return r.copyWith(
         isLiked: liked,
         isSaved: saved,
-        likesCount: r.likesCount,
+        likesCount: likes,
+        commentsCount: comments,
       );
     }).toList();
     if (searchReels.isEmpty) return;
@@ -128,13 +163,13 @@ class SearchPostsGrid extends StatelessWidget {
     final bool isHttp = img.startsWith('http://') || img.startsWith('https://');
     final bool isAsset = img.startsWith('assets/');
     final bool isText = item.type == 'TEXT' || (img.isEmpty && item.mediaRefs.isEmpty);
-    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
-    final ProfileProvider profile = context.read<ProfileProvider>();
-    final String postId = item.id ?? 'search_${item.caption.hashCode}';
-    final bool isLiked = homeFeed.isPostLiked(postId) || profile.isPostLiked(postId) || item.isLiked;
-    final bool isSaved = homeFeed.isPostSaved(postId) || profile.isPostSaved(postId) || item.isSaved;
-    final int rawLikes = item.likesCount ?? 0;
-    final int likesCount = rawLikes;
+    final String postId = (item.refId != null && item.refId!.trim().isNotEmpty)
+        ? item.refId!.trim()
+        : (item.id ?? 'search_${item.caption.hashCode}');
+    final bool isLiked = PostInteractionRegistry.isLiked(postId, fallback: item.isLiked);
+    final bool isSaved = PostInteractionRegistry.isSaved(postId, fallback: item.isSaved);
+    final int likesCount = PostInteractionRegistry.getLikeCount(postId, fallback: item.likesCount ?? 0);
+    final int commentsCount = CommentCountRegistry.getOr(postId, item.commentsCount ?? 0);
 
     final PostItemModel post = PostItemModel(
       id: postId,
@@ -150,10 +185,7 @@ class SearchPostsGrid extends StatelessWidget {
           ? item.caption!
           : 'Shared post',
       likesCount: likesCount,
-      commentsCount: homeFeed.getCommentCount(postId) ??
-          profile.getCommentCount(postId) ??
-          item.commentsCount ??
-          0,
+      commentsCount: commentsCount,
       viewsCount: item.viewsCount,
       postImageUrl: (!isText && isHttp) ? img : null,
       postImageAsset: (!isText && isAsset) ? img : null,
@@ -161,15 +193,17 @@ class SearchPostsGrid extends StatelessWidget {
       communityId: item.communityId,
       isLiked: isLiked,
       isSaved: isSaved,
+      allowComments: item.allowComments,
+      allowDownloads: item.allowDownloads,
+      allowCommentsFrom: item.allowCommentsFrom,
+      isAuthorPrivate: item.isAuthorPrivate,
     );
 
     PostFeedCard.openFullscreen(context, post);
   }
 
   void _handleTap(BuildContext context, int index) {
-    final List<DiscoverSearchResult> activeResults = results
-        .where((DiscoverSearchResult r) => !DeletedPostsRegistry.isDeleted(r.id ?? ''))
-        .toList();
+    final List<DiscoverSearchResult> activeResults = _filterAndDeduplicate(results);
     if (index >= activeResults.length) return;
     final DiscoverSearchResult item = activeResults[index];
     if (item.isReel) {
@@ -181,9 +215,7 @@ class SearchPostsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<DiscoverSearchResult> activeResults = results
-        .where((DiscoverSearchResult r) => !DeletedPostsRegistry.isDeleted(r.id ?? ''))
-        .toList();
+    final List<DiscoverSearchResult> activeResults = _filterAndDeduplicate(results);
 
     if (activeResults.isEmpty) {
       return const SizedBox.shrink();
@@ -202,11 +234,39 @@ class SearchPostsGrid extends StatelessWidget {
       itemBuilder: (BuildContext context, int index) {
         final DiscoverSearchResult item = activeResults[index];
         final bool isReel = item.isReel;
-        final String countText = isReel
-            ? (item.viewCount ?? '${item.viewsCount}')
-            : (item.likesCount != null && item.likesCount! > 0
-                ? '${item.likesCount}'
-                : (item.viewCount ?? ''));
+        // Wrap in ListenableBuilder so count updates reactively when liked/unliked
+        return ListenableBuilder(
+          listenable: PostInteractionRegistry.notifier,
+          builder: (BuildContext ctx, _) {
+            final String postId = (item.refId != null && item.refId!.trim().isNotEmpty)
+                ? item.refId!.trim()
+                : (item.id ?? '');
+            final bool isLiked = PostInteractionRegistry.isLiked(postId, fallback: item.isLiked);
+            final int effectiveLikes = PostInteractionRegistry.getLikeCount(
+              postId,
+              fallback: (isLiked && (item.likesCount == null || item.likesCount == 0))
+                  ? 1
+                  : (item.likesCount ?? 0),
+            );
+            final int reelViews = PostInteractionRegistry.getViewsCount(
+              postId,
+              fallback: item.viewsCount > 0
+                  ? item.viewsCount
+                  : (int.tryParse(item.viewCount ?? '') ?? 0),
+            );
+            final String countText = isReel
+                ? (reelViews > 0
+                    ? (reelViews >= 1000000
+                        ? '${(reelViews / 1000000).toStringAsFixed(1)}M'
+                        : (reelViews >= 1000
+                            ? '${(reelViews / 1000).toStringAsFixed(1)}K'
+                            : '$reelViews'))
+                    : (item.viewCount != null && item.viewCount!.isNotEmpty && item.viewCount != '0'
+                        ? item.viewCount!
+                        : '0'))
+                : (effectiveLikes > 0
+                    ? '$effectiveLikes'
+                    : (item.viewCount ?? ''));
 
         return GestureDetector(
           onTap: () => _handleTap(context, index),
@@ -242,7 +302,9 @@ class SearchPostsGrid extends StatelessWidget {
                     children: <Widget>[
                       Icon(
                         isReel ? Icons.play_arrow_rounded : Icons.favorite_rounded,
-                        color: isReel ? Colors.white : Colors.redAccent.withValues(alpha: 0.9),
+                        color: isReel
+                            ? Colors.white
+                            : (isLiked ? Colors.redAccent : Colors.white70),
                         size: 14,
                       ),
                       const SizedBox(width: 3),
@@ -250,7 +312,7 @@ class SearchPostsGrid extends StatelessWidget {
                         child: Text(
                           countText.isNotEmpty
                               ? countText
-                              : (isReel ? 'Watch' : 'Post'),
+                              : (isReel ? 'Watch' : (isLiked ? '1' : 'Post')),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.caption.copyWith(
@@ -267,6 +329,8 @@ class SearchPostsGrid extends StatelessWidget {
             ),
           ),
         );
+          }, // end ListenableBuilder builder
+        ); // end ListenableBuilder
       },
     );
   }

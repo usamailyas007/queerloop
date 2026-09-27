@@ -150,13 +150,16 @@ class DiscoverSpotlightCard extends StatelessWidget {
     final String? imageUrl = activeSpotlight?.imageUrl;
 
     return Container(
-      decoration: BoxDecoration(
-        color: isDark ? context.themeCardBackground : const Color(0xFFEDEDF2),
+      foregroundDecoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0x4DB45C4D),
-          width: 1.5,
+          color: context.themeBorder,
+          width: 1.0,
         ),
+      ),
+      decoration: BoxDecoration(
+        color: context.themeCardBackground,
+        borderRadius: BorderRadius.circular(20),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(

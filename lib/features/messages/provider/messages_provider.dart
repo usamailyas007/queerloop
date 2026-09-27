@@ -91,13 +91,31 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<void> reloadPrivacySettings() async {
+    await _loadPersistedPrivacySettings();
+  }
+
   Future<void> _loadPersistedPrivacySettings() async {
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       final String userSuffix = _currentUserId ?? 'guest';
-      _showActivityStatus = prefs.getBool('privacy_show_activity_$userSuffix') ?? true;
-      _sendReadReceipts = prefs.getBool('privacy_read_receipts_$userSuffix') ?? true;
-      notifyListeners();
+      final bool newShowActivity =
+          prefs.getBool('privacy_show_activity_$userSuffix') ?? true;
+      final bool newSendReadReceipts =
+          prefs.getBool('privacy_read_receipts_$userSuffix') ?? true;
+      bool changed = false;
+      if (newShowActivity != _showActivityStatus) {
+        _showActivityStatus = newShowActivity;
+        changed = true;
+        _socketService?.sendPresence(isOnline: _showActivityStatus);
+      }
+      if (newSendReadReceipts != _sendReadReceipts) {
+        _sendReadReceipts = newSendReadReceipts;
+        changed = true;
+      }
+      if (changed) {
+        notifyListeners();
+      }
     } catch (_) {}
   }
 
@@ -438,6 +456,16 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   String? get activeChatConvId => _activeChatConvId;
 
+  ConversationModel? getConversation(String id) {
+    try {
+      return _conversations.firstWhere(
+        (ConversationModel c) => c.id == id || c.participantId == id,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   void setActiveChat(String? conversationId) {
     _activeChatConvId = conversationId;
     if (conversationId != null && conversationId.isNotEmpty) {
@@ -591,6 +619,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_currentUserId == null || _currentUserId!.isEmpty) return;
     switch (state) {
       case AppLifecycleState.resumed:
+        _loadPersistedPrivacySettings();
         // App came to foreground — announce online if activity status is enabled
         if (_showActivityStatus) {
           _socketService?.sendPresence(isOnline: true);
@@ -688,7 +717,16 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
           m.id.startsWith('temp_') &&
           (m.text == event.body || event.body.isEmpty));
       if (tempIdx != -1) {
-        msgs[tempIdx] = msgs[tempIdx].copyWith(id: event.messageId);
+        final ChatMessageModel existing = msgs[tempIdx];
+        final ChatMessageModel parsed = event.raw.isNotEmpty
+            ? ChatMessageModel.fromJson(event.raw, currentUserId: _currentUserId)
+            : existing;
+        msgs[tempIdx] = existing.copyWith(
+          id: event.messageId,
+          replyToId: parsed.replyToId ?? existing.replyToId,
+          replyToText: parsed.replyToText ?? existing.replyToText,
+          replyToSender: parsed.replyToSender ?? existing.replyToSender,
+        );
         _messagesByConvId[convId] = msgs;
         notifyListeners();
         return;
@@ -704,7 +742,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // 3. Construct new chat message
     final bool isRead = isFromMe || isCurrentChat;
-    final ChatMessageModel newMsg;
+    ChatMessageModel newMsg;
     if (event.raw.isNotEmpty) {
       newMsg = ChatMessageModel.fromJson(
         event.raw,
@@ -728,6 +766,25 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         createdAt: DateTime.now(),
         type: MessageType.text,
       );
+    }
+
+    // Enrich reply metadata if replyToId is present but text or sender is missing
+    if (newMsg.replyToId != null && newMsg.replyToId!.isNotEmpty) {
+      if (newMsg.replyToText == null || newMsg.replyToSender == null) {
+        final ChatMessageModel? orig = msgs.cast<ChatMessageModel?>().firstWhere(
+          (ChatMessageModel? m) => m != null && m.id == newMsg.replyToId,
+          orElse: () => null,
+        );
+        if (orig != null) {
+          newMsg = newMsg.copyWith(
+            replyToText: newMsg.replyToText ??
+                orig.text ??
+                (orig.mediaUrl != null ? '📷 Photo' : null),
+            replyToSender: newMsg.replyToSender ??
+                (orig.isMe ? 'You' : orig.senderUsername),
+          );
+        }
+      }
     }
 
     msgs.add(newMsg);
@@ -2679,6 +2736,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> loadConversations({bool force = false}) async {
     if (_service == null) return;
+    _loadPersistedPrivacySettings();
     loadBlockedUsers();
     loadRestrictedUsers();
     loadMutedUsers();
@@ -3135,6 +3193,28 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       final int prevCount = prevMsgs?.length ?? 0;
       final List<ChatMessageModel> msgs =
           _applyReadStatesToMessages(conversationId, fetched);
+
+      // Enrich reply references from known messages in the conversation
+      final Map<String, ChatMessageModel> msgMap = <String, ChatMessageModel>{
+        for (final ChatMessageModel m in msgs) m.id: m,
+      };
+      for (int i = 0; i < msgs.length; i++) {
+        final ChatMessageModel m = msgs[i];
+        if (m.replyToId != null && m.replyToId!.isNotEmpty) {
+          if (m.replyToText == null || m.replyToSender == null) {
+            final ChatMessageModel? orig = msgMap[m.replyToId];
+            if (orig != null) {
+              msgs[i] = m.copyWith(
+                replyToText: m.replyToText ??
+                    orig.text ??
+                    (orig.mediaUrl != null ? '📷 Photo' : null),
+                replyToSender: m.replyToSender ??
+                    (orig.isMe ? 'You' : orig.senderUsername),
+              );
+            }
+          }
+        }
+      }
       _messagesByConvId[conversationId] = msgs;
 
       for (final ChatMessageModel m in fetched) {
@@ -3254,7 +3334,13 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // ── Send Message ───────────────────────────────────────────────────────────
-  Future<void> sendMessage(String conversationId, String text) async {
+  Future<void> sendMessage(
+    String conversationId,
+    String text, {
+    String? replyToId,
+    String? replyToText,
+    String? replyToSender,
+  }) async {
     final String trimmed = text.trim();
     if (trimmed.isEmpty) return;
 
@@ -3280,6 +3366,9 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       timestamp: 'Just now',
       text: trimmed,
       type: MessageType.gradientText,
+      replyToId: replyToId,
+      replyToText: replyToText,
+      replyToSender: replyToSender,
       createdAt: DateTime.now(),
     );
 
@@ -3381,6 +3470,9 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
           conversationId: targetConvId,
           text: trimmed,
           body: trimmed,
+          replyToId: replyToId,
+          replyToText: replyToText,
+          replyToSender: replyToSender,
         );
       } catch (e) {
         debugPrint('Error sending message: $e');

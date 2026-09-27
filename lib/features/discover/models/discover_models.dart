@@ -4,6 +4,7 @@ import '../widgets/search_tag_tile.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_images.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 
@@ -29,6 +30,7 @@ class DiscoverSearchResult {
     this.mediaRefs = const <String>[],
     this.visibility,
     this.allowComments = true,
+    this.allowDownloads = true,
     this.allowCommentsFrom = 'everyone',
     this.isAuthorPrivate = false,
   });
@@ -53,6 +55,7 @@ class DiscoverSearchResult {
   final List<String> mediaRefs;
   final String? visibility;
   final bool allowComments;
+  final bool allowDownloads;
   final String allowCommentsFrom;
   final bool isAuthorPrivate;
 
@@ -99,6 +102,7 @@ class DiscoverSearchResult {
     String? visibility,
     int? viewsCount,
     bool? allowComments,
+    bool? allowDownloads,
     String? allowCommentsFrom,
     bool? isAuthorPrivate,
   }) {
@@ -123,6 +127,7 @@ class DiscoverSearchResult {
       mediaRefs: mediaRefs ?? this.mediaRefs,
       visibility: visibility ?? this.visibility,
       allowComments: allowComments ?? this.allowComments,
+      allowDownloads: allowDownloads ?? this.allowDownloads,
       allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
       isAuthorPrivate: isAuthorPrivate ?? this.isAuthorPrivate,
     );
@@ -130,6 +135,12 @@ class DiscoverSearchResult {
 
   factory DiscoverSearchResult.fromPostItem(PostItemModel post) {
     final String img = (post.postImageUrl ?? post.postImageAsset ?? '').trim();
+    final int views = post.viewsCount;
+    final String? formattedViews = views >= 1000000
+        ? '${(views / 1000000).toStringAsFixed(1)}M'
+        : (views >= 1000
+            ? '${(views / 1000).toStringAsFixed(1)}K'
+            : (views > 0 ? '$views' : null));
     return DiscoverSearchResult(
       id: post.id,
       refId: null,
@@ -141,11 +152,17 @@ class DiscoverSearchResult {
       authorAvatar: post.avatarAsset,
       likesCount: post.likesCount,
       commentsCount: post.commentsCount,
+      viewsCount: views,
+      viewCount: formattedViews,
       type: 'PHOTO',
       communityId: post.communityId,
       isLiked: post.isLiked,
       isSaved: post.isSaved,
       visibility: post.visibility,
+      allowComments: post.allowComments,
+      allowDownloads: post.allowDownloads,
+      allowCommentsFrom: post.allowCommentsFrom,
+      isAuthorPrivate: post.isAuthorPrivate,
     );
   }
 
@@ -159,6 +176,12 @@ class DiscoverSearchResult {
     if (thumb.contains('/videos/processed/') && thumb.endsWith('/thumbnail.jpg')) {
       thumb = thumb.replaceAll('/thumbnail.jpg', '/thumb.0000000.jpg');
     }
+    final int views = reel.viewsCount;
+    final String? formattedViews = views >= 1000000
+        ? '${(views / 1000000).toStringAsFixed(1)}M'
+        : (views >= 1000
+            ? '${(views / 1000).toStringAsFixed(1)}K'
+            : (views > 0 ? '$views' : null));
     return DiscoverSearchResult(
       id: reel.id,
       refId: null,
@@ -171,11 +194,17 @@ class DiscoverSearchResult {
       authorAvatar: reel.avatarAsset,
       likesCount: reel.likesCount,
       commentsCount: reel.commentsCount,
+      viewsCount: views,
+      viewCount: formattedViews,
       type: 'VIDEO',
       communityId: reel.communityId,
       isLiked: reel.isLiked,
       isSaved: reel.isSaved,
       visibility: reel.visibility,
+      allowComments: reel.allowComments,
+      allowDownloads: reel.allowDownloads,
+      allowCommentsFrom: reel.allowCommentsFrom,
+      isAuthorPrivate: reel.isAuthorPrivate,
     );
   }
 
@@ -399,15 +428,31 @@ class DiscoverSearchResult {
       }
     }
 
-    // 5. Views Count parsing (strictly from API)
+    // 5. Views Count parsing (from API or counts)
     final dynamic rawViews = json['viewsCount'] ??
         json['viewCount'] ??
+        json['views_count'] ??
+        json['view_count'] ??
         json['views'] ??
         json['playCount'] ??
         json['playsCount'] ??
+        json['play_count'] ??
+        json['plays_count'] ??
         json['plays'] ??
+        json['totalViews'] ??
+        json['totalPlays'] ??
+        json['impressions'] ??
+        (json['metadata'] is Map
+            ? (json['metadata']['views'] ??
+                json['metadata']['plays'] ??
+                json['metadata']['viewCount'] ??
+                json['metadata']['playCount'])
+            : null) ??
         (json['_count'] is Map
-            ? (json['_count']['views'] ?? json['_count']['plays'])
+            ? (json['_count']['views'] ??
+                json['_count']['plays'] ??
+                json['_count']['viewCount'] ??
+                json['_count']['playCount'])
             : null);
     final int views = rawViews is num
         ? rawViews.toInt()
@@ -417,9 +462,9 @@ class DiscoverSearchResult {
         ? '${(views / 1000000).toStringAsFixed(1)}M'
         : (views >= 1000
             ? '${(views / 1000).toStringAsFixed(1)}K'
-            : (views > 0 ? '$views' : (rawViews != null ? '0' : null)));
+            : (views > 0 ? '$views' : null));
 
-    return DiscoverSearchResult(
+    final DiscoverSearchResult result = DiscoverSearchResult(
       id: json['id']?.toString() ?? json['_id']?.toString(),
       refId: refId,
       authorId: resolvedAuthorId,
@@ -437,28 +482,69 @@ class DiscoverSearchResult {
           .toString(),
       authorUsername: resolvedAuthorUsername,
       authorAvatar: resolvedAuthorAvatar,
-      likesCount: (json['likesCount'] is num)
-          ? (json['likesCount'] as num).toInt()
-          : ((json['likeCount'] is num)
-              ? (json['likeCount'] as num).toInt()
-              : (json['likes'] is num ? (json['likes'] as num).toInt() : null)),
-      commentsCount: json['commentsCount'] is num
-          ? (json['commentsCount'] as num).toInt()
-          : null,
+      likesCount: () {
+        final dynamic raw = json['likesCount'] ??
+            json['likeCount'] ??
+            json['likes_count'] ??
+            json['like_count'] ??
+            json['totalLikes'] ??
+            json['total_likes'] ??
+            json['likes'] ??
+            (json['_count'] is Map ? json['_count']['likes'] : null) ??
+            (json['metadata'] is Map
+                ? (json['metadata']['likesCount'] ??
+                    json['metadata']['likeCount'] ??
+                    json['metadata']['likes_count'] ??
+                    json['metadata']['likes'])
+                : null) ??
+            (json['metrics'] is Map
+                ? (json['metrics']['likesCount'] ??
+                    json['metrics']['likeCount'] ??
+                    json['metrics']['likes'])
+                : null);
+        if (raw is num) return raw.toInt();
+        if (raw is List) return raw.length;
+        if (raw != null) return int.tryParse(raw.toString());
+        return null;
+      }(),
+      commentsCount: () {
+        final dynamic raw = json['commentsCount'] ??
+            json['commentCount'] ??
+            json['comments_count'] ??
+            json['comment_count'] ??
+            json['totalComments'] ??
+            json['total_comments'] ??
+            json['comments'] ??
+            (json['_count'] is Map ? json['_count']['comments'] : null) ??
+            (json['metadata'] is Map
+                ? (json['metadata']['commentsCount'] ??
+                    json['metadata']['commentCount'] ??
+                    json['metadata']['comments'])
+                : null) ??
+            (json['metrics'] is Map
+                ? (json['metrics']['commentsCount'] ??
+                    json['metrics']['commentCount'] ??
+                    json['metrics']['comments'])
+                : null);
+        if (raw is num) return raw.toInt();
+        if (raw is List) return raw.length;
+        if (raw != null) return int.tryParse(raw.toString());
+        return null;
+      }(),
       type: postType.isNotEmpty ? postType : null,
       communityId: json['communityId']?.toString(),
       isLiked: () {
-        final dynamic raw = json['isLiked'] ??
+        final dynamic raw = json['likedByMe'] ??
+            json['liked_by_me'] ??
+            json['isLikedByMe'] ??
+            json['is_liked_by_me'] ??
+            json['isLiked'] ??
             json['is_liked'] ??
             json['userLiked'] ??
             json['user_liked'] ??
             json['liked'] ??
             json['hasLiked'] ??
             json['has_liked'] ??
-            json['likedByMe'] ??
-            json['liked_by_me'] ??
-            json['isLikedByMe'] ??
-            json['is_liked_by_me'] ??
             (json['viewer'] is Map
                 ? (json['viewer']['isLiked'] ?? json['viewer']['liked'])
                 : null) ??
@@ -469,17 +555,17 @@ class DiscoverSearchResult {
         return raw == true || raw == 1 || raw == 'true';
       }(),
       isSaved: () {
-        final dynamic raw = json['isSaved'] ??
+        final dynamic raw = json['savedByMe'] ??
+            json['saved_by_me'] ??
+            json['isSavedByMe'] ??
+            json['is_saved_by_me'] ??
+            json['isSaved'] ??
             json['is_saved'] ??
             json['userSaved'] ??
             json['user_saved'] ??
             json['saved'] ??
             json['hasSaved'] ??
             json['has_saved'] ??
-            json['savedByMe'] ??
-            json['saved_by_me'] ??
-            json['isSavedByMe'] ??
-            json['is_saved_by_me'] ??
             (json['viewer'] is Map
                 ? (json['viewer']['isSaved'] ?? json['viewer']['saved'])
                 : null) ??
@@ -491,6 +577,7 @@ class DiscoverSearchResult {
       }(),
       visibility: json['visibility']?.toString(),
       allowComments: (json['allowComments'] ?? json['allowComment']) as bool? ?? true,
+      allowDownloads: (json['allowDownloads'] ?? json['allowDownload'] ?? json['allowSharing'] ?? json['allow_downloads'] ?? json['allow_download']) as bool? ?? true,
       allowCommentsFrom: ((json['allowCommentsFrom'] ??
                   json['allow_comments_from'] ??
                   (json['author'] is Map
@@ -517,6 +604,18 @@ class DiscoverSearchResult {
           json['is_private'] == true ||
           json['isAuthorPrivate'] == true,
     );
+
+    final String? cleanId = result.id?.trim();
+    if (cleanId != null && cleanId.isNotEmpty) {
+      PostInteractionRegistry.seedFromServer(
+        cleanId,
+        isLiked: result.isLiked,
+        isSaved: result.isSaved,
+        likesCount: result.likesCount,
+        commentsCount: result.commentsCount,
+      );
+    }
+    return result;
   }
 }
 

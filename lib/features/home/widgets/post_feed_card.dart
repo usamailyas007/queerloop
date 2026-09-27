@@ -36,6 +36,7 @@ class PostFeedCard extends StatelessWidget {
     required this.onSaveToggle,
     required this.onOpenComments,
     this.isFollowing = false,
+    this.isProfileScreen = false,
     this.onFollowToggle,
     this.onCardTap,
     this.onPostDeleted,
@@ -47,17 +48,20 @@ class PostFeedCard extends StatelessWidget {
   final VoidCallback onSaveToggle;
   final VoidCallback onOpenComments;
   final bool isFollowing;
+  final bool isProfileScreen;
   final VoidCallback? onFollowToggle;
   final VoidCallback? onCardTap;
   final VoidCallback? onPostDeleted;
 
-  static void openFullscreen(BuildContext context, PostItemModel post) {
-    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
-    final ProfileProvider profile = context.read<ProfileProvider>();
-    final bool isLiked = homeFeed.isPostLiked(post.id) || profile.isPostLiked(post.id) || post.isLiked;
-    final bool isSaved = homeFeed.isPostSaved(post.id) || profile.isPostSaved(post.id) || post.isSaved;
-    final int commentsCount = homeFeed.getCommentCount(post.id) ?? profile.getCommentCount(post.id) ?? post.commentsCount;
-    final int likesCount = post.likesCount;
+  static void openFullscreen(
+    BuildContext context,
+    PostItemModel post, {
+    bool isProfileScreen = false,
+  }) {
+    final bool isLiked = PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked);
+    final bool isSaved = PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved);
+    final int commentsCount = CommentCountRegistry.getOr(post.id, post.commentsCount);
+    final int likesCount = PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
     final PostItemModel resolvedPost = post.copyWith(
       isLiked: isLiked,
       isSaved: isSaved,
@@ -102,6 +106,7 @@ class PostFeedCard extends StatelessWidget {
                   initialPage: 0,
                   customReels: <ReelItemModel>[reel],
                   hasBottomBar: false,
+                  isProfileScreen: isProfileScreen,
                 ),
                 SafeArea(
                   child: Padding(
@@ -138,7 +143,10 @@ class PostFeedCard extends StatelessWidget {
       Navigator.push<void>(
         context,
         MaterialPageRoute<void>(
-          builder: (_) => PostFullscreenImageViewerScreen(post: resolvedPost),
+          builder: (_) => PostFullscreenImageViewerScreen(
+            post: resolvedPost,
+            isProfileScreen: isProfileScreen,
+          ),
         ),
       );
     }
@@ -146,23 +154,25 @@ class PostFeedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    final bool isDark = context.isDarkMode;
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        PostInteractionRegistry.notifier,
+        CommentCountRegistry.notifier,
+      ]),
+      builder: (BuildContext context, _) {
+        final AppLocalizations l10n = AppLocalizations.of(context);
+        final bool isDark = context.isDarkMode;
 
-    final AuthProvider auth = context.read<AuthProvider>();
-    final ProfileProvider profileProvider = context.watch<ProfileProvider>();
-    final HomeFeedProvider homeFeed = context.watch<HomeFeedProvider>();
-    final bool effectiveLiked =
-        homeFeed.isPostLiked(post.id) || profileProvider.isPostLiked(post.id) || post.isLiked;
+        final AuthProvider auth = context.read<AuthProvider>();
+        final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+        final bool effectiveLiked =
+        PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked);
     final bool effectiveSaved =
-        homeFeed.isPostSaved(post.id) || profileProvider.isPostSaved(post.id) || post.isSaved;
-    final int effectiveLikesCount = (!post.isLiked && effectiveLiked)
-        ? (post.likesCount > 0 ? post.likesCount + 1 : 1)
-        : (post.isLiked && !effectiveLiked
-            ? (post.likesCount > 0 ? post.likesCount - 1 : 0)
-            : post.likesCount);
+        PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved);
+    final int effectiveLikesCount =
+        PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
     final int effectiveCommentsCount =
-        homeFeed.getCommentCount(post.id) ?? profileProvider.getCommentCount(post.id) ?? post.commentsCount;
+        CommentCountRegistry.getOr(post.id, post.commentsCount);
 
     final String? currentUserId = auth.userId ?? profileProvider.profile?.id;
     final String? authorId = post.authorId;
@@ -206,6 +216,10 @@ class PostFeedCard extends StatelessWidget {
           GestureDetector(
             onTap: () {
               if (isCurrentUser) {
+                if (isProfileScreen) {
+                  // Already on profile screen! Do not navigate.
+                  return;
+                }
                 Navigator.push<void>(
                   context,
                   MaterialPageRoute<void>(
@@ -240,6 +254,7 @@ class PostFeedCard extends StatelessWidget {
                           width: 40,
                           height: 40,
                           fit: BoxFit.cover,
+                          gaplessPlayback: true,
                           errorBuilder: (_, _, _) => Image.asset(
                             AppImages.user1,
                             width: 40,
@@ -467,7 +482,7 @@ class PostFeedCard extends StatelessWidget {
                       width: 22,
                       height: 22,
                     ),
-                    if (!shouldHideLikes && post.hasLikeCount && effectiveLikesCount > 0) ...<Widget>[
+                    if (!shouldHideLikes && effectiveLikesCount > 0) ...<Widget>[
                       const SizedBox(width: 6),
                       Text(
                         '${effectiveLikesCount > 1000 ? '${(effectiveLikesCount / 1000).toStringAsFixed(1)}K' : effectiveLikesCount}',
@@ -611,10 +626,12 @@ class PostFeedCard extends StatelessWidget {
       ),
     );
 
-    return GestureDetector(
-      onTap: onCardTap ?? () => openFullscreen(context, post),
-      behavior: HitTestBehavior.opaque,
-      child: card,
+        return GestureDetector(
+          onTap: onCardTap ?? () => openFullscreen(context, post),
+          behavior: HitTestBehavior.opaque,
+          child: card,
+        );
+      },
     );
   }
 
@@ -814,18 +831,13 @@ class PostFeedCard extends StatelessWidget {
         width: double.infinity,
         height: 220,
         fit: BoxFit.cover,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
+        gaplessPlayback: true,
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (wasSynchronouslyLoaded || frame != null) return child;
           return Container(
             height: 220,
             width: double.infinity,
             color: context.isDarkMode ? Colors.white10 : Colors.black12,
-            child: const Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AppColors.gradientPink,
-              ),
-            ),
           );
         },
         errorBuilder: (_, _, _) => Container(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../../profile_setup/models/community_model.dart';
@@ -43,6 +44,7 @@ class ReelsFeedView extends StatefulWidget {
     this.initialPage = 0,
     this.customReels,
     this.hasBottomBar = true,
+    this.isProfileScreen = false,
     super.key,
   });
 
@@ -50,6 +52,7 @@ class ReelsFeedView extends StatefulWidget {
   final int initialPage;
   final List<ReelItemModel>? customReels;
   final bool hasBottomBar;
+  final bool isProfileScreen;
 
   @override
   State<ReelsFeedView> createState() => _ReelsFeedViewState();
@@ -176,17 +179,19 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
         return CommentsBottomSheet(
           postId: postId,
           postAuthorId: postAuthorId,
-          totalComments: totalComments,
+          totalComments: CommentCountRegistry.getOr(postId, totalComments),
           allowComments: allowComments,
           allowCommentsFrom: allowCommentsFrom,
           authorUsername: authorUsername,
           onCommentAdded: () {
+            CommentCountRegistry.increment(postId);
             context.read<HomeFeedProvider>().incrementCommentCount(postId);
             try {
               context.read<ProfileProvider>().incrementCommentCount(postId);
             } catch (_) {}
           },
           onCommentDeleted: (int deletedCount, int remainingCount) {
+            CommentCountRegistry.set(postId, remainingCount);
             context
                 .read<HomeFeedProvider>()
                 .setCommentCount(postId, remainingCount);
@@ -197,6 +202,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
             } catch (_) {}
           },
           onCommentCountChanged: (int count) {
+            CommentCountRegistry.set(postId, count);
             context.read<HomeFeedProvider>().setCommentCount(postId, count);
             try {
               context
@@ -438,9 +444,10 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                   provider.bottomNavIndex == 0 &&
                   provider.activeSubMode == SubMode.reels);
 
-          final bool isItemLiked = provider.isPostLiked(item.id) || item.isLiked;
-          final bool isItemSaved = provider.isPostSaved(item.id) || item.isSaved;
-          final int itemLikesCount = item.likesCount;
+          final bool isItemLiked = PostInteractionRegistry.isLiked(item.id, fallback: item.isLiked);
+          final bool isItemSaved = PostInteractionRegistry.isSaved(item.id, fallback: item.isSaved);
+          final int itemLikesCount = PostInteractionRegistry.getLikeCount(item.id, fallback: item.likesCount);
+          final int itemCommentsCount = CommentCountRegistry.getOr(item.id, item.commentsCount);
 
           return ReelFeedCard(
             key: ValueKey<String>(item.id),
@@ -449,9 +456,11 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
               isLiked: isItemLiked,
               isSaved: isItemSaved,
               likesCount: itemLikesCount,
+              commentsCount: itemCommentsCount,
             ),
             isActive: isVisuallyActive,
             hasBottomBar: widget.hasBottomBar,
+            isProfileScreen: widget.isProfileScreen,
             showCommunityFilterTag: provider.activeTopTab == TopTab.communities,
             selectedCommunity: provider.selectedCommunityFilter,
             onLikeToggle: () {
@@ -459,14 +468,13 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                 widget.onGuestActionTriggered?.call();
               } else {
                 final bool currentlyLiked =
-                    provider.isPostLiked(item.id) || item.isLiked;
+                    PostInteractionRegistry.isLiked(item.id, fallback: item.isLiked);
                 final bool newLiked = !currentlyLiked;
-                final int currentCount = item.likesCount;
-                final int newCount = item.hasLikeCount
-                    ? (newLiked
-                        ? currentCount + 1
-                        : (currentCount > 0 ? currentCount - 1 : 0))
-                    : currentCount;
+                final int currentCount = PostInteractionRegistry.getLikeCount(item.id, fallback: item.likesCount);
+                final int newCount = newLiked
+                    ? currentCount + 1
+                    : (currentCount > 0 ? currentCount - 1 : 0);
+                PostInteractionRegistry.setLiked(item.id, newLiked, newCount: newCount);
 
                 if (widget.customReels != null) {
                   final int idx = _localReels.indexWhere((r) => r.id == item.id);
@@ -487,11 +495,11 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                     fallbackReel: item.copyWith(isLiked: newLiked, likesCount: newCount),
                   );
                 } catch (_) {}
-                // Pass the original item (not pre-toggled) so toggleLikeReel
-                // can correctly compute the direction by negating item.isLiked.
+                // Pass the original item so toggleLikeReel can propagate to HomeFeedProvider
                 provider.toggleLikeReel(
                   item.id,
                   fallbackReel: item,
+                  explicitLiked: newLiked,
                 );
               }
             },
@@ -500,8 +508,9 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                 widget.onGuestActionTriggered?.call();
               } else {
                 final bool currentlySaved =
-                    provider.isPostSaved(item.id) || item.isSaved;
+                    PostInteractionRegistry.isSaved(item.id, fallback: item.isSaved);
                 final bool newSaved = !currentlySaved;
+                PostInteractionRegistry.setSaved(item.id, newSaved);
 
                 if (widget.customReels != null) {
                   final int idx = _localReels.indexWhere((r) => r.id == item.id);
@@ -518,11 +527,10 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                     fallbackReel: item.copyWith(isSaved: newSaved),
                   );
                 } catch (_) {}
-                // Pass the original item (not pre-toggled) so toggleSaveReel
-                // can correctly compute the direction by negating item.isSaved.
                 provider.toggleSaveReel(
                   item.id,
                   fallbackReel: item,
+                  explicitSaved: newSaved,
                 );
               }
             },

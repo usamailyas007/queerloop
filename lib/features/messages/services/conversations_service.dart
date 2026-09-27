@@ -232,6 +232,9 @@ class ConversationsService {
     String? mediaUrl,
     String? sharedPostId,
     String? currentUserId,
+    String? replyToId,
+    String? replyToText,
+    String? replyToSender,
   }) async {
     try {
       debugPrint('🚀 [ConversationsService] Sending message to $conversationId');
@@ -252,6 +255,15 @@ class ConversationsService {
         'mediaUrl': null,
         if (sharedPostId != null && sharedPostId.isNotEmpty)
           'sharedPostId': sharedPostId,
+        if (replyToId != null && replyToId.isNotEmpty) ...<String, dynamic>{
+          'replyToMessageId': replyToId,
+          'replyToId': replyToId,
+          'replyTo': <String, dynamic>{
+            'id': replyToId,
+            'text': ?replyToText,
+            'sender': ?replyToSender,
+          },
+        },
       };
       final dynamic res = await _client.post(
         ApiEndpoints.conversationMessages(conversationId),

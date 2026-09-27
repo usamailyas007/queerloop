@@ -15,6 +15,7 @@ import '../../create_post/services/post_content_service.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../home/screens/reels_feed_view.dart';
 import '../../home/screens/single_post_view_screen.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../models/message_models.dart';
 import '../provider/messages_provider.dart';
 import '../services/shared_post_cache.dart';
@@ -80,6 +81,117 @@ class ChatBubble extends StatelessWidget {
       );
     }
     return const SizedBox.shrink();
+  }
+
+  Widget _buildReplyQuote(BuildContext context, {bool isMe = false}) {
+    String? displayText = message.replyToText;
+    String? rawSender = message.replyToSender?.trim();
+
+    if ((displayText == null || displayText.trim().isEmpty) &&
+        message.replyToId != null &&
+        message.replyToId!.isNotEmpty) {
+      final MessagesProvider provider = context.read<MessagesProvider>();
+      final String? convId =
+          message.conversationId ?? provider.activeChatConvId;
+      if (convId != null) {
+        final List<ChatMessageModel> convMsgs =
+            provider.getMessagesFor(convId);
+        final ChatMessageModel? orig =
+            convMsgs.cast<ChatMessageModel?>().firstWhere(
+                  (ChatMessageModel? m) => m != null && m.id == message.replyToId,
+                  orElse: () => null,
+                );
+        if (orig != null) {
+          displayText = (orig.text != null && orig.text!.trim().isNotEmpty)
+              ? orig.text!.trim()
+              : (orig.mediaUrl != null ? '📷 Photo' : 'Original message');
+          rawSender ??= orig.isMe ? 'You' : orig.senderUsername;
+        }
+      }
+    }
+
+    if (displayText == null || displayText.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    String senderName = 'Reply';
+    if (rawSender != null && rawSender.isNotEmpty) {
+      if (rawSender.toLowerCase() == 'you' || rawSender.toLowerCase() == 'me') {
+        senderName = 'You';
+      } else if (rawSender == 'User') {
+        final MessagesProvider provider = context.read<MessagesProvider>();
+        final String? convId =
+            message.conversationId ?? provider.activeChatConvId;
+        final ConversationModel? conv =
+            convId != null ? provider.getConversation(convId) : null;
+        if (conv != null &&
+            conv.username.isNotEmpty &&
+            conv.username != 'User') {
+          senderName = conv.username.startsWith('@')
+              ? conv.username
+              : '@${conv.username}';
+        } else if (conv != null &&
+            conv.displayName != null &&
+            conv.displayName!.isNotEmpty &&
+            conv.displayName != 'User') {
+          senderName = conv.displayName!;
+        } else {
+          senderName = 'Reply';
+        }
+      } else {
+        senderName = rawSender.startsWith('@') ? rawSender : '@$rawSender';
+      }
+    }
+
+    final bool isUnsentReply =
+        displayText.trim().toLowerCase().contains('unsent');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: isMe
+            ? Colors.black.withValues(alpha: 0.16)
+            : context.themeBackground.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+          left: BorderSide(
+            color: isMe ? Colors.white : AppColors.gradientCyan,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            senderName,
+            style: AppTextStyles.caption.copyWith(
+              color: isMe ? Colors.white : AppColors.gradientCyan,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            displayText.trim(),
+            style: AppTextStyles.caption.copyWith(
+              color: isMe
+                  ? Colors.white.withValues(alpha: 0.85)
+                  : context.themeTextSecondary,
+              fontSize: 11,
+              fontStyle: isUnsentReply ? FontStyle.italic : FontStyle.normal,
+              height: 1.2,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildSharedPostThumbnail(BuildContext context) {
@@ -233,6 +345,12 @@ class ChatBubble extends StatelessWidget {
               ? cached.authorId
               : null);
 
+      // Permission fields — populated from the backend fetch when available
+      bool reelAllowComments = true;
+      bool reelAllowDownloads = true;
+      String reelAllowCommentsFrom = 'everyone';
+      bool reelIsAuthorPrivate = false;
+
       // If videoUrl is not resolved yet, fetch the post from backend
       if (resolvedVideo == null || resolvedVideo.isEmpty) {
         try {
@@ -249,6 +367,10 @@ class ChatBubble extends StatelessWidget {
           if (raw.caption.isNotEmpty) caption = raw.caption;
           if (raw.likesCount > 0) likes = raw.likesCount;
           if (raw.commentsCount > 0) comments = raw.commentsCount;
+          reelAllowComments = raw.allowComments;
+          reelAllowDownloads = raw.allowDownloads;
+          reelAllowCommentsFrom = raw.allowCommentsFrom;
+          reelIsAuthorPrivate = raw.isAuthorPrivate;
 
           if (raw.mediaRefs.isNotEmpty) {
             final String firstRef = raw.mediaRefs.first.trim();
@@ -286,8 +408,14 @@ class ChatBubble extends StatelessWidget {
         videoUrl: resolvedVideo,
         thumbnailUrl: resolvedThumb,
         caption: caption,
-        likesCount: likes,
-        commentsCount: comments,
+        isLiked: PostInteractionRegistry.isLiked(postId, fallback: false),
+        isSaved: PostInteractionRegistry.isSaved(postId, fallback: false),
+        likesCount: PostInteractionRegistry.getLikeCount(postId, fallback: likes),
+        commentsCount: CommentCountRegistry.getOr(postId, comments),
+        allowComments: reelAllowComments,
+        allowDownloads: reelAllowDownloads,
+        allowCommentsFrom: reelAllowCommentsFrom,
+        isAuthorPrivate: reelIsAuthorPrivate,
       );
 
       Navigator.push<void>(
@@ -435,6 +563,9 @@ class ChatBubble extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: <Widget>[
                   Container(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.72,
+                    ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.lg,
                       vertical: AppSpacing.md,
@@ -443,13 +574,20 @@ class ChatBubble extends StatelessWidget {
                       gradient: AppColors.primaryGradientButton,
                       borderRadius: BorderRadius.circular(AppRadius.card),
                     ),
-                    child: Text(
-                      message.text ?? '',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        _buildReplyQuote(context, isMe: true),
+                        Text(
+                          message.text ?? '',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (message.reactionEmoji != null || message.reactions.isNotEmpty)
@@ -466,6 +604,9 @@ class ChatBubble extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Container(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.72,
+                    ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.lg,
                       vertical: AppSpacing.md,
@@ -478,12 +619,19 @@ class ChatBubble extends StatelessWidget {
                         width: 1.5,
                       ),
                     ),
-                    child: Text(
-                      message.text ?? '',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: context.themeTextPrimary,
-                        fontSize: 13,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        _buildReplyQuote(context, isMe: false),
+                        Text(
+                          message.text ?? '',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: context.themeTextPrimary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (message.reactionEmoji != null || message.reactions.isNotEmpty)
@@ -514,13 +662,20 @@ class ChatBubble extends StatelessWidget {
                       borderRadius: BorderRadius.circular(AppRadius.card),
                       border: Border.all(color: context.themeBorder),
                     ),
-                    child: Text(
-                      message.text ?? '',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: context.themeTextPrimary,
-                        fontSize: 13,
-                        height: 1.35,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        _buildReplyQuote(context, isMe: isMe),
+                        Text(
+                          message.text ?? '',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: context.themeTextPrimary,
+                            fontSize: 13,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (message.reactionEmoji != null || message.reactions.isNotEmpty)
@@ -542,6 +697,9 @@ class ChatBubble extends StatelessWidget {
                     ? CrossAxisAlignment.end
                     : CrossAxisAlignment.start,
                 children: <Widget>[
+                  if (message.replyToText != null &&
+                      message.replyToText!.trim().isNotEmpty)
+                    _buildReplyQuote(context, isMe: isMe),
                   Builder(
                     builder: (BuildContext context) {
                       final bool hasLocalFile = message.imageFilePath != null &&

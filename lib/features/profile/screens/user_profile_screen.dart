@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/config/api_endpoints.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
@@ -45,7 +46,7 @@ class UserProfileScreen extends StatefulWidget {
     this.userId,
     this.username = 'rowankeeps',
     this.name = 'Rowan',
-    this.avatarAsset = AppImages.user1,
+    this.avatarAsset = AppImages.defaultAvatar,
     this.isPrivate = false,
     this.initialReel,
     this.initialPost,
@@ -219,12 +220,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       final String formattedUsername = authorUsername.startsWith('@')
           ? authorUsername
           : '@$authorUsername';
+      final String? profileAvatar = (_profile?.avatarUrl != null &&
+              _profile!.avatarUrl!.trim().isNotEmpty)
+          ? _profile!.avatarUrl!.trim()
+          : null;
       final String avatar = (post.authorAvatar != null &&
-              post.authorAvatar!.isNotEmpty)
-          ? post.authorAvatar!
-          : ((_profile?.avatarUrl != null && _profile!.avatarUrl!.isNotEmpty)
-              ? _profile!.avatarUrl!
-              : fallbackAvatar);
+              post.authorAvatar!.trim().isNotEmpty)
+          ? post.authorAvatar!.trim()
+          : (profileAvatar ?? AppImages.defaultAvatar);
 
       reels.add(
         ReelItemModel(
@@ -240,11 +243,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           videoUrl: videoUrl,
           thumbnailUrl: thumbUrl,
           caption: post.body.isNotEmpty ? post.body : post.caption,
-          likesCount: post.likesCount,
-          commentsCount: post.commentsCount,
+          likesCount: PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount),
+          commentsCount: CommentCountRegistry.getOr(post.id, post.commentsCount),
           viewsCount: post.viewsCount,
-          isLiked: post.isLiked,
-          isSaved: post.isSaved,
+          isLiked: PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked),
+          isSaved: PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved),
           allowComments: post.allowComments,
           allowDownloads: post.allowDownloads,
           hideLikes: _profile?.hideMyLikes ?? false,
@@ -696,7 +699,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _profile?.isPrivate ?? (widget.isPrivate || widget.username.contains('kit.lumen'));
     final String currentUsername = _profile?.username ?? widget.username;
     final String currentName = _profile?.displayName ?? widget.name;
-    final String currentAvatar = _profile?.avatarUrl ?? widget.avatarAsset;
+    final String currentAvatar = (_profile != null)
+        ? ((_profile!.avatarUrl != null && _profile!.avatarUrl!.trim().isNotEmpty)
+            ? _profile!.avatarUrl!.trim()
+            : AppImages.defaultAvatar)
+        : ((widget.avatarAsset.isNotEmpty && widget.avatarAsset != AppImages.user1)
+            ? widget.avatarAsset
+            : AppImages.defaultAvatar);
     final String currentBio = _profile?.bio ??
         (isPrivateAccount
             ? 'Private account.'
@@ -844,9 +853,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             Expanded(
               child: _isLoading && _profile == null && _authorReels.isEmpty && _authorTextPosts.isEmpty
                   ? const _FullProfileShimmerSkeleton()
-                  : ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                      children: <Widget>[
+                  : ListenableBuilder(
+                      listenable: Listenable.merge(<Listenable>[
+                        PostInteractionRegistry.notifier,
+                        CommentCountRegistry.notifier,
+                      ]),
+                      builder: (BuildContext context, _) {
+                        return ListView(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                          children: <Widget>[
                         // Profile Header & Stats Widget
                         ProfileHeaderStatsWidget(
                           avatarAsset: currentAvatar,
@@ -1246,11 +1261,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         for (final PostResponseModel post in _authorTextPosts) ...<Widget>[
                           Builder(
                             builder: (BuildContext ctx) {
-                              final bool isPostItemLiked = context.watch<HomeFeedProvider>().isPostLiked(post.id) || post.isLiked;
-                              final int postItemLikes = post.likesCount;
-                              final int effectiveCommentsCount = context.watch<HomeFeedProvider>().getCommentCount(post.id) ??
-                                  context.watch<ProfileProvider>().getCommentCount(post.id) ??
-                                  post.commentsCount;
+                              final bool isPostItemLiked = PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked);
+                              final bool isPostItemSaved = PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved);
+                              final int postItemLikes = PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
+                              final int effectiveCommentsCount = CommentCountRegistry.getOr(post.id, post.commentsCount);
                               final PostItemModel postItem = PostItemModel(
                                 id: post.id,
                                 authorId: post.authorId ?? _effectiveUserId,
@@ -1285,7 +1299,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 postType: post.type,
                                 communityId: post.communityId,
                                 isLiked: isPostItemLiked,
-                                isSaved: context.watch<HomeFeedProvider>().isPostSaved(post.id) || post.isSaved,
+                                isSaved: isPostItemSaved,
                                 allowComments: post.allowComments,
                                 allowDownloads: post.allowDownloads,
                                 hideLikes: _profile?.hideMyLikes ?? false,
@@ -1304,14 +1318,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       .indexWhere((PostResponseModel p) => p.id == post.id);
                                   if (idx != -1) {
                                     final bool currentLiked =
-                                        context.read<HomeFeedProvider>().isPostLiked(post.id) ||
-                                        _authorTextPosts[idx].isLiked;
+                                        PostInteractionRegistry.isLiked(post.id, fallback: _authorTextPosts[idx].isLiked);
                                     final bool newLiked = !currentLiked;
+                                    final int currentCount = PostInteractionRegistry.getLikeCount(post.id, fallback: _authorTextPosts[idx].likesCount);
                                     final int newCount = newLiked
-                                        ? _authorTextPosts[idx].likesCount + 1
-                                        : (_authorTextPosts[idx].likesCount > 0
-                                            ? _authorTextPosts[idx].likesCount - 1
+                                        ? currentCount + 1
+                                        : (currentCount > 0
+                                            ? currentCount - 1
                                             : 0);
+                                    PostInteractionRegistry.setLiked(post.id, newLiked, newCount: newCount);
                                     setState(() {
                                       _authorTextPosts[idx] =
                                           _authorTextPosts[idx].copyWith(
@@ -1343,9 +1358,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       .indexWhere((PostResponseModel p) => p.id == post.id);
                                   if (idx != -1) {
                                     final bool currentSaved =
-                                        context.read<HomeFeedProvider>().isPostSaved(post.id) ||
-                                        _authorTextPosts[idx].isSaved;
+                                        PostInteractionRegistry.isSaved(post.id, fallback: _authorTextPosts[idx].isSaved);
                                     final bool newSaved = !currentSaved;
+                                    PostInteractionRegistry.setSaved(post.id, newSaved);
                                     setState(() {
                                       _authorTextPosts[idx] =
                                           _authorTextPosts[idx].copyWith(
@@ -1370,7 +1385,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     isScrollControlled: true,
                                     backgroundColor: Colors.transparent,
                                     builder: (_) => CommentsBottomSheet(
-                                      totalComments: post.commentsCount,
+                                      totalComments: CommentCountRegistry.getOr(post.id, post.commentsCount),
                                       postId: post.id,
                                       postAuthorId: post.authorId ?? _effectiveUserId,
                                       communityId: post.communityId,
@@ -1378,6 +1393,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       allowCommentsFrom: post.allowCommentsFrom,
                                       authorUsername: post.authorName,
                                       onCommentAdded: () {
+                                        CommentCountRegistry.increment(post.id);
                                         context.read<HomeFeedProvider>().incrementCommentCount(post.id);
                                         try {
                                           context.read<ProfileProvider>().incrementCommentCount(post.id);
@@ -1386,12 +1402,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                           final int idx = _authorTextPosts.indexWhere((PostResponseModel p) => p.id == post.id);
                                           if (idx != -1) {
                                             _authorTextPosts[idx] = _authorTextPosts[idx].copyWith(
-                                              commentsCount: _authorTextPosts[idx].commentsCount + 1,
+                                              commentsCount: CommentCountRegistry.getOr(post.id, _authorTextPosts[idx].commentsCount + 1),
                                             );
                                           }
                                         });
                                       },
                                       onCommentDeleted: (int deletedCount, int remainingCount) {
+                                        CommentCountRegistry.set(post.id, remainingCount);
                                         context.read<HomeFeedProvider>().setCommentCount(post.id, remainingCount);
                                         try {
                                           context.read<ProfileProvider>().updatePostCommentCount(post.id, remainingCount);
@@ -1406,6 +1423,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                         });
                                       },
                                       onCommentCountChanged: (int count) {
+                                        CommentCountRegistry.set(post.id, count);
                                         context.read<HomeFeedProvider>().setCommentCount(post.id, count);
                                         try {
                                           context.read<ProfileProvider>().updatePostCommentCount(post.id, count);
@@ -1475,8 +1493,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                   const SizedBox(height: AppSpacing.xxl),
                 ],
-              ),
-            ),
+              );
+            },
+          ),
+        ),
           ],
         ),
       ),

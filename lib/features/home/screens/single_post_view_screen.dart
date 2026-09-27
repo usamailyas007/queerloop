@@ -11,6 +11,7 @@ import '../../create_post/services/post_content_service.dart';
 import '../../messages/models/message_models.dart';
 import '../models/post_item_model.dart';
 import '../models/reel_item_model.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import 'post_fullscreen_image_viewer_screen.dart';
 import 'reels_feed_view.dart';
 
@@ -139,18 +140,26 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
             content: raw.caption.isNotEmpty
                 ? raw.caption
                 : (widget.chatMessage?.postCaption ?? ''),
-            likesCount: raw.likesCount > 0
-                ? raw.likesCount
-                : (widget.chatMessage?.postLikes ?? 0),
-            commentsCount: raw.commentsCount > 0
-                ? raw.commentsCount
-                : (widget.chatMessage?.postComments ?? 0),
+            likesCount: PostInteractionRegistry.getLikeCount(
+              raw.id,
+              fallback: raw.likesCount > 0
+                  ? raw.likesCount
+                  : (widget.chatMessage?.postLikes ?? 0),
+            ),
+            commentsCount: CommentCountRegistry.getOr(
+              raw.id,
+              raw.commentsCount > 0
+                  ? raw.commentsCount
+                  : (widget.chatMessage?.postComments ?? 0),
+            ),
             postImageUrl: isVideoType ? thumbUrl : (mediaUrl ?? thumbUrl),
             postType: isVideoType ? 'VIDEO' : 'IMAGE',
-            isLiked: raw.isLiked,
-            isSaved: raw.isSaved,
+            isLiked: PostInteractionRegistry.isLiked(raw.id, fallback: raw.isLiked),
+            isSaved: PostInteractionRegistry.isSaved(raw.id, fallback: raw.isSaved),
             allowComments: raw.allowComments,
             allowDownloads: raw.allowDownloads,
+            allowCommentsFrom: raw.allowCommentsFrom,
+            isAuthorPrivate: raw.isAuthorPrivate,
           );
           _isLoading = false;
         });
@@ -170,10 +179,15 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
               pronounsTime: m.timestamp.isNotEmpty ? m.timestamp : 'Recently',
               avatarAsset: m.postAuthorAvatarUrl ?? AppImages.user1,
               content: m.postCaption ?? '',
-              likesCount: m.postLikes ?? 0,
-              commentsCount: m.postComments ?? 0,
+              likesCount: PostInteractionRegistry.getLikeCount(widget.postId, fallback: m.postLikes ?? 0),
+              commentsCount: CommentCountRegistry.getOr(widget.postId, m.postComments ?? 0),
               postImageUrl: m.postThumbnailAsset,
               postType: m.postType == 'reel' ? 'VIDEO' : 'IMAGE',
+              isLiked: PostInteractionRegistry.isLiked(widget.postId, fallback: false),
+              isSaved: PostInteractionRegistry.isSaved(widget.postId, fallback: false),
+              // Permissions are unknown without a successful API fetch — use safe defaults
+              allowComments: true,
+              allowDownloads: true,
             );
             _isLoading = false;
           });
@@ -275,10 +289,14 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
         videoUrl: _resolvedVideoUrl ?? _post!.postImageUrl,
         thumbnailUrl: _post!.postImageUrl,
         caption: _post!.content,
-        likesCount: _post!.likesCount,
-        commentsCount: _post!.commentsCount,
-        isLiked: _post!.isLiked,
-        isSaved: _post!.isSaved,
+        likesCount: PostInteractionRegistry.getLikeCount(_post!.id, fallback: _post!.likesCount),
+        commentsCount: CommentCountRegistry.getOr(_post!.id, _post!.commentsCount),
+        isLiked: PostInteractionRegistry.isLiked(_post!.id, fallback: _post!.isLiked),
+        isSaved: PostInteractionRegistry.isSaved(_post!.id, fallback: _post!.isSaved),
+        allowComments: _post!.allowComments,
+        allowDownloads: _post!.allowDownloads,
+        allowCommentsFrom: _post!.allowCommentsFrom,
+        isAuthorPrivate: _post!.isAuthorPrivate,
       );
 
       return Scaffold(

@@ -91,8 +91,12 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
       );
 
       for (final DiscoverSearchResult p in searchResults.posts) {
-        final String id = p.id ?? '';
-        if (id.isEmpty || DeletedPostsRegistry.isDeleted(id)) continue;
+        final String searchDocId = (p.id ?? '').trim().toLowerCase();
+        final String refId = (p.refId ?? '').trim().toLowerCase().replaceAll(RegExp(r'^/+|^media/'), '');
+        final String effectiveId = (p.refId != null && p.refId!.trim().isNotEmpty)
+            ? p.refId!.trim()
+            : (p.id ?? '');
+        if (effectiveId.isEmpty || DeletedPostsRegistry.isDeleted(effectiveId) || DeletedPostsRegistry.isDeleted(searchDocId)) continue;
         if (!PostVisibilityFilter.canViewPost(
           visibility: p.visibility,
           authorId: p.authorId,
@@ -109,45 +113,61 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
           continue;
         }
 
-        if (seenIds.add(id)) {
-          final bool isPostLiked = p.isLiked || homeFeed.isPostLiked(id) || profile.isPostLiked(id);
-          final bool isPostSaved = p.isSaved || homeFeed.isPostSaved(id) || profile.isPostSaved(id);
-          final int rawLikes = p.likesCount ?? 0;
-          final int postLikes = isPostLiked ? (rawLikes > 0 ? rawLikes : 1) : rawLikes;
-          final bool isText = p.imageAsset.trim().isEmpty;
-
-          photoPosts.add(PostItemModel(
-            id: id,
-            authorId: p.authorId,
-            authorDisplayName: (p.authorUsername != null && p.authorUsername!.trim().isNotEmpty)
-                ? p.authorUsername!.trim()
-                : 'Creator',
-            username: (p.authorUsername != null && p.authorUsername!.trim().isNotEmpty)
-                ? (p.authorUsername!.startsWith('@') ? p.authorUsername!.trim() : '@${p.authorUsername!.trim()}')
-                : '@creator',
-            pronounsTime: 'they/them · recent',
-            avatarAsset: (p.authorAvatar != null && p.authorAvatar!.trim().isNotEmpty)
-                ? p.authorAvatar!.trim()
-                : AppImages.user1,
-            content: p.caption ?? '',
-            likesCount: postLikes,
-            commentsCount: p.commentsCount ?? 0,
-            viewsCount: p.viewsCount,
-            postImageUrl: !isText ? p.imageAsset : null,
-            postType: isText ? 'TEXT' : 'PHOTO',
-            communityId: p.communityId,
-            isLiked: isPostLiked,
-            isSaved: isPostSaved,
-            allowComments: p.allowComments,
-            allowCommentsFrom: p.allowCommentsFrom,
-            isAuthorPrivate: p.isAuthorPrivate,
-          ));
+        if (seenIds.contains(effectiveId.toLowerCase()) ||
+            (searchDocId.isNotEmpty && seenIds.contains(searchDocId)) ||
+            (refId.isNotEmpty && seenIds.contains(refId))) {
+          continue;
         }
+
+        seenIds.add(effectiveId.toLowerCase());
+        if (searchDocId.isNotEmpty) seenIds.add(searchDocId);
+        if (refId.isNotEmpty) seenIds.add(refId);
+        for (final String m in p.mediaRefs) {
+          final String cleanM = m.trim().toLowerCase().replaceAll(RegExp(r'^/+|^media/'), '');
+          if (cleanM.isNotEmpty) seenIds.add(cleanM);
+        }
+
+        final bool isPostLiked = p.isLiked || homeFeed.isPostLiked(effectiveId) || profile.isPostLiked(effectiveId);
+        final bool isPostSaved = p.isSaved || homeFeed.isPostSaved(effectiveId) || profile.isPostSaved(effectiveId);
+        final int rawLikes = p.likesCount ?? 0;
+        final int postLikes = isPostLiked ? (rawLikes > 0 ? rawLikes : 1) : rawLikes;
+        final bool isText = p.imageAsset.trim().isEmpty;
+
+        photoPosts.add(PostItemModel(
+          id: effectiveId,
+          authorId: p.authorId,
+          authorDisplayName: (p.authorUsername != null && p.authorUsername!.trim().isNotEmpty)
+              ? p.authorUsername!.trim()
+              : 'Creator',
+          username: (p.authorUsername != null && p.authorUsername!.trim().isNotEmpty)
+              ? (p.authorUsername!.startsWith('@') ? p.authorUsername!.trim() : '@${p.authorUsername!.trim()}')
+              : '@creator',
+          pronounsTime: 'they/them · recent',
+          avatarAsset: (p.authorAvatar != null && p.authorAvatar!.trim().isNotEmpty)
+              ? p.authorAvatar!.trim()
+              : AppImages.user1,
+          content: p.caption ?? '',
+          likesCount: postLikes,
+          commentsCount: p.commentsCount ?? 0,
+          viewsCount: p.viewsCount,
+          postImageUrl: !isText ? p.imageAsset : null,
+          postType: isText ? 'TEXT' : 'PHOTO',
+          communityId: p.communityId,
+          isLiked: isPostLiked,
+          isSaved: isPostSaved,
+          allowComments: p.allowComments,
+          allowCommentsFrom: p.allowCommentsFrom,
+          isAuthorPrivate: p.isAuthorPrivate,
+        ));
       }
 
       for (final DiscoverSearchResult r in searchResults.reels) {
-        final String id = r.id ?? '';
-        if (id.isEmpty || DeletedPostsRegistry.isDeleted(id)) continue;
+        final String searchDocId = (r.id ?? '').trim().toLowerCase();
+        final String refId = (r.refId ?? '').trim().toLowerCase().replaceAll(RegExp(r'^/+|^media/'), '');
+        final String effectiveId = (r.refId != null && r.refId!.trim().isNotEmpty)
+            ? r.refId!.trim()
+            : (r.id ?? '');
+        if (effectiveId.isEmpty || DeletedPostsRegistry.isDeleted(effectiveId) || DeletedPostsRegistry.isDeleted(searchDocId)) continue;
         if (!PostVisibilityFilter.canViewPost(
           visibility: r.visibility,
           authorId: r.authorId,
@@ -164,39 +184,51 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
           continue;
         }
 
-        if (seenIds.add(id)) {
-          final bool isReelLiked = r.isLiked || homeFeed.isPostLiked(id) || profile.isPostLiked(id);
-          final bool isReelSaved = r.isSaved || homeFeed.isPostSaved(id) || profile.isPostSaved(id);
-          final int rawLikes = r.likesCount ?? 0;
-          final int reelLikes = isReelLiked ? (rawLikes > 0 ? rawLikes : 1) : rawLikes;
-
-          videoReels.add(ReelItemModel(
-            id: id,
-            authorId: r.authorId,
-            authorDisplayName: (r.authorUsername != null && r.authorUsername!.trim().isNotEmpty)
-                ? r.authorUsername!.trim()
-                : 'Creator',
-            username: (r.authorUsername != null && r.authorUsername!.trim().isNotEmpty)
-                ? (r.authorUsername!.startsWith('@') ? r.authorUsername!.trim() : '@${r.authorUsername!.trim()}')
-                : '@creator',
-            pronounsTime: 'they/them · recent',
-            avatarAsset: (r.authorAvatar != null && r.authorAvatar!.trim().isNotEmpty)
-                ? r.authorAvatar!.trim()
-                : AppImages.user1,
-            videoAsset: '',
-            videoUrl: r.videoUrl,
-            thumbnailUrl: r.thumbnailUrl ?? (r.imageAsset.isNotEmpty ? r.imageAsset : null),
-            caption: r.caption ?? '',
-            likesCount: reelLikes,
-            commentsCount: r.commentsCount ?? 0,
-            isLiked: isReelLiked,
-            isSaved: isReelSaved,
-            communityId: r.communityId,
-            allowComments: r.allowComments,
-            allowCommentsFrom: r.allowCommentsFrom,
-            isAuthorPrivate: r.isAuthorPrivate,
-          ));
+        if (seenIds.contains(effectiveId.toLowerCase()) ||
+            (searchDocId.isNotEmpty && seenIds.contains(searchDocId)) ||
+            (refId.isNotEmpty && seenIds.contains(refId))) {
+          continue;
         }
+
+        seenIds.add(effectiveId.toLowerCase());
+        if (searchDocId.isNotEmpty) seenIds.add(searchDocId);
+        if (refId.isNotEmpty) seenIds.add(refId);
+        for (final String m in r.mediaRefs) {
+          final String cleanM = m.trim().toLowerCase().replaceAll(RegExp(r'^/+|^media/'), '');
+          if (cleanM.isNotEmpty) seenIds.add(cleanM);
+        }
+
+        final bool isReelLiked = r.isLiked || homeFeed.isPostLiked(effectiveId) || profile.isPostLiked(effectiveId);
+        final bool isReelSaved = r.isSaved || homeFeed.isPostSaved(effectiveId) || profile.isPostSaved(effectiveId);
+        final int rawLikes = r.likesCount ?? 0;
+        final int reelLikes = isReelLiked ? (rawLikes > 0 ? rawLikes : 1) : rawLikes;
+
+        videoReels.add(ReelItemModel(
+          id: effectiveId,
+          authorId: r.authorId,
+          authorDisplayName: (r.authorUsername != null && r.authorUsername!.trim().isNotEmpty)
+              ? r.authorUsername!.trim()
+              : 'Creator',
+          username: (r.authorUsername != null && r.authorUsername!.trim().isNotEmpty)
+              ? (r.authorUsername!.startsWith('@') ? r.authorUsername!.trim() : '@${r.authorUsername!.trim()}')
+              : '@creator',
+          pronounsTime: 'they/them · recent',
+          avatarAsset: (r.authorAvatar != null && r.authorAvatar!.trim().isNotEmpty)
+              ? r.authorAvatar!.trim()
+              : AppImages.user1,
+          videoAsset: '',
+          videoUrl: r.videoUrl,
+          thumbnailUrl: r.thumbnailUrl ?? (r.imageAsset.isNotEmpty ? r.imageAsset : null),
+          caption: r.caption ?? '',
+          likesCount: reelLikes,
+          commentsCount: r.commentsCount ?? 0,
+          isLiked: isReelLiked,
+          isSaved: isReelSaved,
+          communityId: r.communityId,
+          allowComments: r.allowComments,
+          allowCommentsFrom: r.allowCommentsFrom,
+          isAuthorPrivate: r.isAuthorPrivate,
+        ));
       }
     } catch (e) {
       debugPrint('⚠️ [HashtagPostsScreen] Error querying search API for hashtag: $e');
@@ -209,7 +241,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
         final String contentLower = p.content.toLowerCase();
         if (contentLower.contains(hashTag.toLowerCase()) ||
             contentLower.contains(tagLower)) {
-          if (seenIds.add(p.id)) {
+          if (seenIds.add(p.id.toLowerCase())) {
             final bool isVid = p.postType.toUpperCase().trim() == 'VIDEO' ||
                 p.postType.toLowerCase().trim() == 'reel' ||
                 (p.postImageUrl != null &&
@@ -257,7 +289,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
         if (hasTag ||
             captionLower.contains(hashTag.toLowerCase()) ||
             captionLower.contains(tagLower)) {
-          if (seenIds.add(r.id)) {
+          if (seenIds.add(r.id.toLowerCase())) {
             videoReels.add(r.copyWith(
               isLiked: r.isLiked || homeFeed.isPostLiked(r.id) || profile.isPostLiked(r.id),
               isSaved: r.isSaved || homeFeed.isPostSaved(r.id) || profile.isPostSaved(r.id),
@@ -299,7 +331,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
 
         if (!hasTag) continue;
 
-        if (!seenIds.add(p.id)) continue;
+        if (!seenIds.add(p.id.toLowerCase())) continue;
 
         final bool isVid = p.type.toUpperCase().trim() == 'VIDEO' ||
             p.type.toLowerCase().trim() == 'reel' ||
@@ -435,10 +467,11 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
   }
 
   void _openReelPlayer(int initialIndex) async {
-    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
     final List<ReelItemModel> preparedReels = _reels.map((ReelItemModel r) => r.copyWith(
-      isLiked: homeFeed.isPostLiked(r.id) || r.isLiked,
-      isSaved: homeFeed.isPostSaved(r.id) || r.isSaved,
+      isLiked: PostInteractionRegistry.isLiked(r.id, fallback: r.isLiked),
+      isSaved: PostInteractionRegistry.isSaved(r.id, fallback: r.isSaved),
+      likesCount: PostInteractionRegistry.getLikeCount(r.id, fallback: r.likesCount),
+      commentsCount: CommentCountRegistry.getOr(r.id, r.commentsCount),
     )).toList();
 
     await Navigator.push<void>(
@@ -485,23 +518,25 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
       ),
     );
     if (mounted) {
-      final HomeFeedProvider feed = context.read<HomeFeedProvider>();
-      final ProfileProvider profile = context.read<ProfileProvider>();
       setState(() {
         _reels.removeWhere((ReelItemModel r) => DeletedPostsRegistry.isDeleted(r.id));
         _posts.removeWhere((PostItemModel p) => DeletedPostsRegistry.isDeleted(p.id));
         for (int i = 0; i < _reels.length; i++) {
           final String id = _reels[i].id;
           _reels[i] = _reels[i].copyWith(
-            isLiked: feed.isPostLiked(id) || profile.isPostLiked(id) || _reels[i].isLiked,
-            isSaved: feed.isPostSaved(id) || profile.isPostSaved(id) || _reels[i].isSaved,
+            isLiked: PostInteractionRegistry.isLiked(id, fallback: _reels[i].isLiked),
+            isSaved: PostInteractionRegistry.isSaved(id, fallback: _reels[i].isSaved),
+            likesCount: PostInteractionRegistry.getLikeCount(id, fallback: _reels[i].likesCount),
+            commentsCount: CommentCountRegistry.getOr(id, _reels[i].commentsCount),
           );
         }
         for (int i = 0; i < _posts.length; i++) {
           final String id = _posts[i].id;
           _posts[i] = _posts[i].copyWith(
-            isLiked: feed.isPostLiked(id) || profile.isPostLiked(id) || _posts[i].isLiked,
-            isSaved: feed.isPostSaved(id) || profile.isPostSaved(id) || _posts[i].isSaved,
+            isLiked: PostInteractionRegistry.isLiked(id, fallback: _posts[i].isLiked),
+            isSaved: PostInteractionRegistry.isSaved(id, fallback: _posts[i].isSaved),
+            likesCount: PostInteractionRegistry.getLikeCount(id, fallback: _posts[i].likesCount),
+            commentsCount: CommentCountRegistry.getOr(id, _posts[i].commentsCount),
           );
         }
       });
@@ -511,25 +546,23 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
   void _toggleLike(String id) {
     final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
     final ProfileProvider profile = context.read<ProfileProvider>();
-    final bool currentlyLiked = homeFeed.isPostLiked(id) ||
-        profile.isPostLiked(id) ||
-        (_posts.any((PostItemModel p) => p.id == id && p.isLiked));
+    final int itemIndex = _posts.indexWhere((PostItemModel p) => p.id == id);
+    final PostItemModel? currentItem = itemIndex != -1 ? _posts[itemIndex] : null;
+    final bool currentlyLiked = PostInteractionRegistry.isLiked(id, fallback: currentItem?.isLiked ?? false);
     final bool newLiked = !currentlyLiked;
+    final int baseCount = PostInteractionRegistry.getLikeCount(id, fallback: currentItem?.likesCount ?? 0);
+    final int newCount = newLiked ? baseCount + 1 : (baseCount > 0 ? baseCount - 1 : 0);
+
+    PostInteractionRegistry.setLiked(id, newLiked, count: newCount);
 
     PostItemModel? target;
     setState(() {
-      final int i = _posts.indexWhere((PostItemModel p) => p.id == id);
-      if (i != -1) {
-        final PostItemModel item = _posts[i];
-        final int baseCount = item.likesCount;
-        final int newCount = newLiked
-            ? baseCount + 1
-            : (baseCount > 0 ? baseCount - 1 : 0);
-        _posts[i] = item.copyWith(
+      if (itemIndex != -1) {
+        _posts[itemIndex] = _posts[itemIndex].copyWith(
           isLiked: newLiked,
           likesCount: newCount,
         );
-        target = _posts[i];
+        target = _posts[itemIndex];
       }
     });
     try {
@@ -537,7 +570,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
       profile.updateLikedPost(
         id,
         isLiked: newLiked,
-        likesCount: target?.likesCount ?? (newLiked ? 1 : 0),
+        likesCount: newCount,
         fallbackPost: target,
       );
     } catch (_) {}
@@ -546,17 +579,18 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
   void _toggleSave(String id) {
     final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
     final ProfileProvider profile = context.read<ProfileProvider>();
-    final bool currentlySaved = homeFeed.isPostSaved(id) ||
-        profile.isPostSaved(id) ||
-        (_posts.any((PostItemModel p) => p.id == id && p.isSaved));
+    final int itemIndex = _posts.indexWhere((PostItemModel p) => p.id == id);
+    final PostItemModel? currentItem = itemIndex != -1 ? _posts[itemIndex] : null;
+    final bool currentlySaved = PostInteractionRegistry.isSaved(id, fallback: currentItem?.isSaved ?? false);
     final bool newSaved = !currentlySaved;
+
+    PostInteractionRegistry.setSaved(id, newSaved);
 
     PostItemModel? target;
     setState(() {
-      final int i = _posts.indexWhere((PostItemModel p) => p.id == id);
-      if (i != -1) {
-        _posts[i] = _posts[i].copyWith(isSaved: newSaved);
-        target = _posts[i];
+      if (itemIndex != -1) {
+        _posts[itemIndex] = _posts[itemIndex].copyWith(isSaved: newSaved);
+        target = _posts[itemIndex];
       }
     });
     try {
@@ -579,24 +613,29 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
           postId: post.id,
           postAuthorId: post.authorId,
           communityId: post.communityId,
-          totalComments: post.commentsCount,
+          totalComments: CommentCountRegistry.getOr(post.id, post.commentsCount),
           allowComments: post.allowComments,
           allowCommentsFrom: post.allowCommentsFrom,
           authorUsername: post.username,
           onCommentAdded: () {
+            final int newCount = CommentCountRegistry.increment(post.id);
             setState(() {
               final int i = _posts.indexWhere((PostItemModel p) => p.id == post.id);
               if (i != -1) {
                 _posts[i] = _posts[i].copyWith(
-                  commentsCount: _posts[i].commentsCount + 1,
+                  commentsCount: newCount,
                 );
               }
             });
             try {
               context.read<HomeFeedProvider>().incrementCommentCount(post.id);
             } catch (_) {}
+            try {
+              context.read<ProfileProvider>().incrementCommentCount(post.id);
+            } catch (_) {}
           },
           onCommentDeleted: (int deletedCount, int remainingCount) {
+            CommentCountRegistry.set(post.id, remainingCount);
             setState(() {
               final int i = _posts.indexWhere((PostItemModel p) => p.id == post.id);
               if (i != -1) {
@@ -608,8 +647,12 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
             try {
               context.read<HomeFeedProvider>().setCommentCount(post.id, remainingCount);
             } catch (_) {}
+            try {
+              context.read<ProfileProvider>().updatePostCommentCount(post.id, remainingCount);
+            } catch (_) {}
           },
           onCommentCountChanged: (int count) {
+            CommentCountRegistry.set(post.id, count);
             setState(() {
               final int i = _posts.indexWhere((PostItemModel p) => p.id == post.id);
               if (i != -1) {
@@ -620,6 +663,9 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
             });
             try {
               context.read<HomeFeedProvider>().setCommentCount(post.id, count);
+            } catch (_) {}
+            try {
+              context.read<ProfileProvider>().updatePostCommentCount(post.id, count);
             } catch (_) {}
           },
         );
@@ -642,8 +688,14 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
 
     return Scaffold(
       backgroundColor: context.themeBackground,
-      body: SafeArea(
-        child: Column(
+      body: ListenableBuilder(
+        listenable: Listenable.merge([
+          PostInteractionRegistry.notifier,
+          CommentCountRegistry.notifier,
+        ]),
+        builder: (BuildContext context, _) {
+          return SafeArea(
+            child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             // ── Header ──────────────────────────────────────────────────────
@@ -759,8 +811,10 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
             ),
           ],
         ),
-      ),
-    );
+      );
+    },
+  ),
+);
   }
 
   Widget _buildPostsTab() {

@@ -197,10 +197,13 @@ class DiscoverService {
         rawList = response['feed'] as List<dynamic>;
       }
     }
-    return rawList
+    debugPrint('📦 [DiscoverLivePosts] RAW type: ${response.runtimeType}');
+    final List<PostResponseModel> list = rawList
         .whereType<Map<String, dynamic>>()
         .map(PostResponseModel.fromJson)
         .toList();
+    debugPrint('📦 [DiscoverLivePosts] Parsed ${list.length} live posts');
+    return list;
   }
 
   // ── Multi-Tab Search ───────────────────────────────────────────────────────
@@ -224,6 +227,16 @@ class DiscoverService {
         useCache: false,
       );
       MultiTabSearchResults results = _parseSearchResults(res, activeTab: tab);
+
+      // ── DEBUG: Print raw discover search response structure ────────────────
+      debugPrint('📦 [DiscoverSearch] RAW response type: ${res.runtimeType}');
+      if (res is Map) {
+        debugPrint('📦 [DiscoverSearch] Top-level keys: ${res.keys.toList()}');
+      } else if (res is List) {
+        debugPrint('📦 [DiscoverSearch] response is List, length: ${res.length}');
+      }
+      debugPrint('📦 [DiscoverSearch] Parsed: ${results.posts.length} posts, ${results.reels.length} reels');
+      // ──────────────────────────────────────────────────────────────────────
 
       // 2. Fetch live existing posts from Posts API to reconcile deleted/stale content
       final List<PostResponseModel> livePosts = await getLivePosts();
@@ -252,17 +265,42 @@ class DiscoverService {
 
       // 3. Process Posts: Use refId as media reference ID and filter out deleted/stale posts
       final List<DiscoverSearchResult> verifiedPosts = <DiscoverSearchResult>[];
+      final Set<String> seenPostKeys = <String>{};
       for (final DiscoverSearchResult p in results.posts) {
-        final String id = p.id ?? '';
+        final String id = (p.id ?? '').trim();
         if (id.isNotEmpty && DeletedPostsRegistry.isDeleted(id)) continue;
 
         final String? cleanRef = (p.refId ?? (p.mediaRefs.isNotEmpty ? p.mediaRefs.first : null))
             ?.replaceAll(RegExp(r'^/+|^media/'), '')
-            .trim()
-            .toLowerCase();
+            .trim();
 
-        final PostResponseModel? matchingLive = (id.isNotEmpty ? livePostsById[id.toLowerCase()] : null) ??
-            (cleanRef != null && cleanRef.isNotEmpty ? livePostsByMediaRef[cleanRef] : null);
+        if (cleanRef != null && cleanRef.isNotEmpty && DeletedPostsRegistry.isDeleted(cleanRef)) continue;
+
+        final String idLower = id.toLowerCase();
+        final String cleanRefLower = cleanRef?.toLowerCase() ?? '';
+
+        if (idLower.isNotEmpty && seenPostKeys.contains('id:$idLower')) continue;
+        if (cleanRefLower.isNotEmpty && seenPostKeys.contains('id:$cleanRefLower')) continue;
+
+        PostResponseModel? matchingLive = (cleanRefLower.isNotEmpty ? livePostsById[cleanRefLower] : null) ??
+            (idLower.isNotEmpty ? livePostsById[idLower] : null) ??
+            (cleanRefLower.isNotEmpty ? livePostsByMediaRef[cleanRefLower] : null);
+
+        if (matchingLive == null && cleanRefLower.isNotEmpty) {
+          try {
+            final dynamic postData = await _client.get(
+              ApiEndpoints.post(cleanRefLower),
+              useCache: false,
+            );
+            if (postData is Map<String, dynamic>) {
+              final dynamic postMap = postData['data'] is Map<String, dynamic>
+                  ? postData['data']
+                  : postData;
+              matchingLive = PostResponseModel.fromJson(postMap as Map<String, dynamic>);
+              livePostsById[cleanRefLower] = matchingLive;
+            }
+          } catch (_) {}
+        }
 
         // If livePosts API is active and this post is missing from livePosts, it has been deleted!
         if (livePosts.isNotEmpty && matchingLive == null) {
@@ -288,6 +326,24 @@ class DiscoverService {
           }
         }
 
+        final int vCount = matchingLive?.viewsCount ?? p.viewsCount;
+        final String? formattedV = vCount >= 1000000
+            ? '${(vCount / 1000000).toStringAsFixed(1)}M'
+            : (vCount >= 1000
+                ? '${(vCount / 1000).toStringAsFixed(1)}K'
+                : (vCount > 0 ? '$vCount' : null));
+
+        final String? effectiveId = p.id?.trim();
+        if (effectiveId != null && effectiveId.isNotEmpty) {
+          seenPostKeys.add('id:${effectiveId.toLowerCase()}');
+        }
+        if (cleanRefLower.isNotEmpty) {
+          seenPostKeys.add('id:$cleanRefLower');
+        }
+        if (effectiveRefId != null && effectiveRefId.trim().isNotEmpty) {
+          seenPostKeys.add('id:${effectiveRefId.trim().toLowerCase()}');
+        }
+
         verifiedPosts.add(p.copyWith(
           refId: effectiveRefId,
           imageAsset: mediaUrl ?? matchingLive?.postImageUrl ?? p.imageAsset,
@@ -295,21 +351,33 @@ class DiscoverService {
           caption: matchingLive?.caption ?? p.caption,
           likesCount: matchingLive?.likesCount ?? p.likesCount,
           commentsCount: matchingLive?.commentsCount ?? p.commentsCount,
-          viewsCount: matchingLive?.viewsCount ?? p.viewsCount,
+          viewsCount: vCount,
+          viewCount: formattedV ?? p.viewCount,
           isLiked: matchingLive?.isLiked ?? p.isLiked,
           isSaved: matchingLive?.isSaved ?? p.isSaved,
           authorId: matchingLive?.authorId ?? p.authorId,
           authorUsername: matchingLive?.authorName ?? matchingLive?.authorDisplayName ?? p.authorUsername,
           authorAvatar: matchingLive?.authorAvatar ?? p.authorAvatar,
         ));
+
+        // ── DEBUG: print each verified post ───────────────────────────────
+        final DiscoverSearchResult dbg = verifiedPosts.last;
+        debugPrint(
+          '  📌 [DiscoverPost] id=${dbg.id} '
+          'likesCount=${dbg.likesCount} '
+          'isLiked=${dbg.isLiked} '
+          'isSaved=${dbg.isSaved} '
+          'type=${dbg.type} '
+          'caption="${(dbg.caption ?? '').length > 30 ? (dbg.caption ?? '').substring(0, 30) : (dbg.caption ?? '')}"',
+        );
       }
 
       // If verifiedPosts is empty or tab is posts/all, pull matching live posts from Posts API
       if (verifiedPosts.isEmpty && livePosts.isNotEmpty) {
         final String qLower = q.toLowerCase();
-        final Set<String> existingIds = verifiedPosts.map((DiscoverSearchResult p) => p.id ?? '').toSet();
         for (final PostResponseModel lp in livePosts) {
-          if (existingIds.contains(lp.id)) continue;
+          final String lpIdLower = lp.id.trim().toLowerCase();
+          if (seenPostKeys.contains('id:$lpIdLower')) continue;
           if (DeletedPostsRegistry.isDeleted(lp.id)) continue;
           if (lp.type.toUpperCase() == 'VIDEO') continue;
           final bool match = lp.caption.toLowerCase().contains(qLower) ||
@@ -344,15 +412,19 @@ class DiscoverService {
               isSaved: lp.isSaved,
               communityId: lp.communityId,
             ));
-            existingIds.add(lp.id);
+            seenPostKeys.add('id:$lpIdLower');
+            if (ref != null && ref.trim().isNotEmpty) {
+              seenPostKeys.add('id:${ref.trim().toLowerCase()}');
+            }
           }
         }
       }
 
       // 4. Process Reels: Use refId to resolve actual media; if media does not exist, skip it!
       final List<DiscoverSearchResult> verifiedReels = <DiscoverSearchResult>[];
+      final Set<String> seenReelKeys = <String>{};
       for (final DiscoverSearchResult r in results.reels) {
-        final String id = r.id ?? '';
+        final String id = (r.id ?? '').trim();
         if (id.isNotEmpty && DeletedPostsRegistry.isDeleted(id)) continue;
 
         final String? refId = r.refId ?? (r.mediaRefs.isNotEmpty ? r.mediaRefs.first : null);
@@ -362,6 +434,13 @@ class DiscoverService {
         }
 
         final String cleanRef = refId.replaceAll(RegExp(r'^/+|^media/'), '').trim();
+        if (cleanRef.isNotEmpty && DeletedPostsRegistry.isDeleted(cleanRef)) continue;
+
+        final String idLower = id.toLowerCase();
+        final String cleanRefLower = cleanRef.toLowerCase();
+
+        if (idLower.isNotEmpty && seenReelKeys.contains('id:$idLower')) continue;
+        if (cleanRefLower.isNotEmpty && seenReelKeys.contains('id:$cleanRefLower')) continue;
 
         // Check if media resolution is already cached
         if (_mediaStatusCache.containsKey(cleanRef)) {
@@ -372,6 +451,8 @@ class DiscoverService {
           }
           final String? url = cached['url'];
           final String? thumb = cached['thumbnailUrl'];
+          if (idLower.isNotEmpty) seenReelKeys.add('id:$idLower');
+          if (cleanRefLower.isNotEmpty) seenReelKeys.add('id:$cleanRefLower');
           verifiedReels.add(r.copyWith(
             refId: cleanRef,
             videoUrl: url ?? r.videoUrl,
@@ -381,12 +462,32 @@ class DiscoverService {
           continue;
         }
 
-        // Check against live posts first: if live post has this ref and is active
-        final PostResponseModel? matchingLive = (id.isNotEmpty ? livePostsById[id.toLowerCase()] : null) ??
+        // Check against live posts first: by refId (post ID), search doc id, or media ref
+        PostResponseModel? matchingLive = (cleanRef.isNotEmpty ? livePostsById[cleanRef.toLowerCase()] : null) ??
+            (id.isNotEmpty ? livePostsById[id.toLowerCase()] : null) ??
             livePostsByMediaRef[cleanRef.toLowerCase()];
 
-        // If not in livePosts and livePosts is populated, verify with Media Status API
-        if (livePosts.isNotEmpty && matchingLive == null) {
+        // If not in livePosts (since livePosts only fetches the latest 10 items), fetch post by id directly
+        if (matchingLive == null && cleanRef.isNotEmpty) {
+          try {
+            final dynamic postData = await _client.get(
+              ApiEndpoints.post(cleanRef),
+              useCache: false,
+            );
+            if (postData is Map<String, dynamic>) {
+              final dynamic postMap = postData['data'] is Map<String, dynamic>
+                  ? postData['data']
+                  : postData;
+              matchingLive = PostResponseModel.fromJson(postMap as Map<String, dynamic>);
+              livePostsById[cleanRef.toLowerCase()] = matchingLive;
+            }
+          } catch (_) {
+            // cleanRef may be a media ref or mediaStatus is needed
+          }
+        }
+
+        // If still not found, verify with Media Status API
+        if (matchingLive == null) {
           try {
             final dynamic mediaData = await _client.get(
               ApiEndpoints.mediaStatus(cleanRef),
@@ -411,11 +512,22 @@ class DiscoverService {
                 'thumbnailUrl': resolvedThumb,
               };
 
+              final int vCount = r.viewsCount;
+              final String? vFormatted = vCount >= 1000000
+                  ? '${(vCount / 1000000).toStringAsFixed(1)}M'
+                  : (vCount >= 1000
+                      ? '${(vCount / 1000).toStringAsFixed(1)}K'
+                      : (vCount > 0 ? '$vCount' : r.viewCount));
+
+              if (idLower.isNotEmpty) seenReelKeys.add('id:$idLower');
+              if (cleanRefLower.isNotEmpty) seenReelKeys.add('id:$cleanRefLower');
               verifiedReels.add(r.copyWith(
                 refId: cleanRef,
                 videoUrl: resolvedVid,
                 thumbnailUrl: resolvedThumb,
                 imageAsset: resolvedThumb,
+                viewsCount: vCount,
+                viewCount: vFormatted,
               ));
             } else {
               _mediaStatusCache[cleanRef] = <String, String>{'exists': 'false'};
@@ -424,11 +536,10 @@ class DiscoverService {
           } catch (e) {
             debugPrint('⚠️ [DiscoverService] Reel media $cleanRef not found: $e');
             _mediaStatusCache[cleanRef] = <String, String>{'exists': 'false'};
-            // Media no longer exists -> skip!
             continue;
           }
-        } else if (matchingLive != null) {
-          // Reel exists in live posts!
+        } else {
+          // Reel exists in live posts / was fetched from posts service!
           final String resolvedVid = matchingLive.postImageUrl ??
               '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
           final String resolvedThumb = matchingLive.thumbnailUrl ??
@@ -440,6 +551,15 @@ class DiscoverService {
             'thumbnailUrl': resolvedThumb,
           };
 
+          final int effectiveViews = matchingLive.viewsCount > 0 ? matchingLive.viewsCount : r.viewsCount;
+          final String? formattedViews = effectiveViews >= 1000000
+              ? '${(effectiveViews / 1000000).toStringAsFixed(1)}M'
+              : (effectiveViews >= 1000
+                  ? '${(effectiveViews / 1000).toStringAsFixed(1)}K'
+                  : (effectiveViews > 0 ? '$effectiveViews' : null));
+
+          if (idLower.isNotEmpty) seenReelKeys.add('id:$idLower');
+          if (cleanRefLower.isNotEmpty) seenReelKeys.add('id:$cleanRefLower');
           verifiedReels.add(r.copyWith(
             refId: cleanRef,
             videoUrl: resolvedVid,
@@ -448,48 +568,14 @@ class DiscoverService {
             caption: matchingLive.caption.isNotEmpty ? matchingLive.caption : r.caption,
             likesCount: matchingLive.likesCount,
             commentsCount: matchingLive.commentsCount,
-            viewsCount: matchingLive.viewsCount,
+            viewsCount: effectiveViews,
+            viewCount: formattedViews ?? r.viewCount,
             isLiked: matchingLive.isLiked,
             isSaved: matchingLive.isSaved,
             authorId: matchingLive.authorId ?? r.authorId,
             authorUsername: matchingLive.authorName ?? matchingLive.authorDisplayName ?? r.authorUsername,
             authorAvatar: matchingLive.authorAvatar ?? r.authorAvatar,
           ));
-        } else {
-          // livePosts was empty -> verify via mediaStatus
-          try {
-            final dynamic mediaData = await _client.get(
-              ApiEndpoints.mediaStatus(cleanRef),
-              useCache: false,
-            );
-            if (mediaData is Map<String, dynamic>) {
-              final String? url = mediaData['url'] as String? ?? mediaData['downloadUrl'] as String?;
-              final String? thumb = mediaData['thumbnailUrl'] as String?;
-              if (url == null && thumb == null) {
-                _mediaStatusCache[cleanRef] = <String, String>{'exists': 'false'};
-                continue;
-              }
-              final String resolvedVid = url ?? '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
-              final String resolvedThumb = thumb ?? '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumb.0000000.jpg';
-              _mediaStatusCache[cleanRef] = <String, String>{
-                'exists': 'true',
-                'url': resolvedVid,
-                'thumbnailUrl': resolvedThumb,
-              };
-              verifiedReels.add(r.copyWith(
-                refId: cleanRef,
-                videoUrl: resolvedVid,
-                thumbnailUrl: resolvedThumb,
-                imageAsset: resolvedThumb,
-              ));
-            } else {
-              _mediaStatusCache[cleanRef] = <String, String>{'exists': 'false'};
-              continue;
-            }
-          } catch (_) {
-            _mediaStatusCache[cleanRef] = <String, String>{'exists': 'false'};
-            continue;
-          }
         }
       }
 

@@ -430,4 +430,58 @@ class UserProfile {
       isMuted: other.isMuted ?? isMuted,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'userId': id,
+      'id': id,
+      if (email != null) 'email': email,
+      if (displayName != null) 'displayName': displayName,
+      if (username != null) 'username': username,
+      if (bio != null) 'bio': bio,
+      if (avatarUrl != null) 'avatarUrl': avatarUrl,
+      if (pronouns != null) 'pronouns': pronouns,
+      if (pronounsPrivate != null) 'pronounsPrivate': pronounsPrivate,
+      if (interests != null) 'interests': interests,
+      if (isPrivate != null) 'isPrivate': isPrivate,
+      if (showInDiscover != null) 'showInDiscover': showInDiscover,
+      if (allowMessagesFrom != null) 'allowMessagesFrom': allowMessagesFrom,
+      if (allowCommentsFrom != null) 'allowCommentsFrom': allowCommentsFrom,
+      if (hideMyLikes != null) 'hideMyLikes': hideMyLikes,
+      if (profileVisibility != null) 'profileVisibility': profileVisibility,
+      if (showActivityStatus != null) 'showActivityStatus': showActivityStatus,
+      if (sendReadReceipts != null) 'sendReadReceipts': sendReadReceipts,
+      if (notifyOnLike != null) 'notifyOnLike': notifyOnLike,
+      if (notifyOnComment != null) 'notifyOnComment': notifyOnComment,
+      if (notifyOnFollow != null) 'notifyOnFollow': notifyOnFollow,
+      if (notifyOnMessage != null) 'notifyOnMessage': notifyOnMessage,
+      if (notifyOnFollowRequests != null)
+        'notifyOnFollowRequests': notifyOnFollowRequests,
+      if (notifyOnCommunityPosts != null)
+        'notifyOnCommunityPosts': notifyOnCommunityPosts,
+      if (notifyOnAnnouncementsFeatures != null)
+        'notifyOnAnnouncementsFeatures': notifyOnAnnouncementsFeatures,
+      if (notifyOnSafetyModerationUpdates != null)
+        'notifyOnSafetyModerationUpdates': notifyOnSafetyModerationUpdates,
+      if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+      if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
+      if (followersCount != null) 'followersCount': followersCount,
+      if (followingCount != null) 'followingCount': followingCount,
+      if (postsCount != null) 'postsCount': postsCount,
+      if (relationship != null) 'relationship': relationship,
+      if (isFollowing != null) 'isFollowing': isFollowing,
+      if (isPending != null) 'isPending': isPending,
+      if (isBlocked != null) 'isBlocked': isBlocked,
+      if (isMuted != null) 'isMuted': isMuted,
+      if (isRestricted != null) 'isRestricted': isRestricted,
+      'privacySettings': <String, dynamic>{
+        if (allowMessagesFrom != null) 'allowMessagesFrom': allowMessagesFrom,
+        if (allowCommentsFrom != null) 'allowCommentsFrom': allowCommentsFrom,
+        if (hideMyLikes != null) 'hideMyLikes': hideMyLikes,
+        if (profileVisibility != null) 'profileVisibility': profileVisibility,
+        if (showActivityStatus != null) 'showActivityStatus': showActivityStatus,
+        if (sendReadReceipts != null) 'sendReadReceipts': sendReadReceipts,
+      },
+    };
+  }
 }

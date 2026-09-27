@@ -74,8 +74,26 @@ class DiscoverProvider extends ChangeNotifier {
     List<PostItemModel> posts = const <PostItemModel>[],
     List<ReelItemModel> reels = const <ReelItemModel>[],
   }) {
-    _liveHomePosts = posts;
-    _liveHomeReels = reels;
+    final Set<String> seenPostIds = <String>{};
+    final List<PostItemModel> uniquePosts = <PostItemModel>[];
+    for (final PostItemModel p in posts) {
+      final String pid = p.id.trim();
+      if (pid.isNotEmpty && seenPostIds.add(pid)) {
+        uniquePosts.add(p);
+      }
+    }
+
+    final Set<String> seenReelIds = <String>{};
+    final List<ReelItemModel> uniqueReels = <ReelItemModel>[];
+    for (final ReelItemModel r in reels) {
+      final String rid = r.id.trim();
+      if (rid.isNotEmpty && seenReelIds.add(rid)) {
+        uniqueReels.add(r);
+      }
+    }
+
+    _liveHomePosts = uniquePosts;
+    _liveHomeReels = uniqueReels;
     _updateTrendingCountsWithLiveFeed();
   }
 
@@ -93,8 +111,11 @@ class DiscoverProvider extends ChangeNotifier {
 
   List<DiscoverSearchResult> _filterDeletedPosts(List<DiscoverSearchResult> list) {
     return list.where((DiscoverSearchResult p) {
-      final String id = p.id ?? '';
-      return id.isNotEmpty && !DeletedPostsRegistry.isDeleted(id);
+      final String id = (p.id ?? '').trim();
+      final String refId = (p.refId ?? '').trim();
+      if (id.isNotEmpty && DeletedPostsRegistry.isDeleted(id)) return false;
+      if (refId.isNotEmpty && DeletedPostsRegistry.isDeleted(refId)) return false;
+      return id.isNotEmpty || refId.isNotEmpty;
     }).toList();
   }
 
@@ -117,26 +138,78 @@ class DiscoverProvider extends ChangeNotifier {
     }).toList();
   }
 
+  /// Deduplicates search results across `id`, `refId`, media references, and media URLs.
+  List<DiscoverSearchResult> _deduplicateSearchResults(List<DiscoverSearchResult> list) {
+    final List<DiscoverSearchResult> result = <DiscoverSearchResult>[];
+    final Set<String> seen = <String>{};
+
+    for (final DiscoverSearchResult item in list) {
+      final String id = (item.id ?? '').trim().toLowerCase();
+      final String refId = (item.refId ?? '')
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'^/+|^media/'), '');
+
+      String mediaKey = '';
+      if (item.videoUrl != null && item.videoUrl!.trim().isNotEmpty) {
+        final String v = item.videoUrl!.trim().toLowerCase();
+        final RegExpMatch? m = RegExp(r'/videos/processed/([a-zA-Z0-9_\-]+)').firstMatch(v);
+        mediaKey = m != null ? 'vid:${m.group(1)}' : 'vid:$v';
+      } else if (item.imageAsset.isNotEmpty && item.imageAsset.startsWith('http')) {
+        final String img = item.imageAsset.trim().toLowerCase();
+        final RegExpMatch? m = RegExp(r'/images/original/([^/]+)/([a-zA-Z0-9_\-]+)').firstMatch(img);
+        mediaKey = m != null ? 'img:${m.group(2)}' : 'img:$img';
+      }
+
+      bool isDuplicate = false;
+      if (id.isNotEmpty && seen.contains('id:$id')) isDuplicate = true;
+      if (refId.isNotEmpty && seen.contains('id:$refId')) isDuplicate = true;
+      if (mediaKey.isNotEmpty && seen.contains(mediaKey)) isDuplicate = true;
+
+      if (isDuplicate) {
+        final int existingIdx = result.indexWhere((DiscoverSearchResult r) =>
+            (id.isNotEmpty && (r.id?.toLowerCase() == id || r.refId?.toLowerCase() == id)) ||
+            (refId.isNotEmpty && (r.id?.toLowerCase() == refId || r.refId?.toLowerCase() == refId)));
+        if (existingIdx != -1) {
+          final DiscoverSearchResult existing = result[existingIdx];
+          if (item.viewsCount > existing.viewsCount ||
+              (existing.viewsCount == 0 && item.viewCount != null && item.viewCount != '0')) {
+            result[existingIdx] = existing.copyWith(
+              viewsCount: item.viewsCount,
+              viewCount: item.viewCount,
+            );
+          }
+        }
+        continue;
+      }
+
+      if (id.isNotEmpty) seen.add('id:$id');
+      if (refId.isNotEmpty) seen.add('id:$refId');
+      for (final String m in item.mediaRefs) {
+        final String cleanM = m.trim().toLowerCase().replaceAll(RegExp(r'^/+|^media/'), '');
+        if (cleanM.isNotEmpty) seen.add('id:$cleanM');
+      }
+      if (mediaKey.isNotEmpty) seen.add(mediaKey);
+
+      result.add(item);
+    }
+
+    return result;
+  }
+
   List<DiscoverSearchResult> get searchResults =>
-      _filterVisiblePosts(_filterDeletedPosts(_searchResults.posts));
+      _deduplicateSearchResults(_filterVisiblePosts(_filterDeletedPosts(_searchResults.posts)));
 
   List<DiscoverSearchResult> get postsResults =>
-      searchResults.where((DiscoverSearchResult p) => !p.isReel).toList();
+      _deduplicateSearchResults(searchResults.where((DiscoverSearchResult p) => !p.isReel).toList());
 
   List<DiscoverSearchResult> get reelsResults {
     final List<DiscoverSearchResult> fromReels =
         _filterVisiblePosts(_filterDeletedPosts(_searchResults.reels));
     final List<DiscoverSearchResult> fromPosts =
         searchResults.where((DiscoverSearchResult p) => p.isReel).toList();
-    final Set<String> seenIds = <String>{};
-    final List<DiscoverSearchResult> combined = <DiscoverSearchResult>[];
-    for (final DiscoverSearchResult r in <DiscoverSearchResult>[...fromReels, ...fromPosts]) {
-      final String id = r.id ?? '';
-      if (id.isNotEmpty && !DeletedPostsRegistry.isDeleted(id) && seenIds.add(id)) {
-        combined.add(r);
-      }
-    }
-    return combined;
+    final List<DiscoverSearchResult> combined = <DiscoverSearchResult>[...fromReels, ...fromPosts];
+    return _deduplicateSearchResults(combined);
   }
 
   List<DiscoverPerson> get peopleResults {
@@ -243,8 +316,8 @@ class DiscoverProvider extends ChangeNotifier {
     _liveHomePosts = _liveHomePosts.where((PostItemModel p) => p.id != clean).toList();
     _liveHomeReels = _liveHomeReels.where((ReelItemModel r) => r.id != clean).toList();
     _searchResults = _searchResults.copyWith(
-      posts: _searchResults.posts.where((DiscoverSearchResult p) => p.id != clean).toList(),
-      reels: _searchResults.reels.where((DiscoverSearchResult r) => r.id != clean).toList(),
+      posts: _searchResults.posts.where((DiscoverSearchResult p) => p.id != clean && p.refId != clean).toList(),
+      reels: _searchResults.reels.where((DiscoverSearchResult r) => r.id != clean && r.refId != clean).toList(),
     );
     notifyListeners();
   }
@@ -279,57 +352,56 @@ class DiscoverProvider extends ChangeNotifier {
       final List<DiscoverSearchResult> localMatchedReels = <DiscoverSearchResult>[];
 
       if (tabName == 'all' || tabName == 'posts') {
+        final Set<String> seenLocalPostIds = <String>{};
         for (final PostItemModel p in _liveHomePosts) {
           if (DeletedPostsRegistry.isDeleted(p.id)) continue;
           if (p.postType.toUpperCase().trim() == 'VIDEO') continue;
           if (p.content.toLowerCase().contains(qLower) ||
               p.username.toLowerCase().contains(qLower)) {
-            localMatchedPosts.add(DiscoverSearchResult.fromPostItem(p));
+            if (seenLocalPostIds.add(p.id.trim())) {
+              localMatchedPosts.add(DiscoverSearchResult.fromPostItem(p));
+            }
           }
         }
       }
 
       if (tabName == 'all' || tabName == 'reels') {
+        final Set<String> seenLocalReelIds = <String>{};
         for (final ReelItemModel r in _liveHomeReels) {
           if (DeletedPostsRegistry.isDeleted(r.id)) continue;
           if (r.caption.toLowerCase().contains(qLower) ||
               r.username.toLowerCase().contains(qLower) ||
               r.tags.any((String t) => t.toLowerCase().contains(qLower))) {
-            localMatchedReels.add(DiscoverSearchResult.fromReelItem(r));
+            if (seenLocalReelIds.add(r.id.trim())) {
+              localMatchedReels.add(DiscoverSearchResult.fromReelItem(r));
+            }
           }
         }
       }
 
-      final List<DiscoverSearchResult> filteredPosts = results.posts
-          .where((DiscoverSearchResult p) => !DeletedPostsRegistry.isDeleted(p.id ?? ''))
-          .toList();
-      final List<DiscoverSearchResult> filteredReels = results.reels
-          .where((DiscoverSearchResult r) => !DeletedPostsRegistry.isDeleted(r.id ?? ''))
-          .toList();
+      final List<DiscoverSearchResult> filteredPosts = _deduplicateSearchResults(
+        results.posts
+            .where((DiscoverSearchResult p) =>
+                !DeletedPostsRegistry.isDeleted(p.id ?? '') &&
+                !DeletedPostsRegistry.isDeleted(p.refId ?? ''))
+            .toList(),
+      );
+      final List<DiscoverSearchResult> filteredReels = _deduplicateSearchResults(
+        results.reels
+            .where((DiscoverSearchResult r) =>
+                !DeletedPostsRegistry.isDeleted(r.id ?? '') &&
+                !DeletedPostsRegistry.isDeleted(r.refId ?? ''))
+            .toList(),
+      );
 
-      if (localMatchedPosts.isNotEmpty) {
-        final Set<String> existingIds =
-            filteredPosts.map((DiscoverSearchResult p) => p.id ?? '').toSet();
-        for (final DiscoverSearchResult lm in localMatchedPosts) {
-          if (lm.id != null && !existingIds.contains(lm.id)) {
-            filteredPosts.add(lm);
-            existingIds.add(lm.id!);
-          }
-        }
-      }
+      final List<DiscoverSearchResult> mergedPosts = _deduplicateSearchResults(
+        <DiscoverSearchResult>[...filteredPosts, ...localMatchedPosts],
+      );
+      final List<DiscoverSearchResult> mergedReels = _deduplicateSearchResults(
+        <DiscoverSearchResult>[...filteredReels, ...localMatchedReels],
+      );
 
-      if (localMatchedReels.isNotEmpty) {
-        final Set<String> existingReelIds =
-            filteredReels.map((DiscoverSearchResult r) => r.id ?? '').toSet();
-        for (final DiscoverSearchResult lr in localMatchedReels) {
-          if (lr.id != null && !existingReelIds.contains(lr.id)) {
-            filteredReels.add(lr);
-            existingReelIds.add(lr.id!);
-          }
-        }
-      }
-
-      results = results.copyWith(posts: filteredPosts, reels: filteredReels);
+      results = results.copyWith(posts: mergedPosts, reels: mergedReels);
 
       _searchCache[cacheKey] = results;
 

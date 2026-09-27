@@ -19,6 +19,7 @@ import '../../profile/provider/profile_provider.dart';
 import '../models/post_item_model.dart';
 import '../models/reel_item_model.dart';
 import '../provider/home_feed_provider.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../messages/widgets/report_conversation_bottom_sheet.dart';
 import '../../reports/models/report_models.dart';
 import 'send_to_bottom_sheet.dart';
@@ -335,9 +336,11 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                     (widget.postAuthor != null &&
                         context.read<ProfileProvider>().username.replaceAll('@', '').toLowerCase() ==
                             widget.postAuthor!.replaceAll('@', '').toLowerCase());
-                final bool downloadsAllowed = widget.reel?.allowDownloads ??
-                    widget.post?.allowDownloads ??
-                    widget.allowDownloads;
+                final bool isPostDownloadAllowed = widget.post?.allowDownloads ?? true;
+                final bool isReelDownloadAllowed = widget.reel?.allowDownloads ?? true;
+                final bool downloadsAllowed = widget.allowDownloads &&
+                    isPostDownloadAllowed &&
+                    isReelDownloadAllowed;
                 final bool canDownload = downloadsAllowed &&
                     (resolvedMedia != null && resolvedMedia.isNotEmpty);
 
@@ -389,13 +392,13 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                         },
                       ),
 
-                    // 3. Save
                     Builder(
                       builder: (BuildContext ctx) {
                         final HomeFeedProvider homeFeed = ctx.watch<HomeFeedProvider>();
                         final String? targetId = widget.reel?.id ?? widget.post?.id ?? widget.postId;
-                        final bool isSaved = (targetId != null && homeFeed.isPostSaved(targetId)) ||
-                            (widget.reel?.isSaved ?? widget.post?.isSaved ?? false);
+                        final bool isSaved = targetId != null
+                            ? PostInteractionRegistry.isSaved(targetId, fallback: homeFeed.isPostSaved(targetId) || (widget.reel?.isSaved ?? widget.post?.isSaved ?? false))
+                            : (widget.reel?.isSaved ?? widget.post?.isSaved ?? false);
 
                         return _ActionButtonTile(
                           icon: Icon(
@@ -410,10 +413,12 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                             Navigator.pop(context);
                             if (targetId != null && targetId.isNotEmpty) {
                               final bool newSaved = !isSaved;
+                              PostInteractionRegistry.setSaved(targetId, newSaved);
                               if (widget.reel != null || isVideo) {
                                 homeFeed.toggleSaveReel(
                                   targetId,
                                   fallbackReel: widget.reel,
+                                  explicitSaved: newSaved,
                                 );
                                 try {
                                   context.read<ProfileProvider>().updateSavedReel(
@@ -426,6 +431,7 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                                 homeFeed.toggleSavePost(
                                   targetId,
                                   fallbackPost: widget.post,
+                                  explicitSaved: newSaved,
                                 );
                                 try {
                                   context.read<ProfileProvider>().updateSavedPost(

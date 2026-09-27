@@ -40,6 +40,7 @@ class ProfileMediaGridWidget extends StatelessWidget {
                 initialPage: initialIndex,
                 customReels: List<ReelItemModel>.from(reelsList),
                 hasBottomBar: false,
+                isProfileScreen: true,
               ),
 
               // Top back button

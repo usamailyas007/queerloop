@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:video_player/video_player.dart';
 
@@ -359,12 +361,23 @@ class ReelVideoPreloader {
       muteAll();
       return;
     }
-    for (final MapEntry<String, VideoPlayerController> entry in _controllers.entries) {
-      try {
-        if (entry.value.value.isInitialized) {
-          entry.value.setVolume(entry.key == activeId ? 1.0 : 0.0);
-        }
-      } catch (_) {}
+    void applyVolume() {
+      for (final MapEntry<String, VideoPlayerController> entry in _controllers.entries) {
+        try {
+          if (entry.value.value.isInitialized) {
+            final double targetVol = entry.key == activeId ? 1.0 : 0.0;
+            if (entry.value.value.volume != targetVol) {
+              entry.value.setVolume(targetVol);
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (WidgetsBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => applyVolume());
+    } else {
+      applyVolume();
     }
   }
 

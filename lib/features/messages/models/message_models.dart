@@ -111,6 +111,9 @@ class ChatMessageModel {
     this.unsentAt,
     this.createdAt,
     this.type = MessageType.text,
+    this.replyToId,
+    this.replyToText,
+    this.replyToSender,
   });
 
   final String id;
@@ -141,6 +144,9 @@ class ChatMessageModel {
   final DateTime? unsentAt;
   final DateTime? createdAt;
   final MessageType type;
+  final String? replyToId;
+  final String? replyToText;
+  final String? replyToSender;
 
   factory ChatMessageModel.fromJson(
     Map<String, dynamic> json, {
@@ -231,6 +237,63 @@ class ChatMessageModel {
                 rawMedia.trim().startsWith('assets/')
             ? rawMedia.trim()
             : '${AppConfig.baseUrl.replaceAll(RegExp(r"/+$"), "")}/media/${rawMedia.trim().replaceAll(RegExp(r"^/media/"), "").replaceAll(RegExp(r"^/+"), "")}');
+
+    // Parse reply metadata
+    final dynamic replyRaw = json['replyTo'] ?? json['reply_to'] ?? json['reply'];
+    String? replyToId;
+    String? replyToText;
+    String? replyToSender;
+    if (replyRaw is Map) {
+      replyToId = (replyRaw['id'] ??
+              replyRaw['_id'] ??
+              replyRaw['messageId'] ??
+              replyRaw['replyToMessageId'])
+          ?.toString();
+      final dynamic replyUnsentAt = replyRaw['unsentAt'] ?? replyRaw['unsent_at'];
+      if (replyUnsentAt != null &&
+          replyUnsentAt.toString().trim().isNotEmpty &&
+          replyUnsentAt.toString().trim().toLowerCase() != 'null') {
+        replyToText = 'This message was unsent';
+      } else {
+        replyToText =
+            (replyRaw['body'] ?? replyRaw['text'] ?? replyRaw['content'])?.toString();
+        if ((replyToText == null || replyToText.isEmpty) &&
+            replyRaw['mediaUrl'] != null &&
+            replyRaw['mediaUrl'].toString().trim().isNotEmpty &&
+            replyRaw['mediaUrl'].toString().toLowerCase() != 'null') {
+          replyToText = '📷 Photo';
+        }
+      }
+      final dynamic replySender = replyRaw['sender'];
+      final String? rSenderId = (replyRaw['senderId'] ??
+              replyRaw['sender_id'] ??
+              (replySender is Map ? (replySender['id'] ?? replySender['_id']) : null))
+          ?.toString();
+      if (currentUserId != null &&
+          currentUserId.isNotEmpty &&
+          rSenderId != null &&
+          rSenderId == currentUserId) {
+        replyToSender = 'You';
+      } else {
+        replyToSender = (replyRaw['senderUsername'] ??
+            replyRaw['username'] ??
+            (replySender is Map
+                ? (replySender['username'] ?? replySender['name'])
+                : null) ??
+            replyRaw['sender'])?.toString();
+      }
+    } else {
+      replyToId = (json['replyToMessageId'] ??
+              json['replyToId'] ??
+              json['reply_to_id'])
+          ?.toString();
+      replyToText = (json['replyToText'] ?? json['reply_to_text'])?.toString();
+      replyToSender = (json['replyToSender'] ?? json['reply_to_sender'])?.toString();
+    }
+    replyToId ??= (json['replyToMessageId'] ??
+            json['replyToId'] ??
+            json['reply_to_id'])
+        ?.toString();
 
     // Parse reactions (supports List of reaction objects or Map format: {"😂": ["user_id"]})
     final List<MessageReactionModel> parsedReactions = <MessageReactionModel>[];
@@ -560,6 +623,9 @@ class ChatMessageModel {
       unsentAt: unsentTime,
       createdAt: created,
       type: mType,
+      replyToId: replyToId,
+      replyToText: replyToText,
+      replyToSender: replyToSender,
     );
   }
 
@@ -593,6 +659,9 @@ class ChatMessageModel {
     DateTime? unsentAt,
     DateTime? createdAt,
     MessageType? type,
+    String? replyToId,
+    String? replyToText,
+    String? replyToSender,
   }) {
     return ChatMessageModel(
       id: id ?? this.id,
@@ -623,6 +692,9 @@ class ChatMessageModel {
       unsentAt: unsentAt ?? this.unsentAt,
       createdAt: createdAt ?? this.createdAt,
       type: type ?? this.type,
+      replyToId: replyToId ?? this.replyToId,
+      replyToText: replyToText ?? this.replyToText,
+      replyToSender: replyToSender ?? this.replyToSender,
     );
   }
 }

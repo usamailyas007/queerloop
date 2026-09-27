@@ -156,7 +156,10 @@ class ProfileProvider extends ChangeNotifier {
   bool get isLoadingSaved => _isLoadingSaved;
   bool get hasFetchedSaved => _hasFetchedSaved;
 
-  bool isPostLiked(String id) {
+  bool isPostLiked(String id) =>
+      PostInteractionRegistry.isLiked(id, fallback: _isPostLikedInternal(id));
+
+  bool _isPostLikedInternal(String id) {
     if (_likedPosts.any((PostItemModel p) => p.id == id && p.isLiked)) return true;
     if (_likedReels.any((ReelItemModel r) => r.id == id && r.isLiked)) return true;
     if (_userPosts.any((PostItemModel p) => p.id == id && p.isLiked)) return true;
@@ -166,7 +169,10 @@ class ProfileProvider extends ChangeNotifier {
     return false;
   }
 
-  bool isPostSaved(String id) {
+  bool isPostSaved(String id) =>
+      PostInteractionRegistry.isSaved(id, fallback: _isPostSavedInternal(id));
+
+  bool _isPostSavedInternal(String id) {
     if (_savedPosts.any((PostItemModel p) => p.id == id && p.isSaved)) return true;
     if (_savedReels.any((ReelItemModel r) => r.id == id && r.isSaved)) return true;
     if (_userPosts.any((PostItemModel p) => p.id == id && p.isSaved)) return true;
@@ -269,6 +275,9 @@ class ProfileProvider extends ChangeNotifier {
   bool get notifyOnSafetyModerationUpdates =>
       _profile?.notifyOnSafetyModerationUpdates ?? true;
 
+  void Function({bool? showActivityStatus, bool? sendReadReceipts})?
+      onPrivacySettingsChanged;
+
   static String formatPrivacyLabel(String? val) {
     if (val == null || val.isEmpty) return 'Everyone';
     final String lower = val.toLowerCase().trim();
@@ -328,6 +337,374 @@ class ProfileProvider extends ChangeNotifier {
     ]);
   }
 
+  Future<void> _hydrateLocalSettings(String userId, {Map<String, dynamic>? serverData}) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+
+      final String? savedMessagesFrom =
+          prefs.getString('privacy_allow_messages_$userId');
+      final String? savedCommentsFrom =
+          prefs.getString('privacy_allow_comments_$userId');
+      final String? savedProfileVisibility =
+          prefs.getString('privacy_visibility_$userId');
+      final bool? savedHideLikes =
+          prefs.getBool('privacy_hide_my_likes_$userId');
+      final bool? savedIsPrivate =
+          prefs.getBool('privacy_is_private_$userId');
+      final bool? savedShowDiscover =
+          prefs.getBool('privacy_show_discover_$userId');
+      final bool? savedShowActivity =
+          prefs.getBool('privacy_show_activity_$userId');
+      final bool? savedReadReceipts =
+          prefs.getBool('privacy_read_receipts_$userId');
+      final bool? savedNotifyLike =
+          prefs.getBool('notification_notify_like_$userId');
+      final bool? savedNotifyComment =
+          prefs.getBool('notification_notify_comment_$userId');
+      final bool? savedNotifyFollow =
+          prefs.getBool('notification_notify_follow_$userId');
+      final bool? savedNotifyMessage =
+          prefs.getBool('notification_notify_message_$userId');
+      final bool? savedFollowRequests =
+          prefs.getBool('notification_follow_requests_$userId');
+      final bool? savedCommunityPosts =
+          prefs.getBool('notification_community_posts_$userId');
+      final bool? savedAnnouncements =
+          prefs.getBool('notification_announcements_$userId');
+      final bool? savedModeration =
+          prefs.getBool('notification_moderation_$userId');
+
+      // Check serverData if provided
+      bool? serverShowActivity;
+      bool? serverReadReceipts;
+      bool? serverHideLikes;
+      bool? serverIsPrivate;
+      bool? serverShowDiscover;
+      String? serverMessagesFrom;
+      String? serverCommentsFrom;
+      String? serverProfileVisibility;
+
+      bool? serverNotifyLike;
+      bool? serverNotifyComment;
+      bool? serverNotifyFollow;
+      bool? serverNotifyMessage;
+      bool? serverFollowRequests;
+      bool? serverCommunityPosts;
+      bool? serverAnnouncements;
+      bool? serverModeration;
+
+      if (serverData != null) {
+        if (serverData['showActivityStatus'] is bool) {
+          serverShowActivity = serverData['showActivityStatus'] as bool;
+        } else if (serverData['show_activity_status'] is bool) {
+          serverShowActivity = serverData['show_activity_status'] as bool;
+        } else if (serverData['privacySettings'] is Map &&
+            (serverData['privacySettings']['showActivityStatus'] ??
+                    serverData['privacySettings']['show_activity_status']) is bool) {
+          serverShowActivity = (serverData['privacySettings']['showActivityStatus'] ??
+              serverData['privacySettings']['show_activity_status']) as bool;
+        }
+
+        if (serverData['sendReadReceipts'] is bool) {
+          serverReadReceipts = serverData['sendReadReceipts'] as bool;
+        } else if (serverData['send_read_receipts'] is bool) {
+          serverReadReceipts = serverData['send_read_receipts'] as bool;
+        } else if (serverData['privacySettings'] is Map &&
+            (serverData['privacySettings']['sendReadReceipts'] ??
+                    serverData['privacySettings']['send_read_receipts']) is bool) {
+          serverReadReceipts = (serverData['privacySettings']['sendReadReceipts'] ??
+              serverData['privacySettings']['send_read_receipts']) as bool;
+        }
+
+        if (serverData['hideMyLikes'] is bool) {
+          serverHideLikes = serverData['hideMyLikes'] as bool;
+        } else if (serverData['hide_my_likes'] is bool) {
+          serverHideLikes = serverData['hide_my_likes'] as bool;
+        } else if (serverData['privacySettings'] is Map &&
+            (serverData['privacySettings']['hideMyLikes'] ??
+                    serverData['privacySettings']['hide_my_likes']) is bool) {
+          serverHideLikes = (serverData['privacySettings']['hideMyLikes'] ??
+              serverData['privacySettings']['hide_my_likes']) as bool;
+        }
+
+        if (serverData['isPrivate'] is bool) {
+          serverIsPrivate = serverData['isPrivate'] as bool;
+        } else if (serverData['is_private'] is bool) {
+          serverIsPrivate = serverData['is_private'] as bool;
+        }
+
+        if (serverData['showInDiscover'] is bool) {
+          serverShowDiscover = serverData['showInDiscover'] as bool;
+        } else if (serverData['show_in_discover'] is bool) {
+          serverShowDiscover = serverData['show_in_discover'] as bool;
+        }
+
+        final dynamic rawMsg = serverData['allowMessagesFrom'] ??
+            serverData['allow_messages_from'] ??
+            serverData['whoCanMessage'] ??
+            (serverData['privacySettings'] is Map ? serverData['privacySettings']['allowMessagesFrom'] : null);
+        if (rawMsg is String && rawMsg.isNotEmpty) {
+          serverMessagesFrom = _normalizePrivacy(rawMsg);
+        }
+
+        final dynamic rawComment = serverData['allowCommentsFrom'] ??
+            serverData['allow_comments_from'] ??
+            serverData['whoCanComment'] ??
+            (serverData['privacySettings'] is Map ? serverData['privacySettings']['allowCommentsFrom'] : null);
+        if (rawComment is String && rawComment.isNotEmpty) {
+          serverCommentsFrom = _normalizePrivacy(rawComment);
+        }
+
+        final dynamic rawVisibility = serverData['profileVisibility'] ??
+            serverData['profile_visibility'] ??
+            (serverData['privacySettings'] is Map ? serverData['privacySettings']['profileVisibility'] : null);
+        if (rawVisibility is String && rawVisibility.isNotEmpty) {
+          serverProfileVisibility = _normalizePrivacy(rawVisibility);
+        }
+
+        // Notification checks from serverData
+        if (serverData['notifyOnLike'] is bool) {
+          serverNotifyLike = serverData['notifyOnLike'] as bool;
+        } else if (serverData['notify_on_like'] is bool) {
+          serverNotifyLike = serverData['notify_on_like'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnLike'] ??
+                    serverData['notificationSettings']['notify_on_like']) is bool) {
+          serverNotifyLike = (serverData['notificationSettings']['notifyOnLike'] ??
+              serverData['notificationSettings']['notify_on_like']) as bool;
+        }
+
+        if (serverData['notifyOnComment'] is bool) {
+          serverNotifyComment = serverData['notifyOnComment'] as bool;
+        } else if (serverData['notify_on_comment'] is bool) {
+          serverNotifyComment = serverData['notify_on_comment'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnComment'] ??
+                    serverData['notificationSettings']['notify_on_comment']) is bool) {
+          serverNotifyComment = (serverData['notificationSettings']['notifyOnComment'] ??
+              serverData['notificationSettings']['notify_on_comment']) as bool;
+        }
+
+        if (serverData['notifyOnFollow'] is bool) {
+          serverNotifyFollow = serverData['notifyOnFollow'] as bool;
+        } else if (serverData['notify_on_follow'] is bool) {
+          serverNotifyFollow = serverData['notify_on_follow'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnFollow'] ??
+                    serverData['notificationSettings']['notify_on_follow']) is bool) {
+          serverNotifyFollow = (serverData['notificationSettings']['notifyOnFollow'] ??
+              serverData['notificationSettings']['notify_on_follow']) as bool;
+        }
+
+        if (serverData['notifyOnMessage'] is bool) {
+          serverNotifyMessage = serverData['notifyOnMessage'] as bool;
+        } else if (serverData['notify_on_message'] is bool) {
+          serverNotifyMessage = serverData['notify_on_message'] as bool;
+        } else if (serverData['directMessages'] is bool) {
+          serverNotifyMessage = serverData['directMessages'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnMessage'] ??
+                    serverData['notificationSettings']['directMessages']) is bool) {
+          serverNotifyMessage = (serverData['notificationSettings']['notifyOnMessage'] ??
+              serverData['notificationSettings']['directMessages']) as bool;
+        }
+
+        if (serverData['notifyOnFollowRequests'] is bool) {
+          serverFollowRequests = serverData['notifyOnFollowRequests'] as bool;
+        } else if (serverData['notify_on_follow_requests'] is bool) {
+          serverFollowRequests = serverData['notify_on_follow_requests'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnFollowRequests'] ??
+                    serverData['notificationSettings']['notify_on_follow_requests']) is bool) {
+          serverFollowRequests = (serverData['notificationSettings']['notifyOnFollowRequests'] ??
+              serverData['notificationSettings']['notify_on_follow_requests']) as bool;
+        }
+
+        if (serverData['notifyOnCommunityPosts'] is bool) {
+          serverCommunityPosts = serverData['notifyOnCommunityPosts'] as bool;
+        } else if (serverData['notify_on_community_posts'] is bool) {
+          serverCommunityPosts = serverData['notify_on_community_posts'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnCommunityPosts'] ??
+                    serverData['notificationSettings']['notify_on_community_posts']) is bool) {
+          serverCommunityPosts = (serverData['notificationSettings']['notifyOnCommunityPosts'] ??
+              serverData['notificationSettings']['notify_on_community_posts']) as bool;
+        }
+
+        if (serverData['notifyOnAnnouncementsFeatures'] is bool) {
+          serverAnnouncements = serverData['notifyOnAnnouncementsFeatures'] as bool;
+        } else if (serverData['notify_on_announcements_features'] is bool) {
+          serverAnnouncements = serverData['notify_on_announcements_features'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnAnnouncementsFeatures'] ??
+                    serverData['notificationSettings']['notify_on_announcements_features']) is bool) {
+          serverAnnouncements = (serverData['notificationSettings']['notifyOnAnnouncementsFeatures'] ??
+              serverData['notificationSettings']['notify_on_announcements_features']) as bool;
+        }
+
+        if (serverData['notifyOnSafetyModerationUpdates'] is bool) {
+          serverModeration = serverData['notifyOnSafetyModerationUpdates'] as bool;
+        } else if (serverData['notify_on_safety_moderation_updates'] is bool) {
+          serverModeration = serverData['notify_on_safety_moderation_updates'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnSafetyModerationUpdates'] ??
+                    serverData['notificationSettings']['notify_on_safety_moderation_updates']) is bool) {
+          serverModeration = (serverData['notificationSettings']['notifyOnSafetyModerationUpdates'] ??
+              serverData['notificationSettings']['notify_on_safety_moderation_updates']) as bool;
+        }
+      }
+
+      final bool effectiveShowActivity = serverShowActivity ??
+          savedShowActivity ??
+          _profile?.showActivityStatus ??
+          true;
+
+      final bool effectiveReadReceipts = serverReadReceipts ??
+          savedReadReceipts ??
+          _profile?.sendReadReceipts ??
+          true;
+
+      final bool effectiveHideLikes = serverHideLikes ??
+          savedHideLikes ??
+          _profile?.hideMyLikes ??
+          false;
+
+      final bool effectiveIsPrivate = serverIsPrivate ??
+          savedIsPrivate ??
+          _profile?.isPrivate ??
+          false;
+
+      final bool effectiveShowDiscover = serverShowDiscover ??
+          savedShowDiscover ??
+          _profile?.showInDiscover ??
+          true;
+
+      final String effectiveMessagesFrom = serverMessagesFrom ??
+          savedMessagesFrom ??
+          _profile?.allowMessagesFrom ??
+          'everyone';
+
+      final String effectiveCommentsFrom = serverCommentsFrom ??
+          savedCommentsFrom ??
+          _profile?.allowCommentsFrom ??
+          'everyone';
+
+      final String effectiveProfileVisibility = serverProfileVisibility ??
+          savedProfileVisibility ??
+          _profile?.profileVisibility ??
+          'everyone';
+
+      final bool effectiveNotifyLike = serverNotifyLike ??
+          savedNotifyLike ??
+          _profile?.notifyOnLike ??
+          true;
+
+      final bool effectiveNotifyComment = serverNotifyComment ??
+          savedNotifyComment ??
+          _profile?.notifyOnComment ??
+          true;
+
+      final bool effectiveNotifyFollow = serverNotifyFollow ??
+          savedNotifyFollow ??
+          _profile?.notifyOnFollow ??
+          true;
+
+      final bool effectiveNotifyMessage = serverNotifyMessage ??
+          savedNotifyMessage ??
+          _profile?.notifyOnMessage ??
+          true;
+
+      final bool effectiveFollowRequests = serverFollowRequests ??
+          savedFollowRequests ??
+          _profile?.notifyOnFollowRequests ??
+          true;
+
+      final bool effectiveCommunityPosts = serverCommunityPosts ??
+          savedCommunityPosts ??
+          _profile?.notifyOnCommunityPosts ??
+          true;
+
+      final bool effectiveAnnouncements = serverAnnouncements ??
+          savedAnnouncements ??
+          _profile?.notifyOnAnnouncementsFeatures ??
+          true;
+
+      final bool effectiveModeration = serverModeration ??
+          savedModeration ??
+          _profile?.notifyOnSafetyModerationUpdates ??
+          true;
+
+      // Always update SharedPreferences with the resolved values
+      await prefs.setBool('privacy_show_activity_$userId', effectiveShowActivity);
+      await prefs.setBool('privacy_read_receipts_$userId', effectiveReadReceipts);
+      await prefs.setBool('privacy_hide_my_likes_$userId', effectiveHideLikes);
+      await prefs.setBool('privacy_is_private_$userId', effectiveIsPrivate);
+      await prefs.setBool('privacy_show_discover_$userId', effectiveShowDiscover);
+      await prefs.setString('privacy_allow_messages_$userId', effectiveMessagesFrom);
+      await prefs.setString('privacy_allow_comments_$userId', effectiveCommentsFrom);
+      await prefs.setString('privacy_visibility_$userId', effectiveProfileVisibility);
+
+      await prefs.setBool('notification_notify_like_$userId', effectiveNotifyLike);
+      await prefs.setBool('notification_notify_comment_$userId', effectiveNotifyComment);
+      await prefs.setBool('notification_notify_follow_$userId', effectiveNotifyFollow);
+      await prefs.setBool('notification_notify_message_$userId', effectiveNotifyMessage);
+      await prefs.setBool('notification_follow_requests_$userId', effectiveFollowRequests);
+      await prefs.setBool('notification_community_posts_$userId', effectiveCommunityPosts);
+      await prefs.setBool('notification_announcements_$userId', effectiveAnnouncements);
+      await prefs.setBool('notification_moderation_$userId', effectiveModeration);
+
+      if (_profile != null) {
+        _profile = _profile!.copyWith(
+          isPrivate: effectiveIsPrivate,
+          showInDiscover: effectiveShowDiscover,
+          allowMessagesFrom: effectiveMessagesFrom,
+          allowCommentsFrom: effectiveCommentsFrom,
+          hideMyLikes: effectiveHideLikes,
+          profileVisibility: effectiveProfileVisibility,
+          showActivityStatus: effectiveShowActivity,
+          sendReadReceipts: effectiveReadReceipts,
+          notifyOnLike: effectiveNotifyLike,
+          notifyOnComment: effectiveNotifyComment,
+          notifyOnFollow: effectiveNotifyFollow,
+          notifyOnMessage: effectiveNotifyMessage,
+          notifyOnFollowRequests: effectiveFollowRequests,
+          notifyOnCommunityPosts: effectiveCommunityPosts,
+          notifyOnAnnouncementsFeatures: effectiveAnnouncements,
+          notifyOnSafetyModerationUpdates: effectiveModeration,
+        );
+      }
+
+      final List<String>? savedIdentities = prefs.getStringList('user_identities_$userId');
+      if (savedIdentities != null && savedIdentities.isNotEmpty) {
+        _identities = savedIdentities;
+      }
+
+      onPrivacySettingsChanged?.call(
+        showActivityStatus: effectiveShowActivity,
+        sendReadReceipts: effectiveReadReceipts,
+      );
+
+      // Save hydrated profile back into CacheManager so cold launches have it
+      if (_profile != null) {
+        CacheManager.instance.put(
+          'profile_details_$userId',
+          _profile!.toJson(),
+          ttl: const Duration(days: 7),
+        );
+        AuthorProfileCache.set(
+          _profile!.id,
+          AuthorInfo(
+            id: _profile!.id,
+            username: _profile!.username ?? '',
+            displayName: _profile!.displayName ?? '',
+            avatarUrl: _profile!.avatarUrl,
+            hideMyLikes: _profile!.hideMyLikes,
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
   Future<void> _fetchProfileDetails(String userId) async {
     try {
       if (AppConfig.useMockApi) {
@@ -346,6 +723,7 @@ class ProfileProvider extends ChangeNotifier {
               CacheManager.instance.get('profile_details_$userId');
           if (cached is Map<String, dynamic>) {
             _profile = UserProfile.fromJson(cached);
+            await _hydrateLocalSettings(userId);
             notifyListeners();
           }
         }
@@ -354,75 +732,9 @@ class ProfileProvider extends ChangeNotifier {
         final dynamic data = await _client.get(ApiEndpoints.user(userId));
         debugPrint('📥 [ProfileProvider] Profile data received: $data');
         if (data is Map<String, dynamic>) {
-          CacheManager.instance.put(
-            'profile_details_$userId',
-            data,
-            ttl: const Duration(days: 7),
-          );
           _profile = UserProfile.fromJson(data);
-          if (_profile != null) {
-            AuthorProfileCache.set(
-              _profile!.id,
-              AuthorInfo(
-                id: _profile!.id,
-                username: _profile!.username ?? '',
-                displayName: _profile!.displayName ?? '',
-                avatarUrl: _profile!.avatarUrl,
-                hideMyLikes: _profile!.hideMyLikes,
-              ),
-            );
-          }
-          try {
-            SharedPreferences.getInstance().then((SharedPreferences prefs) {
-              final String? savedMessagesFrom =
-                  prefs.getString('privacy_allow_messages_$userId');
-              final bool? savedShowActivity =
-                  prefs.getBool('privacy_show_activity_$userId');
-              final bool? savedReadReceipts =
-                  prefs.getBool('privacy_read_receipts_$userId');
-              final bool? savedNotifyMessage =
-                  prefs.getBool('notification_notify_message_$userId');
-              final bool? savedCommunityPosts =
-                  prefs.getBool('notification_community_posts_$userId');
-              final bool? savedAnnouncements =
-                  prefs.getBool('notification_announcements_$userId');
-              final bool? savedModeration =
-                  prefs.getBool('notification_moderation_$userId');
-
-              if (data['showActivityStatus'] is bool) {
-                prefs.setBool('privacy_show_activity_$userId',
-                    data['showActivityStatus'] as bool);
-              }
-              if (data['sendReadReceipts'] is bool) {
-                prefs.setBool('privacy_read_receipts_$userId',
-                    data['sendReadReceipts'] as bool);
-              }
-              if (_profile != null) {
-                _profile = _profile!.copyWith(
-                  allowMessagesFrom:
-                      savedMessagesFrom ?? _profile!.allowMessagesFrom,
-                  showActivityStatus:
-                      savedShowActivity ?? _profile!.showActivityStatus,
-                  sendReadReceipts:
-                      savedReadReceipts ?? _profile!.sendReadReceipts,
-                  notifyOnMessage:
-                      savedNotifyMessage ?? _profile!.notifyOnMessage,
-                  notifyOnCommunityPosts:
-                      savedCommunityPosts ?? _profile!.notifyOnCommunityPosts,
-                  notifyOnAnnouncementsFeatures: savedAnnouncements ??
-                      _profile!.notifyOnAnnouncementsFeatures,
-                  notifyOnSafetyModerationUpdates: savedModeration ??
-                      _profile!.notifyOnSafetyModerationUpdates,
-                );
-              }
-              final List<String>? savedIdentities =
-                  prefs.getStringList('user_identities_$userId');
-              if (savedIdentities != null && savedIdentities.isNotEmpty) {
-                _identities = savedIdentities;
-              }
-              notifyListeners();
-            });
-          } catch (_) {}
+          await _hydrateLocalSettings(userId, serverData: data);
+          notifyListeners();
         }
       }
       _error = null;
@@ -693,6 +1005,7 @@ class ProfileProvider extends ChangeNotifier {
     if (srIndex != -1) {
       _savedReels[srIndex] = _savedReels[srIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
     }
+    PostInteractionRegistry.setLiked(id, isLiked, newCount: likesCount);
     notifyListeners();
   }
 
@@ -740,6 +1053,7 @@ class ProfileProvider extends ChangeNotifier {
     if (srIndex != -1) {
       _savedReels[srIndex] = _savedReels[srIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
     }
+    PostInteractionRegistry.setLiked(id, isLiked, newCount: likesCount);
     notifyListeners();
   }
 
@@ -769,6 +1083,7 @@ class ProfileProvider extends ChangeNotifier {
     if (lpIndex != -1) {
       _likedPosts[lpIndex] = _likedPosts[lpIndex].copyWith(isSaved: isSaved);
     }
+    PostInteractionRegistry.setSaved(id, isSaved);
     notifyListeners();
   }
 
@@ -798,6 +1113,7 @@ class ProfileProvider extends ChangeNotifier {
     if (lrIndex != -1) {
       _likedReels[lrIndex] = _likedReels[lrIndex].copyWith(isSaved: isSaved);
     }
+    PostInteractionRegistry.setSaved(id, isSaved);
     notifyListeners();
   }
 
@@ -821,9 +1137,12 @@ class ProfileProvider extends ChangeNotifier {
     return 0;
   }
 
+  void setCommentCount(String id, int count) => updatePostCommentCount(id, count);
+
   void updatePostCommentCount(String id, int count) {
     final int safeCount = count.clamp(0, 999999);
     _overrideCommentCounts[id] = safeCount;
+    CommentCountRegistry.set(id, safeCount);
     final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
     if (upIndex != -1) {
       _userPosts[upIndex] = _userPosts[upIndex].copyWith(commentsCount: safeCount);
@@ -952,24 +1271,55 @@ class ProfileProvider extends ChangeNotifier {
         }
       }
 
-      final String authorUsername =
-          post.authorName ?? _profile?.username ?? 'you';
+      final bool isOwnPost = (post.authorId != null &&
+              _cachedUserId != null &&
+              post.authorId == _cachedUserId) ||
+          (fallbackAuthorId != null &&
+              _cachedUserId != null &&
+              fallbackAuthorId == _cachedUserId);
+
+      final AuthorInfo? cachedAuthor = (post.authorId != null && post.authorId!.isNotEmpty)
+          ? AuthorProfileCache.get(post.authorId!)
+          : null;
+
+      final String authorUsername = post.authorName ??
+          (isOwnPost
+              ? (_profile?.username ?? 'you')
+              : (cachedAuthor?.username ?? 'user'));
       final String formattedUsername = authorUsername.startsWith('@')
           ? authorUsername
           : '@$authorUsername';
       final String avatar = (post.authorAvatar != null &&
               post.authorAvatar!.isNotEmpty)
           ? post.authorAvatar!
-          : ((_profile?.avatarUrl != null && _profile!.avatarUrl!.isNotEmpty)
-              ? _profile!.avatarUrl!
-              : AppImages.user1);
+          : (isOwnPost
+              ? ((_profile?.avatarUrl != null && _profile!.avatarUrl!.isNotEmpty)
+                  ? _profile!.avatarUrl!
+                  : AppImages.defaultAvatar)
+              : (cachedAuthor?.avatarUrl != null && cachedAuthor!.avatarUrl!.isNotEmpty
+                  ? cachedAuthor.avatarUrl!
+                  : AppImages.defaultAvatar));
+      final String? authorDisplayName = post.authorDisplayName ??
+          (isOwnPost ? _profile?.displayName : cachedAuthor?.displayName);
+
+      final int effectiveCommentsCount =
+          CommentCountRegistry.get(post.id) ??
+          _overrideCommentCounts[post.id] ??
+          post.commentsCount;
+
+      final bool isLiked =
+          markLiked || PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked);
+      final bool isSaved =
+          markSaved || PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved);
+      final int effectiveLikesCount =
+          PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
 
       if (isVideo) {
         userReelsList.add(
           ReelItemModel(
             id: post.id,
             authorId: post.authorId ?? fallbackAuthorId ?? _cachedUserId,
-            authorDisplayName: post.authorDisplayName,
+            authorDisplayName: authorDisplayName,
             username: formattedUsername,
             pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
                 ? _formatTime(post.createdAt)
@@ -979,12 +1329,12 @@ class ProfileProvider extends ChangeNotifier {
             videoUrl: mediaUrl,
             thumbnailUrl: thumbnailUrl,
             caption: post.body.isNotEmpty ? post.body : post.caption,
-            likesCount: post.likesCount,
+            likesCount: effectiveLikesCount,
             hasLikeCount: post.hasLikeCount,
-            commentsCount: post.commentsCount,
+            commentsCount: effectiveCommentsCount,
             viewsCount: post.viewsCount,
-            isLiked: markLiked || post.isLiked || isPostLiked(post.id),
-            isSaved: markSaved || post.isSaved || isPostSaved(post.id),
+            isLiked: isLiked,
+            isSaved: isSaved,
             allowComments: post.allowComments,
             allowDownloads: post.allowDownloads,
             hideLikes: post.hideLikes,
@@ -1002,19 +1352,19 @@ class ProfileProvider extends ChangeNotifier {
           PostItemModel(
             id: post.id,
             authorId: post.authorId ?? fallbackAuthorId ?? _cachedUserId,
-            authorDisplayName: post.authorDisplayName,
+            authorDisplayName: authorDisplayName,
             username: formattedUsername,
             pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
                 ? _formatTime(post.createdAt)
                 : 'just now',
             avatarAsset: avatar,
             content: post.body.isNotEmpty ? post.body : post.caption,
-            likesCount: post.likesCount,
+            likesCount: effectiveLikesCount,
             hasLikeCount: post.hasLikeCount,
-            commentsCount: post.commentsCount,
+            commentsCount: effectiveCommentsCount,
             viewsCount: post.viewsCount,
-            isLiked: markLiked || post.isLiked || isPostLiked(post.id),
-            isSaved: markSaved || post.isSaved || isPostSaved(post.id),
+            isLiked: isLiked,
+            isSaved: isSaved,
             allowComments: post.allowComments,
             allowDownloads: post.allowDownloads,
             hideLikes: post.hideLikes,
@@ -1205,71 +1555,52 @@ class ProfileProvider extends ChangeNotifier {
     if (interests != null) payload['interests'] = interests;
     if (isPrivate != null) payload['isPrivate'] = isPrivate;
     if (showInDiscover != null) payload['showInDiscover'] = showInDiscover;
+    // Privacy settings (Manage Account)
+    if (isPrivate != null) payload['isPrivate'] = isPrivate;
+    if (showInDiscover != null) payload['showInDiscover'] = showInDiscover;
     if (allowMessagesFrom != null) {
-      final String norm = _normalizePrivacy(allowMessagesFrom);
-      payload['allowMessagesFrom'] = norm;
-      payload['allow_messages_from'] = norm;
-      payload['whoCanMessage'] = norm;
-      payload['who_can_message'] = norm;
+      payload['allowMessagesFrom'] = _normalizePrivacy(allowMessagesFrom);
     }
     if (allowCommentsFrom != null) {
-      final String norm = _normalizePrivacy(allowCommentsFrom);
-      payload['allowCommentsFrom'] = norm;
-      payload['allow_comments_from'] = norm;
-      payload['whoCanComment'] = norm;
-      payload['who_can_comment'] = norm;
+      payload['allowCommentsFrom'] = _normalizePrivacy(allowCommentsFrom);
     }
     if (hideMyLikes != null) {
       payload['hideMyLikes'] = hideMyLikes;
-      payload['hide_my_likes'] = hideMyLikes;
     }
     if (profileVisibility != null) {
-      final String norm = _normalizePrivacy(profileVisibility);
-      payload['profileVisibility'] = norm;
-      payload['profile_visibility'] = norm;
+      payload['profileVisibility'] = _normalizePrivacy(profileVisibility);
     }
     if (showActivityStatus != null) {
       payload['showActivityStatus'] = showActivityStatus;
-      payload['show_activity_status'] = showActivityStatus;
     }
     if (sendReadReceipts != null) {
       payload['sendReadReceipts'] = sendReadReceipts;
-      payload['send_read_receipts'] = sendReadReceipts;
     }
+
+    // Notification settings (Notifications Screen)
     if (notifyOnLike != null) {
       payload['notifyOnLike'] = notifyOnLike;
-      payload['notify_on_like'] = notifyOnLike;
     }
     if (notifyOnComment != null) {
       payload['notifyOnComment'] = notifyOnComment;
-      payload['notify_on_comment'] = notifyOnComment;
     }
     if (notifyOnFollow != null) {
       payload['notifyOnFollow'] = notifyOnFollow;
-      payload['notify_on_follow'] = notifyOnFollow;
     }
     if (notifyOnMessage != null) {
       payload['notifyOnMessage'] = notifyOnMessage;
-      payload['notify_on_message'] = notifyOnMessage;
-      payload['directMessages'] = notifyOnMessage;
-      payload['direct_messages'] = notifyOnMessage;
     }
     if (notifyOnFollowRequests != null) {
       payload['notifyOnFollowRequests'] = notifyOnFollowRequests;
-      payload['notify_on_follow_requests'] = notifyOnFollowRequests;
     }
     if (notifyOnCommunityPosts != null) {
       payload['notifyOnCommunityPosts'] = notifyOnCommunityPosts;
-      payload['notify_on_community_posts'] = notifyOnCommunityPosts;
     }
     if (notifyOnAnnouncementsFeatures != null) {
       payload['notifyOnAnnouncementsFeatures'] = notifyOnAnnouncementsFeatures;
-      payload['notify_on_announcements_features'] = notifyOnAnnouncementsFeatures;
     }
     if (notifyOnSafetyModerationUpdates != null) {
       payload['notifyOnSafetyModerationUpdates'] =
-          notifyOnSafetyModerationUpdates;
-      payload['notify_on_safety_moderation_updates'] =
           notifyOnSafetyModerationUpdates;
     }
 
@@ -1300,13 +1631,34 @@ class ProfileProvider extends ChangeNotifier {
       notifyOnSafetyModerationUpdates: notifyOnSafetyModerationUpdates,
     );
     _profile = optimistic;
+    if (showActivityStatus != null || sendReadReceipts != null) {
+      onPrivacySettingsChanged?.call(
+        showActivityStatus: showActivityStatus ?? _profile?.showActivityStatus,
+        sendReadReceipts: sendReadReceipts ?? _profile?.sendReadReceipts,
+      );
+    }
     notifyListeners();
 
-    // 2. Persist to SharedPreferences so local state never reverts
+    // 2. Persist to SharedPreferences & CacheManager so local state never reverts
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       if (allowMessagesFrom != null) {
         await prefs.setString('privacy_allow_messages_$userId', _normalizePrivacy(allowMessagesFrom));
+      }
+      if (allowCommentsFrom != null) {
+        await prefs.setString('privacy_allow_comments_$userId', _normalizePrivacy(allowCommentsFrom));
+      }
+      if (profileVisibility != null) {
+        await prefs.setString('privacy_visibility_$userId', _normalizePrivacy(profileVisibility));
+      }
+      if (hideMyLikes != null) {
+        await prefs.setBool('privacy_hide_my_likes_$userId', hideMyLikes);
+      }
+      if (isPrivate != null) {
+        await prefs.setBool('privacy_is_private_$userId', isPrivate);
+      }
+      if (showInDiscover != null) {
+        await prefs.setBool('privacy_show_discover_$userId', showInDiscover);
       }
       if (showActivityStatus != null) {
         await prefs.setBool('privacy_show_activity_$userId', showActivityStatus);
@@ -1314,8 +1666,20 @@ class ProfileProvider extends ChangeNotifier {
       if (sendReadReceipts != null) {
         await prefs.setBool('privacy_read_receipts_$userId', sendReadReceipts);
       }
+      if (notifyOnLike != null) {
+        await prefs.setBool('notification_notify_like_$userId', notifyOnLike);
+      }
+      if (notifyOnComment != null) {
+        await prefs.setBool('notification_notify_comment_$userId', notifyOnComment);
+      }
+      if (notifyOnFollow != null) {
+        await prefs.setBool('notification_notify_follow_$userId', notifyOnFollow);
+      }
       if (notifyOnMessage != null) {
         await prefs.setBool('notification_notify_message_$userId', notifyOnMessage);
+      }
+      if (notifyOnFollowRequests != null) {
+        await prefs.setBool('notification_follow_requests_$userId', notifyOnFollowRequests);
       }
       if (notifyOnCommunityPosts != null) {
         await prefs.setBool('notification_community_posts_$userId', notifyOnCommunityPosts);
@@ -1327,6 +1691,24 @@ class ProfileProvider extends ChangeNotifier {
         await prefs.setBool('notification_moderation_$userId', notifyOnSafetyModerationUpdates);
       }
     } catch (_) {}
+
+    if (_profile != null) {
+      CacheManager.instance.put(
+        'profile_details_$userId',
+        _profile!.toJson(),
+        ttl: const Duration(days: 7),
+      );
+      AuthorProfileCache.set(
+        _profile!.id,
+        AuthorInfo(
+          id: _profile!.id,
+          username: _profile!.username ?? '',
+          displayName: _profile!.displayName ?? '',
+          avatarUrl: _profile!.avatarUrl,
+          hideMyLikes: _profile!.hideMyLikes,
+        ),
+      );
+    }
 
     if (payload.isEmpty) {
       _isBusy = false;
@@ -1347,6 +1729,7 @@ class ProfileProvider extends ChangeNotifier {
           final UserProfile updated =
               UserProfile.fromJson(data);
           _profile = optimistic.merge(updated);
+          await _hydrateLocalSettings(userId, serverData: data);
         }
       } else {
         _profile = optimistic;
@@ -1368,12 +1751,13 @@ class ProfileProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _error = e.message;
+      // Keep optimistic state locally so user preferences persist
       notifyListeners();
-      return false;
+      return true;
     } catch (e) {
       _error = 'Failed to update profile.';
       notifyListeners();
-      return false;
+      return true;
     } finally {
       _isBusy = false;
       notifyListeners();

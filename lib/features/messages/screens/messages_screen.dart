@@ -8,6 +8,8 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../auth/auth_provider.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../models/message_models.dart';
 import '../provider/messages_provider.dart';
 import '../widgets/conversation_tile.dart';
@@ -37,6 +39,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final MessagesProvider provider = context.read<MessagesProvider>();
+        final ProfileProvider profile = context.read<ProfileProvider>();
+        final String? uid = context.read<AuthProvider>().userId;
+        if (uid != null && uid.isNotEmpty) {
+          profile.fetchProfile(uid).catchError((_) {});
+        }
+        provider.updatePrivacySettings(
+          showActivityStatus: profile.showActivityStatus,
+          sendReadReceipts: profile.sendReadReceipts,
+        );
         provider.setSearchQuery('');
         provider.loadConversations();
         provider.loadMessageRequests();

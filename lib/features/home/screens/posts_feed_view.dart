@@ -11,6 +11,7 @@ import '../widgets/comments_bottom_sheet.dart';
 import '../widgets/filter_communities_bottom_sheet.dart';
 import '../widgets/home_empty_state_view.dart';
 import '../widgets/post_feed_card.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 
 class PostsFeedView extends StatelessWidget {
   const PostsFeedView({
@@ -77,17 +78,19 @@ class PostsFeedView extends StatelessWidget {
         return CommentsBottomSheet(
           postId: postId,
           postAuthorId: postAuthorId,
-          totalComments: totalComments,
+          totalComments: CommentCountRegistry.getOr(postId, totalComments),
           allowComments: allowComments,
           allowCommentsFrom: allowCommentsFrom,
           authorUsername: authorUsername,
           onCommentAdded: () {
+            CommentCountRegistry.increment(postId);
             context.read<HomeFeedProvider>().incrementCommentCount(postId);
             try {
               context.read<ProfileProvider>().incrementCommentCount(postId);
             } catch (_) {}
           },
           onCommentDeleted: (int deletedCount, int remainingCount) {
+            CommentCountRegistry.set(postId, remainingCount);
             context
                 .read<HomeFeedProvider>()
                 .setCommentCount(postId, remainingCount);
@@ -98,6 +101,7 @@ class PostsFeedView extends StatelessWidget {
             } catch (_) {}
           },
           onCommentCountChanged: (int count) {
+            CommentCountRegistry.set(postId, count);
             context.read<HomeFeedProvider>().setCommentCount(postId, count);
             try {
               context

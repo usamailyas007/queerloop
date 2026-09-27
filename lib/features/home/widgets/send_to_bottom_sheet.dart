@@ -138,7 +138,11 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
           }).toList();
 
     final String shareTargetId = widget.reel?.id ?? widget.postId ?? '';
-    final String postAuthorDisplay = widget.reel?.username ?? widget.postAuthor ?? 'Creator';
+    final String rawAuthor =
+        widget.reel?.username ?? widget.postAuthor ?? 'Creator';
+    final String cleanAuthor = rawAuthor.replaceAll(RegExp(r'^@+'), '').trim();
+    final String postAuthorDisplay =
+        cleanAuthor.isNotEmpty ? cleanAuthor : 'Creator';
     final String postDescDisplay = widget.reel != null
         ? (widget.reel!.caption.isNotEmpty ? widget.reel!.caption : 'Reel')
         : (widget.postCaption ?? 'Post');

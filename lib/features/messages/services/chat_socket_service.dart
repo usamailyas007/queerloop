@@ -487,19 +487,7 @@ class ChatSocketService {
           .setTransports(<String>['websocket'])
           .disableAutoConnect()
           .enableReconnection()
-          .setReconnectionAttempts(20)
-          .setReconnectionDelay(1000)
-          .setReconnectionDelayMax(5000)
-          .enableForceNew()
-          .setAuth(<String, dynamic>{
-            'token': rawToken,
-            'accessToken': rawToken,
-          })
-          .setQuery(<String, dynamic>{
-            'token': rawToken,
-            'accessToken': rawToken,
-          })
-          .setExtraHeaders(<String, String>{
+                    .setExtraHeaders(<String, String>{
             'Authorization': bearerToken,
             'authorization': bearerToken,
             'token': rawToken,
@@ -516,7 +504,7 @@ class ChatSocketService {
   }
 
   void _logEmit(String event, dynamic payload) {
-    debugPrint('''
+    print('''
 ╔════════════════════════════════════════════════════════════════
 ║ 📤 [SOCKET EMIT]
 ║ Event:   $event
@@ -525,7 +513,7 @@ class ChatSocketService {
   }
 
   void _logInbound(String event, dynamic data) {
-    debugPrint('''
+    print('''
 ╔════════════════════════════════════════════════════════════════
 ║ 📥 [SOCKET RESPONSE / INBOUND EVENT]
 ║ Event:    $event
@@ -540,41 +528,9 @@ class ChatSocketService {
     try {
       _socket!.onAny((dynamic event, dynamic data) {
         final String ev = event.toString();
-        const Set<String> handledEvents = <String>{
-          'message:new',
-          'message_read',
-          'message:read',
-          'reaction_add',
-          'reaction:add',
-          'reaction_remove',
-          'reaction:remove',
-          'unsend_message',
-          'message:unsend',
-          'message_unsend',
-          'delete_message',
-          'message:delete',
-          'message_deleted',
-          'message:deleted',
-          'user_presence',
-          'user:presence',
-          'presence',
-          'presence:update',
-          'user_online',
-          'user:online',
-          'user_offline',
-          'user:offline',
-          'conversation:typing',
-          'typing_indicator',
-          'typing:indicator',
-          'typing',
-          'user_typing',
-          'user:typing',
-          'typing:start',
-          'typing:stop',
-        };
-        if (!handledEvents.contains(ev)) {
-          _logInbound(ev, data);
-        }
+        // Ignore noisy presence/typing spam, but log all message/reply/error events
+        if (ev.contains('presence') || ev.contains('typing')) return;
+        _logInbound(ev, data);
       });
     } catch (_) {}
 
@@ -659,17 +615,27 @@ class ChatSocketService {
     // ── Backend Inbound Events ────────────────────────────────────────────────
 
     // 1. message:new -> { conversationId, messageId, senderId, body }
-    _socket!.on('message:new', (dynamic data) {
-      _logInbound('message:new', data);
+    // 1. message:new / new_message -> { conversationId, messageId, senderId, body, ... }
+    void handleNewMessage(dynamic data, String eventName) {
+      debugPrint('''
+════════════════════════════════════════════════════════════════
+📥 [SOCKET INBOUND $eventName]
+Data: $data
+════════════════════════════════════════════════════════════════''');
+      _logInbound(eventName, data);
       try {
         final SocketNewMessageEvent event = SocketNewMessageEvent.fromJson(data);
         if (event.conversationId.isNotEmpty) {
           _newMessageController.add(event);
         }
       } catch (e) {
-        debugPrint('⚠️ [ChatSocketService] Error parsing "message:new": $e');
+        debugPrint('⚠️ [ChatSocketService] Error parsing "$eventName": $e');
       }
-    });
+    }
+    _socket!.on('message:new', (dynamic data) => handleNewMessage(data, 'message:new'));
+    _socket!.on('new_message', (dynamic data) => handleNewMessage(data, 'new_message'));
+    _socket!.on('message', (dynamic data) => handleNewMessage(data, 'message'));
+    _socket!.on('message:created', (dynamic data) => handleNewMessage(data, 'message:created'));
 
     // 2. message_read / message:read -> { conversationId, messageId, readerId }
     void handleMessageRead(dynamic data, String eventName) {
@@ -1003,6 +969,9 @@ class ChatSocketService {
     String? mediaRef,
     String? mediaUrl,
     String? sharedPostId,
+    String? replyToId,
+    String? replyToText,
+    String? replyToSender,
   }) {
     final String cleanId = cleanConversationId(conversationId);
     if (cleanId.isEmpty) return;
@@ -1028,10 +997,39 @@ class ChatSocketService {
       'mediaUrl': null,
       if (sharedPostId != null && sharedPostId.isNotEmpty)
         'sharedPostId': sharedPostId,
+      if (replyToId != null && replyToId.trim().isNotEmpty) ...<String, dynamic>{
+        'replyToMessageId': replyToId.trim(),
+        'replyToId': replyToId.trim(),
+        'replyTo': <String, dynamic>{
+          'id': replyToId.trim(),
+          if (replyToText != null && replyToText.trim().isNotEmpty)
+            'body': replyToText.trim(),
+          if (replyToText != null && replyToText.trim().isNotEmpty)
+            'text': replyToText.trim(),
+          if (replyToSender != null && replyToSender.trim().isNotEmpty)
+            'sender': replyToSender.trim(),
+        },
+      },
     };
 
+    debugPrint('''
+════════════════════════════════════════════════════════════════
+📤 [SOCKET EMIT send_message]
+Payload: ${jsonEncode(payload)}
+════════════════════════════════════════════════════════════════''');
+
     _logEmit('send_message', payload);
-    _socket?.emit('send_message', payload);
+    try {
+      _socket?.emitWithAck('send_message', payload, ack: (dynamic ackData) {
+        debugPrint('''
+════════════════════════════════════════════════════════════════
+📥 [SOCKET ACK RESPONSE for send_message]
+Ack Data: $ackData
+════════════════════════════════════════════════════════════════''');
+      });
+    } catch (_) {
+      _socket?.emit('send_message', payload);
+    }
   }
 
   /// 4. message_read

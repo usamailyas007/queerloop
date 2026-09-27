@@ -21,17 +21,6 @@ class PrivacySettingsScreen extends StatefulWidget {
 }
 
 class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
-  late bool _privateAccount;
-  late bool _appearInExplore;
-  late bool _hideLikes;
-
-  bool _showActivityStatus = true;
-  bool _sendReadReceipts = true;
-
-  late String _whoCanMessage;
-  late String _whoCanComment;
-  late String _profileVisibility;
-
   @override
   void initState() {
     super.initState();
@@ -40,16 +29,11 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     ReelVideoPreloader.instance.muteAll();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ReelVideoPreloader.instance.pauseAll();
+      final String? uid = context.read<AuthProvider>().userId;
+      if (uid != null && uid.isNotEmpty) {
+        context.read<ProfileProvider>().fetchProfile(uid).catchError((_) {});
+      }
     });
-    final ProfileProvider provider = context.read<ProfileProvider>();
-    _privateAccount = provider.isPrivate;
-    _appearInExplore = provider.showInDiscover;
-    _hideLikes = provider.hideMyLikes;
-    _whoCanMessage = provider.allowMessagesFromLabel;
-    _whoCanComment = provider.allowCommentsFromLabel;
-    _profileVisibility = provider.profileVisibilityLabel;
-    _showActivityStatus = provider.showActivityStatus;
-    _sendReadReceipts = provider.sendReadReceipts;
   }
 
   void _syncSetting({
@@ -194,6 +178,16 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ProfileProvider provider = context.watch<ProfileProvider>();
+    final bool privateAccount = provider.isPrivate;
+    final bool appearInExplore = provider.showInDiscover;
+    final bool hideLikes = provider.hideMyLikes;
+    final String whoCanMessage = provider.allowMessagesFromLabel;
+    final String whoCanComment = provider.allowCommentsFromLabel;
+    final String profileVisibility = provider.profileVisibilityLabel;
+    final bool showActivityStatus = provider.showActivityStatus;
+    final bool sendReadReceipts = provider.sendReadReceipts;
+
     return Scaffold(
       backgroundColor: context.themeBackground,
       body: SafeArea(
@@ -268,29 +262,20 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                   _buildCardToggle(
                     title: 'Private account',
                     subtitle: 'Followers need approval',
-                    value: _privateAccount,
-                    onChanged: (bool val) {
-                      setState(() => _privateAccount = val);
-                      _syncSetting(isPrivate: val);
-                    },
+                    value: privateAccount,
+                    onChanged: (bool val) => _syncSetting(isPrivate: val),
                   ),
                   _buildCardToggle(
                     title: 'Appear in Explore',
                     subtitle: 'Search and suggestions',
-                    value: _appearInExplore,
-                    onChanged: (bool val) {
-                      setState(() => _appearInExplore = val);
-                      _syncSetting(showInDiscover: val);
-                    },
+                    value: appearInExplore,
+                    onChanged: (bool val) => _syncSetting(showInDiscover: val),
                   ),
                   _buildCardToggle(
                     title: 'Hide my likes',
                     subtitle: 'Nobody sees what you liked',
-                    value: _hideLikes,
-                    onChanged: (bool val) {
-                      setState(() => _hideLikes = val);
-                      _syncSetting(hideMyLikes: val);
-                    },
+                    value: hideLikes,
+                    onChanged: (bool val) => _syncSetting(hideMyLikes: val),
                   ),
 
                   const SizedBox(height: AppSpacing.lg),
@@ -310,54 +295,51 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
 
                   _buildCardSelector(
                     title: 'Who can message me',
-                    subtitle: _whoCanMessage,
+                    subtitle: whoCanMessage,
                     onTap: () async {
                       final dynamic res = await Navigator.push<dynamic>(
                         context,
                         MaterialPageRoute<dynamic>(
                           builder: (_) => AllowMessagesFromScreen(
-                            initialSelection: _whoCanMessage,
+                            initialSelection: whoCanMessage,
                           ),
                         ),
                       );
                       if (res is String && mounted) {
-                        setState(() => _whoCanMessage = res);
                         _syncSetting(allowMessagesFrom: res);
                       }
                     },
                   ),
                   _buildCardSelector(
                     title: 'Who can comment',
-                    subtitle: _whoCanComment,
+                    subtitle: whoCanComment,
                     onTap: () async {
                       final String? res = await Navigator.push<String>(
                         context,
                         MaterialPageRoute<String>(
                           builder: (_) => WhoCanCommentScreen(
-                            initialSelection: _whoCanComment,
+                            initialSelection: whoCanComment,
                           ),
                         ),
                       );
                       if (res != null && mounted) {
-                        setState(() => _whoCanComment = res);
                         _syncSetting(allowCommentsFrom: res);
                       }
                     },
                   ),
                   _buildCardSelector(
                     title: 'Profile Visibility',
-                    subtitle: _profileVisibility,
+                    subtitle: profileVisibility,
                     onTap: () async {
                       final dynamic res = await Navigator.push<dynamic>(
                         context,
                         MaterialPageRoute<dynamic>(
                           builder: (_) => ProfileVisibilityScreen(
-                            initialSelection: _profileVisibility,
+                            initialSelection: profileVisibility,
                           ),
                         ),
                       );
                       if (res is String && mounted) {
-                        setState(() => _profileVisibility = res);
                         _syncSetting(profileVisibility: res);
                       }
                     },
@@ -381,20 +363,16 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                   _buildCardToggle(
                     title: 'Show activity status',
                     subtitle: "Lets people you follow see when you're active",
-                    value: _showActivityStatus,
-                    onChanged: (bool val) {
-                      setState(() => _showActivityStatus = val);
-                      _syncSetting(showActivityStatus: val);
-                    },
+                    value: showActivityStatus,
+                    onChanged: (bool val) =>
+                        _syncSetting(showActivityStatus: val),
                   ),
                   _buildCardToggle(
                     title: 'Send read receipts',
                     subtitle: 'Shows "Read" under messages you\'ve opened',
-                    value: _sendReadReceipts,
-                    onChanged: (bool val) {
-                      setState(() => _sendReadReceipts = val);
-                      _syncSetting(sendReadReceipts: val);
-                    },
+                    value: sendReadReceipts,
+                    onChanged: (bool val) =>
+                        _syncSetting(sendReadReceipts: val),
                   ),
 
                   const SizedBox(height: AppSpacing.xl),

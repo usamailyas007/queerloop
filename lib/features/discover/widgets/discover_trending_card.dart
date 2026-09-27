@@ -55,24 +55,12 @@ class DiscoverTrendingCard extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    item.hashtag,
-                    style: AppTextStyles.titleSmall.copyWith(
-                      color: context.themeTextPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.postsCount,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.themeTextMuted,
-                    ),
-                  ),
-                ],
+              child: Text(
+                item.hashtag,
+                style: AppTextStyles.titleSmall.copyWith(
+                  color: context.themeTextPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
             ClipRRect(

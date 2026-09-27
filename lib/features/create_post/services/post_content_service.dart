@@ -252,7 +252,14 @@ class PostContentService {
         debugPrint('📡 [FeedAPI] Authenticated GET ${ApiEndpoints.posts} failed, falling back to no-auth: $authErr');
         response = await _client.getNoAuth(ApiEndpoints.posts);
       }
-      final List<PostResponseModel> posts = _parsePostsList(response);
+      final dynamic resToLog = response;
+      debugPrint('📦 [FeedPosts] RAW type: ${resToLog.runtimeType}');
+      if (resToLog is Map) {
+        debugPrint('📦 [FeedPosts] Top keys: ${resToLog.keys.toList()}');
+      } else if (resToLog is List) {
+        debugPrint('📦 [FeedPosts] List length: ${resToLog.length}');
+      }
+      final List<PostResponseModel> posts = _parsePostsList(response, tag: 'FeedPosts');
       debugPrint('📡 [FeedAPI] GET ${ApiEndpoints.posts} returned ${posts.length} parsed items');
       return posts;
     }
@@ -293,7 +300,8 @@ class PostContentService {
     try {
       final dynamic response =
           await _client.getNoAuth(ApiEndpoints.trendingPosts);
-      return _parsePostsList(response);
+      debugPrint('📦 [TrendingPosts] RAW type: ${response.runtimeType}');
+      return _parsePostsList(response, tag: 'TrendingPosts');
     } catch (e) {
       debugPrint('⚠️ [PostContent] Failed to fetch trending posts (/posts/trending): $e');
       return const <PostResponseModel>[];
@@ -316,7 +324,22 @@ class PostContentService {
         ApiEndpoints.feedForYou,
         useCache: false,
       );
-      return _parsePostsList(response);
+      // ── DEBUG: Print raw For You feed response ──────────────────────────
+      debugPrint('📦 [ForYouFeed] RAW response type: ${response.runtimeType}');
+      if (response is Map) {
+        debugPrint('📦 [ForYouFeed] Top-level keys: ${response.keys.toList()}');
+        final dynamic data = response['data'];
+        if (data is Map) {
+          debugPrint('📦 [ForYouFeed] data keys: ${data.keys.toList()}');
+        } else if (data is List) {
+          debugPrint('📦 [ForYouFeed] data is List, length: ${data.length}');
+        }
+      } else if (response is List) {
+        debugPrint('📦 [ForYouFeed] response is List, length: ${response.length}');
+      }
+      // ───────────────────────────────────────────────────────────────────
+      final List<PostResponseModel> posts = _parsePostsList(response, tag: 'ForYouFeed');
+      return posts;
     } catch (e) {
       debugPrint('⚠️ [PostContent] Failed to fetch for-you feed: $e');
       rethrow;
@@ -334,7 +357,15 @@ class PostContentService {
     try {
       final dynamic response =
           await _client.get(ApiEndpoints.feedFollowing, useCache: false);
-      return _parsePostsList(response);
+      // ── DEBUG: Print raw Following feed response ────────────────────────
+      debugPrint('📦 [FollowingFeed] RAW type: ${response.runtimeType}');
+      if (response is Map) {
+        debugPrint('📦 [FollowingFeed] keys: ${response.keys.toList()}');
+      } else if (response is List) {
+        debugPrint('📦 [FollowingFeed] list length: ${response.length}');
+      }
+      // ───────────────────────────────────────────────────────────────────
+      return _parsePostsList(response, tag: 'FollowingFeed');
     } catch (e) {
       debugPrint('⚠️ [PostContent] Failed to fetch following feed: $e');
       return const <PostResponseModel>[];
@@ -360,7 +391,7 @@ class PostContentService {
     }
   }
 
-  List<PostResponseModel> _parsePostsList(dynamic response) {
+  List<PostResponseModel> _parsePostsList(dynamic response, {String tag = 'Posts'}) {
     List<dynamic> rawList = <dynamic>[];
     if (response is List) {
       rawList = response;
@@ -410,6 +441,10 @@ class PostContentService {
         rawList = response['content'] as List<dynamic>;
       }
     }
+
+    // ── DEBUG: Summary of parsed items ──────────────────────────────────────
+    debugPrint('📋 [$tag] Parsing ${rawList.length} raw items from response');
+
     final List<PostResponseModel> result = <PostResponseModel>[];
     for (final dynamic item in rawList) {
       if (item is String && item.trim().isNotEmpty) {
@@ -434,12 +469,25 @@ class PostContentService {
                   (dynamic k, dynamic v) => MapEntry<String, dynamic>(k.toString(), v),
                 )
               : rawMap;
-          result.add(PostResponseModel.fromJson(typed));
+          final PostResponseModel parsed = PostResponseModel.fromJson(typed);
+          result.add(parsed);
+          // ── DEBUG: Print each parsed post ──────────────────────────────
+          debugPrint(
+            '  📌 [$tag] id=${parsed.id} '
+            'type=${parsed.type} '
+            'likesCount=${parsed.likesCount} '
+            'isLiked=${parsed.isLiked} '
+            'isSaved=${parsed.isSaved} '
+            'hasLikeCount=${parsed.hasLikeCount} '
+            'commentsCount=${parsed.commentsCount} '
+            'body="${parsed.body.length > 30 ? parsed.body.substring(0, 30) : parsed.body}"',
+          );
         } catch (e) {
           debugPrint('⚠️ [PostContent] Error parsing post item: $e');
         }
       }
     }
+    debugPrint('✅ [$tag] Parsed ${result.length} valid posts');
     return result;
   }
 
@@ -458,14 +506,28 @@ class PostContentService {
   // POST /posts/:id/like (Content Service, Port 3013)
   Future<void> likePost(String postId) async {
     if (AppConfig.useMockApi) return;
-    await _client.post(ApiEndpoints.postLike(postId));
+    debugPrint('❤️ [PostContent] likePost($postId)');
+    try {
+      await _client.post(ApiEndpoints.postLike(postId));
+      debugPrint('✅ [PostContent] likePost($postId) SUCCESS');
+    } catch (e) {
+      debugPrint('❌ [PostContent] likePost($postId) FAILED: $e');
+      rethrow;
+    }
   }
 
   // ── Unlike Post ───────────────────────────────────────────────────────────
   // DELETE /posts/:id/like (Content Service, Port 3013)
   Future<void> unlikePost(String postId) async {
     if (AppConfig.useMockApi) return;
-    await _client.delete(ApiEndpoints.postLike(postId));
+    debugPrint('💔 [PostContent] unlikePost($postId)');
+    try {
+      await _client.delete(ApiEndpoints.postLike(postId));
+      debugPrint('✅ [PostContent] unlikePost($postId) SUCCESS');
+    } catch (e) {
+      debugPrint('❌ [PostContent] unlikePost($postId) FAILED: $e');
+      rethrow;
+    }
   }
 
   // ── Save Post ─────────────────────────────────────────────────────────────
@@ -527,6 +589,7 @@ class PostContentService {
     if (AppConfig.useMockApi) return const <dynamic>[];
     final dynamic response =
         await _client.get(ApiEndpoints.postComments(postId), useCache: false);
+    debugPrint('=== [COMMENTS API RESPONSE] postId: $postId ===\n$response');
     if (response is List) return response;
     if (response is Map<String, dynamic>) {
       if (response['data'] is List) return response['data'] as List<dynamic>;
@@ -644,7 +707,8 @@ class PostContentService {
     try {
       final dynamic response =
           await _client.get(ApiEndpoints.userLikes, useCache: false);
-      return _parsePostsList(response);
+      debugPrint('📦 [UserLikes] RAW type: ${response.runtimeType}');
+      return _parsePostsList(response, tag: 'UserLikes');
     } catch (e) {
       debugPrint('⚠️ [PostContent] Failed to fetch liked posts: $e');
       return const <PostResponseModel>[];
@@ -658,7 +722,8 @@ class PostContentService {
     try {
       final dynamic response =
           await _client.get(ApiEndpoints.userSaved, useCache: false);
-      return _parsePostsList(response);
+      debugPrint('📦 [UserSaved] RAW type: ${response.runtimeType}');
+      return _parsePostsList(response, tag: 'UserSaved');
     } catch (e) {
       debugPrint('⚠️ [PostContent] Failed to fetch saved posts: $e');
       return const <PostResponseModel>[];

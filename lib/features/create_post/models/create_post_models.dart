@@ -3,6 +3,7 @@ import 'package:photo_manager/photo_manager.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/cache/cache_manager.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 
 class AuthorInfo {
   const AuthorInfo({
@@ -748,7 +749,7 @@ class PostResponseModel {
       }
     }
 
-    return PostResponseModel(
+    final PostResponseModel post = PostResponseModel(
       id: (map['id'] ?? map['_id'] ?? '').toString(),
       caption: (map['body'] ??
               map['caption'] ??
@@ -817,17 +818,17 @@ class PostResponseModel {
             : int.tryParse(rawViews?.toString() ?? '0') ?? 0;
       }(),
       isLiked: () {
-        final dynamic raw = map['isLiked'] ??
+        final dynamic raw = map['likedByMe'] ??
+            map['liked_by_me'] ??
+            map['isLikedByMe'] ??
+            map['is_liked_by_me'] ??
+            map['isLiked'] ??
             map['is_liked'] ??
             map['liked'] ??
             map['hasLiked'] ??
             map['has_liked'] ??
             map['userLiked'] ??
             map['user_liked'] ??
-            map['likedByMe'] ??
-            map['liked_by_me'] ??
-            map['isLikedByMe'] ??
-            map['is_liked_by_me'] ??
             (map['viewer'] is Map
                 ? (map['viewer']['isLiked'] ?? map['viewer']['liked'])
                 : null) ??
@@ -837,17 +838,17 @@ class PostResponseModel {
         return raw == true || raw == 1 || raw == 'true';
       }(),
       isSaved: () {
-        final dynamic raw = map['isSaved'] ??
+        final dynamic raw = map['savedByMe'] ??
+            map['saved_by_me'] ??
+            map['isSavedByMe'] ??
+            map['is_saved_by_me'] ??
+            map['isSaved'] ??
             map['is_saved'] ??
             map['saved'] ??
             map['hasSaved'] ??
             map['has_saved'] ??
             map['userSaved'] ??
             map['user_saved'] ??
-            map['savedByMe'] ??
-            map['saved_by_me'] ??
-            map['isSavedByMe'] ??
-            map['is_saved_by_me'] ??
             (map['viewer'] is Map
                 ? (map['viewer']['isSaved'] ?? map['viewer']['saved'])
                 : null) ??
@@ -944,6 +945,18 @@ class PostResponseModel {
       status: map['status']?.toString(),
       deletedAt: map['deletedAt']?.toString() ?? map['deleted_at']?.toString(),
     );
+
+    final String cleanPostId = post.id.trim();
+    if (cleanPostId.isNotEmpty) {
+      PostInteractionRegistry.registerServerPost(
+        cleanPostId,
+        isLiked: post.isLiked,
+        isSaved: post.isSaved,
+        likesCount: post.likesCount,
+        commentsCount: post.commentsCount,
+      );
+    }
+    return post;
   }
 }
 

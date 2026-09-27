@@ -129,7 +129,7 @@ class App extends StatelessWidget {
           create: (_) => ChatSocketService(),
           dispose: (_, ChatSocketService service) => service.dispose(),
         ),
-        ChangeNotifierProxyProvider2<AuthProvider, NetworkInfo, MessagesProvider>(
+        ChangeNotifierProxyProvider3<AuthProvider, NetworkInfo, ProfileProvider, MessagesProvider>(
           create: (BuildContext ctx) => MessagesProvider(
             service: ctx.read<ConversationsService>(),
             socketService: ctx.read<ChatSocketService>(),
@@ -139,6 +139,7 @@ class App extends StatelessWidget {
             BuildContext ctx,
             AuthProvider auth,
             NetworkInfo network,
+            ProfileProvider profile,
             MessagesProvider? existing,
           ) {
             final String? token = ctx.read<ApiClient>().authToken;
@@ -157,6 +158,10 @@ class App extends StatelessWidget {
                 token: token,
               );
               provider.notifyNetworkChange(isOnline: network.isOnline);
+              provider.updatePrivacySettings(
+                showActivityStatus: profile.showActivityStatus,
+                sendReadReceipts: profile.sendReadReceipts,
+              );
             });
             return provider;
           },

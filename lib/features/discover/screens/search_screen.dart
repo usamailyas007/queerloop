@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -10,6 +11,7 @@ import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_tag_chip.dart';
 import '../../auth/auth_provider.dart';
 import '../../home/models/post_item_model.dart';
+import '../../home/models/reel_item_model.dart';
 import '../../home/provider/home_feed_provider.dart';
 import '../../home/screens/hashtag_posts_screen.dart';
 import '../../home/widgets/comments_bottom_sheet.dart';
@@ -60,8 +62,8 @@ class _SearchScreenState extends State<SearchScreen> {
         final DiscoverProvider disc = context.read<DiscoverProvider>();
         disc.setCurrentUser(userId: myId, username: myUsername);
         disc.syncHomeFeedContent(
-          posts: homeFeed.posts,
-          reels: homeFeed.reels,
+          posts: <PostItemModel>[...homeFeed.posts, ...profile.userPosts],
+          reels: <ReelItemModel>[...homeFeed.reels, ...profile.userReels],
         );
       }
     });
@@ -362,7 +364,9 @@ class _SearchResultsBody extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: AppSpacing.md),
                         child: PostFeedCard(
                           post: PostItemModel(
-                            id: res.id ?? 'search_${res.caption.hashCode}',
+                            id: (res.refId != null && res.refId!.trim().isNotEmpty)
+                                ? res.refId!.trim()
+                                : (res.id ?? 'search_${res.caption.hashCode}'),
                             authorId: res.authorId,
                             username: (res.authorUsername != null &&
                                     res.authorUsername!.trim().isNotEmpty)
@@ -377,19 +381,15 @@ class _SearchResultsBody extends StatelessWidget {
                                     res.caption!.trim().isNotEmpty)
                                 ? res.caption!
                                 : 'Shared post',
-                            likesCount: res.likesCount ?? 0,
-                            commentsCount: res.commentsCount ?? 0,
+                            likesCount: PostInteractionRegistry.getLikeCount(res.id ?? '', fallback: res.likesCount ?? 0),
+                            commentsCount: CommentCountRegistry.getOr(res.id ?? '', res.commentsCount ?? 0),
                             viewsCount: res.viewsCount,
                             postImageUrl: (!isText && isHttp) ? img : null,
                             postImageAsset: (!isText && isAsset) ? img : null,
                             postType: isText ? 'TEXT' : (res.type ?? 'PHOTO'),
                             communityId: res.communityId,
-                            isLiked: context.watch<HomeFeedProvider>().isPostLiked(res.id ?? '') ||
-                                context.watch<ProfileProvider>().isPostLiked(res.id ?? '') ||
-                                res.isLiked,
-                            isSaved: context.watch<HomeFeedProvider>().isPostSaved(res.id ?? '') ||
-                                context.watch<ProfileProvider>().isPostSaved(res.id ?? '') ||
-                                res.isSaved,
+                            isLiked: PostInteractionRegistry.isLiked(res.id ?? '', fallback: res.isLiked),
+                            isSaved: PostInteractionRegistry.isSaved(res.id ?? '', fallback: res.isSaved),
                           ),
                           onPostDeleted: () {
                             if (res.id != null) {
@@ -401,11 +401,12 @@ class _SearchResultsBody extends StatelessWidget {
                             if (pid.isNotEmpty) {
                               final HomeFeedProvider hf = context.read<HomeFeedProvider>();
                               final ProfileProvider pp = context.read<ProfileProvider>();
-                              final bool currentlyLiked = hf.isPostLiked(pid) || pp.isPostLiked(pid) || res.isLiked;
+                              final bool currentlyLiked = PostInteractionRegistry.isLiked(pid, fallback: res.isLiked);
                               final bool newLiked = !currentlyLiked;
-                              hf.toggleLikePost(pid, explicitLiked: newLiked);
-                              final int curCount = res.likesCount ?? 0;
+                              final int curCount = PostInteractionRegistry.getLikeCount(pid, fallback: res.likesCount ?? 0);
                               final int nextCount = newLiked ? curCount + 1 : (curCount > 0 ? curCount - 1 : 0);
+                              PostInteractionRegistry.setLiked(pid, newLiked, newCount: nextCount);
+                              hf.toggleLikePost(pid, explicitLiked: newLiked);
                               pp.updateLikedPost(pid, isLiked: newLiked, likesCount: nextCount);
                             }
                           },
@@ -414,8 +415,9 @@ class _SearchResultsBody extends StatelessWidget {
                             if (pid.isNotEmpty) {
                               final HomeFeedProvider hf = context.read<HomeFeedProvider>();
                               final ProfileProvider pp = context.read<ProfileProvider>();
-                              final bool currentlySaved = hf.isPostSaved(pid) || pp.isPostSaved(pid) || res.isSaved;
+                              final bool currentlySaved = PostInteractionRegistry.isSaved(pid, fallback: res.isSaved);
                               final bool newSaved = !currentlySaved;
+                              PostInteractionRegistry.setSaved(pid, newSaved);
                               hf.toggleSavePost(pid, explicitSaved: newSaved);
                               try {
                                 pp.updateSavedPost(pid, isSaved: newSaved);
@@ -431,12 +433,13 @@ class _SearchResultsBody extends StatelessWidget {
                                 postId: res.id,
                                 postAuthorId: res.authorId,
                                 communityId: res.communityId,
-                                totalComments: res.commentsCount ?? 0,
+                                totalComments: CommentCountRegistry.getOr(res.id ?? '', res.commentsCount ?? 0),
                                 allowComments: res.allowComments,
                                 allowCommentsFrom: res.allowCommentsFrom,
                                 authorUsername: res.authorUsername,
                                 onCommentAdded: () {
                                   if (res.id != null) {
+                                    CommentCountRegistry.increment(res.id!);
                                     context.read<HomeFeedProvider>().incrementCommentCount(res.id!);
                                     try {
                                       context.read<ProfileProvider>().incrementCommentCount(res.id!);
@@ -445,6 +448,7 @@ class _SearchResultsBody extends StatelessWidget {
                                 },
                                 onCommentDeleted: (int deletedCount, int remainingCount) {
                                   if (res.id != null) {
+                                    CommentCountRegistry.set(res.id!, remainingCount);
                                     context.read<HomeFeedProvider>().setCommentCount(res.id!, remainingCount);
                                     try {
                                       context.read<ProfileProvider>().updatePostCommentCount(res.id!, remainingCount);
@@ -453,6 +457,7 @@ class _SearchResultsBody extends StatelessWidget {
                                 },
                                 onCommentCountChanged: (int count) {
                                   if (res.id != null) {
+                                    CommentCountRegistry.set(res.id!, count);
                                     context.read<HomeFeedProvider>().setCommentCount(res.id!, count);
                                     try {
                                       context.read<ProfileProvider>().updatePostCommentCount(res.id!, count);
@@ -621,7 +626,9 @@ class _SearchResultsBody extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: AppSpacing.md),
                         child: PostFeedCard(
                           post: PostItemModel(
-                            id: res.id ?? 'search_${res.caption.hashCode}',
+                            id: (res.refId != null && res.refId!.trim().isNotEmpty)
+                                ? res.refId!.trim()
+                                : (res.id ?? 'search_${res.caption.hashCode}'),
                             authorId: res.authorId,
                             username: (res.authorUsername != null &&
                                     res.authorUsername!.trim().isNotEmpty)
@@ -636,19 +643,15 @@ class _SearchResultsBody extends StatelessWidget {
                                     res.caption!.trim().isNotEmpty)
                                 ? res.caption!
                                 : 'Shared post',
-                            likesCount: res.likesCount ?? 0,
-                            commentsCount: res.commentsCount ?? 0,
+                            likesCount: PostInteractionRegistry.getLikeCount(res.id ?? '', fallback: res.likesCount ?? 0),
+                            commentsCount: CommentCountRegistry.getOr(res.id ?? '', res.commentsCount ?? 0),
                             viewsCount: res.viewsCount,
                             postImageUrl: (!isText && isHttp) ? img : null,
                             postImageAsset: (!isText && isAsset) ? img : null,
                             postType: isText ? 'TEXT' : (res.type ?? 'PHOTO'),
                             communityId: res.communityId,
-                            isLiked: context.watch<HomeFeedProvider>().isPostLiked(res.id ?? '') ||
-                                context.watch<ProfileProvider>().isPostLiked(res.id ?? '') ||
-                                res.isLiked,
-                            isSaved: context.watch<HomeFeedProvider>().isPostSaved(res.id ?? '') ||
-                                context.watch<ProfileProvider>().isPostSaved(res.id ?? '') ||
-                                res.isSaved,
+                            isLiked: PostInteractionRegistry.isLiked(res.id ?? '', fallback: res.isLiked),
+                            isSaved: PostInteractionRegistry.isSaved(res.id ?? '', fallback: res.isSaved),
                           ),
                           onPostDeleted: () {
                             if (res.id != null) {
@@ -660,11 +663,12 @@ class _SearchResultsBody extends StatelessWidget {
                             if (pid.isNotEmpty) {
                               final HomeFeedProvider hf = context.read<HomeFeedProvider>();
                               final ProfileProvider pp = context.read<ProfileProvider>();
-                              final bool currentlyLiked = hf.isPostLiked(pid) || pp.isPostLiked(pid) || res.isLiked;
+                              final bool currentlyLiked = PostInteractionRegistry.isLiked(pid, fallback: res.isLiked);
                               final bool newLiked = !currentlyLiked;
-                              hf.toggleLikePost(pid, explicitLiked: newLiked);
-                              final int curCount = res.likesCount ?? 0;
+                              final int curCount = PostInteractionRegistry.getLikeCount(pid, fallback: res.likesCount ?? 0);
                               final int nextCount = newLiked ? curCount + 1 : (curCount > 0 ? curCount - 1 : 0);
+                              PostInteractionRegistry.setLiked(pid, newLiked, newCount: nextCount);
+                              hf.toggleLikePost(pid, explicitLiked: newLiked);
                               pp.updateLikedPost(pid, isLiked: newLiked, likesCount: nextCount);
                             }
                           },
@@ -673,8 +677,9 @@ class _SearchResultsBody extends StatelessWidget {
                             if (pid.isNotEmpty) {
                               final HomeFeedProvider hf = context.read<HomeFeedProvider>();
                               final ProfileProvider pp = context.read<ProfileProvider>();
-                              final bool currentlySaved = hf.isPostSaved(pid) || pp.isPostSaved(pid) || res.isSaved;
+                              final bool currentlySaved = PostInteractionRegistry.isSaved(pid, fallback: res.isSaved);
                               final bool newSaved = !currentlySaved;
+                              PostInteractionRegistry.setSaved(pid, newSaved);
                               hf.toggleSavePost(pid, explicitSaved: newSaved);
                               try {
                                 pp.updateSavedPost(pid, isSaved: newSaved);
@@ -690,12 +695,13 @@ class _SearchResultsBody extends StatelessWidget {
                                 postId: res.id,
                                 postAuthorId: res.authorId,
                                 communityId: res.communityId,
-                                totalComments: res.commentsCount ?? 0,
+                                totalComments: CommentCountRegistry.getOr(res.id ?? '', res.commentsCount ?? 0),
                                 allowComments: res.allowComments,
                                 allowCommentsFrom: res.allowCommentsFrom,
                                 authorUsername: res.authorUsername,
                                 onCommentAdded: () {
                                   if (res.id != null) {
+                                    CommentCountRegistry.increment(res.id!);
                                     context.read<HomeFeedProvider>().incrementCommentCount(res.id!);
                                     try {
                                       context.read<ProfileProvider>().incrementCommentCount(res.id!);
@@ -704,6 +710,7 @@ class _SearchResultsBody extends StatelessWidget {
                                 },
                                 onCommentDeleted: (int deletedCount, int remainingCount) {
                                   if (res.id != null) {
+                                    CommentCountRegistry.set(res.id!, remainingCount);
                                     context.read<HomeFeedProvider>().setCommentCount(res.id!, remainingCount);
                                     try {
                                       context.read<ProfileProvider>().updatePostCommentCount(res.id!, remainingCount);
@@ -712,6 +719,7 @@ class _SearchResultsBody extends StatelessWidget {
                                 },
                                 onCommentCountChanged: (int count) {
                                   if (res.id != null) {
+                                    CommentCountRegistry.set(res.id!, count);
                                     context.read<HomeFeedProvider>().setCommentCount(res.id!, count);
                                     try {
                                       context.read<ProfileProvider>().updatePostCommentCount(res.id!, count);

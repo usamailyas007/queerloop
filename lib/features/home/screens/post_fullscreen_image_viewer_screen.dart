@@ -21,17 +21,20 @@ import '../widgets/safety_bottom_sheet.dart';
 import '../widgets/send_to_bottom_sheet.dart';
 import '../widgets/share_this_post_bottom_sheet.dart';
 import '../../create_post/models/create_post_models.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import 'profile_tab_screen.dart';
 
 class PostFullscreenImageViewerScreen extends StatefulWidget {
   const PostFullscreenImageViewerScreen({
     required this.post,
     this.heroTag,
+    this.isProfileScreen = false,
     super.key,
   });
 
   final PostItemModel post;
   final String? heroTag;
+  final bool isProfileScreen;
 
   @override
   State<PostFullscreenImageViewerScreen> createState() =>
@@ -92,16 +95,18 @@ class _PostFullscreenImageViewerScreenState
           resolvedAuthorId ??= auth.userId ?? profile.profile?.id;
         }
 
-        final bool isLiked = homeFeed.isPostLiked(_post.id) || _post.isLiked;
-        final bool isSaved = homeFeed.isPostSaved(_post.id) || _post.isSaved;
-        final int likes = _post.likesCount;
+        final bool isLiked = PostInteractionRegistry.isLiked(_post.id, fallback: homeFeed.isPostLiked(_post.id) || _post.isLiked);
+        final bool isSaved = PostInteractionRegistry.isSaved(_post.id, fallback: homeFeed.isPostSaved(_post.id) || _post.isSaved);
+        final int likes = PostInteractionRegistry.getLikeCount(_post.id, fallback: _post.likesCount);
+        final int comments = CommentCountRegistry.getOr(_post.id, _post.commentsCount);
         final bool authorChanged = resolvedAuthorId != null && resolvedAuthorId != _post.authorId;
-        if (isLiked != _post.isLiked || isSaved != _post.isSaved || likes != _post.likesCount || authorChanged) {
+        if (isLiked != _post.isLiked || isSaved != _post.isSaved || likes != _post.likesCount || comments != _post.commentsCount || authorChanged) {
           setState(() {
             _post = _post.copyWith(
               isLiked: isLiked,
               isSaved: isSaved,
               likesCount: likes,
+              commentsCount: comments,
               authorId: resolvedAuthorId ?? _post.authorId,
             );
           });
@@ -127,8 +132,7 @@ class _PostFullscreenImageViewerScreenState
   }
 
   void _onDoubleTap() {
-    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
-    final bool isLiked = homeFeed.isPostLiked(_post.id) || _post.isLiked;
+    final bool isLiked = PostInteractionRegistry.isLiked(_post.id, fallback: _post.isLiked);
     if (!isLiked) {
       _handleLikeToggle();
     }
@@ -144,11 +148,13 @@ class _PostFullscreenImageViewerScreenState
     final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
     final ProfileProvider profile = context.read<ProfileProvider>();
 
-    final bool currentlyLiked = homeFeed.isPostLiked(_post.id) || _post.isLiked;
+    final bool currentlyLiked = PostInteractionRegistry.isLiked(_post.id, fallback: _post.isLiked);
     final bool newLiked = !currentlyLiked;
-    final int baseCount = _post.likesCount;
+    final int baseCount = PostInteractionRegistry.getLikeCount(_post.id, fallback: _post.likesCount);
     final int newCount =
         newLiked ? baseCount + 1 : (baseCount > 0 ? baseCount - 1 : 0);
+
+    PostInteractionRegistry.setLiked(_post.id, newLiked, count: newCount);
 
     setState(() {
       _post = _post.copyWith(
@@ -166,8 +172,10 @@ class _PostFullscreenImageViewerScreenState
   void _handleSaveToggle() {
     final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
     final ProfileProvider profile = context.read<ProfileProvider>();
-    final bool currentlySaved = homeFeed.isPostSaved(_post.id) || _post.isSaved;
+    final bool currentlySaved = PostInteractionRegistry.isSaved(_post.id, fallback: _post.isSaved);
     final bool newSaved = !currentlySaved;
+
+    PostInteractionRegistry.setSaved(_post.id, newSaved);
 
     setState(() {
       _post = _post.copyWith(isSaved: newSaved);
@@ -212,14 +220,15 @@ class _PostFullscreenImageViewerScreenState
       builder: (_) => CommentsBottomSheet(
         postId: _post.id,
         postAuthorId: resolvedAuthorId ?? _post.authorId,
-        totalComments: _post.commentsCount,
+        totalComments: CommentCountRegistry.getOr(_post.id, _post.commentsCount),
         allowComments: _post.allowComments,
         allowCommentsFrom: _post.allowCommentsFrom,
         authorUsername: _post.username.isNotEmpty ? _post.username : _post.authorName,
         communityId: _post.communityId,
         onCommentAdded: () {
+          final int newCount = CommentCountRegistry.increment(_post.id);
           setState(() {
-            _post = _post.copyWith(commentsCount: _post.commentsCount + 1);
+            _post = _post.copyWith(commentsCount: newCount);
           });
           try {
             context.read<HomeFeedProvider>().incrementCommentCount(_post.id);
@@ -229,6 +238,7 @@ class _PostFullscreenImageViewerScreenState
           } catch (_) {}
         },
         onCommentDeleted: (int deletedCount, int remainingCount) {
+          CommentCountRegistry.set(_post.id, remainingCount);
           setState(() {
             _post = _post.copyWith(commentsCount: remainingCount);
           });
@@ -240,6 +250,7 @@ class _PostFullscreenImageViewerScreenState
           } catch (_) {}
         },
         onCommentCountChanged: (int count) {
+          CommentCountRegistry.set(_post.id, count);
           setState(() {
             _post = _post.copyWith(commentsCount: count);
           });
@@ -269,6 +280,7 @@ class _PostFullscreenImageViewerScreenState
       commentsCount: _post.commentsCount,
       isLiked: _post.isLiked,
       isSaved: _post.isSaved,
+      allowDownloads: _post.allowDownloads,
     );
 
     showModalBottomSheet<void>(
@@ -367,6 +379,10 @@ class _PostFullscreenImageViewerScreenState
         _post.authorId!.trim().toLowerCase() == currentUserId.trim().toLowerCase();
 
     if (isCurrentUser) {
+      if (widget.isProfileScreen) {
+        Navigator.pop(context);
+        return;
+      }
       Navigator.push<void>(
         context,
         MaterialPageRoute<void>(
@@ -412,9 +428,6 @@ class _PostFullscreenImageViewerScreenState
     final ProfileProvider profileProvider = context.watch<ProfileProvider>();
     final HomeFeedProvider homeFeed = context.watch<HomeFeedProvider>();
     final AuthProvider authProvider = context.watch<AuthProvider>();
-    final int effectiveCommentsCount = homeFeed.getCommentCount(_post.id) ??
-        profileProvider.getCommentCount(_post.id) ??
-        _post.commentsCount;
     final String? currentUserId = authProvider.userId;
     final String cleanPostUser = _post.username.replaceAll('@', '').trim().toLowerCase();
     final String myProfUser = profileProvider.username.replaceAll('@', '').trim().toLowerCase();
@@ -450,9 +463,25 @@ class _PostFullscreenImageViewerScreenState
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
+      body: ListenableBuilder(
+        listenable: Listenable.merge([
+          PostInteractionRegistry.notifier,
+          CommentCountRegistry.notifier,
+        ]),
+        builder: (BuildContext context, _) {
+          final bool isLiked = PostInteractionRegistry.isLiked(_post.id, fallback: _post.isLiked);
+          final bool isSaved = PostInteractionRegistry.isSaved(_post.id, fallback: _post.isSaved);
+          final int currentLikesCount = PostInteractionRegistry.getLikeCount(_post.id, fallback: _post.likesCount);
+          final int effectiveCommentsCount = CommentCountRegistry.getOr(
+            _post.id,
+            homeFeed.getCommentCount(_post.id) ??
+                profileProvider.getCommentCount(_post.id) ??
+                _post.commentsCount,
+          );
+
+          return Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
           // ── 1. Fullscreen Interactive Image ────────────────────────────────
           GestureDetector(
             onTap: _toggleOverlay,
@@ -639,9 +668,9 @@ class _PostFullscreenImageViewerScreenState
                   // Like Button
                   _ViewerActionButton(
                     onTap: _handleLikeToggle,
-                    label: shouldHideLikes ? '' : '${_post.likesCount}',
+                    label: shouldHideLikes ? '' : '$currentLikesCount',
                     child: Image.asset(
-                      _post.isLiked ? AppIcons.likedLogo : AppIcons.unlikeLogo,
+                      isLiked ? AppIcons.likedLogo : AppIcons.unlikeLogo,
                       width: 28,
                       height: 28,
                     ),
@@ -703,10 +732,10 @@ class _PostFullscreenImageViewerScreenState
                   // Save Button
                   _ViewerActionButton(
                     onTap: _handleSaveToggle,
-                    label: _post.isSaved ? 'Saved' : 'Save',
+                    label: isSaved ? 'Saved' : 'Save',
                     child: Icon(
-                      _post.isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                      color: _post.isSaved ? AppColors.gradientCyan : Colors.white,
+                      isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                      color: isSaved ? AppColors.gradientCyan : Colors.white,
                       size: 26,
                     ),
                   ),
@@ -868,8 +897,10 @@ class _PostFullscreenImageViewerScreenState
             ),
           ),
         ],
-      ),
-    );
+      );
+    },
+  ),
+);
   }
 }
 

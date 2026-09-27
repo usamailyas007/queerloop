@@ -39,8 +39,30 @@ class HomeFeedProvider extends ChangeNotifier {
   final Set<String> _userLikedPostIds = <String>{};
   final Set<String> _userSavedPostIds = <String>{};
 
-  bool isPostSaved(String id) => _userSavedPostIds.contains(id);
-  bool isPostLiked(String id) => _userLikedPostIds.contains(id);
+  bool isPostSaved(String id) =>
+      PostInteractionRegistry.isSaved(id, fallback: _userSavedPostIds.contains(id));
+  bool isPostLiked(String id) =>
+      PostInteractionRegistry.isLiked(id, fallback: _userLikedPostIds.contains(id));
+
+  int? getCommentCount(String id) => CommentCountRegistry.get(id);
+
+  void setCommentCount(String id, int count) {
+    final int safeCount = count.clamp(0, 999999);
+    CommentCountRegistry.set(id, safeCount);
+    _updatePostInAllLists(id, (p) => p.copyWith(commentsCount: safeCount));
+    _updateReelInAllLists(id, (r) => r.copyWith(commentsCount: safeCount));
+    notifyListeners();
+  }
+
+  void incrementCommentCount(String id) {
+    final int cur = CommentCountRegistry.getOr(id, _getExistingCommentsCount(id));
+    setCommentCount(id, cur + 1);
+  }
+
+  void decrementCommentCount(String id, {int amount = 1}) {
+    final int cur = CommentCountRegistry.getOr(id, _getExistingCommentsCount(id));
+    setCommentCount(id, (cur - amount).clamp(0, 999999));
+  }
 
   bool _isGuest = false;
   int _bottomNavIndex = 0; // 0: Home, 1: Discover, 2: Create, 3: Messages, 4: Profile
@@ -130,11 +152,17 @@ class HomeFeedProvider extends ChangeNotifier {
             prefs.getStringList(_prefsKeyForUser(newUserId));
         if (savedLikes != null) {
           _userLikedPostIds.addAll(savedLikes);
+          for (final String id in savedLikes) {
+            PostInteractionRegistry.seedPersisted(id, isLiked: true);
+          }
         }
         final List<String>? savedPosts =
             prefs.getStringList(_prefsKeyForSaved(newUserId));
         if (savedPosts != null) {
           _userSavedPostIds.addAll(savedPosts);
+          for (final String id in savedPosts) {
+            PostInteractionRegistry.seedPersisted(id, isSaved: true);
+          }
         }
       } catch (e) {
         debugPrint('⚠️ [HomeFeedProvider] Error loading user likes/saves: $e');
@@ -174,6 +202,14 @@ class HomeFeedProvider extends ChangeNotifier {
           if (p.id.isNotEmpty && _userLikedPostIds.add(p.id)) {
             changed = true;
           }
+          // Seed registry so like state is immediately available across all screens
+          PostInteractionRegistry.seedFromServer(
+            p.id,
+            isLiked: true,
+            isSaved: _userSavedPostIds.contains(p.id),
+            likesCount: p.likesCount,
+            commentsCount: p.commentsCount,
+          );
         }
       }
 
@@ -182,6 +218,14 @@ class HomeFeedProvider extends ChangeNotifier {
           if (p.id.isNotEmpty && _userSavedPostIds.add(p.id)) {
             changed = true;
           }
+          // Seed registry so save state is immediately available across all screens
+          PostInteractionRegistry.seedFromServer(
+            p.id,
+            isLiked: _userLikedPostIds.contains(p.id),
+            isSaved: true,
+            likesCount: p.likesCount,
+            commentsCount: p.commentsCount,
+          );
         }
       }
 
@@ -501,15 +545,36 @@ class HomeFeedProvider extends ChangeNotifier {
       thumbnailUrl = videoUrl.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
     }
 
-    final bool isUserLikedLocally = _userLikedPostIds.contains(post.id);
-    final bool isLiked = isUserLikedLocally || post.isLiked;
+    final bool isLiked = PostInteractionRegistry.isLiked(
+      post.id,
+      fallback: _userLikedPostIds.contains(post.id) || post.isLiked,
+    );
     if (isLiked) {
       _userLikedPostIds.add(post.id);
     }
-    final bool isSaved = _userSavedPostIds.contains(post.id) || post.isSaved;
+    final bool isSaved = PostInteractionRegistry.isSaved(
+      post.id,
+      fallback: _userSavedPostIds.contains(post.id) || post.isSaved,
+    );
     if (isSaved) {
       _userSavedPostIds.add(post.id);
     }
+    final int baseCount = post.likesCount;
+    final int effectiveLikesCount = PostInteractionRegistry.getLikeCount(
+      post.id,
+      fallback: (isLiked && baseCount == 0) ? 1 : baseCount,
+    );
+    final int effectiveCommentsCount =
+        CommentCountRegistry.getOr(post.id, post.commentsCount);
+
+    // Seed registry so counts/states are available across all screens
+    PostInteractionRegistry.seedFromServer(
+      post.id,
+      isLiked: isLiked,
+      isSaved: isSaved,
+      likesCount: effectiveLikesCount,
+      commentsCount: post.commentsCount,
+    );
 
     final AuthorInfo? cachedAuthor =
         (post.authorId != null) ? AuthorProfileCache.get(post.authorId!) : null;
@@ -563,8 +628,8 @@ class HomeFeedProvider extends ChangeNotifier {
       videoUrl: videoUrl,
       thumbnailUrl: thumbnailUrl,
       caption: post.body.isNotEmpty ? post.body : post.caption,
-      likesCount: post.likesCount,
-      commentsCount: post.commentsCount,
+      likesCount: effectiveLikesCount,
+      commentsCount: effectiveCommentsCount,
       viewsCount: post.viewsCount,
       isLiked: isLiked,
       isSaved: isSaved,
@@ -646,15 +711,36 @@ class HomeFeedProvider extends ChangeNotifier {
       }
     }
 
-    final bool isUserLikedLocally = _userLikedPostIds.contains(post.id);
-    final bool isLiked = isUserLikedLocally || post.isLiked;
+    final bool isLiked = PostInteractionRegistry.isLiked(
+      post.id,
+      fallback: _userLikedPostIds.contains(post.id) || post.isLiked,
+    );
     if (isLiked) {
       _userLikedPostIds.add(post.id);
     }
-    final bool isSaved = _userSavedPostIds.contains(post.id) || post.isSaved;
+    final bool isSaved = PostInteractionRegistry.isSaved(
+      post.id,
+      fallback: _userSavedPostIds.contains(post.id) || post.isSaved,
+    );
     if (isSaved) {
       _userSavedPostIds.add(post.id);
     }
+    final int baseCount = post.likesCount;
+    final int effectiveLikesCount = PostInteractionRegistry.getLikeCount(
+      post.id,
+      fallback: (isLiked && baseCount == 0) ? 1 : baseCount,
+    );
+    final int effectiveCommentsCount =
+        CommentCountRegistry.getOr(post.id, post.commentsCount);
+
+    // Seed registry so counts/states are available across all screens
+    PostInteractionRegistry.seedFromServer(
+      post.id,
+      isLiked: isLiked,
+      isSaved: isSaved,
+      likesCount: effectiveLikesCount,
+      commentsCount: post.commentsCount,
+    );
 
     final AuthorInfo? cachedAuthor =
         (post.authorId != null) ? AuthorProfileCache.get(post.authorId!) : null;
@@ -719,8 +805,8 @@ class HomeFeedProvider extends ChangeNotifier {
       pronounsTime: _formatTime(post.createdAt),
       avatarAsset: resolvedPostAvatar,
       content: post.body.isNotEmpty ? post.body : post.caption,
-      likesCount: post.likesCount,
-      commentsCount: post.commentsCount,
+      likesCount: effectiveLikesCount,
+      commentsCount: effectiveCommentsCount,
       viewsCount: post.viewsCount,
       postImageUrl: imageUrl,
       postType: normalizedType,
@@ -1035,10 +1121,6 @@ class HomeFeedProvider extends ChangeNotifier {
     updateInList(_communityPosts);
   }
 
-  final Map<String, int> _overrideCommentCounts = <String, int>{};
-
-  int? getCommentCount(String postId) => _overrideCommentCounts[postId];
-
   int _getExistingCommentsCount(String postId) {
     for (final PostItemModel p in <PostItemModel>[..._forYouPosts, ..._followingPosts, ..._communityPosts]) {
       if (p.id == postId) return p.commentsCount;
@@ -1047,35 +1129,6 @@ class HomeFeedProvider extends ChangeNotifier {
       if (r.id == postId) return r.commentsCount;
     }
     return 0;
-  }
-
-  // Increment comment count locally when comment is added
-  void incrementCommentCount(String postId) {
-    final int current = getCommentCount(postId) ?? _getExistingCommentsCount(postId);
-    final int next = current + 1;
-    _overrideCommentCounts[postId] = next;
-    _updatePostInAllLists(postId, (p) => p.copyWith(commentsCount: next));
-    _updateReelInAllLists(postId, (r) => r.copyWith(commentsCount: next));
-    notifyListeners();
-  }
-
-  // Decrement comment count locally when comment is deleted
-  void decrementCommentCount(String postId, {int amount = 1}) {
-    final int current = getCommentCount(postId) ?? _getExistingCommentsCount(postId);
-    final int next = (current - amount).clamp(0, 999999);
-    _overrideCommentCounts[postId] = next;
-    _updatePostInAllLists(postId, (p) => p.copyWith(commentsCount: next));
-    _updateReelInAllLists(postId, (r) => r.copyWith(commentsCount: next));
-    notifyListeners();
-  }
-
-  // Set exact comment count locally
-  void setCommentCount(String postId, int count) {
-    final int safeCount = count.clamp(0, 999999);
-    _overrideCommentCounts[postId] = safeCount;
-    _updatePostInAllLists(postId, (p) => p.copyWith(commentsCount: safeCount));
-    _updateReelInAllLists(postId, (r) => r.copyWith(commentsCount: safeCount));
-    notifyListeners();
   }
 
   // Actions
@@ -1214,30 +1267,29 @@ class HomeFeedProvider extends ChangeNotifier {
     if (target == null && fallbackReel != null) {
       target = fallbackReel;
     }
-    final bool alreadyLiked = _userLikedPostIds.contains(id) || (target != null && target.isLiked);
-    final bool newLiked = explicitLiked ?? !alreadyLiked;
+    final bool currentlyLiked = PostInteractionRegistry.isLiked(
+      id,
+      fallback: _userLikedPostIds.contains(id) || (target != null && target.isLiked),
+    );
+    final bool newLiked = explicitLiked ?? !currentlyLiked;
 
-    target ??= ReelItemModel(
-        id: id,
-        username: '@creator',
-        pronounsTime: '',
-        avatarAsset: '',
-        videoAsset: '',
-        caption: '',
-        likesCount: alreadyLiked ? 1 : 0,
-        commentsCount: 0,
-        isLiked: alreadyLiked,
-      );
+    final int currentCount = PostInteractionRegistry.getLikeCount(
+      id,
+      fallback: target?.likesCount ?? (currentlyLiked ? 1 : 0),
+    );
 
-    final int baseCount = target.likesCount;
-    final int newCount = target.hasLikeCount
-        ? (newLiked
-            ? (alreadyLiked ? baseCount : baseCount + 1)
-            : (baseCount > 0 ? (alreadyLiked ? baseCount - 1 : baseCount) : 0))
-        : baseCount;
+    int newCount;
+    if (newLiked) {
+      newCount = currentlyLiked ? currentCount : currentCount + 1;
+      if (newCount < 1) newCount = 1;
+    } else {
+      newCount = currentlyLiked ? (currentCount > 0 ? currentCount - 1 : 0) : currentCount;
+    }
 
     _updateReelInAllLists(id, (r) => r.copyWith(isLiked: newLiked, likesCount: newCount));
     _updatePostInAllLists(id, (p) => p.copyWith(isLiked: newLiked, likesCount: newCount));
+
+    PostInteractionRegistry.setLiked(id, newLiked, newCount: newCount);
 
     if (newLiked) {
       _userLikedPostIds.add(id);
@@ -1260,16 +1312,20 @@ class HomeFeedProvider extends ChangeNotifier {
         }
       } catch (err) {
         debugPrint('Error syncing like for reel $id: $err');
+        // Rollback optimistic update
+        final bool rollbackLiked = currentlyLiked;
+        final int rollbackCount = currentCount;
         _updateReelInAllLists(
           id,
-          (r) => r.copyWith(isLiked: target!.isLiked, likesCount: target.likesCount),
+          (r) => r.copyWith(isLiked: rollbackLiked, likesCount: rollbackCount),
         );
         _updatePostInAllLists(
           id,
-          (p) => p.copyWith(isLiked: target!.isLiked, likesCount: target.likesCount),
+          (p) => p.copyWith(isLiked: rollbackLiked, likesCount: rollbackCount),
         );
+        PostInteractionRegistry.setLiked(id, rollbackLiked, newCount: rollbackCount);
         if (_currentUserId != null) {
-          if (target.isLiked) {
+          if (rollbackLiked) {
             _userLikedPostIds.add(id);
           } else {
             _userLikedPostIds.remove(id);
@@ -1297,11 +1353,16 @@ class HomeFeedProvider extends ChangeNotifier {
     if (target == null && fallbackReel != null) {
       target = fallbackReel;
     }
-    final bool currentSaved = _userSavedPostIds.contains(id) || (target != null && target.isSaved);
+    final bool currentSaved = PostInteractionRegistry.isSaved(
+      id,
+      fallback: _userSavedPostIds.contains(id) || (target != null && target.isSaved),
+    );
     final bool newSaved = explicitSaved ?? !currentSaved;
 
     _updateReelInAllLists(id, (r) => r.copyWith(isSaved: newSaved));
     _updatePostInAllLists(id, (p) => p.copyWith(isSaved: newSaved));
+
+    PostInteractionRegistry.setSaved(id, newSaved);
 
     if (_currentUserId != null) {
       if (newSaved) {
@@ -1403,29 +1464,29 @@ class HomeFeedProvider extends ChangeNotifier {
     if (target == null && fallbackPost != null) {
       target = fallbackPost;
     }
-    final bool alreadyLiked = _userLikedPostIds.contains(id) || (target != null && target.isLiked);
-    final bool newLiked = explicitLiked ?? !alreadyLiked;
+    final bool currentlyLiked = PostInteractionRegistry.isLiked(
+      id,
+      fallback: _userLikedPostIds.contains(id) || (target != null && target.isLiked),
+    );
+    final bool newLiked = explicitLiked ?? !currentlyLiked;
 
-    target ??= PostItemModel(
-        id: id,
-        username: '@creator',
-        pronounsTime: '',
-        avatarAsset: '',
-        content: '',
-        likesCount: alreadyLiked ? 1 : 0,
-        commentsCount: 0,
-        isLiked: alreadyLiked,
-      );
+    final int currentCount = PostInteractionRegistry.getLikeCount(
+      id,
+      fallback: target?.likesCount ?? (currentlyLiked ? 1 : 0),
+    );
 
-    final int baseCount = target.likesCount;
-    final int newCount = target.hasLikeCount
-        ? (newLiked
-            ? (alreadyLiked ? baseCount : baseCount + 1)
-            : (baseCount > 0 ? (alreadyLiked ? baseCount - 1 : baseCount) : 0))
-        : baseCount;
+    int newCount;
+    if (newLiked) {
+      newCount = currentlyLiked ? currentCount : currentCount + 1;
+      if (newCount < 1) newCount = 1;
+    } else {
+      newCount = currentlyLiked ? (currentCount > 0 ? currentCount - 1 : 0) : currentCount;
+    }
 
     _updatePostInAllLists(id, (p) => p.copyWith(isLiked: newLiked, likesCount: newCount));
     _updateReelInAllLists(id, (r) => r.copyWith(isLiked: newLiked, likesCount: newCount));
+
+    PostInteractionRegistry.setLiked(id, newLiked, newCount: newCount);
 
     if (newLiked) {
       _userLikedPostIds.add(id);
@@ -1450,15 +1511,19 @@ class HomeFeedProvider extends ChangeNotifier {
         }
       } catch (err) {
         debugPrint('Error syncing like for post $id: $err');
+        // Rollback optimistic update
+        final bool rollbackLiked = currentlyLiked;
+        final int rollbackCount = currentCount;
         _updatePostInAllLists(
           id,
-          (p) => p.copyWith(isLiked: target!.isLiked, likesCount: target.likesCount),
+          (p) => p.copyWith(isLiked: rollbackLiked, likesCount: rollbackCount),
         );
         _updateReelInAllLists(
           id,
-          (r) => r.copyWith(isLiked: target!.isLiked, likesCount: target.likesCount),
+          (r) => r.copyWith(isLiked: rollbackLiked, likesCount: rollbackCount),
         );
-        if (target.isLiked) {
+        PostInteractionRegistry.setLiked(id, rollbackLiked, newCount: rollbackCount);
+        if (rollbackLiked) {
           _userLikedPostIds.add(id);
         } else {
           _userLikedPostIds.remove(id);
@@ -1487,11 +1552,16 @@ class HomeFeedProvider extends ChangeNotifier {
     if (target == null && fallbackPost != null) {
       target = fallbackPost;
     }
-    final bool currentSaved = _userSavedPostIds.contains(id) || (target != null && target.isSaved);
+    final bool currentSaved = PostInteractionRegistry.isSaved(
+      id,
+      fallback: _userSavedPostIds.contains(id) || (target != null && target.isSaved),
+    );
     final bool newSaved = explicitSaved ?? !currentSaved;
 
     _updatePostInAllLists(id, (p) => p.copyWith(isSaved: newSaved));
     _updateReelInAllLists(id, (r) => r.copyWith(isSaved: newSaved));
+
+    PostInteractionRegistry.setSaved(id, newSaved);
 
     if (newSaved) {
       _userSavedPostIds.add(id);

@@ -71,6 +71,17 @@ class CommentLikesTracker {
     return serverStatus;
   }
 
+  static void registerServerLiked(String id, bool liked) {
+    if (id.isEmpty) return;
+    if (liked) {
+      _likedCommentIds.add(id);
+      _unlikedCommentIds.remove(id);
+    } else {
+      _likedCommentIds.remove(id);
+      _unlikedCommentIds.add(id);
+    }
+  }
+
   static void setLiked(String id, bool liked) {
     if (id.isEmpty) return;
     if (liked) {
@@ -165,6 +176,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
   void _syncGlobalCommentCount(int count) {
     if (widget.postId != null && widget.postId!.isNotEmpty) {
+      CommentCountRegistry.set(widget.postId, count);
       try {
         context.read<HomeFeedProvider>().setCommentCount(widget.postId!, count);
       } catch (_) {}
@@ -319,6 +331,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
       final String? myUserId = context.read<AuthProvider>().userId;
       await CommentLikesTracker.ensureInitialized(userId: myUserId);
       final List<dynamic> raw = await service.getComments(widget.postId!);
+      debugPrint('=== [COMMENTS BOTTOM SHEET API RESPONSE] postId: ${widget.postId} ===\n$raw');
       final Map<String, CommentItemModel> allMap = <String, CommentItemModel>{};
       final List<CommentItemModel> topLevel = <CommentItemModel>[];
       final List<CommentItemModel> pendingReplies = <CommentItemModel>[];
@@ -354,15 +367,15 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
           final int likesCount = (item['likeCount'] ?? item['likesCount'] ?? item['likes'] ?? 0) as int? ?? 0;
           final String commentId = (item['id'] ?? item['_id'] ?? '').toString();
 
-          final dynamic rawIsLiked = item['isLiked'] ??
+          final dynamic rawIsLiked = item['likedByMe'] ??
+              item['isLikedByMe'] ??
+              item['is_liked_by_me'] ??
+              item['isLiked'] ??
               item['is_liked'] ??
               item['liked'] ??
               item['hasLiked'] ??
               item['has_liked'] ??
-              item['likedByMe'] ??
               item['liked_by_me'] ??
-              item['isLikedByMe'] ??
-              item['is_liked_by_me'] ??
               item['userLiked'] ??
               item['user_liked'] ??
               (item['viewer'] is Map ? (item['viewer']['isLiked'] ?? item['viewer']['liked']) : null) ??
@@ -370,34 +383,35 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
           bool isLiked = rawIsLiked == true || rawIsLiked == 1 || rawIsLiked == 'true';
 
-          final dynamic rawLikes = item['likes'] ??
-              item['commentLikes'] ??
-              item['comment_likes'] ??
-              item['userLikes'] ??
-              item['user_likes'] ??
-              item['likedBy'] ??
-              item['liked_by'] ??
-              item['likesList'] ??
-              item['likes_users'];
-          if (rawLikes is List && myUserId != null && myUserId.isNotEmpty) {
-            for (final dynamic l in rawLikes) {
-              if (l is String && l.trim().toLowerCase() == myUserId.trim().toLowerCase()) {
-                isLiked = true;
-                break;
-              } else if (l is Map) {
-                final String? uid = (l['userId'] ?? l['user_id'] ?? l['id'] ?? l['authorId'])?.toString();
-                if (uid != null && uid.trim().toLowerCase() == myUserId.trim().toLowerCase()) {
+          if (rawIsLiked != null) {
+            CommentLikesTracker.registerServerLiked(commentId, isLiked);
+          } else {
+            final dynamic rawLikes = item['likes'] ??
+                item['commentLikes'] ??
+                item['comment_likes'] ??
+                item['userLikes'] ??
+                item['user_likes'] ??
+                item['likedBy'] ??
+                item['liked_by'] ??
+                item['likesList'] ??
+                item['likes_users'];
+            if (rawLikes is List && myUserId != null && myUserId.isNotEmpty) {
+              for (final dynamic l in rawLikes) {
+                if (l is String && l.trim().toLowerCase() == myUserId.trim().toLowerCase()) {
                   isLiked = true;
                   break;
+                } else if (l is Map) {
+                  final String? uid = (l['userId'] ?? l['user_id'] ?? l['id'] ?? l['authorId'])?.toString();
+                  if (uid != null && uid.trim().toLowerCase() == myUserId.trim().toLowerCase()) {
+                    isLiked = true;
+                    break;
+                  }
                 }
               }
             }
           }
 
           isLiked = CommentLikesTracker.isCommentLiked(commentId, serverStatus: isLiked);
-          if (isLiked) {
-            CommentLikesTracker.setLiked(commentId, true);
-          }
 
           final CommentItemModel model = CommentItemModel(
             id: commentId,
@@ -1478,7 +1492,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     final int displayCount = _isLoadingComments
-        ? widget.totalComments
+        ? (CommentCountRegistry.get(widget.postId) ?? widget.totalComments)
         : _totalCommentsCount;
     final String titleText = widget.isAnswers
         ? '$displayCount ${displayCount == 1 ? 'answer' : 'answers'}'
