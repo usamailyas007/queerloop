@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../features/auth/screens/account_pending_deletion_screen.dart';
+
 import '../features/auth/screens/account_created_success_screen.dart';
 import '../features/auth/screens/code_expired_screen.dart';
 import '../features/auth/screens/create_new_password_screen.dart';
@@ -40,6 +42,7 @@ abstract final class AppRoutes {
   static const String home = '/home';
   static const String settings = '/settings';
   static const String editProfile = '/edit-profile';
+  static const String accountPendingDeletion = '/account-pending-deletion';
 
   static Map<String, WidgetBuilder> get routes => <String, WidgetBuilder>{
         splash: (BuildContext context) => const SplashScreen(),
@@ -83,6 +86,14 @@ abstract final class AppRoutes {
         settings: settings,
       );
     }
+    if (settings.name == accountPendingDeletion) {
+      final String token = (settings.arguments as String?) ?? '';
+      return MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            AccountPendingDeletionScreen(restorationToken: token),
+        settings: settings,
+      );
+    }
     final WidgetBuilder? builder = routes[settings.name];
     if (builder != null) {
       return MaterialPageRoute<void>(
@@ -99,3 +110,8 @@ abstract final class AppRoutes {
 
 // Alias for convenience across screens
 typedef Routes = AppRoutes;
+
+/// Global RouteObserver to monitor route push/pop events across screens (e.g. pausing reel audio).
+final RouteObserver<ModalRoute<void>> appRouteObserver =
+    RouteObserver<ModalRoute<void>>();
+

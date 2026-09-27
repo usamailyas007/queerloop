@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "494655940899",
+    "project_id": "queerloop-c00e6",
+    "storage_bucket": "queerloop-c00e6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:494655940899:android:3d198197f8f43a8f6d0496",
+        "android_client_info": {
+          "package_name": "com.queerloop.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "494655940899-r0u1oocfcojo8caqche70c1047qsng9e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.queerloop.app",
+            "certificate_hash": "713861b88671d0b4e5130b797fbac4635435f329"
+          }
+        },
+        {
+          "client_id": "494655940899-l61kvs2gq29cp6it6onb5buto8qtlnht.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPlQKil0jOWpSejYMEAi0M6GU0TY3RVn4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "494655940899-l61kvs2gq29cp6it6onb5buto8qtlnht.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "494655940899-k47o7aedu4ggbq1bdabeinl69vma8vok.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.queerloop.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -12,6 +12,7 @@ import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../auth/auth_provider.dart';
 import '../../home/provider/home_feed_provider.dart';
+import '../../notifications/provider/notifications_provider.dart';
 import '../provider/profile_provider.dart';
 
 import '../widgets/logout_confirmation_modal_dialog.dart';
@@ -24,7 +25,7 @@ import 'privacy_policy_screen.dart';
 import 'privacy_settings_screen.dart';
 import 'terms_of_service_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     this.name = 'Ash Mercado',
     this.handleWithPronouns = '@ashinorbit · she/they',
@@ -35,6 +36,22 @@ class SettingsScreen extends StatelessWidget {
   final String name;
   final String handleWithPronouns;
   final String avatarAsset;
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<ProfileProvider>().loadBlockedAccounts();
+        context.read<ProfileProvider>().loadMutedAccounts();
+      }
+    });
+  }
 
   Widget _buildOptionTile({
     required BuildContext context,
@@ -96,9 +113,9 @@ class SettingsScreen extends StatelessWidget {
     final bool isDark = context.isDarkMode;
     final ProfileProvider profileProvider = context.watch<ProfileProvider>();
     final String currentName =
-        profileProvider.displayName.isNotEmpty ? profileProvider.displayName : name;
+        profileProvider.displayName.isNotEmpty ? profileProvider.displayName : widget.name;
     final String currentAvatar =
-        profileProvider.avatarUrl.isNotEmpty ? profileProvider.avatarUrl : avatarAsset;
+        profileProvider.avatarUrl.isNotEmpty ? profileProvider.avatarUrl : widget.avatarAsset;
     final String handle = profileProvider.username.isNotEmpty
         ? (profileProvider.username.startsWith('@')
             ? profileProvider.username
@@ -329,7 +346,9 @@ class SettingsScreen extends StatelessWidget {
                       size: 18,
                     ),
                     title: 'Blocked accounts',
-                    trailingText: '7',
+                    trailingText: profileProvider.blockedAccounts.isNotEmpty
+                        ? '${profileProvider.blockedAccounts.length}'
+                        : null,
                     onTap: () {
                       Navigator.push<void>(
                         context,
@@ -351,6 +370,9 @@ class SettingsScreen extends StatelessWidget {
                       ),
                     ),
                     title: 'Muted accounts',
+                    trailingText: profileProvider.mutedAccounts.isNotEmpty
+                        ? '${profileProvider.mutedAccounts.length}'
+                        : null,
                     onTap: () {
                       Navigator.push<void>(
                         context,
@@ -436,9 +458,15 @@ class SettingsScreen extends StatelessWidget {
                       LogoutConfirmationModalDialog.show(
                         context,
                         username: handle,
+                        avatarAsset: currentAvatar,
                         onConfirmLogout: () async {
-                          context.read<HomeFeedProvider>().resetToHome();
-                          await context.read<AuthProvider>().signOut();
+                          try {
+                            await context.read<NotificationsProvider>().unregisterDeviceToken();
+                          } catch (_) {}
+                          if (context.mounted) {
+                            context.read<HomeFeedProvider>().resetToHome();
+                            await context.read<AuthProvider>().signOut();
+                          }
                           if (context.mounted) {
                             AppSnackBar.showSuccess(
                               context,

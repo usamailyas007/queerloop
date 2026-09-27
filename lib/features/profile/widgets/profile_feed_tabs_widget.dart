@@ -20,7 +20,9 @@ class ProfileFeedTabsWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<String> tabs = <String>['Posts', 'Reels', 'Saved', 'Liked'];
+    final List<String> tabs = isOwnProfile
+        ? const <String>['Posts', 'Reels', 'Saved', 'Liked']
+        : const <String>['Posts', 'Reels'];
 
     return Column(
       children: <Widget>[

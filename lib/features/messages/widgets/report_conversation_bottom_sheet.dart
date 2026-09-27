@@ -160,22 +160,39 @@ class _ReportConversationBottomSheetState
                   children: <Widget>[
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.asset(
-                        widget.thumbnailAsset,
-                        width: 36,
-                        height: 36,
-                        fit: BoxFit.cover,
-                        errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) => Container(
-                          width: 36,
-                          height: 36,
-                          color: const Color(0xFF0F2F34),
-                          child: const Icon(
-                            Icons.report_problem_rounded,
-                            color: AppColors.gradientCyan,
-                            size: 20,
-                          ),
-                        ),
-                      ),
+                      child: widget.thumbnailAsset.startsWith('http')
+                          ? Image.network(
+                              widget.thumbnailAsset,
+                              width: 36,
+                              height: 36,
+                              fit: BoxFit.cover,
+                              errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) => Container(
+                                width: 36,
+                                height: 36,
+                                color: const Color(0xFF0F2F34),
+                                child: const Icon(
+                                  Icons.report_problem_rounded,
+                                  color: AppColors.gradientCyan,
+                                  size: 20,
+                                ),
+                              ),
+                            )
+                          : Image.asset(
+                              widget.thumbnailAsset,
+                              width: 36,
+                              height: 36,
+                              fit: BoxFit.cover,
+                              errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) => Container(
+                                width: 36,
+                                height: 36,
+                                color: const Color(0xFF0F2F34),
+                                child: const Icon(
+                                  Icons.report_problem_rounded,
+                                  color: AppColors.gradientCyan,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(

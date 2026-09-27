@@ -1,6 +1,7 @@
 // Profile Provider — manages fetching and updating User Profile via GET/PATCH /users/:id.
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
@@ -14,11 +15,19 @@ import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/models/profile_models.dart';
+import '../../profile_setup/profile_setup_service.dart';
+import '../models/user_relationship_models.dart';
+import '../services/user_relationship_service.dart';
 
 class ProfileProvider extends ChangeNotifier {
-  ProfileProvider({required ApiClient client}) : _client = client;
+  ProfileProvider({
+    required ApiClient client,
+    UserRelationshipService? relationshipService,
+  })  : _client = client,
+        _relationshipService = relationshipService ?? UserRelationshipService(client);
 
   final ApiClient _client;
+  final UserRelationshipService _relationshipService;
 
   UserProfile? _profile;
   bool _isBusy = false;
@@ -30,6 +39,70 @@ class ProfileProvider extends ChangeNotifier {
   List<CommunityModel> _userCommunities = <CommunityModel>[];
   bool _isLoadingContent = false;
 
+  List<PostItemModel> _likedPosts = <PostItemModel>[];
+  List<ReelItemModel> _likedReels = <ReelItemModel>[];
+  bool _isLoadingLiked = false;
+
+  List<PostItemModel> _savedPosts = <PostItemModel>[];
+  List<ReelItemModel> _savedReels = <ReelItemModel>[];
+  bool _isLoadingSaved = false;
+  bool _hasFetchedLiked = false;
+  bool _hasFetchedSaved = false;
+
+  List<BlockedAccountItem> _blockedAccounts = <BlockedAccountItem>[];
+  bool _isLoadingBlocked = false;
+
+  List<RestrictedAccountItem> _restrictedAccounts = <RestrictedAccountItem>[];
+  bool _isLoadingRestricted = false;
+
+  List<MutedAccountItem> _mutedAccounts = <MutedAccountItem>[];
+  bool _isLoadingMuted = false;
+
+  List<FollowRequestItem> _followRequests = <FollowRequestItem>[];
+  bool _isLoadingFollowRequests = false;
+
+  List<UserRelationItem> _followers = <UserRelationItem>[];
+  List<UserRelationItem> _following = <UserRelationItem>[];
+  final Set<String> _followingUserIds = <String>{};
+  final Set<String> _followingUsernames = <String>{};
+  bool _isLoadingRelations = false;
+
+  Set<String> get followingUserIds => Set<String>.unmodifiable(_followingUserIds);
+  Set<String> get followingUsernames => Set<String>.unmodifiable(_followingUsernames);
+
+  bool isFollowingUser({String? userId, String? username}) {
+    if (userId != null && userId.trim().isNotEmpty) {
+      final String cleanId = userId.trim().toLowerCase();
+      if (_followingUserIds.contains(cleanId)) return true;
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      final String cleanUsername =
+          username.replaceAll('@', '').trim().toLowerCase();
+      if (_followingUsernames.contains(cleanUsername)) return true;
+    }
+    return false;
+  }
+
+  void addFollowedUser({required String userId, String? username}) {
+    if (userId.trim().isNotEmpty) {
+      _followingUserIds.add(userId.trim().toLowerCase());
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      _followingUsernames.add(username.replaceAll('@', '').trim().toLowerCase());
+    }
+    notifyListeners();
+  }
+
+  void removeFollowedUser({required String userId, String? username}) {
+    if (userId.trim().isNotEmpty) {
+      _followingUserIds.remove(userId.trim().toLowerCase());
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      _followingUsernames.remove(username.replaceAll('@', '').trim().toLowerCase());
+    }
+    notifyListeners();
+  }
+
   UserProfile? get profile => _profile;
   bool get isBusy => _isBusy;
   String? get error => _error;
@@ -39,6 +112,34 @@ class ProfileProvider extends ChangeNotifier {
   List<ReelItemModel> get userReels => _userReels;
   List<CommunityModel> get userCommunities => _userCommunities;
   bool get isLoadingContent => _isLoadingContent;
+
+  List<PostItemModel> get likedPosts => _likedPosts;
+  List<ReelItemModel> get likedReels => _likedReels;
+  bool get isLoadingLiked => _isLoadingLiked;
+  bool get hasFetchedLiked => _hasFetchedLiked;
+
+  List<PostItemModel> get savedPosts => _savedPosts;
+  List<ReelItemModel> get savedReels => _savedReels;
+  bool get isLoadingSaved => _isLoadingSaved;
+  bool get hasFetchedSaved => _hasFetchedSaved;
+
+  List<BlockedAccountItem> get blockedAccounts => _blockedAccounts;
+  bool get isLoadingBlocked => _isLoadingBlocked;
+
+  List<RestrictedAccountItem> get restrictedAccounts => _restrictedAccounts;
+  bool get isLoadingRestricted => _isLoadingRestricted;
+
+  List<MutedAccountItem> get mutedAccounts => _mutedAccounts;
+  bool get isLoadingMuted => _isLoadingMuted;
+
+  List<FollowRequestItem> get followRequests => _followRequests;
+  bool get isLoadingFollowRequests => _isLoadingFollowRequests;
+
+  List<UserRelationItem> get followers => _followers;
+  List<UserRelationItem> get following => _following;
+  bool get isLoadingRelations => _isLoadingRelations;
+
+  UserRelationshipService get relationshipService => _relationshipService;
 
   String get displayName => _profile?.displayName ?? 'Ash Mercado';
   String get username => _profile?.username ?? 'ashinorbit';
@@ -60,10 +161,33 @@ class ProfileProvider extends ChangeNotifier {
     return '0';
   }
 
-  String get followersCount =>
-      _profile?.followersCount != null ? '${_profile!.followersCount}' : '0';
-  String get followingCount =>
-      _profile?.followingCount != null ? '${_profile!.followingCount}' : '0';
+  String get followersCount {
+    final int? profileCount = _profile?.followersCount;
+    if (_followers.length > (profileCount ?? 0)) {
+      return '${_followers.length}';
+    }
+    if (profileCount != null && profileCount > 0) {
+      return '$profileCount';
+    }
+    if (_followers.isNotEmpty) {
+      return '${_followers.length}';
+    }
+    return '${profileCount ?? 0}';
+  }
+
+  String get followingCount {
+    final int? profileCount = _profile?.followingCount;
+    if (_following.length > (profileCount ?? 0)) {
+      return '${_following.length}';
+    }
+    if (profileCount != null && profileCount > 0) {
+      return '$profileCount';
+    }
+    if (_following.isNotEmpty) {
+      return '${_following.length}';
+    }
+    return '${profileCount ?? 0}';
+  }
 
   List<String> get interests => _profile?.interests ?? const <String>[];
   bool get isPrivate => _profile?.isPrivate ?? false;
@@ -122,6 +246,12 @@ class ProfileProvider extends ChangeNotifier {
         _userPosts.clear();
         _userReels.clear();
         _userCommunities.clear();
+        _likedPosts.clear();
+        _likedReels.clear();
+        _savedPosts.clear();
+        _savedReels.clear();
+        _hasFetchedLiked = false;
+        _hasFetchedSaved = false;
       }
     }
 
@@ -132,11 +262,16 @@ class ProfileProvider extends ChangeNotifier {
     }
     _error = null;
 
-    // Batch call: fetch profile details, communities, and user posts concurrently
+    // Batch call: fetch profile details, communities, user posts, followers, following, and relationships concurrently
     await Future.wait(<Future<void>>[
       _fetchProfileDetails(userId),
       fetchUserCommunities(userId),
       fetchUserContent(userId),
+      loadFollowers(userId),
+      loadFollowing(userId),
+      loadBlockedAccounts(),
+      loadRestrictedAccounts(),
+      loadMutedAccounts(),
     ]);
   }
 
@@ -164,6 +299,18 @@ class ProfileProvider extends ChangeNotifier {
             ttl: const Duration(days: 7),
           );
           _profile = UserProfile.fromJson(data);
+          try {
+            if (data['showActivityStatus'] is bool) {
+              SharedPreferences.getInstance().then((SharedPreferences prefs) {
+                prefs.setBool('privacy_show_activity_$userId', data['showActivityStatus'] as bool);
+              });
+            }
+            if (data['sendReadReceipts'] is bool) {
+              SharedPreferences.getInstance().then((SharedPreferences prefs) {
+                prefs.setBool('privacy_read_receipts_$userId', data['sendReadReceipts'] as bool);
+              });
+            }
+          } catch (_) {}
         }
       }
       _error = null;
@@ -242,6 +389,202 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
+  /// Checks if a community is joined by checking the user's active communities.
+  bool isCommunityJoined({String? id, String? name}) {
+    if (id != null && id.isNotEmpty) {
+      if (_userCommunities.any((CommunityModel c) => c.id == id)) return true;
+    }
+    if (name != null && name.isNotEmpty) {
+      final String clean = name.trim().toLowerCase();
+      if (_userCommunities.any((CommunityModel c) => c.name.trim().toLowerCase() == clean)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Dynamically joins a community and updates the profile's joined communities.
+  Future<void> joinCommunity(String communityId, {String? name}) async {
+    try {
+      final ProfileSetupService setupService = ProfileSetupService(_client);
+      String targetId = communityId;
+      if (targetId.isEmpty && name != null && name.isNotEmpty) {
+        final List<CommunityModel> allComms = await setupService.getCommunities();
+        final CommunityModel match = allComms.firstWhere(
+          (CommunityModel c) => c.name.trim().toLowerCase() == name.trim().toLowerCase(),
+          orElse: () => const CommunityModel(id: '', name: '', description: ''),
+        );
+        targetId = match.id;
+      }
+      if (targetId.isNotEmpty) {
+        await setupService.joinCommunity(targetId);
+      }
+      if (!_userCommunities.any((CommunityModel c) =>
+          (targetId.isNotEmpty && c.id == targetId) ||
+          (name != null && c.name.trim().toLowerCase() == name.trim().toLowerCase()))) {
+        _userCommunities.add(CommunityModel(
+          id: targetId,
+          name: name ?? '',
+          description: '',
+          isJoined: true,
+        ));
+      }
+      if (_cachedUserId != null && _cachedUserId!.isNotEmpty) {
+        await fetchUserCommunities(_cachedUserId!, forceRefresh: true);
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to join community: $e');
+    }
+  }
+
+  /// Dynamically leaves a community and removes it from the profile's joined communities.
+  Future<void> leaveCommunity(String communityId, {String? name}) async {
+    try {
+      final ProfileSetupService setupService = ProfileSetupService(_client);
+      String targetId = communityId;
+      if (targetId.isEmpty && name != null && name.isNotEmpty) {
+        final CommunityModel match = _userCommunities.firstWhere(
+          (CommunityModel c) => c.name.trim().toLowerCase() == name.trim().toLowerCase(),
+          orElse: () => const CommunityModel(id: '', name: '', description: ''),
+        );
+        targetId = match.id;
+      }
+      if (targetId.isNotEmpty) {
+        await setupService.leaveCommunity(targetId);
+      }
+      _userCommunities.removeWhere((CommunityModel c) =>
+          (targetId.isNotEmpty && c.id == targetId) ||
+          (name != null && c.name.trim().toLowerCase() == name.trim().toLowerCase()));
+      if (_cachedUserId != null && _cachedUserId!.isNotEmpty) {
+        await fetchUserCommunities(_cachedUserId!, forceRefresh: true);
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to leave community: $e');
+    }
+  }
+
+  /// Removes or updates a reel in liked reels when unliked
+  void removeLikedReel(String id) {
+    _likedReels.removeWhere((ReelItemModel r) => r.id == id);
+    _likedPosts.removeWhere((PostItemModel p) => p.id == id);
+    notifyListeners();
+  }
+
+  void updateLikedReel(String id, {required bool isLiked, required int likesCount}) {
+    final int rIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (rIndex != -1) {
+      if (!isLiked) {
+        _likedReels.removeAt(rIndex);
+      } else {
+        _likedReels[rIndex] = _likedReels[rIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+      }
+    }
+    final int pIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (pIndex != -1) {
+      if (!isLiked) {
+        _likedPosts.removeAt(pIndex);
+      } else {
+        _likedPosts[pIndex] = _likedPosts[pIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<_ContentBatch> _processPosts(
+    List<PostResponseModel> posts, {
+    String? fallbackAuthorId,
+    bool markSaved = false,
+    bool markLiked = false,
+  }) async {
+    final List<PostItemModel> userPostsList = <PostItemModel>[];
+    final List<ReelItemModel> userReelsList = <ReelItemModel>[];
+
+    for (final PostResponseModel post in posts) {
+      String? mediaUrl;
+      String? thumbnailUrl;
+
+      if (post.mediaRefs.isNotEmpty) {
+        final String mediaId = post.mediaRefs.first;
+        try {
+          final dynamic mediaData =
+              await _client.get(ApiEndpoints.mediaStatus(mediaId));
+          if (mediaData is Map<String, dynamic>) {
+            mediaUrl = mediaData['url'] as String? ??
+                mediaData['downloadUrl'] as String?;
+            thumbnailUrl = mediaData['thumbnailUrl'] as String?;
+          }
+        } catch (e) {
+          debugPrint('⚠️ [ProfileProvider] Could not resolve media $mediaId: $e');
+        }
+      }
+
+      final String type = post.type.toUpperCase().trim();
+      final String authorUsername =
+          post.authorName ?? _profile?.username ?? 'you';
+      final String formattedUsername = authorUsername.startsWith('@')
+          ? authorUsername
+          : '@$authorUsername';
+      final String avatar = (post.authorAvatar != null &&
+              post.authorAvatar!.isNotEmpty)
+          ? post.authorAvatar!
+          : ((_profile?.avatarUrl != null && _profile!.avatarUrl!.isNotEmpty)
+              ? _profile!.avatarUrl!
+              : AppImages.user1);
+
+      if (type == 'VIDEO') {
+        userReelsList.add(
+          ReelItemModel(
+            id: post.id,
+            authorId: post.authorId ?? fallbackAuthorId ?? _cachedUserId,
+            authorDisplayName: post.authorDisplayName,
+            username: formattedUsername,
+            pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
+                ? _formatTime(post.createdAt)
+                : 'just now',
+            avatarAsset: avatar,
+            videoAsset: '',
+            videoUrl: mediaUrl,
+            thumbnailUrl: thumbnailUrl,
+            caption: post.body.isNotEmpty ? post.body : post.caption,
+            likesCount: post.likesCount,
+            commentsCount: post.commentsCount,
+            isLiked: markLiked || post.isLiked,
+            isSaved: markSaved || post.isSaved,
+            tags: post.tags,
+            durationText:
+                (post.duration != null && post.duration!.isNotEmpty)
+                    ? post.duration!
+                    : '0:30',
+          ),
+        );
+      } else {
+        // PHOTO or TEXT
+        userPostsList.add(
+          PostItemModel(
+            id: post.id,
+            authorId: post.authorId ?? fallbackAuthorId ?? _cachedUserId,
+            username: formattedUsername,
+            pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
+                ? _formatTime(post.createdAt)
+                : 'just now',
+            avatarAsset: avatar,
+            content: post.body.isNotEmpty ? post.body : post.caption,
+            likesCount: post.likesCount,
+            commentsCount: post.commentsCount,
+            isLiked: markLiked || post.isLiked,
+            isSaved: markSaved || post.isSaved,
+            postImageUrl: mediaUrl,
+            postType: type,
+          ),
+        );
+      }
+    }
+
+    return _ContentBatch(posts: userPostsList, reels: userReelsList);
+  }
+
   Future<void> fetchUserContent(String userId) async {
     if (userId.isEmpty) return;
 
@@ -252,92 +595,95 @@ class ProfileProvider extends ChangeNotifier {
       final PostContentService service = PostContentService(_client);
       final List<PostResponseModel> posts =
           await service.getPostsByAuthor(userId);
+      final _ContentBatch batch =
+          await _processPosts(posts, fallbackAuthorId: userId);
 
-      final List<PostItemModel> userPostsList = <PostItemModel>[];
-      final List<ReelItemModel> userReelsList = <ReelItemModel>[];
-
-      for (final PostResponseModel post in posts) {
-        String? mediaUrl;
-        String? thumbnailUrl;
-
-        if (post.mediaRefs.isNotEmpty) {
-          final String mediaId = post.mediaRefs.first;
-          try {
-            final dynamic mediaData =
-                await _client.get(ApiEndpoints.mediaStatus(mediaId));
-            if (mediaData is Map<String, dynamic>) {
-              mediaUrl = mediaData['url'] as String? ??
-                  mediaData['downloadUrl'] as String?;
-              thumbnailUrl = mediaData['thumbnailUrl'] as String?;
-            }
-          } catch (e) {
-            debugPrint('⚠️ [ProfileProvider] Could not resolve media $mediaId: $e');
-          }
-        }
-
-        final String type = post.type.toUpperCase().trim();
-        final String authorUsername = _profile?.username ?? 'you';
-        final String formattedUsername = authorUsername.startsWith('@')
-            ? authorUsername
-            : '@$authorUsername';
-        final String avatar =
-            (_profile?.avatarUrl != null && _profile!.avatarUrl!.isNotEmpty)
-                ? _profile!.avatarUrl!
-                : AppImages.user1;
-
-        if (type == 'VIDEO') {
-          userReelsList.add(
-            ReelItemModel(
-              id: post.id,
-              authorId: post.authorId ?? userId,
-              username: formattedUsername,
-              pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
-                  ? _formatTime(post.createdAt)
-                  : 'just now',
-              avatarAsset: avatar,
-              videoAsset: '',
-              videoUrl: mediaUrl,
-              thumbnailUrl: thumbnailUrl,
-              caption: post.body.isNotEmpty ? post.body : post.caption,
-              likesCount: post.likesCount,
-              commentsCount: post.commentsCount,
-              isLiked: post.isLiked,
-              tags: post.tags,
-              durationText:
-                  (post.duration != null && post.duration!.isNotEmpty)
-                      ? post.duration!
-                      : '0:30',
-            ),
-          );
-        } else {
-          // PHOTO or TEXT
-          userPostsList.add(
-            PostItemModel(
-              id: post.id,
-              authorId: post.authorId ?? userId,
-              username: formattedUsername,
-              pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
-                  ? _formatTime(post.createdAt)
-                  : 'just now',
-              avatarAsset: avatar,
-              content: post.body.isNotEmpty ? post.body : post.caption,
-              likesCount: post.likesCount,
-              commentsCount: post.commentsCount,
-              isLiked: post.isLiked,
-              postImageUrl: mediaUrl,
-              postType: type,
-            ),
-          );
-        }
-      }
-
-      _userPosts = userPostsList;
-      _userReels = userReelsList;
+      _userPosts = batch.posts;
+      _userReels = batch.reels;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Error fetching user content: $e');
     } finally {
       _isLoadingContent = false;
       notifyListeners();
+    }
+  }
+
+  /// List User's Liked Posts. GET /users/me/likes
+  Future<void> fetchLikedPosts({bool force = false}) async {
+    if (!force && _hasFetchedLiked && (_likedPosts.isNotEmpty || _likedReels.isNotEmpty)) {
+      return;
+    }
+    // Only show full loading state if we haven't loaded items yet
+    if (_likedPosts.isEmpty && _likedReels.isEmpty) {
+      _isLoadingLiked = true;
+      notifyListeners();
+    }
+
+    try {
+      final PostContentService service = PostContentService(_client);
+      final List<PostResponseModel> posts = await service.getLikedPosts();
+      final _ContentBatch batch = await _processPosts(posts, markLiked: true);
+
+      _likedPosts = batch.posts;
+      _likedReels = batch.reels;
+      _hasFetchedLiked = true;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Error fetching liked posts: $e');
+    } finally {
+      _isLoadingLiked = false;
+      _hasFetchedLiked = true;
+      notifyListeners();
+    }
+  }
+
+  /// List User's Saved Posts. GET /users/me/saved
+  Future<void> fetchSavedPosts({bool force = false}) async {
+    if (!force && _hasFetchedSaved && (_savedPosts.isNotEmpty || _savedReels.isNotEmpty)) {
+      return;
+    }
+    // Only show full loading state if we haven't loaded items yet
+    if (_savedPosts.isEmpty && _savedReels.isEmpty) {
+      _isLoadingSaved = true;
+      notifyListeners();
+    }
+
+    try {
+      final PostContentService service = PostContentService(_client);
+      final List<PostResponseModel> posts = await service.getSavedPosts();
+      final _ContentBatch batch = await _processPosts(posts, markSaved: true);
+
+      _savedPosts = batch.posts;
+      _savedReels = batch.reels;
+      _hasFetchedSaved = true;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Error fetching saved posts: $e');
+    } finally {
+      _isLoadingSaved = false;
+      _hasFetchedSaved = true;
+      notifyListeners();
+    }
+  }
+
+  /// Delete own Post or Video Post. DELETE /posts/:id
+  Future<bool> deletePost(String postId) async {
+    _userPosts.removeWhere((PostItemModel p) => p.id == postId);
+    _userReels.removeWhere((ReelItemModel r) => r.id == postId);
+    _likedPosts.removeWhere((PostItemModel p) => p.id == postId);
+    _likedReels.removeWhere((ReelItemModel r) => r.id == postId);
+    _savedPosts.removeWhere((PostItemModel p) => p.id == postId);
+    _savedReels.removeWhere((ReelItemModel r) => r.id == postId);
+    if (_profile != null && (_profile!.postsCount ?? 0) > 0) {
+      _profile = _profile!.copyWith(postsCount: _profile!.postsCount! - 1);
+    }
+    notifyListeners();
+
+    try {
+      final PostContentService service = PostContentService(_client);
+      await service.deletePost(postId);
+      return true;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Error deleting post: $e');
+      return false;
     }
   }
 
@@ -527,4 +873,430 @@ class ProfileProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+
+  bool isBlocked(String? key) {
+    if (key == null || key.trim().isEmpty) return false;
+    final String clean = key.trim().toLowerCase().replaceAll('@', '');
+    return _blockedAccounts.any((BlockedAccountItem a) =>
+        a.userId.toLowerCase() == clean ||
+        a.username.toLowerCase().replaceAll('@', '') == clean);
+  }
+
+  bool isRestricted(String? key) {
+    if (key == null || key.trim().isEmpty) return false;
+    final String clean = key.trim().toLowerCase().replaceAll('@', '');
+    return _restrictedAccounts.any((RestrictedAccountItem a) =>
+        a.userId.toLowerCase() == clean ||
+        a.username.toLowerCase().replaceAll('@', '') == clean);
+  }
+
+  bool isMuted(String? key) {
+    if (key == null || key.trim().isEmpty) return false;
+    final String clean = key.trim().toLowerCase().replaceAll('@', '');
+    return _mutedAccounts.any((MutedAccountItem a) =>
+        a.userId.toLowerCase() == clean ||
+        a.username.toLowerCase().replaceAll('@', '') == clean);
+  }
+
+  // ── Blocked Accounts Management ───────────────────────────────────────────
+
+  Future<void> loadBlockedAccounts({bool forceRefresh = false}) async {
+    _isLoadingBlocked = true;
+    notifyListeners();
+    try {
+      _blockedAccounts = await _relationshipService.getBlockedAccounts();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to load blocked accounts: $e');
+    } finally {
+      _isLoadingBlocked = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> blockUser(
+    String userId, {
+    String? username,
+    String? displayName,
+    String? avatarUrl,
+  }) async {
+    try {
+      final bool success = await _relationshipService.blockUser(userId);
+      if (success) {
+        final String effectiveUsername = username ?? 'user';
+        if (!_blockedAccounts.any((BlockedAccountItem a) => a.userId == userId)) {
+          _blockedAccounts.insert(
+            0,
+            BlockedAccountItem(
+              userId: userId,
+              username: effectiveUsername,
+              displayName: displayName ?? effectiveUsername,
+              avatarUrl: avatarUrl,
+              blockedAt: DateTime.now(),
+            ),
+          );
+        }
+        _followers.removeWhere((UserRelationItem r) => r.userId == userId);
+        _following.removeWhere((UserRelationItem r) => r.userId == userId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to block user $userId: $e');
+      return false;
+    }
+  }
+
+  Future<bool> unblockUser(String userId) async {
+    try {
+      final bool success = await _relationshipService.unblockUser(userId);
+      if (success) {
+        _blockedAccounts.removeWhere((BlockedAccountItem a) => a.userId == userId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to unblock user $userId: $e');
+      return false;
+    }
+  }
+
+  // ── Restricted Accounts Management ─────────────────────────────────────────
+
+  Future<void> loadRestrictedAccounts({bool forceRefresh = false}) async {
+    _isLoadingRestricted = true;
+    notifyListeners();
+    try {
+      _restrictedAccounts = await _relationshipService.getRestrictedAccounts();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to load restricted accounts: $e');
+    } finally {
+      _isLoadingRestricted = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> restrictUser(
+    String userId, {
+    String? username,
+    String? displayName,
+    String? avatarUrl,
+  }) async {
+    try {
+      final bool success = await _relationshipService.restrictUser(userId);
+      if (success) {
+        final String effectiveUsername = username ?? 'user';
+        if (!_restrictedAccounts.any((RestrictedAccountItem a) => a.userId == userId)) {
+          _restrictedAccounts.insert(
+            0,
+            RestrictedAccountItem(
+              userId: userId,
+              username: effectiveUsername,
+              displayName: displayName ?? effectiveUsername,
+              avatarUrl: avatarUrl,
+              restrictedAt: DateTime.now(),
+            ),
+          );
+        }
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to restrict user $userId: $e');
+      return false;
+    }
+  }
+
+  Future<bool> unrestrictUser(String userId) async {
+    try {
+      final bool success = await _relationshipService.unrestrictUser(userId);
+      if (success) {
+        _restrictedAccounts.removeWhere((RestrictedAccountItem a) => a.userId == userId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to unrestrict user $userId: $e');
+      return false;
+    }
+  }
+
+  // ── Muted Accounts Management ─────────────────────────────────────────────
+
+  Future<void> loadMutedAccounts({bool forceRefresh = false}) async {
+    _isLoadingMuted = true;
+    notifyListeners();
+    try {
+      _mutedAccounts = await _relationshipService.getMutedAccounts();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to load muted accounts: $e');
+    } finally {
+      _isLoadingMuted = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> muteUser(
+    String userId, {
+    String? username,
+    String? displayName,
+    String? avatarUrl,
+    String scope = 'posts',
+    int durationHours = 8,
+  }) async {
+    try {
+      final bool success = await _relationshipService.muteUser(
+        userId,
+        scope: scope,
+        durationHours: durationHours,
+      );
+      if (success) {
+        final String effectiveUsername = username ?? 'user';
+        if (!_mutedAccounts.any((MutedAccountItem a) => a.userId == userId)) {
+          _mutedAccounts.insert(
+            0,
+            MutedAccountItem(
+              userId: userId,
+              username: effectiveUsername,
+              displayName: displayName ?? effectiveUsername,
+              avatarUrl: avatarUrl,
+              mutedUntil: DateTime.now().add(Duration(hours: durationHours)),
+              scope: scope,
+            ),
+          );
+        }
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to mute user $userId: $e');
+      return false;
+    }
+  }
+
+  Future<bool> unmuteUser(String userId) async {
+    try {
+      final bool success = await _relationshipService.unmuteUser(userId);
+      if (success) {
+        _mutedAccounts.removeWhere((MutedAccountItem a) => a.userId == userId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to unmute user $userId: $e');
+      return false;
+    }
+  }
+
+  // ── Follow Requests Management ────────────────────────────────────────────
+
+  Future<void> loadFollowRequests({bool forceRefresh = false}) async {
+    _isLoadingFollowRequests = true;
+    notifyListeners();
+    try {
+      _followRequests = await _relationshipService.getFollowRequests();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to load follow requests: $e');
+    } finally {
+      _isLoadingFollowRequests = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> acceptFollowRequest(String requestId) async {
+    try {
+      final bool success = await _relationshipService.acceptFollowRequest(requestId);
+      if (success) {
+        _followRequests.removeWhere((FollowRequestItem r) => r.id == requestId || r.userId == requestId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to accept follow request $requestId: $e');
+      return false;
+    }
+  }
+
+  Future<bool> rejectFollowRequest(String requestId) async {
+    try {
+      final bool success = await _relationshipService.rejectFollowRequest(requestId);
+      if (success) {
+        _followRequests.removeWhere((FollowRequestItem r) => r.id == requestId || r.userId == requestId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to reject follow request $requestId: $e');
+      return false;
+    }
+  }
+
+  // ── Followers & Following Operations ──────────────────────────────────────
+
+  Future<List<UserRelationItem>> loadFollowers([String? userId]) async {
+    final String targetId = (userId != null && userId.isNotEmpty)
+        ? userId
+        : (_profile?.id ?? _cachedUserId ?? '');
+    if (targetId.isEmpty) return _followers;
+
+    _isLoadingRelations = true;
+    notifyListeners();
+    try {
+      final List<UserRelationItem> items =
+          await _relationshipService.getFollowers(targetId);
+      _followers = items;
+      if (_profile != null && (userId == null || userId == _profile!.id)) {
+        final int current = _profile!.followersCount ?? 0;
+        final int updated = items.length > current ? items.length : current;
+        _profile = _profile!.copyWith(followersCount: updated);
+      }
+      return items;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to load followers for $targetId: $e');
+      return <UserRelationItem>[];
+    } finally {
+      _isLoadingRelations = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<UserRelationItem>> loadFollowing([String? userId]) async {
+    final String targetId = (userId != null && userId.isNotEmpty)
+        ? userId
+        : (_profile?.id ?? _cachedUserId ?? '');
+    if (targetId.isEmpty) return _following;
+
+    _isLoadingRelations = true;
+    notifyListeners();
+    try {
+      final List<UserRelationItem> items =
+          await _relationshipService.getFollowing(targetId);
+      _following = items;
+      for (final UserRelationItem u in items) {
+        if (u.userId.trim().isNotEmpty) {
+          _followingUserIds.add(u.userId.trim().toLowerCase());
+        }
+        if (u.username.trim().isNotEmpty) {
+          _followingUsernames.add(u.username.replaceAll('@', '').trim().toLowerCase());
+        }
+      }
+      if (_profile != null) {
+        final int current = _profile!.followingCount ?? 0;
+        final int updated = items.length > current ? items.length : current;
+        _profile = _profile!.copyWith(followingCount: updated);
+      }
+      return items;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to load following for $userId: $e');
+      return <UserRelationItem>[];
+    } finally {
+      _isLoadingRelations = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> followUser(String userId, {String? username}) async {
+    try {
+      final bool success = await _relationshipService.followUser(userId);
+      if (success) {
+        if (userId.trim().isNotEmpty) {
+          _followingUserIds.add(userId.trim().toLowerCase());
+        }
+        if (username != null && username.trim().isNotEmpty) {
+          _followingUsernames.add(username.replaceAll('@', '').trim().toLowerCase());
+        }
+        final int idx = _following.indexWhere(
+            (UserRelationItem u) => u.userId.toLowerCase() == userId.toLowerCase());
+        if (idx != -1) {
+          _following[idx] = _following[idx].copyWith(isFollowing: true);
+        } else {
+          _following.insert(
+            0,
+            UserRelationItem(
+              userId: userId,
+              username: username ?? 'user',
+              displayName: username ?? 'User',
+              isFollowing: true,
+            ),
+          );
+        }
+        final int fIdx = _followers.indexWhere(
+            (UserRelationItem u) => u.userId.toLowerCase() == userId.toLowerCase());
+        if (fIdx != -1) {
+          _followers[fIdx] = _followers[fIdx].copyWith(isFollowing: true);
+        }
+        // If current profile is loaded, increment followingCount
+        if (_profile != null) {
+          final int cur = _profile!.followingCount ?? _following.length;
+          _profile = _profile!.copyWith(
+            followingCount: cur + 1,
+          );
+        }
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to follow user $userId: $e');
+      rethrow;
+    }
+  }
+
+  Future<bool> unfollowUser(String userId, {String? username}) async {
+    try {
+      final bool success = await _relationshipService.unfollowUser(userId);
+      if (success) {
+        if (userId.trim().isNotEmpty) {
+          _followingUserIds.remove(userId.trim().toLowerCase());
+        }
+        if (username != null && username.trim().isNotEmpty) {
+          _followingUsernames.remove(username.replaceAll('@', '').trim().toLowerCase());
+        }
+        _following.removeWhere(
+            (UserRelationItem u) => u.userId.toLowerCase() == userId.toLowerCase());
+        final int fIdx = _followers.indexWhere(
+            (UserRelationItem u) => u.userId.toLowerCase() == userId.toLowerCase());
+        if (fIdx != -1) {
+          _followers[fIdx] = _followers[fIdx].copyWith(isFollowing: false);
+        }
+        if (_profile != null) {
+          final int cur = _profile!.followingCount ?? _following.length + 1;
+          final int count = cur - 1;
+          _profile = _profile!.copyWith(
+            followingCount: count > 0 ? count : 0,
+          );
+        }
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to unfollow user $userId: $e');
+      rethrow;
+    }
+  }
+
+  Future<bool> removeFollower(String userId) async {
+    try {
+      final bool success = await _relationshipService.removeFollower(userId);
+      if (success) {
+        _followers.removeWhere((UserRelationItem u) => u.userId == userId);
+        if (_profile != null) {
+          final int cur = _profile!.followersCount ?? _followers.length + 1;
+          final int count = cur - 1;
+          _profile = _profile!.copyWith(
+            followersCount: count > 0 ? count : 0,
+          );
+        }
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to remove follower $userId: $e');
+      rethrow;
+    }
+  }
+}
+
+class _ContentBatch {
+  const _ContentBatch({required this.posts, required this.reels});
+  final List<PostItemModel> posts;
+  final List<ReelItemModel> reels;
 }

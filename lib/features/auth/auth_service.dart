@@ -1,8 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/api/api_exception.dart';
 import '../../core/cache/cache_manager.dart';
 import '../../core/config/api_endpoints.dart';
 import '../../core/config/app_config.dart';
@@ -39,6 +42,11 @@ class RefreshTokenResult {
 abstract final class _StorageKey {
   static const String accessToken = 'auth.accessToken';
   static const String refreshToken = 'auth.refreshToken';
+
+  /// Keyed by Apple's stable `userIdentifier` — Apple only shares the
+  /// account's email on the very first authorization, so we cache it
+  /// (Keychain-backed, survives reinstall) to resolve later sign-ins.
+  static const String appleEmailPrefix = 'auth.appleEmail.';
 }
 
 class AuthService {
@@ -65,11 +73,289 @@ class AuthService {
     return _storage.read(key: _StorageKey.refreshToken);
   }
 
+  // ── Social Sign-In: Google ────────────────────────────────────────────
+  // Triggers Google Sign-In SDK, gets idToken, posts to /auth/google.
+  // Returns AuthSession on success.
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: <String>['email', 'profile'],
+    clientId: defaultTargetPlatform == TargetPlatform.iOS
+        ? '494655940899-k47o7aedu4ggbq1bdabeinl69vma8vok.apps.googleusercontent.com'
+        : null,
+    serverClientId: AppConfig.googleServerClientId.isNotEmpty
+        ? AppConfig.googleServerClientId
+        : null,
+  );
+
+  Future<SocialSignInResult> signInWithGoogle() async {
+    if (AppConfig.useMockApi) {
+      debugPrint('ℹ️ [AuthService] Mock Google sign-in.');
+      final AuthSession session = _mockSession('mockgoogle@gmail.com');
+      await _persistTokens(session);
+      return SocialSignInResult.success(session);
+    }
+
+    try {
+      // Force fresh account picker every time
+      await _googleSignIn.signOut();
+      final GoogleSignInAccount? account = await _googleSignIn.signIn();
+      if (account == null) {
+        debugPrint('⚠️ [AuthService] Google sign-in cancelled by user.');
+        return SocialSignInResult.cancelled();
+      }
+
+      final String email = account.email.trim();
+      final String? displayName = account.displayName;
+      final String? photoUrl = account.photoUrl;
+      final String googleId = account.id;
+
+      debugPrint('🔑 [AuthService] Google account selected: $email (Name: $displayName)');
+
+      // Generate strong deterministic password for this Google account
+      final String googleAuthPassword = 'GoogleAuth_${googleId}_!Aa9';
+
+      // 1. Check if email exists by attempting login first
+      try {
+        debugPrint('🚀 [AuthService] Attempting Login with Google credentials for: $email');
+        final AuthSession session = await signIn(
+          email: email,
+          password: googleAuthPassword,
+        );
+        debugPrint('✅ [AuthService] Google login successful for: $email');
+        // Existing user logged in — go straight to home.
+        // Profile setup is only needed for brand-new registrations.
+        return SocialSignInResult.success(session);
+      } catch (loginError) {
+        debugPrint('ℹ️ [AuthService] Google login attempt failed: $loginError');
+
+        // Case 1: Email not verified yet
+        if (loginError is ApiException && loginError.code == 'EMAIL_NOT_VERIFIED') {
+          debugPrint('⚠️ [AuthService] Email not verified. Resending OTP for: $email');
+          try {
+            await resendEmailOtp(email);
+          } catch (_) {}
+          return SocialSignInResult.needsVerification(
+            email: email,
+            displayName: displayName,
+            photoUrl: photoUrl,
+            message: 'Please verify your email address. A verification code has been sent.',
+          );
+        }
+
+        // Case 2: User does not exist (or wrong password) -> Call Register API!
+        debugPrint('🚀 [AuthService] Email does not exist or login failed. Attempting Register for: $email');
+        try {
+          final RegisterResponse reg = await register(
+            email: email,
+            password: googleAuthPassword,
+          );
+          debugPrint('✅ [AuthService] Google registration initiated for: $email');
+          return SocialSignInResult.needsVerification(
+            email: email,
+            displayName: displayName,
+            photoUrl: photoUrl,
+            message: reg.message,
+          );
+        } catch (regError) {
+          debugPrint('❌ [AuthService] Google register failed: $regError');
+
+          if (regError is ApiException) {
+            if (regError.code == 'OTP_COOLDOWN') {
+              return SocialSignInResult.needsVerification(
+                email: email,
+                displayName: displayName,
+                photoUrl: photoUrl,
+                message: regError.message,
+              );
+            }
+            if (regError.statusCode == 409 ||
+                regError.message.toLowerCase().contains('already exists')) {
+              debugPrint(
+                  '⚠️ [AuthService] Email $email exists with a password account. Redirecting to password login.');
+              return SocialSignInResult.accountExistsWithPassword(
+                email: email,
+                displayName: displayName,
+              );
+            }
+            return SocialSignInResult.error(regError.message);
+          }
+          return SocialSignInResult.error(regError.toString());
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ [AuthService] Google sign-in general error: $e');
+      return SocialSignInResult.error(e.toString());
+    }
+  }
+
+  // ── Social Sign-In: Apple ────────────────────────────────────────────
+  // Mirrors signInWithGoogle() exactly: no dedicated backend endpoint — a
+  // deterministic password is derived from Apple's stable `userIdentifier`,
+  // then we try login first and fall back to register.
+  //
+  // Apple only returns `email`/`givenName`/`familyName` on the FIRST
+  // authorization for this app + Apple ID; every later sign-in returns them
+  // as null. We cache the email keyed by `userIdentifier` in secure storage
+  // so repeat sign-ins can still resolve an email to log in with.
+
+  Future<SocialSignInResult> signInWithApple() async {
+    if (AppConfig.useMockApi) {
+      debugPrint('ℹ️ [AuthService] Mock Apple sign-in.');
+      final AuthSession session = _mockSession('mockapple@icloud.com');
+      await _persistTokens(session);
+      return SocialSignInResult.success(session);
+    }
+
+    try {
+      final AuthorizationCredentialAppleID credential =
+          await SignInWithApple.getAppleIDCredential(
+        scopes: <AppleIDAuthorizationScopes>[
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      if (credential.identityToken == null ||
+          credential.identityToken!.isEmpty) {
+        debugPrint('❌ [AuthService] Apple sign-in: identityToken is null.');
+        return SocialSignInResult.error('Failed to get Apple identity token.');
+      }
+
+      final String userIdentifier = credential.userIdentifier ?? '';
+      if (userIdentifier.isEmpty) {
+        debugPrint('❌ [AuthService] Apple sign-in: userIdentifier is null.');
+        return SocialSignInResult.error(
+            'Failed to get your Apple account identifier.');
+      }
+
+      final String? givenName = credential.givenName;
+      final String? familyName = credential.familyName;
+      final String? displayName =
+          ((givenName != null && givenName.isNotEmpty) ||
+                  (familyName != null && familyName.isNotEmpty))
+              ? '${givenName ?? ''} ${familyName ?? ''}'.trim()
+              : null;
+
+      // Apple only shares the email on the first authorization — cache it
+      // (or fall back to a previously cached one) so repeat sign-ins work.
+      String? email = credential.email?.trim();
+      if (email != null && email.isNotEmpty) {
+        debugPrint(
+            '🔑 [AuthService] Apple returned a fresh email for $userIdentifier — caching it.');
+        await _storage.write(
+          key: '${_StorageKey.appleEmailPrefix}$userIdentifier',
+          value: email,
+        );
+      } else {
+        email = await _storage.read(
+          key: '${_StorageKey.appleEmailPrefix}$userIdentifier',
+        );
+        debugPrint(
+            'ℹ️ [AuthService] Apple did not share an email this time; using cached: $email');
+      }
+
+      if (email == null || email.isEmpty) {
+        debugPrint(
+            '❌ [AuthService] Apple sign-in: no email available for $userIdentifier.');
+        return SocialSignInResult.error(
+          'Apple did not share an email for this sign-in. Go to Settings → '
+          'Apple ID → Sign-In & Security → Sign in with Apple, remove this '
+          'app, then try again.',
+        );
+      }
+
+      debugPrint(
+          '🔑 [AuthService] Apple account selected: $email (Name: $displayName)');
+
+      // Deterministic password derived from Apple's stable user identifier.
+      final String applePassword = 'AppleAuth_${userIdentifier}_!Aa9';
+
+      // 1. Check if the account exists by attempting login first.
+      try {
+        debugPrint(
+            '🚀 [AuthService] Attempting Login with Apple credentials for: $email');
+        final AuthSession session =
+            await signIn(email: email, password: applePassword);
+        debugPrint('✅ [AuthService] Apple login successful for: $email');
+        // Existing user logged in — go straight to home.
+        // Profile setup is only needed for brand-new registrations.
+        return SocialSignInResult.success(session);
+      } catch (loginError) {
+        debugPrint('ℹ️ [AuthService] Apple login attempt failed: $loginError');
+
+        // Case 1: Email not verified yet
+        if (loginError is ApiException &&
+            loginError.code == 'EMAIL_NOT_VERIFIED') {
+          debugPrint(
+              '⚠️ [AuthService] Email not verified. Resending OTP for: $email');
+          try {
+            await resendEmailOtp(email);
+          } catch (_) {}
+          return SocialSignInResult.needsVerification(
+            email: email,
+            displayName: displayName,
+            message:
+                'Please verify your email address. A verification code has been sent.',
+          );
+        }
+
+        // Case 2: User does not exist (or wrong password) -> Call Register API!
+        debugPrint(
+            '🚀 [AuthService] Email does not exist or login failed. Attempting Register for: $email');
+        try {
+          final RegisterResponse reg =
+              await register(email: email, password: applePassword);
+          debugPrint(
+              '✅ [AuthService] Apple registration initiated for: $email');
+          return SocialSignInResult.needsVerification(
+            email: email,
+            displayName: displayName,
+            message: reg.message,
+          );
+        } catch (regError) {
+          debugPrint('❌ [AuthService] Apple register failed: $regError');
+
+          if (regError is ApiException) {
+            if (regError.code == 'OTP_COOLDOWN') {
+              return SocialSignInResult.needsVerification(
+                email: email,
+                displayName: displayName,
+                message: regError.message,
+              );
+            }
+            if (regError.statusCode == 409 ||
+                regError.message.toLowerCase().contains('already exists')) {
+              debugPrint(
+                  '⚠️ [AuthService] Email $email exists with a password account. Redirecting to password login.');
+              return SocialSignInResult.accountExistsWithPassword(
+                email: email,
+                displayName: displayName,
+              );
+            }
+            return SocialSignInResult.error(regError.message);
+          }
+          return SocialSignInResult.error(regError.toString());
+        }
+      }
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        debugPrint('⚠️ [AuthService] Apple sign-in cancelled by user.');
+        return SocialSignInResult.cancelled();
+      }
+      debugPrint('❌ [AuthService] Apple sign-in error: ${e.message}');
+      return SocialSignInResult.error(e.message);
+    } catch (e) {
+      debugPrint('❌ [AuthService] Apple sign-in general error: $e');
+      return SocialSignInResult.error(e.toString());
+    }
+  }
+
   // ── Register ──────────────────────────────────────────────────────────────
   Future<RegisterResponse> register({
     required String email,
     required String password,
   }) async {
+    _client.authToken = null;
     if (AppConfig.useMockApi) {
       debugPrint('ℹ️ [AuthService] Mock API is ON. Returning mock register response.');
       return RegisterResponse(
@@ -106,6 +392,7 @@ class AuthService {
     bool staySignedIn = false,
     String? deviceLabel,
   }) async {
+    _client.authToken = null;
     if (AppConfig.useMockApi) {
       debugPrint('ℹ️ [AuthService] Mock API is ON. Returning mock verify session.');
       return _mockSession(email);
@@ -139,6 +426,7 @@ class AuthService {
   // Returns: { message }
 
   Future<void> resendEmailOtp(String email) async {
+    _client.authToken = null;
     if (AppConfig.useMockApi) {
       debugPrint('ℹ️ [AuthService] Mock resendEmailOtp for $email');
       return;
@@ -158,6 +446,7 @@ class AuthService {
     required String email,
     required String password,
   }) async {
+    _client.authToken = null;
     if (AppConfig.useMockApi) {
       debugPrint('ℹ️ [AuthService] Mock API is ON. Returning mock sign-in session.');
       return _mockSession(email);
@@ -169,6 +458,25 @@ class AuthService {
       body: <String, dynamic>{'email': email, 'password': password},
     );
     debugPrint('📥 [AuthService] Login Response: $data');
+    if (data is Map<String, dynamic>) {
+      final bool isPendingDeletion = data['accountPendingDeletion'] == true ||
+          data['code'] == 'ACCOUNT_PENDING_DELETION' ||
+          (data['data'] is Map &&
+              (data['data']['accountPendingDeletion'] == true ||
+                  data['data']['code'] == 'ACCOUNT_PENDING_DELETION'));
+
+      if (isPendingDeletion) {
+        debugPrint(
+            '⚠️ [AuthService] Account is pending deletion. Intercepting login response.');
+        throw ApiException(
+          data['message']?.toString() ??
+              'Your account is currently scheduled for deletion.',
+          statusCode: 200,
+          code: 'ACCOUNT_PENDING_DELETION',
+          data: data,
+        );
+      }
+    }
     final AuthSession session =
         AuthSession.fromJson(data as Map<String, dynamic>);
     _client.authToken = session.accessToken;
@@ -391,6 +699,7 @@ class AuthService {
   Future<void> clearAllLocalData() async {
     debugPrint(
         '🧹 [AuthService] Clearing authentication credentials and temporary cache...');
+    _client.authToken = null;
     _inMemoryAccessToken = null;
     _inMemoryRefreshToken = null;
     try {
@@ -424,6 +733,102 @@ class AuthService {
       }
     }
     await clearAllLocalData();
+  }
+
+  // ── Request Account Deletion ──────────────────────────────────────────────
+  // POST /users/me/delete
+  // Body: { password, reason, feedback? }
+  // Returns: { message, restorationToken?, scheduledFor? }
+  // After calling: session is invalidated server-side. Clear local data.
+
+  Future<AccountDeletionResult> requestAccountDeletion({
+    required String password,
+    required String reason,
+    String? feedback,
+  }) async {
+    if (AppConfig.useMockApi) {
+      debugPrint('ℹ️ [AuthService] Mock requestAccountDeletion.');
+      await clearAllLocalData();
+      return AccountDeletionResult(
+        message: 'Your account is scheduled for deletion.',
+        restorationToken: 'mock-restoration-token',
+      );
+    }
+
+    debugPrint('🚀 [AuthService] Requesting account deletion...');
+    final Map<String, dynamic> body = <String, dynamic>{
+      'password': password,
+      'reason': reason,
+    };
+    if (feedback != null && feedback.trim().isNotEmpty) {
+      body['feedback'] = feedback.trim();
+    }
+
+    final dynamic data = await _client.post(
+      ApiEndpoints.requestAccountDeletion,
+      body: body,
+    );
+    debugPrint('📥 [AuthService] Account Deletion Response: $data');
+
+    final Map<String, dynamic> payload =
+        (data is Map<String, dynamic>) ? data : <String, dynamic>{};
+    final Map<String, dynamic> inner =
+        (payload['data'] is Map<String, dynamic>)
+            ? payload['data'] as Map<String, dynamic>
+            : payload;
+
+    await clearAllLocalData();
+
+    return AccountDeletionResult(
+      message: inner['message']?.toString() ??
+          'Your account is scheduled for deletion.',
+      restorationToken: inner['restorationToken']?.toString(),
+      scheduledFor: inner['scheduledFor']?.toString(),
+    );
+  }
+
+  // ── Cancel Account Deletion ────────────────────────────────────────────────
+  // POST /auth/cancel-deletion
+  // Body: { restorationToken }
+  // Returns: { accessToken, refreshToken, user } — restores session.
+
+  Future<AuthSession> cancelAccountDeletion({
+    required String restorationToken,
+  }) async {
+    if (AppConfig.useMockApi) {
+      debugPrint('ℹ️ [AuthService] Mock cancelAccountDeletion.');
+      return _mockSession('restored@example.com');
+    }
+
+    debugPrint('🚀 [AuthService] Cancelling account deletion...');
+    _client.authToken = null;
+    final dynamic data = await _client.post(
+      ApiEndpoints.cancelDeletion,
+      body: <String, dynamic>{'restorationToken': restorationToken},
+    );
+    debugPrint('📥 [AuthService] Cancel Deletion Response: $data');
+    final AuthSession session =
+        AuthSession.fromJson(data as Map<String, dynamic>);
+    _client.authToken = session.accessToken;
+    await _persistTokens(session);
+    return session;
+  }
+
+  // ── Get Account Deletion Status ───────────────────────────────────────────
+  // GET /users/me/deletion-status
+  Future<Map<String, dynamic>> getDeletionStatus() async {
+    if (AppConfig.useMockApi) {
+      debugPrint('ℹ️ [AuthService] Mock getDeletionStatus.');
+      return <String, dynamic>{'accountPendingDeletion': false};
+    }
+
+    debugPrint('🚀 [AuthService] Fetching account deletion status...');
+    final dynamic data = await _client.get(ApiEndpoints.deletionStatus);
+    debugPrint('📥 [AuthService] Deletion Status Response: $data');
+    if (data is Map<String, dynamic>) {
+      return data;
+    }
+    return <String, dynamic>{};
   }
 
   // ── Restore from secure storage ───────────────────────────────────────────
@@ -550,4 +955,115 @@ class RegisterResponse {
   final bool verificationRequired;
   final String email;
   final String message;
+}
+
+// ── Social Sign-In Result ─────────────────────────────────────────────────────
+
+enum SocialSignInStatus {
+  success,
+  needsProfileSetup,
+  needsVerification,
+  cancelled,
+  error,
+  /// Email is registered with a password — user must log in via email/password.
+  accountExistsWithPassword,
+}
+
+class SocialSignInResult {
+  const SocialSignInResult._({
+    required this.status,
+    this.session,
+    this.email,
+    this.displayName,
+    this.photoUrl,
+    this.errorMessage,
+  });
+
+  factory SocialSignInResult.success(AuthSession session) =>
+      SocialSignInResult._(
+        status: SocialSignInStatus.success,
+        session: session,
+      );
+
+  factory SocialSignInResult.needsProfileSetup(
+    AuthSession session, {
+    String? displayName,
+    String? photoUrl,
+  }) =>
+      SocialSignInResult._(
+        status: SocialSignInStatus.needsProfileSetup,
+        session: session,
+        displayName: displayName,
+        photoUrl: photoUrl,
+      );
+
+  factory SocialSignInResult.needsVerification({
+    required String email,
+    String? displayName,
+    String? photoUrl,
+    String? message,
+  }) =>
+      SocialSignInResult._(
+        status: SocialSignInStatus.needsVerification,
+        email: email,
+        displayName: displayName,
+        photoUrl: photoUrl,
+        errorMessage: message,
+      );
+
+  factory SocialSignInResult.cancelled() => const SocialSignInResult._(
+        status: SocialSignInStatus.cancelled,
+      );
+
+  factory SocialSignInResult.error(String message) => SocialSignInResult._(
+        status: SocialSignInStatus.error,
+        errorMessage: message,
+      );
+
+  /// Use when the email is already registered with email/password (HTTP 409 during
+  /// Google sign-in). The UI should redirect to the login screen with [email] prefilled.
+  factory SocialSignInResult.accountExistsWithPassword({
+    required String email,
+    String? displayName,
+  }) =>
+      SocialSignInResult._(
+        status: SocialSignInStatus.accountExistsWithPassword,
+        email: email,
+        displayName: displayName,
+        errorMessage:
+            'This email is already registered with a password. Please log in with your email and password.',
+      );
+
+  final SocialSignInStatus status;
+  final AuthSession? session;
+  final String? email;
+  final String? displayName;
+  final String? photoUrl;
+  final String? errorMessage;
+
+  bool get isSuccess => status == SocialSignInStatus.success && session != null;
+  bool get needsProfileSetup => status == SocialSignInStatus.needsProfileSetup;
+  bool get needsVerification => status == SocialSignInStatus.needsVerification;
+  bool get isCancelled => status == SocialSignInStatus.cancelled;
+  bool get isError => status == SocialSignInStatus.error;
+  bool get accountExistsWithPassword =>
+      status == SocialSignInStatus.accountExistsWithPassword;
+}
+
+// ── Account Deletion Result ───────────────────────────────────────────────────
+
+class AccountDeletionResult {
+  const AccountDeletionResult({
+    required this.message,
+    this.restorationToken,
+    this.scheduledFor,
+  });
+
+  final String message;
+
+  /// Token used to cancel deletion within the grace period.
+  final String? restorationToken;
+
+  /// ISO-8601 date string indicating when the account will be permanently deleted.
+  final String? scheduledFor;
 }

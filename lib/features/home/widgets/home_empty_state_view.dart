@@ -8,10 +8,16 @@ import '../../../l10n/app_localizations.dart';
 class HomeEmptyStateView extends StatelessWidget {
   const HomeEmptyStateView({
     required this.onOpenExplore,
+    this.title,
+    this.subtitle,
+    this.buttonText,
     super.key,
   });
 
   final VoidCallback onOpenExplore;
+  final String? title;
+  final String? subtitle;
+  final String? buttonText;
 
   @override
   Widget build(BuildContext context) {
@@ -42,9 +48,9 @@ class HomeEmptyStateView extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.xxl),
 
-            // ── Title: "Nothing here yet" ─────────────────────────────────────
+            // ── Title ────────────────────────────────────────────────────────
             Text(
-              l10n.homeEmptyTitle,
+              title ?? l10n.homeEmptyTitle,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,
@@ -57,7 +63,7 @@ class HomeEmptyStateView extends StatelessWidget {
 
             // ── Subtitle ─────────────────────────────────────────────────────
             Text(
-              l10n.homeEmptySub,
+              subtitle ?? l10n.homeEmptySub,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white60,
@@ -68,7 +74,7 @@ class HomeEmptyStateView extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.xxl),
 
-            // ── CTA Button: "Open Explore" ──────────────────────────────────
+            // ── CTA Button: "Explore Communities" ────────────────────────────
             GestureDetector(
               onTap: onOpenExplore,
               child: Container(
@@ -95,7 +101,7 @@ class HomeEmptyStateView extends StatelessWidget {
                   ],
                 ),
                 child: Text(
-                  l10n.homeOpenExploreBtn,
+                  buttonText ?? l10n.homeOpenExploreBtn,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,

@@ -16,10 +16,13 @@ import '../../home/provider/home_feed_provider.dart';
 import '../../home/screens/home_screen.dart';
 import '../../home/services/reel_video_preloader.dart';
 import '../../profile/provider/profile_provider.dart';
+import '../../profile_setup/provider/profile_setup_provider.dart';
 import '../auth_provider.dart';
+import '../auth_service.dart';
 import '../widgets/auth_divider.dart';
 import '../widgets/auth_footer_link.dart';
 import '../widgets/auth_header.dart';
+import 'account_pending_deletion_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -78,6 +81,37 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
 
+        if (authProvider.errorCode == 'ACCOUNT_PENDING_DELETION') {
+          final dynamic errData = authProvider.errorData;
+          String? restorationToken;
+          String? scheduledFor;
+          if (errData is Map) {
+            final dynamic inner =
+                (errData['data'] is Map) ? errData['data'] : errData;
+            restorationToken = inner['restorationToken']?.toString();
+            scheduledFor =
+                (inner['deletionScheduledAt'] ?? inner['scheduledFor'])
+                    ?.toString();
+          }
+          restorationToken ??= authProvider.pendingDeletionRestorationToken;
+          scheduledFor ??= authProvider.deletionScheduledAt;
+
+          if (restorationToken != null && restorationToken.isNotEmpty) {
+            authProvider.clearError();
+            Navigator.push<void>(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => AccountPendingDeletionScreen(
+                  restorationToken: restorationToken!,
+                  scheduledFor: scheduledFor,
+                ),
+              ),
+            );
+            return;
+          }
+          // No restoration token — fall through to display error
+        }
+
         final String? errorMsg = authProvider.error;
         if (errorMsg != null && errorMsg.isNotEmpty) {
           AppSnackBar.showError(
@@ -131,6 +165,132 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
     setState(() => _isPreloadingFeed = false);
+    _goHome(context);
+  }
+
+  // ── Social Sign-In helpers ─────────────────────────────────────────────────
+
+  Future<void> _handleGoogleSignIn() async {
+    final AuthProvider authProvider = context.read<AuthProvider>();
+    if (authProvider.isBusy) return;
+    await _handleSocialSignInResult(
+      await authProvider.signInWithGoogle(),
+      authProvider,
+    );
+  }
+
+  Future<void> _handleAppleSignIn() async {
+    final AuthProvider authProvider = context.read<AuthProvider>();
+    if (authProvider.isBusy) return;
+    await _handleSocialSignInResult(
+      await authProvider.signInWithApple(),
+      authProvider,
+    );
+  }
+
+  /// Shared handler for Google + Apple sign-in — both go through the same
+  /// login-then-register flow, so they land in the exact same UI states.
+  Future<void> _handleSocialSignInResult(
+    SocialSignInResult result,
+    AuthProvider authProvider,
+  ) async {
+    if (!mounted) return;
+
+    if (result.isCancelled) {
+      return;
+    }
+
+    if (result.isError) {
+      final String? errorMsg = result.errorMessage ?? authProvider.error;
+      if (errorMsg != null && errorMsg.isNotEmpty) {
+        AppSnackBar.showError(
+          context,
+          title: 'Sign In Failed',
+          subtitle: errorMsg,
+        );
+        authProvider.clearError();
+      }
+      return;
+    }
+
+    // Pre-fill profile setup provider if social metadata exists
+    if (result.displayName != null || result.photoUrl != null) {
+      context.read<ProfileSetupProvider>().prefillSocialData(
+        displayName: result.displayName,
+        avatarUrl: result.photoUrl,
+      );
+    }
+
+    // Case 1: Newly registered -> Navigate to email OTP verification
+    if (result.needsVerification) {
+      if (result.errorMessage != null && result.errorMessage!.isNotEmpty) {
+        AppSnackBar.showInfo(
+          context,
+          title: 'Verification Code Sent',
+          subtitle: result.errorMessage!,
+        );
+      }
+      Navigator.pushNamed(
+        context,
+        AppRoutes.verifyEmailOtp,
+        arguments: result.email,
+      );
+      return;
+    }
+
+    // Case 2: User logged in but profile not setup yet -> Navigate to profile setup
+    if (result.needsProfileSetup) {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.profileSetup,
+        (Route<dynamic> route) => false,
+      );
+      return;
+    }
+
+    // Case 3: Already registered and profile completed -> Preload feed and Go Home
+    if (result.isSuccess) {
+      await _warmUpFeedAndGoHome(authProvider);
+    }
+  }
+
+  /// Resets the feed, pre-fetches the profile + first reel, then navigates
+  /// home. Shared by both the password login path and social sign-in.
+  Future<void> _warmUpFeedAndGoHome(AuthProvider authProvider) async {
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    homeFeed.resetToHome();
+    final String? uid = authProvider.userId;
+    final List<Future<dynamic>> warmUpTasks = <Future<dynamic>>[];
+    if (uid != null && uid.isNotEmpty) {
+      warmUpTasks.add(
+        context.read<ProfileProvider>().fetchProfile(uid).catchError((_) {}),
+      );
+    }
+    warmUpTasks.add(() async {
+      try {
+        await homeFeed.loadFeed();
+        if (homeFeed.reels.isNotEmpty) {
+          final firstReel = homeFeed.reels.first;
+          final controller =
+              await ReelVideoPreloader.instance.getOrCreate(firstReel);
+          if (controller != null && !controller.value.isInitialized) {
+            await controller.initialize().timeout(
+                  const Duration(seconds: 4),
+                  onTimeout: () => controller,
+                );
+          }
+          ReelVideoPreloader.instance.preloadSurrounding(homeFeed.reels, 0);
+        }
+      } catch (e) {
+        debugPrint('⚠️ [Login] Social pre-fetching feed failed: $e');
+      }
+    }());
+    await Future.wait(warmUpTasks).timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => <dynamic>[],
+    );
+
+    if (!mounted) return;
     _goHome(context);
   }
 
@@ -302,18 +462,24 @@ class _LoginScreenState extends State<LoginScreen> {
                       Row(
                         children: <Widget>[
                           Expanded(
-                            child: AppSocialButton(
-                              text: l10n.authApple,
-                              iconPath: AppIcons.apple,
-                              onPressed: () {},
+                            child: Selector<AuthProvider, bool>(
+                              selector: (_, AuthProvider p) => p.isBusy,
+                              builder: (_, bool busy, _) => AppSocialButton(
+                                text: l10n.authApple,
+                                iconPath: AppIcons.apple,
+                                onPressed: busy ? () {} : _handleAppleSignIn,
+                              ),
                             ),
                           ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
-                            child: AppSocialButton(
-                              text: l10n.authGoogle,
-                              iconPath: AppIcons.google,
-                              onPressed: () {},
+                            child: Selector<AuthProvider, bool>(
+                              selector: (_, AuthProvider p) => p.isBusy,
+                              builder: (_, bool busy, _) => AppSocialButton(
+                                text: l10n.authGoogle,
+                                iconPath: AppIcons.google,
+                                onPressed: busy ? () {} : _handleGoogleSignIn,
+                              ),
                             ),
                           ),
                         ],

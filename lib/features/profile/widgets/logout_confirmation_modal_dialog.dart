@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
@@ -6,31 +7,49 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
+import '../provider/profile_provider.dart';
 
 class LogoutConfirmationModalDialog extends StatelessWidget {
   const LogoutConfirmationModalDialog({
-    this.username = '@ashinorbit',
-    this.avatarAsset = AppImages.user1,
+    this.username,
+    this.avatarAsset,
     required this.onConfirmLogout,
     super.key,
   });
 
-  final String username;
-  final String avatarAsset;
+  final String? username;
+  final String? avatarAsset;
   final VoidCallback onConfirmLogout;
 
   static Future<void> show(
     BuildContext context, {
-    String username = '@ashinorbit',
-    String avatarAsset = AppImages.user1,
+    String? username,
+    String? avatarAsset,
     required VoidCallback onConfirmLogout,
   }) async {
+    ProfileProvider? profileProvider;
+    try {
+      profileProvider = context.read<ProfileProvider>();
+    } catch (_) {}
+
+    final String effectiveUsername = (username != null && username.isNotEmpty)
+        ? username
+        : (profileProvider != null && profileProvider.username.isNotEmpty
+            ? profileProvider.username
+            : '@user');
+
+    final String effectiveAvatar = (avatarAsset != null && avatarAsset.isNotEmpty)
+        ? avatarAsset
+        : (profileProvider != null && profileProvider.avatarUrl.isNotEmpty
+            ? profileProvider.avatarUrl
+            : AppImages.user1);
+
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (_) => LogoutConfirmationModalDialog(
-        username: username,
-        avatarAsset: avatarAsset,
+        username: effectiveUsername,
+        avatarAsset: effectiveAvatar,
         onConfirmLogout: onConfirmLogout,
       ),
     );
@@ -38,8 +57,25 @@ class LogoutConfirmationModalDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ProfileProvider? profileProvider;
+    try {
+      profileProvider = context.watch<ProfileProvider>();
+    } catch (_) {}
+
+    final String resolvedUsername = (username != null && username!.isNotEmpty)
+        ? username!
+        : (profileProvider != null && profileProvider.username.isNotEmpty
+            ? profileProvider.username
+            : '@user');
+
+    final String resolvedAvatar = (avatarAsset != null && avatarAsset!.isNotEmpty)
+        ? avatarAsset!
+        : (profileProvider != null && profileProvider.avatarUrl.isNotEmpty
+            ? profileProvider.avatarUrl
+            : AppImages.user1);
+
     final String cleanUsername =
-        username.startsWith('@') ? username : '@$username';
+        resolvedUsername.startsWith('@') ? resolvedUsername : '@$resolvedUsername';
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -73,9 +109,9 @@ class LogoutConfirmationModalDialog extends StatelessWidget {
                 gradient: AppColors.primaryGradientButton,
               ),
               child: ClipOval(
-                child: avatarAsset.startsWith('http')
+                child: resolvedAvatar.startsWith('http')
                     ? Image.network(
-                        avatarAsset,
+                        resolvedAvatar,
                         width: 58,
                         height: 58,
                         fit: BoxFit.cover,
@@ -89,8 +125,8 @@ class LogoutConfirmationModalDialog extends StatelessWidget {
                         ),
                       )
                     : Image.asset(
-                        avatarAsset.isNotEmpty
-                            ? avatarAsset
+                        resolvedAvatar.isNotEmpty
+                            ? resolvedAvatar
                             : AppImages.user1,
                         width: 58,
                         height: 58,

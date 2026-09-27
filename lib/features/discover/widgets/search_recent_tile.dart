@@ -11,11 +11,13 @@ class SearchRecentTile extends StatelessWidget {
   const SearchRecentTile({
     required this.query,
     required this.onDelete,
+    this.onTap,
     super.key,
   });
 
   final String query;
   final VoidCallback onDelete;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -34,10 +36,14 @@ class SearchRecentTile extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
-            child: Text(
-              query,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: context.themeTextPrimary,
+            child: GestureDetector(
+              onTap: onTap,
+              behavior: HitTestBehavior.opaque,
+              child: Text(
+                query,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: context.themeTextPrimary,
+                ),
               ),
             ),
           ),

@@ -14,16 +14,19 @@ class BlockUserModalDialog extends StatefulWidget {
   const BlockUserModalDialog({
     required this.username,
     required this.onConfirmBlock,
+    this.onConfirmUnblock,
     super.key,
   });
 
   final String username;
   final VoidCallback onConfirmBlock;
+  final VoidCallback? onConfirmUnblock;
 
   static Future<void> show(
     BuildContext context, {
     required String username,
     required VoidCallback onConfirmBlock,
+    VoidCallback? onConfirmUnblock,
   }) async {
     await showDialog<void>(
       context: context,
@@ -31,6 +34,7 @@ class BlockUserModalDialog extends StatefulWidget {
       builder: (_) => BlockUserModalDialog(
         username: username,
         onConfirmBlock: onConfirmBlock,
+        onConfirmUnblock: onConfirmUnblock,
       ),
     );
   }
@@ -167,7 +171,7 @@ class _BlockUserModalDialogState extends State<BlockUserModalDialog> {
                   subtitle: 'Their posts and comments are gone from your app',
                   actionLabel: 'Undo',
                   onAction: () {
-                    // Undo handler
+                    widget.onConfirmUnblock?.call();
                   },
                 );
 

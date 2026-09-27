@@ -10,6 +10,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../auth/auth_provider.dart';
 import '../../profile/provider/profile_provider.dart';
+import '../../notifications/provider/notifications_provider.dart';
 import '../../profile/screens/edit_profile_screen.dart';
 import '../../profile/screens/followers_following_screen.dart';
 import '../../profile/screens/notifications_screen.dart';
@@ -41,7 +42,20 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
   Future<void> _loadProfile() async {
     final String? userId = context.read<AuthProvider>().userId;
     if (userId != null && userId.isNotEmpty) {
-      await context.read<ProfileProvider>().fetchProfile(userId);
+      final ProfileProvider profile = context.read<ProfileProvider>();
+      await profile.fetchProfile(userId);
+      if (!mounted) return;
+      // Fetch following and followers so all screens know our relationships
+      profile.loadFollowing(userId);
+      profile.loadFollowers(userId);
+      // Preload saved and liked posts in the background so tabs load instantly without flash
+      profile.fetchSavedPosts();
+      profile.fetchLikedPosts();
+      if (_selectedTabIndex == 2) {
+        await profile.fetchSavedPosts(force: true);
+      } else if (_selectedTabIndex == 3) {
+        await profile.fetchLikedPosts(force: true);
+      }
     }
   }
 
@@ -114,42 +128,80 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                   const Spacer(),
 
                   // Bell Icon (Notifications) -> Opens NotificationsScreen
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push<void>(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => const NotificationsScreen(),
+                  Consumer<NotificationsProvider>(
+                    builder: (BuildContext context, NotificationsProvider notifProvider, _) {
+                      final int unread = notifProvider.unreadCount;
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push<void>(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const NotificationsScreen(),
+                            ),
+                          );
+                        },
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: <Widget>[
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.transparent,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.12)
+                                      : context.themeBorder,
+                                  width: 1.1,
+                                ),
+                              ),
+                              child: Center(
+                                child: SvgPicture.asset(
+                                  AppIcons.bell,
+                                  width: 18,
+                                  height: 18,
+                                  colorFilter: ColorFilter.mode(
+                                    context.themeTextPrimary,
+                                    BlendMode.srcIn,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (unread > 0)
+                              Positioned(
+                                top: -2,
+                                right: -2,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: AppColors.primaryGradientButton,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: context.themeBackground,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    unread > 99 ? '99+' : '$unread',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       );
                     },
-                    child: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.12)
-                              : context.themeBorder,
-                          width: 1.1,
-                        ),
-                      ),
-                      child: Center(
-                        child: SvgPicture.asset(
-                          AppIcons.bell,
-                          width: 18,
-                          height: 18,
-                          colorFilter: ColorFilter.mode(
-                            context.themeTextPrimary,
-                            BlendMode.srcIn,
-                          ),
-                        ),
-                      ),
-                    ),
                   ),
 
                   const SizedBox(width: AppSpacing.sm),
@@ -281,6 +333,11 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     selectedIndex: _selectedTabIndex,
                     isOwnProfile: true,
                     onTabSelected: (int index) {
+                      if (index == 2) {
+                        context.read<ProfileProvider>().fetchSavedPosts();
+                      } else if (index == 3) {
+                        context.read<ProfileProvider>().fetchLikedPosts();
+                      }
                       setState(() => _selectedTabIndex = index);
                     },
                   ),
@@ -348,13 +405,169 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       showPlayCounts: true,
                     ),
 
-                  // Tab 2: Saved Grid
-                  if (_selectedTabIndex == 2)
-                    const ProfileMediaGridWidget(showPlayCounts: false),
+                  // Tab 2: Saved Grid & Posts
+                  if (_selectedTabIndex == 2) ...<Widget>[
+                    if ((!profileProvider.hasFetchedSaved ||
+                            profileProvider.isLoadingSaved) &&
+                        profileProvider.savedReels.isEmpty &&
+                        profileProvider.savedPosts.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.gradientPink,
+                          ),
+                        ),
+                      )
+                    else if (profileProvider.savedReels.isEmpty &&
+                        profileProvider.savedPosts.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 40,
+                          horizontal: 24,
+                        ),
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.bookmark_border_rounded,
+                              size: 44,
+                              color: isDark ? Colors.white30 : Colors.black26,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No saved posts yet',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: context.themeTextPrimary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Posts and reels you save will appear here.',
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.themeTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else ...<Widget>[
+                      if (profileProvider.savedReels.isNotEmpty)
+                        ProfileMediaGridWidget(
+                          customReels: profileProvider.savedReels,
+                          showPlayCounts: false,
+                          emptyTitle: 'No saved reels yet',
+                          emptySubtitle: 'Reels you save will appear here.',
+                          emptyIcon: Icons.bookmark_border_rounded,
+                        ),
+                      if (profileProvider.savedPosts.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: AppSpacing.md),
+                        ...profileProvider.savedPosts.map(
+                          (post) => PostFeedCard(
+                            post: post,
+                            onLikeToggle: () {
+                              context
+                                  .read<HomeFeedProvider>()
+                                  .toggleLikePost(post.id);
+                            },
+                            onSaveToggle: () {
+                              context
+                                  .read<HomeFeedProvider>()
+                                  .toggleSavePost(post.id);
+                              profileProvider.fetchSavedPosts(force: true);
+                            },
+                            onOpenComments: () {},
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
 
-                  // Tab 3: Liked Grid
-                  if (_selectedTabIndex == 3)
-                    const ProfileMediaGridWidget(showPlayCounts: false),
+                  // Tab 3: Liked Grid & Posts
+                  if (_selectedTabIndex == 3) ...<Widget>[
+                    if ((!profileProvider.hasFetchedLiked ||
+                            profileProvider.isLoadingLiked) &&
+                        profileProvider.likedReels.isEmpty &&
+                        profileProvider.likedPosts.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.gradientPink,
+                          ),
+                        ),
+                      )
+                    else if (profileProvider.likedReels.isEmpty &&
+                        profileProvider.likedPosts.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 40,
+                          horizontal: 24,
+                        ),
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.favorite_border_rounded,
+                              size: 44,
+                              color: isDark ? Colors.white30 : Colors.black26,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No liked posts yet',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: context.themeTextPrimary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Posts and reels you like will appear here.',
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.themeTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else ...<Widget>[
+                      if (profileProvider.likedReels.isNotEmpty)
+                        ProfileMediaGridWidget(
+                          customReels: profileProvider.likedReels,
+                          showPlayCounts: false,
+                          emptyTitle: 'No liked reels yet',
+                          emptySubtitle: 'Reels you like will appear here.',
+                          emptyIcon: Icons.favorite_border_rounded,
+                        ),
+                      if (profileProvider.likedPosts.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: AppSpacing.md),
+                        ...profileProvider.likedPosts.map(
+                          (post) => PostFeedCard(
+                            post: post,
+                            onLikeToggle: () {
+                              context
+                                  .read<HomeFeedProvider>()
+                                  .toggleLikePost(post.id);
+                              profileProvider.fetchLikedPosts(force: true);
+                            },
+                            onSaveToggle: () {
+                              context
+                                  .read<HomeFeedProvider>()
+                                  .toggleSavePost(post.id);
+                            },
+                            onOpenComments: () {},
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
 
                   // Extra Bottom Safety Clearance for Floating Nav Bar
                   const SizedBox(height: 120),

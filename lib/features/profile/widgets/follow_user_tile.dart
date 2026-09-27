@@ -49,14 +49,18 @@ class FollowUserTile extends StatelessWidget {
                                 const Icon(Icons.person, size: 44),
                           )
                         : Image.asset(
-                            avatarAsset.isNotEmpty
-                                ? avatarAsset
+                            avatarAsset.trim().startsWith('assets/')
+                                ? avatarAsset.trim()
                                 : AppImages.user1,
                             width: 44,
                             height: 44,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) =>
-                                const Icon(Icons.person, size: 44),
+                            errorBuilder: (_, _, _) => Image.asset(
+                              AppImages.user1,
+                              width: 44,
+                              height: 44,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                   ),
                   const SizedBox(width: AppSpacing.md),

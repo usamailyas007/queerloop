@@ -18,12 +18,18 @@ class ProfileMediaGridWidget extends StatelessWidget {
     ],
     this.customReels,
     this.showPlayCounts = true,
+    this.emptyTitle,
+    this.emptySubtitle,
+    this.emptyIcon,
     super.key,
   });
 
   final List<String> videos;
   final List<ReelItemModel>? customReels;
   final bool showPlayCounts;
+  final String? emptyTitle;
+  final String? emptySubtitle;
+  final IconData? emptyIcon;
 
   List<ReelItemModel> _buildProfileReels() {
     final List<String> captions = <String>[
@@ -122,14 +128,14 @@ class ProfileMediaGridWidget extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              const Icon(
-                Icons.video_collection_outlined,
+              Icon(
+                emptyIcon ?? Icons.video_collection_outlined,
                 size: 44,
                 color: Colors.white30,
               ),
               const SizedBox(height: 12),
               Text(
-                'No reels yet',
+                emptyTitle ?? 'No reels yet',
                 style: AppTextStyles.titleMedium.copyWith(
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
@@ -137,7 +143,7 @@ class ProfileMediaGridWidget extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'Videos you create will be showcased here.',
+                emptySubtitle ?? 'Videos you create will be showcased here.',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.caption.copyWith(
                   color: Colors.white54,

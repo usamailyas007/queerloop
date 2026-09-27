@@ -189,6 +189,16 @@ class ProfileSetupProvider extends ChangeNotifier {
     super.dispose();
   }
 
+  void prefillSocialData({String? displayName, String? avatarUrl}) {
+    if (displayName != null && displayName.trim().isNotEmpty) {
+      _displayName = displayName.trim();
+    }
+    if (avatarUrl != null && avatarUrl.trim().isNotEmpty) {
+      _avatarUrl = avatarUrl.trim();
+    }
+    notifyListeners();
+  }
+
   void setDisplayName(String val) {
     if (_displayName == val) return;
     _displayName = val;

@@ -1,19 +1,94 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/app_text_field.dart';
+import '../../auth/auth_provider.dart';
+import '../../auth/auth_service.dart';
 
-class DeleteAccountScreen extends StatelessWidget {
+class DeleteAccountScreen extends StatefulWidget {
   const DeleteAccountScreen({
-    this.username = '@ashinorbit',
+    this.username = '',
     super.key,
   });
 
   final String username;
+
+  @override
+  State<DeleteAccountScreen> createState() => _DeleteAccountScreenState();
+}
+
+class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _feedbackController = TextEditingController();
+  String _selectedReason = 'I no longer want to use this service';
+
+  final List<String> _reasons = [
+    'I no longer want to use this service',
+    'I have a privacy concern',
+    'The app is not useful for me',
+    'I want to create a new account',
+    'Other',
+  ];
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _feedbackController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_passwordController.text.trim().isEmpty) {
+      AppSnackBar.showError(
+        context,
+        title: 'Password Required',
+        subtitle: 'Please enter your password to confirm deletion.',
+      );
+      return;
+    }
+
+    final AuthProvider auth = context.read<AuthProvider>();
+    final AccountDeletionResult? result = await auth.requestAccountDeletion(
+      password: _passwordController.text.trim(),
+      reason: _selectedReason,
+      feedback: _feedbackController.text.trim().isEmpty
+          ? null
+          : _feedbackController.text.trim(),
+    );
+
+    if (!mounted) return;
+
+    if (result != null) {
+      AppSnackBar.show(
+        context,
+        title: 'Deletion Requested',
+        subtitle: 'You have 30 days to log back in and cancel.',
+      );
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.login,
+        (Route<dynamic> r) => false,
+      );
+    } else {
+      final String? err = auth.error;
+      if (err != null && err.isNotEmpty) {
+        AppSnackBar.showError(
+          context,
+          title: 'Failed',
+          subtitle: err,
+        );
+        auth.clearError();
+      }
+    }
+  }
 
   Widget _buildConsequenceCard(
     BuildContext context, {
@@ -61,7 +136,7 @@ class DeleteAccountScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String cleanUsername =
-        username.startsWith('@') ? username : '@$username';
+        widget.username.startsWith('@') ? widget.username : '@${widget.username}';
     final bool isDark = context.isDarkMode;
 
     return Scaffold(
@@ -69,7 +144,7 @@ class DeleteAccountScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: <Widget>[
-            // ── Top Header Bar (Back button + Delete account centered title) ──
+            // Header
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.lg,
@@ -117,16 +192,15 @@ class DeleteAccountScreen extends StatelessWidget {
               ),
             ),
 
-            // ── Main Content Body ───────────────────────────────────────────
             Expanded(
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     const SizedBox(height: AppSpacing.lg),
 
-                    // Top Cyan Trash Icon Badge Box matching reference design
+                    // Icon badge
                     Container(
                       width: 56,
                       height: 56,
@@ -157,7 +231,6 @@ class DeleteAccountScreen extends StatelessWidget {
 
                     const SizedBox(height: AppSpacing.xl),
 
-                    // Title
                     Text(
                       "This can't be undone",
                       style: AppTextStyles.titleLarge.copyWith(
@@ -169,7 +242,6 @@ class DeleteAccountScreen extends StatelessWidget {
 
                     const SizedBox(height: AppSpacing.xs),
 
-                    // Subtitle
                     Text(
                       "Here's exactly what happens when you confirm.",
                       style: AppTextStyles.bodyMedium.copyWith(
@@ -180,7 +252,6 @@ class DeleteAccountScreen extends StatelessWidget {
 
                     const SizedBox(height: AppSpacing.xxl),
 
-                    // 1. All posts, comments erased within 30 days
                     _buildConsequenceCard(
                       context,
                       iconWidget: Icon(
@@ -194,7 +265,6 @@ class DeleteAccountScreen extends StatelessWidget {
                           'All posts, comments and messages are erased within 30 days',
                     ),
 
-                    // 2. @username released and can be claimed by someone else
                     _buildConsequenceCard(
                       context,
                       iconWidget: Icon(
@@ -208,7 +278,6 @@ class DeleteAccountScreen extends StatelessWidget {
                           '$cleanUsername is released and can be claimed by someone else',
                     ),
 
-                    // 3. Reports stay with moderation without your name
                     _buildConsequenceCard(
                       context,
                       iconWidget: const Icon(
@@ -220,44 +289,104 @@ class DeleteAccountScreen extends StatelessWidget {
                           'Reports you filed stay with moderation, without your name',
                     ),
 
-                    const Spacer(),
+                    const SizedBox(height: AppSpacing.xl),
 
-                    // Bottom "Delete my account" outlined button
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                        AppSnackBar.show(
-                          context,
-                          title: 'Account deletion initiated',
-                          subtitle:
-                              'You have 30 days to log back in and cancel.',
-                        );
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: context.themeCardBackground,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: context.themeBorder,
-                            width: 1.1,
+                    // Reason dropdown
+                    Text(
+                      'Why are you leaving?',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: context.themeTextPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.themeCardBackground,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: context.themeBorder),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedReason,
+                          isExpanded: true,
+                          dropdownColor: context.themeCardBackground,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: context.themeTextPrimary,
+                            fontSize: 13,
                           ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Delete my account',
-                            style: TextStyle(
-                              color: context.themeTextPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                          items: _reasons
+                              .map(
+                                (String r) => DropdownMenuItem<String>(
+                                  value: r,
+                                  child: Text(r),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (String? val) {
+                            if (val != null) {
+                              setState(() => _selectedReason = val);
+                            }
+                          },
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: AppSpacing.lg),
+                    const SizedBox(height: AppSpacing.xl),
+
+                    // Password confirmation
+                    Text(
+                      'Confirm with your password',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: context.themeTextPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    AppTextField(
+                      controller: _passwordController,
+                      hintText: 'Enter your password',
+                      isPassword: true,
+                      prefixIconPath: AppIcons.password,
+                    ),
+
+                    const SizedBox(height: AppSpacing.xl),
+
+                    // Optional Feedback
+                    Text(
+                      'Feedback (optional)',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: context.themeTextPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    AppTextField(
+                      controller: _feedbackController,
+                      hintText: 'Help us improve (optional)',
+                      maxLines: 3,
+                    ),
+
+                    const SizedBox(height: AppSpacing.xxl),
+
+                    // Submit button
+                    Selector<AuthProvider, bool>(
+                      selector: (_, AuthProvider p) => p.isBusy,
+                      builder: (_, bool busy, _) => AppGradientButton(
+                        text: 'Delete my account',
+                        isLoading: busy,
+                        onPressed: busy ? () {} : _submit,
+                      ),
+                    ),
+
+                    const SizedBox(height: AppSpacing.xl),
                   ],
                 ),
               ),

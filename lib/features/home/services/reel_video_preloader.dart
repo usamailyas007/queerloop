@@ -125,6 +125,27 @@ class ReelVideoPreloader {
     }
   }
 
+  /// Pause all active video controllers immediately
+  void pauseAll() {
+    for (final VideoPlayerController c in _controllers.values) {
+      try {
+        if (c.value.isInitialized) {
+          c.pause();
+        }
+      } catch (_) {}
+    }
+  }
+
+  /// Pause a specific controller by key
+  void pause(String id) {
+    try {
+      final VideoPlayerController? c = _controllers[id];
+      if (c != null && c.value.isInitialized) {
+        c.pause();
+      }
+    } catch (_) {}
+  }
+
   /// Dispose all controllers when exiting the feed
   void disposeAll() {
     for (final VideoPlayerController c in _controllers.values) {
@@ -137,3 +158,4 @@ class ReelVideoPreloader {
     _initializing.clear();
   }
 }
+

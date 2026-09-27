@@ -8,6 +8,9 @@ import '../config/app_config.dart';
 import 'api_exception.dart';
 
 class ApiClient {
+  /// Toggle HTTP API logging. Kept false per user request to only show socket logs.
+  static const bool enableApiLogging = false;
+
   ApiClient({String? baseUrl, Dio? dio})
       : _dio = dio ?? Dio() {
     final String url = baseUrl ?? AppConfig.baseUrl;
@@ -39,35 +42,73 @@ class ApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
-          final String? token = authToken;
-          if (token != null && token.isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $token';
+          if (isPublicEndpoint(options.path)) {
+            options.headers.remove('Authorization');
+          } else {
+            final String? token = authToken;
+            if (token != null && token.isNotEmpty) {
+              options.headers['Authorization'] = 'Bearer $token';
+            }
           }
-          debugPrint('┌──────────────────────────────────────────────────────────');
-          debugPrint('🌐 [API Request] ${options.method} ${options.uri}');
-          if (options.data != null) {
-            debugPrint('📦 Payload:\n${_prettyJson(options.data)}');
+          final String path = options.path.toLowerCase();
+          final bool isTargetApi = enableApiLogging ||
+              path.contains('/restrict') ||
+              path.contains('/conversations/share') ||
+              path.contains('/share') ||
+              path.contains('/messages') ||
+              path.contains('/block');
+
+          if (isTargetApi) {
+            debugPrint('┌──────────────────────────────────────────────────────────');
+            debugPrint('🌐 [API Request] ${options.method} ${options.uri}');
+            debugPrint('🔑 Headers: Authorization: ${options.headers['Authorization'] != null ? "Bearer ..." : "None"}');
+            if (options.data != null) {
+              debugPrint('📦 Payload:\n${_prettyJson(options.data)}');
+            } else {
+              debugPrint('📦 Payload: null (no body)');
+            }
+            debugPrint('└──────────────────────────────────────────────────────────');
           }
-          debugPrint('└──────────────────────────────────────────────────────────');
           handler.next(options);
         },
         onResponse: (Response<dynamic> response, ResponseInterceptorHandler handler) {
-          debugPrint('┌──────────────────────────────────────────────────────────');
-          debugPrint('✅ [API Response] ${response.requestOptions.method} ${response.requestOptions.path} [Status ${response.statusCode}]');
-          debugPrint('📥 Response Body:\n${_prettyJson(response.data)}');
-          debugPrint('└──────────────────────────────────────────────────────────');
+          final String path =
+              response.requestOptions.path.toLowerCase();
+          final bool isTargetApi = enableApiLogging ||
+              path.contains('/restrict') ||
+              path.contains('/conversations/share') ||
+              path.contains('/share') ||
+              path.contains('/messages') ||
+              path.contains('/block');
+
+          if (isTargetApi) {
+            debugPrint('┌──────────────────────────────────────────────────────────');
+            debugPrint('✅ [API Response] ${response.requestOptions.method} ${response.requestOptions.path} [Status ${response.statusCode}]');
+            debugPrint('📥 Response Body:\n${_prettyJson(response.data)}');
+            debugPrint('└──────────────────────────────────────────────────────────');
+          }
           handler.next(response);
         },
         onError: (DioException error, ErrorInterceptorHandler handler) async {
-          debugPrint('┌──────────────────────────────────────────────────────────');
-          debugPrint('❌ [API Error] ${error.requestOptions.method} ${error.requestOptions.path} [Status ${error.response?.statusCode}]');
-          debugPrint('⚠️ Error Response Body:\n${_prettyJson(error.response?.data)}');
-          debugPrint('└──────────────────────────────────────────────────────────');
+          final String path =
+              error.requestOptions.path.toLowerCase();
+          final bool isTargetApi = enableApiLogging ||
+              path.contains('/restrict') ||
+              path.contains('/conversations/share') ||
+              path.contains('/share') ||
+              path.contains('/messages') ||
+              path.contains('/block');
+
+          if (isTargetApi) {
+            debugPrint('┌──────────────────────────────────────────────────────────');
+            debugPrint('❌ [API Error] ${error.requestOptions.method} ${error.requestOptions.path} [Status ${error.response?.statusCode}]');
+            debugPrint('⚠️ Error Response Body:\n${_prettyJson(error.response?.data)}');
+            debugPrint('└──────────────────────────────────────────────────────────');
+          }
 
           final RequestOptions req = error.requestOptions;
           final int? statusCode = error.response?.statusCode;
-          final bool isAuthPath = req.path.contains('/auth/login') ||
-              req.path.contains('/auth/register') ||
+          final bool isAuthPath = isPublicEndpoint(req.path) ||
               req.path.contains('/auth/refresh');
 
           if (statusCode == 401 && !isAuthPath) {
@@ -274,13 +315,20 @@ class ApiClient {
                 : null,
           ));
 
-  Future<dynamic> delete(String path, {Object? body, Duration? timeout}) =>
+  Future<dynamic> delete(
+    String path, {
+    Object? body,
+    Duration? timeout,
+    Map<String, dynamic>? headers,
+  }) =>
       _send(() => _dio.delete<dynamic>(
             path,
             data: body,
-            options: timeout != null
-                ? Options(sendTimeout: timeout, receiveTimeout: timeout)
-                : null,
+            options: Options(
+              sendTimeout: timeout,
+              receiveTimeout: timeout,
+              headers: headers,
+            ),
           ));
 
   String _toCacheKey(String path, Map<String, dynamic>? query) {
@@ -364,4 +412,15 @@ class ApiClient {
       ApiErrorKind.unknown => 'Something went wrong.',
     };
   }
+
+  /// Returns true for endpoints that never require or accept Authorization headers.
+  static bool isPublicEndpoint(String path) {
+    return path.contains('/auth/login') ||
+        path.contains('/auth/register') ||
+        path.contains('/auth/verify-email') ||
+        path.contains('/auth/password-reset') ||
+        path.contains('/auth/cancel-deletion') ||
+        path.contains('/users/username-available');
+  }
 }
+

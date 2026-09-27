@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../auth/auth_provider.dart';
+import '../../profile/provider/profile_provider.dart';
+import '../../profile_setup/models/community_model.dart';
+import '../../profile_setup/provider/profile_setup_provider.dart';
 import '../models/reel_item_model.dart';
 import '../provider/home_feed_provider.dart';
 import '../services/reel_video_preloader.dart';
@@ -53,16 +57,21 @@ class ReelsFeedView extends StatefulWidget {
 class _ReelsFeedViewState extends State<ReelsFeedView> {
   late final PageController _pageController;
   late int _activePage;
+  List<ReelItemModel> _localReels = <ReelItemModel>[];
 
   @override
   void initState() {
     super.initState();
     _activePage = widget.initialPage;
     _pageController = PageController(initialPage: widget.initialPage);
+    if (widget.customReels != null) {
+      _localReels = List<ReelItemModel>.from(widget.customReels!);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final HomeFeedProvider provider = context.read<HomeFeedProvider>();
-        final List<ReelItemModel> reels = widget.customReels ?? provider.reels;
+        final List<ReelItemModel> reels =
+            widget.customReels != null ? _localReels : provider.reels;
         if (reels.isNotEmpty) {
           ReelVideoPreloader.instance.preloadSurrounding(reels, _activePage);
         }
@@ -71,8 +80,23 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
   }
 
   @override
+  void didUpdateWidget(ReelsFeedView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.customReels != null && widget.customReels != oldWidget.customReels) {
+      _localReels = List<ReelItemModel>.from(widget.customReels!);
+    }
+  }
+
+  @override
+  void deactivate() {
+    ReelVideoPreloader.instance.pauseAll();
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
+    ReelVideoPreloader.instance.pauseAll();
     super.dispose();
   }
 
@@ -80,6 +104,23 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     BuildContext context,
     HomeFeedProvider provider,
   ) {
+    List<CommunityModel> availableComms = const <CommunityModel>[];
+    try {
+      final List<CommunityModel> userComms =
+          context.read<ProfileProvider>().userCommunities;
+      final List<CommunityModel> allComms =
+          context.read<ProfileSetupProvider>().allCommunities;
+
+      final Map<String, CommunityModel> commMap = <String, CommunityModel>{};
+      for (final CommunityModel c in userComms) {
+        commMap[c.id] = c;
+      }
+      for (final CommunityModel c in allComms) {
+        commMap.putIfAbsent(c.id, () => c);
+      }
+      availableComms = commMap.values.toList();
+    } catch (_) {}
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -87,8 +128,12 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
       builder: (context) {
         return FilterCommunitiesBottomSheet(
           selectedCommunity: provider.selectedCommunityFilter,
-          onApply: (String community) {
-            provider.setSelectedCommunityFilter(community);
+          communities: availableComms,
+          onApply: (String community, String? communityId) {
+            provider.setSelectedCommunityFilter(
+              community,
+              communityId: communityId,
+            );
           },
         );
       },
@@ -98,8 +143,9 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
   void _showCommentsSheet(
     BuildContext context,
     String postId,
-    int totalComments,
-  ) {
+    int totalComments, {
+    String? postAuthorId,
+  }) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -107,6 +153,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
       builder: (context) {
         return CommentsBottomSheet(
           postId: postId,
+          postAuthorId: postAuthorId,
           totalComments: totalComments,
           onCommentAdded: () {
             context.read<HomeFeedProvider>().incrementCommentCount(postId);
@@ -123,32 +170,51 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
       backgroundColor: Colors.transparent,
       builder: (context) {
         return ShareThisPostBottomSheet(
+          reel: reel,
           onOpenMoreSendTo: () {
             Navigator.pop(context);
-            _showSendToSheet(context);
+            _showSendToSheet(context, reel);
           },
           onOpenReportSafety: () {
             Navigator.pop(context);
-            _showSafetySheet(context, reel);
+            _showSafetySheet(reel);
           },
         );
       },
     );
   }
 
-  void _showSendToSheet(BuildContext context) {
+  void _showSendToSheet(BuildContext context, [ReelItemModel? reel]) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return const SendToBottomSheet();
+        return SendToBottomSheet(reel: reel);
       },
     );
   }
 
-  void _showSafetySheet(BuildContext context, ReelItemModel reel) {
-    showModalBottomSheet<void>(
+  Future<void> _showSafetySheet(ReelItemModel reel) async {
+    final AuthProvider auth = context.read<AuthProvider>();
+    final ProfileProvider profileProvider = context.read<ProfileProvider>();
+    final String? currentUserId = auth.userId ?? profileProvider.profile?.id;
+    final String myUsername = (auth.user?.displayName ?? profileProvider.username)
+        .replaceAll('@', '')
+        .trim()
+        .toLowerCase();
+    final String reelUsername =
+        reel.username.replaceAll('@', '').trim().toLowerCase();
+    final bool isOwnReel = profileProvider.userReels.any((ReelItemModel r) => r.id == reel.id) ||
+        (reel.authorId != null &&
+            currentUserId != null &&
+            reel.authorId!.trim().toLowerCase() ==
+                currentUserId.trim().toLowerCase()) ||
+        (myUsername.isNotEmpty && reelUsername == myUsername) ||
+        reel.username == '@you' ||
+        reel.username == 'you';
+
+    final dynamic deleted = await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -158,17 +224,37 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
           postId: reel.id,
           authorId: reel.authorId ?? reel.username,
           communityId: reel.communityId,
+          isReel: true,
+          isCreator: isOwnReel,
         );
       },
     );
+
+    if (deleted == true && mounted) {
+      setState(() {});
+      final List<ReelItemModel> currentReels =
+          widget.customReels ?? context.read<HomeFeedProvider>().reels;
+      if (currentReels.isEmpty && widget.customReels != null) {
+        Navigator.pop(context);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final HomeFeedProvider provider = context.watch<HomeFeedProvider>();
-    final List<ReelItemModel> reels = widget.customReels ?? provider.reels;
+    final List<ReelItemModel> reels =
+        widget.customReels != null ? _localReels : provider.reels;
     final double topInset = MediaQuery.of(context).padding.top + 50;
+
+    if (provider.isLoadingFeed && reels.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.gradientPink),
+      );
+    }
+
     if (reels.isEmpty) {
+      final bool isCommunityTab = provider.activeTopTab == TopTab.communities;
       return RefreshIndicator(
         color: AppColors.gradientPink,
         backgroundColor: const Color(0xFF1E1E2E),
@@ -180,10 +266,81 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
               physics: const AlwaysScrollableScrollPhysics(),
               child: SizedBox(
                 height: constraints.maxHeight,
-                child: HomeEmptyStateView(
-                  onOpenExplore: () {
-                    provider.setTopTab(TopTab.forYou);
-                  },
+                child: Stack(
+                  children: <Widget>[
+                    HomeEmptyStateView(
+                      title: isCommunityTab &&
+                              provider.selectedCommunityFilter !=
+                                  'All Communities'
+                          ? 'No videos in ${provider.selectedCommunityFilter}'
+                          : null,
+                      subtitle: isCommunityTab &&
+                              provider.selectedCommunityFilter !=
+                                  'All Communities'
+                          ? 'There are no videos in this community yet. Explore other communities or be the first to post!'
+                          : null,
+                      buttonText: isCommunityTab ? 'Explore Communities' : null,
+                      onOpenExplore: () {
+                        if (isCommunityTab) {
+                          _showFilterCommunitiesSheet(context, provider);
+                        } else {
+                          provider.loadFeed(force: true);
+                        }
+                      },
+                    ),
+                    if (isCommunityTab)
+                      Positioned(
+                        top: topInset + 10,
+                        left: 16,
+                        child: GestureDetector(
+                          onTap: () =>
+                              _showFilterCommunitiesSheet(context, provider),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: AppColors.secondaryGradientButton,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: AppColors.gradientCyan
+                                      .withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                const Icon(
+                                  Icons.groups_rounded,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  provider.selectedCommunityFilter,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  color: Colors.white70,
+                                  size: 16,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             );
@@ -217,10 +374,22 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
         },
         itemBuilder: (context, index) {
           final ReelItemModel item = reels[index];
+          final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+          final bool isAuthorFollowed = profileProvider.isFollowingUser(
+            userId: item.authorId,
+            username: item.username,
+          ) || item.isFollowing;
+
+          final bool isVisuallyActive = (widget.customReels != null)
+              ? (index == _activePage)
+              : (index == _activePage &&
+                  provider.bottomNavIndex == 0 &&
+                  provider.activeSubMode == SubMode.reels);
+
           return ReelFeedCard(
             key: ValueKey<String>(item.id),
-            reel: item,
-            isActive: index == _activePage,
+            reel: item.copyWith(isFollowing: isAuthorFollowed),
+            isActive: isVisuallyActive,
             hasBottomBar: widget.hasBottomBar,
             showCommunityFilterTag: provider.activeTopTab == TopTab.communities,
             selectedCommunity: provider.selectedCommunityFilter,
@@ -228,7 +397,29 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
               if (provider.isGuest) {
                 widget.onGuestActionTriggered?.call();
               } else {
-                provider.toggleLikeReel(item.id);
+                if (widget.customReels != null) {
+                  final int idx = _localReels.indexWhere((r) => r.id == item.id);
+                  if (idx != -1) {
+                    final bool newLiked = !_localReels[idx].isLiked;
+                    final int newCount = newLiked
+                        ? _localReels[idx].likesCount + 1
+                        : (_localReels[idx].likesCount > 0 ? _localReels[idx].likesCount - 1 : 0);
+                    setState(() {
+                      _localReels[idx] = _localReels[idx].copyWith(
+                        isLiked: newLiked,
+                        likesCount: newCount,
+                      );
+                    });
+                    try {
+                      context.read<ProfileProvider>().updateLikedReel(
+                        item.id,
+                        isLiked: newLiked,
+                        likesCount: newCount,
+                      );
+                    } catch (_) {}
+                  }
+                }
+                provider.toggleLikeReel(item.id, fallbackReel: item);
               }
             },
             onSaveToggle: () {
@@ -238,18 +429,46 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                 provider.toggleSaveReel(item.id);
               }
             },
-            onFollowToggle: () {
+            onFollowToggle: () async {
               if (provider.isGuest) {
                 widget.onGuestActionTriggered?.call();
               } else {
-                provider.toggleFollowReel(item.id);
+                final String? targetId = item.authorId;
+                final bool willFollow = !isAuthorFollowed;
+                if (targetId != null && targetId.isNotEmpty) {
+                  provider.setAuthorFollowStatus(
+                    authorId: targetId,
+                    username: item.username,
+                    isFollowing: willFollow,
+                  );
+                  try {
+                    if (willFollow) {
+                      await profileProvider.followUser(targetId, username: item.username);
+                    } else {
+                      await profileProvider.unfollowUser(targetId, username: item.username);
+                    }
+                  } catch (e) {
+                    provider.setAuthorFollowStatus(
+                      authorId: targetId,
+                      username: item.username,
+                      isFollowing: !willFollow,
+                    );
+                  }
+                } else {
+                  provider.toggleFollowReel(item.id);
+                }
               }
             },
             onOpenComments: () {
               if (provider.isGuest) {
                 widget.onGuestActionTriggered?.call();
               } else {
-                _showCommentsSheet(context, item.id, item.commentsCount);
+                _showCommentsSheet(
+                  context,
+                  item.id,
+                  item.commentsCount,
+                  postAuthorId: item.authorId,
+                );
               }
             },
             onOpenShare: () {
@@ -259,7 +478,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                 _showShareSheet(context, item);
               }
             },
-            onOpenSafety: () => _showSafetySheet(context, item),
+            onOpenSafety: () => _showSafetySheet(item),
             onOpenFilterCommunities: () =>
                 _showFilterCommunitiesSheet(context, provider),
           );

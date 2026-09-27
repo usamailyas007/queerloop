@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
+import '../admin/admin_view/community_spotlight/provider/spotlights_provider.dart';
 import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
 import '../core/network/network_info.dart';
@@ -12,15 +13,25 @@ import '../features/auth/auth_provider.dart';
 import '../features/create_post/provider/create_post_provider.dart';
 import '../features/create_post/services/media_upload_service.dart';
 import '../features/create_post/services/post_content_service.dart';
+import '../features/discover/provider/cotd_provider.dart';
+import '../features/discover/provider/discover_provider.dart';
+import '../features/discover/services/cotd_service.dart';
+import '../features/discover/services/discover_service.dart';
 import '../features/home/provider/home_feed_provider.dart';
 import '../features/messages/provider/messages_provider.dart';
+import '../features/messages/services/chat_socket_service.dart';
+import '../features/messages/services/conversations_service.dart';
+import '../features/notifications/provider/notifications_provider.dart';
+import '../features/notifications/services/notifications_service.dart';
 import '../features/profile/provider/profile_provider.dart';
+import '../features/profile/services/user_relationship_service.dart';
 import '../features/profile_setup/profile_setup_service.dart';
 import '../features/profile_setup/provider/profile_setup_provider.dart';
 import '../features/reports/provider/report_provider.dart';
 import '../features/reports/services/report_service.dart';
 import '../features/splash_welcome/provider/splash_provider.dart';
 import '../l10n/app_localizations.dart';
+import '../core/services/navigation_service.dart';
 import 'router.dart';
 import 'routes.dart';
 
@@ -31,38 +42,46 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: <SingleChildWidget>[
-        ChangeNotifierProvider<ThemeProvider>(
-          create: (_) => ThemeProvider(),
-        ),
-        ChangeNotifierProvider<NetworkInfo>(
-          create: (_) => NetworkInfo(),
-        ),
+        ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider<NetworkInfo>(create: (_) => NetworkInfo()),
         Provider<ApiClient>(create: (_) => ApiClient()),
         ChangeNotifierProvider<AuthProvider>(
           create: (BuildContext ctx) =>
               AuthProvider(client: ctx.read<ApiClient>()),
         ),
-        ChangeNotifierProvider<SplashProvider>(
-            create: (_) => SplashProvider()),
+        ChangeNotifierProvider<SplashProvider>(create: (_) => SplashProvider()),
         ChangeNotifierProxyProvider<AuthProvider, ProfileSetupProvider>(
           create: (BuildContext ctx) => ProfileSetupProvider(
             service: ProfileSetupService(ctx.read<ApiClient>()),
           ),
-          update: (BuildContext ctx, AuthProvider auth, ProfileSetupProvider? existing) {
-            final ProfileSetupProvider provider = existing ??
-                ProfileSetupProvider(
-                  service: ProfileSetupService(ctx.read<ApiClient>()),
-                );
-            // Jab bhi user sign out kare, wizard ko Step 1 pe reset karo
-            if (auth.status == AuthStatus.signedOut) {
-              provider.reset();
-            }
-            return provider;
-          },
+          update:
+              (
+                BuildContext ctx,
+                AuthProvider auth,
+                ProfileSetupProvider? existing,
+              ) {
+                final ProfileSetupProvider provider =
+                    existing ??
+                    ProfileSetupProvider(
+                      service: ProfileSetupService(ctx.read<ApiClient>()),
+                    );
+                // Jab bhi user sign out kare, wizard ko Step 1 pe reset karo
+                if (auth.status == AuthStatus.signedOut) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    provider.reset();
+                  });
+                }
+                return provider;
+              },
+        ),
+        Provider<UserRelationshipService>(
+          create: (BuildContext ctx) =>
+              UserRelationshipService(ctx.read<ApiClient>()),
         ),
         ChangeNotifierProvider<ProfileProvider>(
           create: (BuildContext ctx) => ProfileProvider(
             client: ctx.read<ApiClient>(),
+            relationshipService: ctx.read<UserRelationshipService>(),
           ),
         ),
         ChangeNotifierProxyProvider<AuthProvider, HomeFeedProvider>(
@@ -70,15 +89,19 @@ class App extends StatelessWidget {
             contentService: PostContentService(ctx.read<ApiClient>()),
             mediaService: MediaUploadService(ctx.read<ApiClient>()),
           ),
-          update: (BuildContext ctx, AuthProvider auth, HomeFeedProvider? feed) {
-            final HomeFeedProvider provider = feed ??
-                HomeFeedProvider(
-                  contentService: PostContentService(ctx.read<ApiClient>()),
-                  mediaService: MediaUploadService(ctx.read<ApiClient>()),
-                );
-            provider.updateUser(auth.userId);
-            return provider;
-          },
+          update:
+              (BuildContext ctx, AuthProvider auth, HomeFeedProvider? feed) {
+                final HomeFeedProvider provider =
+                    feed ??
+                    HomeFeedProvider(
+                      contentService: PostContentService(ctx.read<ApiClient>()),
+                      mediaService: MediaUploadService(ctx.read<ApiClient>()),
+                    );
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  provider.updateUser(auth.userId);
+                });
+                return provider;
+              },
         ),
         ChangeNotifierProvider<CreatePostProvider>(
           create: (BuildContext ctx) => CreatePostProvider(
@@ -86,22 +109,108 @@ class App extends StatelessWidget {
             contentService: PostContentService(ctx.read<ApiClient>()),
           ),
         ),
-        ChangeNotifierProvider<MessagesProvider>(
-            create: (_) => MessagesProvider()),
-        Provider<ReportService>(
+        Provider<ConversationsService>(
           create: (BuildContext ctx) =>
-              ReportService(ctx.read<ApiClient>()),
+              ConversationsService(ctx.read<ApiClient>()),
+        ),
+        Provider<ChatSocketService>(
+          create: (_) => ChatSocketService(),
+          dispose: (_, ChatSocketService service) => service.dispose(),
+        ),
+        ChangeNotifierProxyProvider2<AuthProvider, NetworkInfo, MessagesProvider>(
+          create: (BuildContext ctx) => MessagesProvider(
+            service: ctx.read<ConversationsService>(),
+            socketService: ctx.read<ChatSocketService>(),
+            token: ctx.read<ApiClient>().authToken,
+          ),
+          update: (
+            BuildContext ctx,
+            AuthProvider auth,
+            NetworkInfo network,
+            MessagesProvider? existing,
+          ) {
+            final String? token = ctx.read<ApiClient>().authToken;
+            final MessagesProvider provider = existing ??
+                MessagesProvider(
+                  service: ctx.read<ConversationsService>(),
+                  socketService: ctx.read<ChatSocketService>(),
+                  currentUserId: auth.userId,
+                  token: token,
+                );
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              provider.updateAuth(
+                userId: auth.userId,
+                service: ctx.read<ConversationsService>(),
+                socketService: ctx.read<ChatSocketService>(),
+                token: token,
+              );
+              provider.notifyNetworkChange(isOnline: network.isOnline);
+            });
+            return provider;
+          },
+        ),
+        Provider<ReportService>(
+          create: (BuildContext ctx) => ReportService(ctx.read<ApiClient>()),
         ),
         ChangeNotifierProvider<ReportProvider>(
-          create: (BuildContext ctx) => ReportProvider(
-            service: ctx.read<ReportService>(),
+          create: (BuildContext ctx) =>
+              ReportProvider(service: ctx.read<ReportService>()),
+        ),
+        Provider<DiscoverService>(
+          create: (BuildContext ctx) => DiscoverService(ctx.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<DiscoverProvider>(
+          create: (BuildContext ctx) =>
+              DiscoverProvider(discoverService: ctx.read<DiscoverService>()),
+        ),
+        Provider<CotdService>(
+          create: (BuildContext ctx) => CotdService(ctx.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<CotdProvider>(
+          create: (BuildContext ctx) =>
+              CotdProvider(service: ctx.read<CotdService>()),
+        ),
+        ChangeNotifierProvider<SpotlightsProvider>(
+          create: (BuildContext ctx) =>
+              SpotlightsProvider(client: ctx.read<ApiClient>()),
+        ),
+        Provider<NotificationsService>(
+          create: (BuildContext ctx) =>
+              NotificationsService(ctx.read<ApiClient>()),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, NotificationsProvider>(
+          create: (BuildContext ctx) => NotificationsProvider(
+            service: ctx.read<NotificationsService>(),
+            relationshipService: ctx.read<UserRelationshipService>(),
           ),
+          update:
+              (
+                BuildContext ctx,
+                AuthProvider auth,
+                NotificationsProvider? existing,
+              ) {
+                final NotificationsProvider provider =
+                    existing ??
+                    NotificationsProvider(
+                      service: ctx.read<NotificationsService>(),
+                      relationshipService: ctx.read<UserRelationshipService>(),
+                      currentUserId: auth.userId,
+                    );
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  provider.syncAuth(
+                    userId: auth.userId,
+                    relationshipService: ctx.read<UserRelationshipService>(),
+                  );
+                });
+                return provider;
+              },
         ),
       ],
       child: Consumer<ThemeProvider>(
         builder: (BuildContext context, ThemeProvider themeProvider, _) {
           return MaterialApp(
             title: 'QueerLoop+',
+            navigatorKey: navigatorKey,
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
             darkTheme: AppTheme.dark,
@@ -110,6 +219,7 @@ class App extends StatelessWidget {
             supportedLocales: AppLocalizations.supportedLocales,
             routes: AppRoutes.routes,
             onGenerateRoute: AppRoutes.onGenerateRoute,
+            navigatorObservers: <NavigatorObserver>[appRouteObserver],
             builder: (BuildContext context, Widget? child) {
               return GestureDetector(
                 behavior: HitTestBehavior.translucent,

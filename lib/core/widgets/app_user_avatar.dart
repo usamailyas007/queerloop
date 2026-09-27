@@ -15,12 +15,13 @@ class AppUserAvatar extends StatelessWidget {
   final bool hasGradientBorder;
 
   Widget _buildAvatarImage({double? width, double? height}) {
+    final String clean = imageAsset.trim();
     final bool isNetwork =
-        imageAsset.startsWith('http://') || imageAsset.startsWith('https://');
+        clean.startsWith('http://') || clean.startsWith('https://');
 
     if (isNetwork) {
       return Image.network(
-        imageAsset,
+        clean,
         width: width,
         height: height,
         fit: BoxFit.cover,
@@ -33,8 +34,11 @@ class AppUserAvatar extends StatelessWidget {
       );
     }
 
+    final String assetToLoad =
+        clean.startsWith('assets/') ? clean : AppImages.user1;
+
     return Image.asset(
-      imageAsset.isNotEmpty ? imageAsset : AppImages.user1,
+      assetToLoad,
       width: width,
       height: height,
       fit: BoxFit.cover,

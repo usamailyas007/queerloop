@@ -17,17 +17,23 @@
       "args": ["--dart-define-from-file", "env/prod.json"]
     },
     {
-      "name": "Admin (staging)",
+      "name": "Admin (staging) — Chrome",
       "request": "launch",
       "type": "dart",
       "program": "lib/main_admin.dart",
-      "args": ["--dart-define-from-file", "env/staging.json"]
+      "deviceId": "chrome",
+      "args": [
+        "--dart-define-from-file", "env/staging.json",
+        "--web-browser-flag", "--disable-web-security",
+        "--web-browser-flag", "--user-data-dir=/tmp/ql-admin-dev"
+      ]
     },
     {
-      "name": "Admin (prod)",
+      "name": "Admin (prod) — Chrome",
       "request": "launch",
       "type": "dart",
       "program": "lib/main_admin.dart",
+      "deviceId": "chrome",
       "flutterMode": "release",
       "args": ["--dart-define-from-file", "env/prod.json"]
     }

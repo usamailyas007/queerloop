@@ -17,6 +17,7 @@ import 'guest_profile_tab_screen.dart';
 import 'posts_feed_view.dart';
 import 'profile_tab_screen.dart';
 import 'reels_feed_view.dart';
+import '../services/reel_video_preloader.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
@@ -119,8 +120,12 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
       }
     }
     if (!provider.isGuest && index == 2) {
+      ReelVideoPreloader.instance.pauseAll();
       CreatePostTypeBottomSheet.show(context);
       return;
+    }
+    if (index != 0) {
+      ReelVideoPreloader.instance.pauseAll();
     }
     provider.setBottomNavIndex(index);
   }
