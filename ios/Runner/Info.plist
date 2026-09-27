@@ -37,17 +37,37 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+	<!-- Camera, Microphone, and Photo Library Permissions -->
 	<key>NSCameraUsageDescription</key>
-	<string>QueerLoop+ needs camera access so you can take photos for your posts, profile picture, and chat messages.</string>
+	<string>QueerLoop+ requires access to your camera to take profile photos and capture video reels.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>QueerLoop+ needs access to your photo library so you can choose photos and videos to share in posts, your profile, and chat messages.</string>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
+	<string>QueerLoop+ requires access to your photo library to select and upload photos and videos for your profile and posts.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>QueerLoop+ requires permission to save photos and videos to your photo library.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>QueerLoop+ requires access to your microphone to record audio when capturing video reels.</string>
+
+	<!-- App Transport Security (Allows backend and CDN traffic) -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+
+	<!-- Background Modes for Push Notifications -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
+
+	<!-- TestFlight Export Compliance (Avoids manual prompt on every build) -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -55,13 +75,17 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
 </dict>
 </plist>

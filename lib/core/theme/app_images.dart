@@ -20,11 +20,12 @@ abstract final class AppImages {
   static const String communityImg = '$homeDir/community-img.png';
   static const String emptyHomeImg = '$homeDir/empty-home.png';
 
+  static const String defaultAvatar = '$dir/dummy_avatar.png';
   static const String userDir = '$dir/sample-users';
-  static const String user1 = '$userDir/user-1.png';
-  static const String user2 = '$userDir/user-2.png';
-  static const String user3 = '$userDir/user-3.png';
-  static const String user4 = '$userDir/user-4.png';
+  static const String user1 = '$dir/dummy_avatar.png';
+  static const String user2 = '$dir/dummy_avatar.png';
+  static const String user3 = '$dir/dummy_avatar.png';
+  static const String user4 = '$dir/dummy_avatar.png';
 
   static const String lesbian = '$communitiesDir/Lesbian.png';
   static const String gay = '$communitiesDir/Gay.png';

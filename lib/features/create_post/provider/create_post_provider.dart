@@ -1,14 +1,16 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../core/api/api_exception.dart';
-import '../../../core/theme/app_images.dart';
 import '../models/create_post_models.dart';
+import '../models/post_draft_model.dart';
 import '../services/media_upload_service.dart';
 import '../services/post_content_service.dart';
 
@@ -18,7 +20,6 @@ class CreatePostProvider extends ChangeNotifier {
     PostContentService? contentService,
   })  : _uploadService = uploadService,
         _contentService = contentService {
-    _initDefaultMedia();
     loadDeviceVideos();
     loadDevicePhotos();
   }
@@ -49,14 +50,14 @@ class CreatePostProvider extends ChangeNotifier {
   bool _isLoadingDevicePhotos = false;
   bool get isLoadingDevicePhotos => _isLoadingDevicePhotos;
 
-  // ── Gallery Items (Recent 4 Videos, Recent 8 Photos) ─────────────────
-  List<GalleryMediaItem> _videoGallery = <GalleryMediaItem>[];
+  // ── Gallery Items ────────────────────────────────────────────────────
+  final List<GalleryMediaItem> _videoGallery = <GalleryMediaItem>[];
   List<GalleryMediaItem> get videoGallery =>
-      List<GalleryMediaItem>.unmodifiable(_videoGallery.take(4));
+      List<GalleryMediaItem>.unmodifiable(_videoGallery);
 
   List<GalleryMediaItem> _photoGallery = <GalleryMediaItem>[];
   List<GalleryMediaItem> get photoGallery =>
-      List<GalleryMediaItem>.unmodifiable(_photoGallery.take(8));
+      List<GalleryMediaItem>.unmodifiable(_photoGallery);
 
   // ── Video Trimming & 60-Second Server Limit ─────────────────────────
   static const int maxVideoDurationLimitSeconds = 60;
@@ -137,10 +138,13 @@ class CreatePostProvider extends ChangeNotifier {
 
   bool get isMediaReady => _uploadStatus == MediaUploadStatus.ready;
 
-  /// Gate: Client-side gating on status===ready
+  /// Gate: Client-side gating on status
   bool get canPublish =>
       !_isPublishing &&
-      (_selectedMedia == null || _uploadStatus == MediaUploadStatus.ready);
+      (_selectedMedia == null ||
+          _uploadStatus == MediaUploadStatus.ready ||
+          _uploadStatus == MediaUploadStatus.idle ||
+          _uploadStatus == MediaUploadStatus.failed);
 
   int _uploadSessionId = 0;
 
@@ -210,7 +214,7 @@ class CreatePostProvider extends ChangeNotifier {
         _uploadResult = MediaUploadResult(
           id: _uploadedMediaId!,
           status: 'ready',
-          downloadUrl: isVideo ? 'assets/videos/video1.mp4' : path,
+          downloadUrl: path,
         );
         _uploadStatus = MediaUploadStatus.ready;
         notifyListeners();
@@ -341,8 +345,12 @@ class CreatePostProvider extends ChangeNotifier {
   Future<PostResponseModel?> publishPost() async {
     if (_isPublishing) return null;
 
-    // Client-side gating: status must be ready before creating post
-    if (_selectedMedia != null && _uploadStatus != MediaUploadStatus.ready) {
+    // Client-side gating: text posts never upload or require media
+    if (_mediaType == MediaType.text) {
+      _selectedMedia = null;
+      _uploadedMediaId = null;
+      _uploadResult = null;
+    } else if (_selectedMedia != null && _uploadStatus != MediaUploadStatus.ready) {
       if (_uploadStatus == MediaUploadStatus.idle ||
           _uploadStatus == MediaUploadStatus.failed) {
         await startMediaUpload();
@@ -359,16 +367,18 @@ class CreatePostProvider extends ChangeNotifier {
 
     try {
       final List<String> mediaRefs = <String>[];
-      if (_uploadedMediaId != null && _uploadedMediaId!.isNotEmpty) {
+      if (_mediaType != MediaType.text &&
+          _uploadedMediaId != null &&
+          _uploadedMediaId!.isNotEmpty) {
         mediaRefs.add(_uploadedMediaId!);
       }
 
       // Backend expects type: "TEXT" | "PHOTO" | "VIDEO"
-      final bool isVideo =
-          _selectedMedia?.isVideo ?? (_mediaType == MediaType.video);
-      final String postType = (_selectedMedia != null || mediaRefs.isNotEmpty)
-          ? (isVideo ? 'VIDEO' : 'PHOTO')
-          : 'TEXT';
+      final String postType = _mediaType == MediaType.text
+          ? 'TEXT'
+          : (_mediaType == MediaType.photo
+              ? 'PHOTO'
+              : ((_selectedMedia?.isVideo ?? true) ? 'VIDEO' : 'PHOTO'));
 
       // Backend expects visibility: "EVERYONE" | "FOLLOWERS" | "COMMUNITY_ONLY"
       final String serverVisibility = () {
@@ -382,8 +392,11 @@ class CreatePostProvider extends ChangeNotifier {
         }
       }();
 
-      final List<String> postTags =
-          _tags.isNotEmpty ? _tags : <String>[_selectedCommunity];
+      final List<String> postTags = _tags.isNotEmpty
+          ? _tags
+          : const <String>[];
+
+      final String? commId = postType == 'TEXT' ? null : _selectedCommunityId;
 
       PostResponseModel result;
       if (_contentService != null) {
@@ -391,20 +404,24 @@ class CreatePostProvider extends ChangeNotifier {
           body: _caption,
           type: postType,
           visibility: serverVisibility,
-          mediaRefs: mediaRefs,
+          mediaRefs: postType == 'TEXT' ? const <String>[] : mediaRefs,
           tags: postTags,
-          communityId: _selectedCommunityId,
+          communityId: commId,
+          allowComments: _allowComments,
+          allowDownloads: _allowDownloads,
         );
       } else {
         result = PostResponseModel(
           id: 'post_${DateTime.now().millisecondsSinceEpoch}',
           caption: _caption,
           type: postType,
-          mediaRefs: mediaRefs,
+          mediaRefs: postType == 'TEXT' ? const <String>[] : mediaRefs,
           tags: postTags,
-          community: _selectedCommunity,
-          communityId: _selectedCommunityId,
+          community: postType == 'TEXT' ? '' : _selectedCommunity,
+          communityId: commId,
           visibility: serverVisibility,
+          allowComments: _allowComments,
+          allowDownloads: _allowDownloads,
         );
       }
 
@@ -428,7 +445,7 @@ class CreatePostProvider extends ChangeNotifier {
   String? _selectedCommunityId;
   String? get selectedCommunityId => _selectedCommunityId;
 
-  PostVisibility _visibility = PostVisibility.followers;
+  PostVisibility _visibility = PostVisibility.everyone;
   PostVisibility get visibility => _visibility;
 
   bool _allowComments = true;
@@ -440,10 +457,105 @@ class CreatePostProvider extends ChangeNotifier {
   final List<String> _tags = <String>[];
   List<String> get tags => List<String>.unmodifiable(_tags);
 
+  String? _currentDraftId;
+  String? get currentDraftId => _currentDraftId;
+
+  PostDraft toDraft({String? caption}) {
+    final String draftId =
+        _currentDraftId ?? 'draft_${DateTime.now().millisecondsSinceEpoch}';
+    return PostDraft(
+      id: draftId,
+      mediaType: _selectedMedia != null
+          ? (_selectedMedia!.isVideo ? MediaType.video : MediaType.photo)
+          : _mediaType,
+      caption: caption ?? _caption,
+      createdAt: DateTime.now(),
+      mediaPath: _selectedMedia?.filePath,
+      communityId: _selectedCommunityId,
+      communityName: _selectedCommunity,
+      allowComments: _allowComments,
+      allowSharing: _allowDownloads,
+      taggedUsers: _tags,
+      mediaUrl: _uploadResult?.downloadUrl ?? _uploadResult?.url,
+      uploadedMediaId: _uploadedMediaId ?? _uploadResult?.id,
+      thumbnailUrl: _uploadResult?.thumbnailUrl,
+    );
+  }
+
+  void loadFromDraft(PostDraft draft) {
+    _currentDraftId = draft.id;
+    _caption = draft.caption;
+    _mediaType = draft.mediaType;
+    if (draft.communityName != null && draft.communityName!.isNotEmpty) {
+      _selectedCommunity = draft.communityName!;
+      _selectedCommunityId = draft.communityId;
+    }
+    _allowComments = draft.allowComments;
+    _allowDownloads = draft.allowSharing;
+    _tags.clear();
+    _tags.addAll(draft.taggedUsers);
+
+    final bool hasMediaUrl =
+        draft.mediaUrl != null && draft.mediaUrl!.trim().isNotEmpty;
+    final String? mediaId = draft.uploadedMediaId;
+
+    if (draft.mediaPath != null && draft.mediaPath!.isNotEmpty) {
+      final File file = File(draft.mediaPath!);
+      if (file.existsSync()) {
+        _selectedMedia = GalleryMediaItem(
+          id: 'draft_${draft.id}',
+          isVideo: draft.mediaType == MediaType.video,
+          filePath: draft.mediaPath,
+          mediaUrl: draft.mediaUrl,
+          thumbnailUrl: draft.thumbnailUrl,
+          durationSeconds: 47,
+        );
+      } else if (hasMediaUrl) {
+        _selectedMedia = GalleryMediaItem(
+          id: 'draft_${draft.id}',
+          isVideo: draft.mediaType == MediaType.video,
+          mediaUrl: draft.mediaUrl,
+          thumbnailUrl: draft.thumbnailUrl,
+          durationSeconds: 47,
+        );
+      }
+    } else if (hasMediaUrl) {
+      _selectedMedia = GalleryMediaItem(
+        id: 'draft_${draft.id}',
+        isVideo: draft.mediaType == MediaType.video,
+        mediaUrl: draft.mediaUrl,
+        thumbnailUrl: draft.thumbnailUrl,
+        durationSeconds: 47,
+      );
+    }
+
+    if (hasMediaUrl && mediaId != null && mediaId.isNotEmpty) {
+      // Re-hydrate the uploaded media state so the user does NOT have to re-process video or image
+      _uploadedMediaId = mediaId;
+      _uploadResult = MediaUploadResult(
+        id: mediaId,
+        status: 'ready',
+        downloadUrl: draft.mediaUrl,
+        thumbnailUrl: draft.thumbnailUrl,
+      );
+      _uploadStatus = MediaUploadStatus.ready;
+      _uploadProgress = 1.0;
+      _uploadError = null;
+    } else {
+      _resetUploadState();
+    }
+    notifyListeners();
+  }
+
   // ── Actions ──────────────────────────────────────────────────────────
   void setMediaType(MediaType type) {
     _mediaType = type;
-    if (type == MediaType.video) {
+    if (type == MediaType.text) {
+      _selectedMedia = null;
+      _uploadedMediaId = null;
+      _uploadResult = null;
+      _resetUploadState();
+    } else if (type == MediaType.video) {
       if (_videoGallery.isNotEmpty) {
         selectMedia(_videoGallery.first);
       } else {
@@ -456,6 +568,14 @@ class CreatePostProvider extends ChangeNotifier {
         loadDevicePhotos();
       }
     }
+    notifyListeners();
+  }
+
+  void clearSelectedMedia() {
+    _selectedMedia = null;
+    _uploadedMediaId = null;
+    _uploadResult = null;
+    _resetUploadState();
     notifyListeners();
   }
 
@@ -524,23 +644,87 @@ class CreatePostProvider extends ChangeNotifier {
   }
 
   void resetPostForm() {
+    _currentDraftId = null;
     _caption = '';
     _tags.clear();
     _selectedCommunity = 'Transgender';
     _selectedCommunityId = null;
-    _visibility = PostVisibility.followers;
+    _visibility = PostVisibility.everyone;
     _allowComments = true;
     _allowDownloads = false;
     _trimStart = 0.0;
     _trimEnd = 1.0;
+    _selectedMedia = null;
     _resetUploadState();
     notifyListeners();
+  }
+
+  static const String _recentVideosPrefKey = 'create_post_recent_videos';
+
+  Future<void> _persistRecentVideos() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final List<Map<String, dynamic>> data = _videoGallery
+          .where((GalleryMediaItem item) =>
+              item.filePath != null && item.filePath!.isNotEmpty)
+          .take(30)
+          .map((GalleryMediaItem item) => item.toJson())
+          .toList();
+      await prefs.setString(_recentVideosPrefKey, jsonEncode(data));
+    } catch (e) {
+      debugPrint('Error persisting recent videos: $e');
+    }
+  }
+
+  Future<void> _loadPersistedRecentVideos() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? raw = prefs.getString(_recentVideosPrefKey);
+      if (raw == null || raw.isEmpty) return;
+
+      final dynamic decoded = jsonDecode(raw);
+      if (decoded is List<dynamic>) {
+        final List<GalleryMediaItem> loaded = <GalleryMediaItem>[];
+        for (final dynamic entry in decoded) {
+          if (entry is Map<String, dynamic>) {
+            final GalleryMediaItem item = GalleryMediaItem.fromJson(entry);
+            if (item.filePath != null &&
+                item.filePath!.isNotEmpty &&
+                File(item.filePath!).existsSync()) {
+              loaded.add(item);
+            }
+          }
+        }
+        if (loaded.isNotEmpty) {
+          final Set<String> existingKeys = _videoGallery
+              .map((GalleryMediaItem e) => e.filePath ?? e.id)
+              .toSet();
+
+          for (final GalleryMediaItem item in loaded) {
+            final String key = item.filePath ?? item.id;
+            if (!existingKeys.contains(key)) {
+              _videoGallery.add(item);
+              existingKeys.add(key);
+            }
+          }
+          if (_selectedMedia == null && _videoGallery.isNotEmpty) {
+            selectMedia(_videoGallery.first);
+          }
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading persisted recent videos: $e');
+    }
   }
 
   // ── Load Most Recent Videos from Phone Gallery (Newest First) ────────
   Future<void> loadDeviceVideos() async {
     _isLoadingDeviceVideos = true;
     notifyListeners();
+
+    // 1. Immediately restore any persisted recent videos across app restarts
+    await _loadPersistedRecentVideos();
 
     try {
       final PermissionState ps = await PhotoManager.requestPermissionExtend();
@@ -554,15 +738,23 @@ class CreatePostProvider extends ChangeNotifier {
           ],
         );
 
-        final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
+        List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
           type: RequestType.video,
           onlyAll: true,
           filterOption: filterOption,
         );
 
+        if (albums.isEmpty) {
+          albums = await PhotoManager.getAssetPathList(
+            type: RequestType.video,
+            onlyAll: false,
+            filterOption: filterOption,
+          );
+        }
+
         if (albums.isNotEmpty) {
           final List<AssetEntity> entities =
-              await albums.first.getAssetListRange(start: 0, end: 4);
+              await albums.first.getAssetListRange(start: 0, end: 50);
 
           if (entities.isNotEmpty) {
             final List<GalleryMediaItem> realItems = <GalleryMediaItem>[];
@@ -601,8 +793,18 @@ class CreatePostProvider extends ChangeNotifier {
             }
 
             if (realItems.isNotEmpty) {
-              _videoGallery = realItems;
-              selectMedia(realItems.first);
+              final Set<String> existingKeys = _videoGallery
+                  .map((GalleryMediaItem e) => e.filePath ?? e.id)
+                  .toSet();
+
+              for (final GalleryMediaItem item in realItems) {
+                final String key = item.filePath ?? item.id;
+                if (!existingKeys.contains(key)) {
+                  _videoGallery.add(item);
+                  existingKeys.add(key);
+                }
+              }
+              await _persistRecentVideos();
             }
           }
         }
@@ -610,6 +812,9 @@ class CreatePostProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error loading recent videos: $e');
     } finally {
+      if (_selectedMedia == null && _videoGallery.isNotEmpty) {
+        selectMedia(_videoGallery.first);
+      }
       _isLoadingDeviceVideos = false;
       notifyListeners();
     }
@@ -640,7 +845,7 @@ class CreatePostProvider extends ChangeNotifier {
 
         if (albums.isNotEmpty) {
           final List<AssetEntity> entities =
-              await albums.first.getAssetListRange(start: 0, end: 8);
+              await albums.first.getAssetListRange(start: 0, end: 100);
 
           if (entities.isNotEmpty) {
             final List<GalleryMediaItem> realItems = <GalleryMediaItem>[];
@@ -674,7 +879,8 @@ class CreatePostProvider extends ChangeNotifier {
 
             if (realItems.isNotEmpty) {
               _photoGallery = realItems;
-              if (_selectedMedia == null || _selectedMedia!.isVideo) {
+              if (_mediaType == MediaType.photo &&
+                  (_selectedMedia == null || _selectedMedia!.isVideo)) {
                 selectMedia(realItems.first);
               }
             }
@@ -721,6 +927,7 @@ class CreatePostProvider extends ChangeNotifier {
           );
           _videoGallery.insert(0, newItem);
           selectMedia(newItem);
+          await _persistRecentVideos();
         }
       } else {
         final XFile? file =
@@ -738,56 +945,5 @@ class CreatePostProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Device media picker exception: $e');
     }
-  }
-
-  // ── Initial Fallback ─────────────────────────────────────────────────
-  void _initDefaultMedia() {
-    _videoGallery = <GalleryMediaItem>[
-      const GalleryMediaItem(
-        id: 'v1',
-        assetPath: AppImages.forYouImg,
-        videoAsset: 'assets/videos/video1.mp4',
-        isVideo: true,
-        duration: '0:47',
-        durationSeconds: 47,
-      ),
-      const GalleryMediaItem(
-        id: 'v2',
-        assetPath: AppImages.followingImg,
-        videoAsset: 'assets/videos/video2.mp4',
-        isVideo: true,
-        duration: '0:40',
-        durationSeconds: 40,
-      ),
-      const GalleryMediaItem(
-        id: 'v3',
-        assetPath: AppImages.communityImg,
-        videoAsset: 'assets/videos/video3.mp4',
-        isVideo: true,
-        duration: '0:59',
-        durationSeconds: 59,
-      ),
-      const GalleryMediaItem(
-        id: 'v4',
-        assetPath: AppImages.emptyHomeImg,
-        videoAsset: 'assets/videos/video1.mp4',
-        isVideo: true,
-        duration: '0:47',
-        durationSeconds: 47,
-      ),
-    ];
-
-    _photoGallery = <GalleryMediaItem>[
-      const GalleryMediaItem(id: 'p1', assetPath: AppImages.searchResult1),
-      const GalleryMediaItem(id: 'p2', assetPath: AppImages.searchResult2),
-      const GalleryMediaItem(id: 'p3', assetPath: AppImages.searchResult3),
-      const GalleryMediaItem(id: 'p4', assetPath: AppImages.searchResult4),
-      const GalleryMediaItem(id: 'p5', assetPath: AppImages.searchResult5),
-      const GalleryMediaItem(id: 'p6', assetPath: AppImages.searchResult6),
-      const GalleryMediaItem(id: 'p7', assetPath: AppImages.queer),
-      const GalleryMediaItem(id: 'p8', assetPath: AppImages.transgender),
-    ];
-
-    _selectedMedia = _videoGallery.first;
   }
 }

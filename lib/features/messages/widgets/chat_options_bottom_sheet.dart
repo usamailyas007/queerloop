@@ -8,6 +8,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../create_post/widgets/custom_gradient_switch.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../../profile/services/user_relationship_service.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../provider/messages_provider.dart';
@@ -159,8 +160,12 @@ class ChatOptionsBottomSheet extends StatelessWidget {
         : (provider.isMuted(userId) || provider.isMuted(username));
     final bool isCurrentlyRestricted =
         provider.isRestricted(userId) || provider.isRestricted(username);
+    final ProfileProvider profileProvider = context.watch<ProfileProvider>();
     final bool isCurrentlyBlocked =
-        provider.isBlocked(userId) || provider.isBlocked(username);
+        provider.isBlocked(userId) ||
+        provider.isBlocked(username) ||
+        profileProvider.isBlocked(userId) ||
+        profileProvider.isBlocked(username);
 
     return Container(
       decoration: BoxDecoration(
@@ -320,6 +325,11 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                           : username;
 
                       await provider.unrestrictUser(effectiveId, username: username);
+                      try {
+                        if (context.mounted) {
+                          context.read<ProfileProvider>().unrestrictUser(effectiveId);
+                        }
+                      } catch (_) {}
                       if (!context.mounted) return;
                       AppSnackBar.show(
                         context,
@@ -327,7 +337,14 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                         title: '$cleanUsername unrestricted',
                         subtitle: 'Their messages returned to your main inbox',
                         actionLabel: 'Undo',
-                        onAction: () => provider.restrictUser(effectiveId, username: username),
+                        onAction: () async {
+                          await provider.restrictUser(effectiveId, username: username);
+                          try {
+                            if (context.mounted) {
+                              context.read<ProfileProvider>().restrictUser(effectiveId, username: username);
+                            }
+                          } catch (_) {}
+                        },
                       );
                     }();
                   } else {
@@ -343,6 +360,11 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                             ? targetId
                             : username;
                         await provider.restrictUser(effectiveId, username: username);
+                        try {
+                          if (context.mounted) {
+                            context.read<ProfileProvider>().restrictUser(effectiveId, username: username);
+                          }
+                        } catch (_) {}
                       },
                     );
                   }
@@ -383,6 +405,9 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                           : username;
 
                       await provider.unblockUser(effectiveId, username: username);
+                      try {
+                        profileProvider.unblockUser(effectiveId, username: username);
+                      } catch (_) {}
                       if (!context.mounted) return;
                       AppSnackBar.show(
                         context,
@@ -390,7 +415,12 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                         title: '$cleanUsername unblocked',
                         subtitle: 'You can now message each other again',
                         actionLabel: 'Undo',
-                        onAction: () => provider.blockUser(effectiveId, username: username),
+                        onAction: () {
+                          provider.blockUser(effectiveId, username: username);
+                          try {
+                            profileProvider.blockUser(effectiveId, username: username);
+                          } catch (_) {}
+                        },
                       );
                     }();
                   } else {
@@ -406,6 +436,9 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                             ? targetId
                             : username;
                         await provider.blockUser(effectiveId, username: username);
+                        try {
+                          profileProvider.blockUser(effectiveId, username: username);
+                        } catch (_) {}
                       },
                       onConfirmUnblock: () async {
                         String? targetId = userId;
@@ -416,6 +449,9 @@ class ChatOptionsBottomSheet extends StatelessWidget {
                             ? targetId
                             : username;
                         await provider.unblockUser(effectiveId, username: username);
+                        try {
+                          profileProvider.unblockUser(effectiveId, username: username);
+                        } catch (_) {}
                       },
                     );
                   }

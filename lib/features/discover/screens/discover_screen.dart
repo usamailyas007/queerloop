@@ -13,10 +13,12 @@ import '../widgets/discover_community_tile.dart';
 import '../widgets/discover_conversation_card.dart';
 import '../widgets/discover_creator_circle.dart';
 import '../widgets/discover_section_label.dart';
+import '../widgets/discover_shimmer_skeleton.dart';
 import '../widgets/discover_spotlight_card.dart';
 import '../widgets/discover_static_search_bar.dart';
 import '../widgets/discover_trending_card.dart';
 import '../../auth/auth_provider.dart';
+import '../../home/provider/home_feed_provider.dart';
 import '../../profile/provider/profile_provider.dart';
 import 'search_screen.dart';
 
@@ -39,7 +41,13 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         final String myUsername = (auth.user?.displayName ?? profile.username)
             .replaceAll('@', '')
             .trim();
-        context.read<DiscoverProvider>().setCurrentUser(userId: myId, username: myUsername);
+        final DiscoverProvider discover = context.read<DiscoverProvider>();
+        discover.setCurrentUser(userId: myId, username: myUsername);
+        final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+        discover.syncHomeFeedContent(posts: homeFeed.posts, reels: homeFeed.reels);
+        if (discover.isInitialLoading) {
+          discover.fetchDiscoverData();
+        }
         context.read<SpotlightsProvider>().loadInitial();
         if (myId != null && myId.isNotEmpty) {
           profile.fetchUserCommunities(myId);
@@ -68,7 +76,11 @@ class _DiscoverScreenBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final DiscoverProvider provider = context.watch<DiscoverProvider>();
     final ProfileProvider profile = context.watch<ProfileProvider>();
+    final SpotlightsProvider spotlights = context.watch<SpotlightsProvider>();
     final AppLocalizations l10n = AppLocalizations.of(context);
+
+    final bool isInitialLoading = provider.isDiscoverLoading ||
+        (!spotlights.hasLoadedOnce && spotlights.isLoading);
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -83,11 +95,13 @@ class _DiscoverScreenBody extends StatelessWidget {
           },
           color: AppColors.gradientCyan,
           backgroundColor: context.themeCardBackground,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
-            slivers: <Widget>[
+          child: isInitialLoading
+              ? const DiscoverShimmerSkeleton()
+              : CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  slivers: <Widget>[
               // ── App Bar ────────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(

@@ -10,6 +10,7 @@ import '../../features/home/provider/home_feed_provider.dart';
 import '../../features/messages/models/message_models.dart';
 import '../../features/messages/provider/messages_provider.dart';
 import '../../features/messages/screens/chat_screen.dart';
+import '../../features/profile/provider/profile_provider.dart';
 import '../../features/profile/screens/followers_following_screen.dart';
 import '../../features/profile/screens/user_profile_screen.dart';
 import '../api/api_client.dart';
@@ -177,6 +178,79 @@ abstract final class PushNotificationService {
   static Future<void> _showForegroundNotification(RemoteMessage message) async {
     final RemoteNotification? notification = message.notification;
     final Map<String, dynamic> data = message.data;
+    final Map<String, dynamic> d =
+        (data['data'] is Map<String, dynamic>) ? data['data'] as Map<String, dynamic> : data;
+
+    // Suppress notifications if sender is restricted or blocked
+    final BuildContext? ctx = navigatorKey.currentContext;
+    if (ctx != null) {
+      try {
+        final MessagesProvider msgProv = ctx.read<MessagesProvider>();
+        ProfileProvider? profileProv;
+        try {
+          profileProv = ctx.read<ProfileProvider>();
+        } catch (_) {}
+
+        final dynamic rawSender = d['sender'] ?? d['user'] ?? d['actor'] ?? d['author'];
+        String? nestedSenderId;
+        String? nestedSenderUname;
+        if (rawSender is Map) {
+          nestedSenderId = (rawSender['id'] ??
+                  rawSender['_id'] ??
+                  rawSender['userId'] ??
+                  rawSender['user_id'])
+              ?.toString();
+          nestedSenderUname = (rawSender['username'] ??
+                  rawSender['handle'] ??
+                  rawSender['name'])
+              ?.toString();
+        }
+
+        final String? senderId = (d['senderId'] ??
+                d['sender_id'] ??
+                d['actorId'] ??
+                d['actor_id'] ??
+                d['userId'] ??
+                d['user_id'] ??
+                d['authorId'] ??
+                nestedSenderId)
+            ?.toString();
+        final String? senderUname = (d['senderUsername'] ??
+                d['sender_username'] ??
+                d['username'] ??
+                d['actorUsername'] ??
+                d['actor_username'] ??
+                nestedSenderUname)
+            ?.toString();
+        final String? convId = (d['conversationId'] ??
+                d['conversation_id'] ??
+                d['convId'] ??
+                d['targetId'])
+            ?.toString();
+
+        final bool isUserRestricted = msgProv.isRestricted(senderId) ||
+            msgProv.isRestricted(senderUname) ||
+            msgProv.isRestricted(convId) ||
+            (profileProv != null &&
+                (profileProv.isRestricted(senderId) ||
+                    profileProv.isRestricted(senderUname) ||
+                    profileProv.isRestricted(convId)));
+
+        final bool isUserBlocked = msgProv.isBlocked(senderId) ||
+            msgProv.isBlocked(senderUname) ||
+            msgProv.isBlocked(convId) ||
+            (profileProv != null &&
+                (profileProv.isBlocked(senderId) ||
+                    profileProv.isBlocked(senderUname) ||
+                    profileProv.isBlocked(convId)));
+
+        if (isUserRestricted || isUserBlocked) {
+          debugPrint(
+              '🔇 [PushNotificationService] Suppressing notification from restricted/blocked user: id=$senderId, uname=$senderUname, conv=$convId');
+          return;
+        }
+      } catch (_) {}
+    }
 
     final String title = notification?.title ??
         (data['title']?.toString() ?? 'QueerLoop');

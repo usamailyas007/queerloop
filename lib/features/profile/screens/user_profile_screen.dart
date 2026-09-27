@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/config/api_endpoints.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
@@ -14,6 +16,7 @@ import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../auth/auth_provider.dart';
 import '../../create_post/models/create_post_models.dart';
+import '../../create_post/services/post_content_service.dart';
 import '../../discover/models/discover_models.dart';
 import '../../discover/services/discover_service.dart';
 import '../../messages/models/message_models.dart';
@@ -21,8 +24,14 @@ import '../../messages/provider/messages_provider.dart';
 import '../../messages/screens/chat_screen.dart';
 import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/models/profile_models.dart';
+import '../../../core/widgets/app_shimmer.dart';
 import '../../../core/widgets/app_snackbar.dart';
+import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
+import '../../home/provider/home_feed_provider.dart';
+import '../../home/services/reel_video_preloader.dart';
+import '../../home/widgets/comments_bottom_sheet.dart';
+import '../../home/widgets/post_feed_card.dart';
 import '../models/user_relationship_models.dart';
 import '../provider/profile_provider.dart';
 import '../services/user_relationship_service.dart';
@@ -37,8 +46,10 @@ class UserProfileScreen extends StatefulWidget {
     this.userId,
     this.username = 'rowankeeps',
     this.name = 'Rowan',
-    this.avatarAsset = AppImages.user1,
+    this.avatarAsset = AppImages.defaultAvatar,
     this.isPrivate = false,
+    this.initialReel,
+    this.initialPost,
     super.key,
   });
 
@@ -47,6 +58,8 @@ class UserProfileScreen extends StatefulWidget {
   final String name;
   final String avatarAsset;
   final bool isPrivate;
+  final ReelItemModel? initialReel;
+  final PostItemModel? initialPost;
 
   @override
   State<UserProfileScreen> createState() => _UserProfileScreenState();
@@ -57,6 +70,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _isRequested = false; // Default: Not requested (shows Follow initially)
   bool _isFollowing = false; // Default: Not following (shows Follow initially)
   bool _isLoading = false;
+  bool _isFetchingProfile = false;
   bool _isStartingChat = false;
   bool _isFollowActionBusy = false;
   String? _resolvedUserId;
@@ -85,14 +99,58 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialReel != null) {
+      _authorReels = <ReelItemModel>[widget.initialReel!];
+    }
+    if (widget.initialPost != null) {
+      final PostItemModel initP = widget.initialPost!;
+      final PostResponseModel initModel = PostResponseModel(
+        id: initP.id,
+        authorId: initP.authorId,
+        authorName: initP.username.replaceAll('@', ''),
+        authorDisplayName: initP.authorDisplayName,
+        authorAvatar: initP.avatarAsset,
+        caption: initP.content,
+        type: initP.postType.isNotEmpty ? initP.postType : 'PHOTO',
+        postImageUrl: initP.postImageUrl,
+        likesCount: initP.likesCount,
+        commentsCount: initP.commentsCount,
+        isLiked: initP.isLiked,
+        isSaved: initP.isSaved,
+        allowComments: initP.allowComments,
+        allowDownloads: initP.allowDownloads,
+      );
+      _authorPosts = <PostResponseModel>[initModel];
+      _authorTextPosts = <PostResponseModel>[initModel];
+      if (initP.postImageUrl != null && initP.postImageUrl!.isNotEmpty) {
+        _postImageUrls[initP.id] = initP.postImageUrl!;
+      }
+    }
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ReelVideoPreloader.instance.pauseAll();
       if (mounted) {
         context.read<MessagesProvider>().loadBlockedUsers();
         context.read<ProfileProvider>().loadBlockedAccounts();
       }
     });
-    if (widget.userId != null && widget.userId!.trim().isNotEmpty) {
-      _fetchUserProfile(widget.userId!.trim());
+
+    String? resolvedId = (widget.userId != null && widget.userId!.trim().isNotEmpty)
+        ? widget.userId!.trim()
+        : null;
+
+    if (resolvedId == null && widget.username.trim().isNotEmpty) {
+      final AuthorInfo? cached = AuthorProfileCache.getByName(widget.username);
+      if (cached != null && cached.id.isNotEmpty) {
+        resolvedId = cached.id;
+        _resolvedUserId = cached.id;
+      }
+    }
+
+    if (resolvedId != null) {
+      _fetchUserProfile(resolvedId);
     } else if (widget.username.trim().isNotEmpty) {
       _resolveUserByUsername(widget.username);
     }
@@ -106,7 +164,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (lower.endsWith('.mp4') ||
           lower.endsWith('.mov') ||
           lower.endsWith('.webm') ||
-          lower.contains('video')) {
+          lower.endsWith('.m3u8') ||
+          lower.contains('/videos/processed/')) {
         return true;
       }
     }
@@ -125,19 +184,34 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       String? thumbUrl;
 
       if (post.mediaRefs.isNotEmpty) {
-        final String firstRef = post.mediaRefs.first;
+        final String firstRef = post.mediaRefs.first.trim();
         if (firstRef.startsWith('http://') || firstRef.startsWith('https://')) {
+          // Already a full CDN/HTTP URL
           videoUrl = firstRef;
+          if (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty) {
+            thumbUrl = post.thumbnailUrl;
+          } else if (firstRef.contains('/videos/processed/')) {
+            thumbUrl = firstRef.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+          } else if (post.postImageUrl != null &&
+              post.postImageUrl!.isNotEmpty &&
+              !post.postImageUrl!.endsWith('.mp4') &&
+              !post.postImageUrl!.endsWith('.m3u8')) {
+            thumbUrl = post.postImageUrl;
+          }
         } else {
-          try {
-            final dynamic mediaData =
-                await client.get(ApiEndpoints.mediaStatus(firstRef));
-            if (mediaData is Map<String, dynamic>) {
-              videoUrl = mediaData['url'] as String? ??
-                  mediaData['downloadUrl'] as String?;
-              thumbUrl = mediaData['thumbnailUrl'] as String?;
-            }
-          } catch (_) {}
+          // Raw UUID from upload — build HLS URL directly (same as For You feed, no extra API call)
+          final String clean = firstRef
+              .replaceAll(RegExp(r'^/+'), '')
+              .replaceAll(RegExp(r'^media/'), '');
+          videoUrl = '${AppConfig.cdnUrl}/videos/processed/$clean/master.m3u8';
+          thumbUrl = (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty)
+              ? post.thumbnailUrl
+              : (post.postImageUrl != null &&
+                      post.postImageUrl!.isNotEmpty &&
+                      !post.postImageUrl!.endsWith('.mp4') &&
+                      !post.postImageUrl!.endsWith('.m3u8'))
+                  ? post.postImageUrl
+                  : '${AppConfig.cdnUrl}/videos/processed/$clean/thumb.0000000.jpg';
         }
       }
 
@@ -146,12 +220,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       final String formattedUsername = authorUsername.startsWith('@')
           ? authorUsername
           : '@$authorUsername';
+      final String? profileAvatar = (_profile?.avatarUrl != null &&
+              _profile!.avatarUrl!.trim().isNotEmpty)
+          ? _profile!.avatarUrl!.trim()
+          : null;
       final String avatar = (post.authorAvatar != null &&
-              post.authorAvatar!.isNotEmpty)
-          ? post.authorAvatar!
-          : ((_profile?.avatarUrl != null && _profile!.avatarUrl!.isNotEmpty)
-              ? _profile!.avatarUrl!
-              : fallbackAvatar);
+              post.authorAvatar!.trim().isNotEmpty)
+          ? post.authorAvatar!.trim()
+          : (profileAvatar ?? AppImages.defaultAvatar);
 
       reels.add(
         ReelItemModel(
@@ -167,11 +243,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           videoUrl: videoUrl,
           thumbnailUrl: thumbUrl,
           caption: post.body.isNotEmpty ? post.body : post.caption,
-          likesCount: post.likesCount,
-          commentsCount: post.commentsCount,
-          isLiked: post.isLiked,
-          isSaved: post.isSaved,
+          likesCount: PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount),
+          commentsCount: CommentCountRegistry.getOr(post.id, post.commentsCount),
+          viewsCount: post.viewsCount,
+          isLiked: PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked),
+          isSaved: PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved),
+          allowComments: post.allowComments,
+          allowDownloads: post.allowDownloads,
+          hideLikes: _profile?.hideMyLikes ?? false,
           tags: post.tags,
+          communityId: post.communityId,
           durationText: (post.duration != null && post.duration!.isNotEmpty)
               ? post.duration!
               : '0:30',
@@ -198,7 +279,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               cleanUsername.toLowerCase(),
           orElse: () => results.people.first,
         );
-        if (person.id != null && person.id!.trim().isNotEmpty && mounted) {
+        if (person.id != null &&
+            person.id!.trim().isNotEmpty &&
+            person.id!.trim() != _resolvedUserId &&
+            mounted) {
           setState(() {
             _resolvedUserId = person.id!.trim();
           });
@@ -211,11 +295,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _fetchUserProfile(String userId) async {
+    if (_isFetchingProfile) return;
+    _isFetchingProfile = true;
     setState(() {
       _isLoading = true;
     });
 
     final ApiClient client = context.read<ApiClient>();
+    final AuthProvider auth = context.read<AuthProvider>();
+    final ProfileProvider profileProvider = context.read<ProfileProvider>();
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
     final UserRelationshipService relService = UserRelationshipService(client);
 
     // 1. Fetch user profile
@@ -227,10 +316,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
       if (data is Map<String, dynamic>) {
         loadedProfile = UserProfile.fromJson(data);
+        AuthorProfileCache.set(
+          loadedProfile.id,
+          AuthorInfo(
+            id: loadedProfile.id,
+            username: loadedProfile.username ?? '',
+            displayName: loadedProfile.displayName ?? '',
+            avatarUrl: loadedProfile.avatarUrl,
+            hideMyLikes: loadedProfile.hideMyLikes,
+          ),
+        );
       }
     } catch (e) {
       debugPrint('❌ [UserProfile] Failed to fetch user profile: $e');
-      if (widget.username.trim().isNotEmpty && _resolvedUserId == null) {
+      if (widget.userId == null && widget.username.trim().isNotEmpty && _resolvedUserId == null) {
         _resolveUserByUsername(widget.username);
       }
     }
@@ -249,9 +348,28 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       debugPrint('⚠️ [UserProfile] Could not fetch followers/following: $e');
     }
 
-    // 3. Fetch author posts with resilient list parsing
-    List<PostResponseModel> allPosts = <PostResponseModel>[];
+    // 3. Check follow status for relationship indicators
+    final String? curUserId = auth.userId ?? profileProvider.profile?.id;
+
+    final bool isFollowedInCache = profileProvider.isFollowingUser(
+      userId: loadedProfile?.id ?? userId,
+      username: loadedProfile?.username ?? widget.username,
+    );
+
+    final bool amIFollower = curUserId != null &&
+        curUserId.isNotEmpty &&
+        followersList.any((UserRelationItem f) => f.userId == curUserId);
+
+    final bool isCurrentlyFollowing = isFollowedInCache ||
+        amIFollower ||
+        loadedProfile?.isFollowing == true ||
+        loadedProfile?.relationship == 'following';
+
+    // 3. Fetch author posts - ensure both video reels and photo posts are fetched,
+    // even if the user is private or posts have followers-only visibility.
+    final List<PostResponseModel> allPosts = <PostResponseModel>[];
     try {
+      debugPrint('🚀 [UserProfile] Calling GET ${ApiEndpoints.postsByAuthor(userId)}');
       final dynamic postsData =
           await client.get(ApiEndpoints.postsByAuthor(userId));
       List<dynamic> rawList = <dynamic>[];
@@ -260,6 +378,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       } else if (postsData is Map<String, dynamic>) {
         if (postsData['data'] is List) {
           rawList = postsData['data'] as List<dynamic>;
+        } else if (postsData['data'] is Map) {
+          final Map d = postsData['data'] as Map;
+          if (d['posts'] is List) {
+            rawList = d['posts'] as List<dynamic>;
+          } else if (d['items'] is List) {
+            rawList = d['items'] as List<dynamic>;
+          } else if (d['results'] is List) {
+            rawList = d['results'] as List<dynamic>;
+          }
         } else if (postsData['posts'] is List) {
           rawList = postsData['posts'] as List<dynamic>;
         } else if (postsData['items'] is List) {
@@ -268,13 +395,113 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           rawList = postsData['results'] as List<dynamic>;
         }
       }
-      allPosts = rawList
-          .whereType<Map<String, dynamic>>()
-          .map(PostResponseModel.fromJson)
-          .toList();
+      for (final dynamic item in rawList) {
+        if (item is Map) {
+          try {
+            final Map<String, dynamic> rawMap = Map<String, dynamic>.from(item);
+            final dynamic nested = rawMap['post'] ?? rawMap['item'] ?? rawMap['savedPost'];
+            final Map<String, dynamic> typed = (nested is Map)
+                ? Map<String, dynamic>.from(nested)
+                : rawMap;
+            final PostResponseModel parsed = PostResponseModel.fromJson(typed);
+            if (!parsed.isDeleted && !allPosts.any((PostResponseModel p) => p.id == parsed.id)) {
+              allPosts.add(parsed);
+            }
+          } catch (e) {
+            debugPrint('⚠️ [UserProfile] Error parsing post: $e');
+          }
+        }
+      }
     } catch (e) {
-      debugPrint('⚠️ [UserProfile] Could not fetch author posts: $e');
+      debugPrint('⚠️ [UserProfile] Could not fetch author posts via postsByAuthor: $e');
     }
+
+    // Fallback/enrich from global feed /posts (Content Service) to guarantee all posts
+    // (both photo posts and video reels) are retrieved, especially for private users or
+    // if /posts?authorId= returned empty/partial results.
+    try {
+      final PostContentService contentService = PostContentService(client);
+      final List<PostResponseModel> feedPosts = await contentService.getFeedPosts();
+      final String cleanUserId = userId.trim().toLowerCase();
+      final String cleanUsername = widget.username.replaceAll('@', '').trim().toLowerCase();
+
+      for (final PostResponseModel p in feedPosts) {
+        final String? pAuthorId = p.authorId?.trim().toLowerCase();
+        final String? pAuthorName = p.authorName?.replaceAll('@', '').trim().toLowerCase();
+        final bool isMatch = (pAuthorId != null && pAuthorId == cleanUserId) ||
+            (pAuthorName != null && pAuthorName == cleanUsername);
+        if (isMatch && !p.isDeleted) {
+          if (!allPosts.any((PostResponseModel existing) => existing.id == p.id)) {
+            allPosts.add(p);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [UserProfile] Fallback getFeedPosts error: $e');
+    }
+
+    // Also enrich from in-memory HomeFeedProvider posts and reels if present
+    try {
+      final String cleanUserId = userId.trim().toLowerCase();
+      final String cleanUsername = widget.username.replaceAll('@', '').trim().toLowerCase();
+
+      for (final PostItemModel p in homeFeed.posts) {
+        final String? pAuthorId = p.authorId?.trim().toLowerCase();
+        final String pUsername = p.username.replaceAll('@', '').trim().toLowerCase();
+        if ((pAuthorId == cleanUserId || pUsername == cleanUsername) &&
+            !allPosts.any((PostResponseModel existing) => existing.id == p.id)) {
+          allPosts.add(
+            PostResponseModel(
+              id: p.id,
+              authorId: p.authorId,
+              authorName: p.username,
+              authorDisplayName: p.authorDisplayName,
+              authorAvatar: p.avatarAsset,
+              caption: p.content,
+              type: p.postType.isNotEmpty ? p.postType : 'PHOTO',
+              postImageUrl: p.postImageUrl,
+              likesCount: p.likesCount,
+              commentsCount: p.commentsCount,
+              isLiked: p.isLiked,
+              isSaved: p.isSaved,
+              allowComments: p.allowComments,
+              allowDownloads: p.allowDownloads,
+            ),
+          );
+        }
+      }
+
+      for (final ReelItemModel r in homeFeed.reels) {
+        final String? rAuthorId = r.authorId?.trim().toLowerCase();
+        final String rUsername = r.username.replaceAll('@', '').trim().toLowerCase();
+        if ((rAuthorId == cleanUserId || rUsername == cleanUsername) &&
+            !allPosts.any((PostResponseModel existing) => existing.id == r.id)) {
+          allPosts.add(
+            PostResponseModel(
+              id: r.id,
+              authorId: r.authorId,
+              authorName: r.username,
+              authorDisplayName: r.authorDisplayName,
+              authorAvatar: r.avatarAsset,
+              caption: r.caption,
+              type: 'VIDEO',
+              mediaRefs: (r.videoUrl != null && r.videoUrl!.isNotEmpty)
+                  ? <String>[r.videoUrl!]
+                  : const <String>[],
+              thumbnailUrl: r.thumbnailUrl,
+              likesCount: r.likesCount,
+              commentsCount: r.commentsCount,
+              viewsCount: r.viewsCount,
+              isLiked: r.isLiked,
+              isSaved: r.isSaved,
+              allowComments: r.allowComments,
+              allowDownloads: r.allowDownloads,
+              duration: r.durationText,
+            ),
+          );
+        }
+      }
+    } catch (_) {}
 
     // Separate posts into text/photo posts vs video reels
     final List<PostResponseModel> textPosts =
@@ -293,25 +520,31 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     // Resolve post image URLs for text/photo posts
     final Map<String, String> postImages = <String, String>{};
     for (final PostResponseModel post in textPosts) {
-      if (post.mediaRefs.isNotEmpty) {
-        final String firstRef = post.mediaRefs.first;
+      if (post.postImageUrl != null && post.postImageUrl!.trim().isNotEmpty) {
+        postImages[post.id] = post.postImageUrl!.trim();
+      } else if (post.mediaRefs.isNotEmpty) {
+        final String firstRef = post.mediaRefs.first.trim();
         if (firstRef.startsWith('http://') ||
             firstRef.startsWith('https://') ||
             firstRef.startsWith('assets/')) {
           postImages[post.id] = firstRef;
         } else {
-          try {
-            final dynamic mediaData =
-                await client.get(ApiEndpoints.mediaStatus(firstRef));
-            if (mediaData is Map<String, dynamic>) {
-              final String? url = mediaData['url'] as String? ??
-                  mediaData['downloadUrl'] as String? ??
-                  mediaData['thumbnailUrl'] as String?;
-              if (url != null && url.isNotEmpty) {
-                postImages[post.id] = url;
-              }
-            }
-          } catch (_) {}
+          final String clean = firstRef
+              .replaceAll(RegExp(r'^/+'), '')
+              .replaceAll(RegExp(r'^media/'), '');
+          final bool hasExt = clean.toLowerCase().endsWith('.jpg') ||
+              clean.toLowerCase().endsWith('.jpeg') ||
+              clean.toLowerCase().endsWith('.png') ||
+              clean.toLowerCase().endsWith('.webp');
+          final String filename = hasExt ? clean : '$clean.jpg';
+          final String author = post.authorId ?? _effectiveUserId ?? userId;
+          if (author.isNotEmpty) {
+            postImages[post.id] =
+                '${AppConfig.cdnUrl}/images/original/$author/$filename';
+          } else {
+            postImages[post.id] =
+                '${AppConfig.cdnUrl}/images/original/$filename';
+          }
         }
       }
     }
@@ -352,19 +585,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     if (!mounted) return;
 
-    final ProfileProvider profileProvider = context.read<ProfileProvider>();
-    final AuthProvider auth = context.read<AuthProvider>();
-    final String? myId = auth.userId;
-
-    final bool isFollowedInCache = profileProvider.isFollowingUser(
-      userId: loadedProfile?.id ?? userId,
-      username: loadedProfile?.username ?? widget.username,
-    );
-
-    final bool amIFollower = myId != null &&
-        myId.isNotEmpty &&
-        followersList.any((UserRelationItem f) => f.userId == myId);
-
     final int calculatedFollowers = (loadedProfile?.followersCount != null &&
             loadedProfile!.followersCount! > followersList.length)
         ? loadedProfile.followersCount!
@@ -379,21 +599,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (loadedProfile != null) {
         _profile = loadedProfile;
       }
-      _authorPosts = allPosts;
-      _authorTextPosts = textPosts;
-      _authorReels = convertedReels;
-      _postImageUrls = postImages;
+      _authorPosts = allPosts.isNotEmpty ? allPosts : _authorPosts;
+      _authorTextPosts = textPosts.isNotEmpty ? textPosts : _authorTextPosts;
+      _authorReels = convertedReels.isNotEmpty
+          ? convertedReels
+          : (_authorReels.isNotEmpty
+              ? _authorReels
+              : (widget.initialReel != null
+                  ? <ReelItemModel>[widget.initialReel!]
+                  : <ReelItemModel>[]));
+      _postImageUrls = <String, String>{..._postImageUrls, ...postImages};
       _userCommunities = comms;
       _followersCount = calculatedFollowers;
       _followingCount = calculatedFollowing;
-      _isFollowing = isFollowedInCache ||
-          amIFollower ||
-          loadedProfile?.isFollowing == true ||
-          loadedProfile?.relationship == 'following';
+      _isFollowing = isCurrentlyFollowing;
       _isRequested = loadedProfile?.isPending == true ||
           loadedProfile?.relationship == 'pending';
       _isLoading = false;
     });
+    _isFetchingProfile = false;
   }
 
   Future<void> _handleFollowToggle({required bool isPrivateAccount}) async {
@@ -475,7 +699,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _profile?.isPrivate ?? (widget.isPrivate || widget.username.contains('kit.lumen'));
     final String currentUsername = _profile?.username ?? widget.username;
     final String currentName = _profile?.displayName ?? widget.name;
-    final String currentAvatar = _profile?.avatarUrl ?? widget.avatarAsset;
+    final String currentAvatar = (_profile != null)
+        ? ((_profile!.avatarUrl != null && _profile!.avatarUrl!.trim().isNotEmpty)
+            ? _profile!.avatarUrl!.trim()
+            : AppImages.defaultAvatar)
+        : ((widget.avatarAsset.isNotEmpty && widget.avatarAsset != AppImages.user1)
+            ? widget.avatarAsset
+            : AppImages.defaultAvatar);
     final String currentBio = _profile?.bio ??
         (isPrivateAccount
             ? 'Private account.'
@@ -496,15 +726,23 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             widget.username.replaceAll('@', '').toLowerCase() ==
                 myName.replaceAll('@', '').toLowerCase());
 
+    final String cleanUsernameOnly =
+        currentUsername.replaceAll('@', '').trim().toLowerCase();
     final bool isUserBlocked = msgProvider.isBlocked(_effectiveUserId) ||
         msgProvider.isBlocked(currentUsername) ||
+        profile.isBlocked(_effectiveUserId) ||
+        profile.isBlocked(currentUsername) ||
         profile.blockedAccounts.any((BlockedAccountItem b) =>
-            (b.userId.isNotEmpty && b.userId == _effectiveUserId) ||
-            b.username.toLowerCase() ==
-                currentUsername.replaceAll('@', '').toLowerCase());
+            (b.userId.isNotEmpty &&
+                (b.userId == _effectiveUserId || b.userId == widget.userId)) ||
+            b.username.replaceAll('@', '').trim().toLowerCase() ==
+                cleanUsernameOnly);
 
-    final bool shouldShowPrivateScreen =
-        isPrivateAccount && !isOwnProfile && !_isFollowing;
+    final bool shouldShowPrivateScreen = isPrivateAccount &&
+        !isOwnProfile &&
+        !_isFollowing &&
+        _authorReels.isEmpty &&
+        _authorTextPosts.isEmpty;
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -613,15 +851,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
             // ── Scrollable Profile Body ─────────────────────────────────────
             Expanded(
-              child: _isLoading && _profile == null
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.gradientPink,
-                      ),
-                    )
-                  : ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                      children: <Widget>[
+              child: _isLoading && _profile == null && _authorReels.isEmpty && _authorTextPosts.isEmpty
+                  ? const _FullProfileShimmerSkeleton()
+                  : ListenableBuilder(
+                      listenable: Listenable.merge(<Listenable>[
+                        PostInteractionRegistry.notifier,
+                        CommentCountRegistry.notifier,
+                      ]),
+                      builder: (BuildContext context, _) {
+                        return ListView(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                          children: <Widget>[
                         // Profile Header & Stats Widget
                         ProfileHeaderStatsWidget(
                           avatarAsset: currentAvatar,
@@ -659,7 +899,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               (isPrivateAccount
                                   ? const <String>[]
                                   : const <String>[]),
-                          identityList: const <String>[],
+                          identityList: isOwnProfile ? profile.identities : const <String>[],
                           interestsList:
                               _profile?.interests ?? const <String>[],
                           communitiesList: _userCommunities,
@@ -683,20 +923,36 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     child: AppOutlineButton(
                                       text: 'Unblock',
                                       onPressed: () async {
-                                        final String? tId = _effectiveUserId;
-                                        if (tId != null && tId.isNotEmpty) {
-                                          await profile.unblockUser(tId);
-                                          await msgProvider.unblockUser(tId, username: currentUsername);
-                                        } else {
-                                          await msgProvider.unblockUser(currentUsername, username: currentUsername);
-                                        }
+                                        final String cleanTarget =
+                                            currentUsername.replaceAll('@', '').trim().toLowerCase();
+                                        final BlockedAccountItem? blockedMatch =
+                                            profile.blockedAccounts.cast<BlockedAccountItem?>().firstWhere(
+                                          (BlockedAccountItem? b) =>
+                                              b != null &&
+                                              ((b.userId.isNotEmpty &&
+                                                      (b.userId == _effectiveUserId ||
+                                                          b.userId == widget.userId)) ||
+                                                  b.username
+                                                          .replaceAll('@', '')
+                                                          .trim()
+                                                          .toLowerCase() ==
+                                                      cleanTarget),
+                                          orElse: () => null,
+                                        );
+                                        final String tId = blockedMatch?.userId ??
+                                            _effectiveUserId ??
+                                            widget.userId ??
+                                            currentUsername;
+
+                                        await profile.unblockUser(tId, username: currentUsername);
+                                        await msgProvider.unblockUser(tId, username: currentUsername);
                                         if (!mounted) return;
                                         setState(() {});
                                         AppSnackBar.showSuccess(
                                           this.context,
                                           title: 'Unblocked',
                                           subtitle:
-                                              '@${currentUsername.replaceAll('@', '')} has been unblocked.',
+                                              '@$cleanTarget has been unblocked.',
                                         );
                                       },
                                     ),
@@ -986,181 +1242,206 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   else ...<Widget>[
                     ProfileFeedTabsWidget(
                       selectedIndex: _selectedTabIndex,
-                      isOwnProfile: false,
+                      isOwnProfile: isOwnProfile,
                       onTabSelected: (int index) {
                         setState(() => _selectedTabIndex = index);
+                        if (index == 2) {
+                          context.read<ProfileProvider>().fetchSavedPosts();
+                        } else if (index == 3) {
+                          context.read<ProfileProvider>().fetchLikedPosts();
+                        }
                       },
                     ),
 
                     // Tab 0: Posts Feed Cards (Photos and Text only)
                     if (_selectedTabIndex == 0) ...<Widget>[
-                      if (_authorTextPosts.isNotEmpty) ...<Widget>[
+                      if (_isLoading && _authorTextPosts.isEmpty) ...<Widget>[
+                        const _ProfilePostsFeedShimmer(),
+                      ] else if (_authorTextPosts.isNotEmpty) ...<Widget>[
                         for (final PostResponseModel post in _authorTextPosts) ...<Widget>[
-                          Container(
-                            margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                            padding: const EdgeInsets.all(AppSpacing.md),
-                            decoration: BoxDecoration(
-                              color: context.themeCardBackground,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: context.themeBorder,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Row(
-                                  children: <Widget>[
-                                    ClipOval(
-                                      child: (currentAvatar.startsWith('http://') ||
-                                              currentAvatar.startsWith('https://'))
-                                          ? Image.network(
-                                              currentAvatar,
-                                              width: 32,
-                                              height: 32,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, _, _) => Image.asset(
-                                                AppImages.user1,
-                                                width: 32,
-                                                height: 32,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            )
-                                          : Image.asset(
-                                              currentAvatar.trim().startsWith('assets/')
-                                                  ? currentAvatar.trim()
-                                                  : AppImages.user1,
-                                              width: 32,
-                                              height: 32,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, _, _) => Image.asset(
-                                                AppImages.user1,
-                                                width: 32,
-                                                height: 32,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            ),
-                                    ),
-                                    const SizedBox(width: AppSpacing.sm),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: <Widget>[
-                                        Text(
-                                          currentUsername.startsWith('@')
-                                              ? currentUsername
-                                              : '@$currentUsername',
-                                          style: AppTextStyles.titleSmall.copyWith(
-                                            color: context.themeTextPrimary,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                        if (post.createdAt != null)
-                                          Text(
-                                            post.createdAt!,
-                                            style: AppTextStyles.caption.copyWith(
-                                              color: context.themeTextMuted,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
+                          Builder(
+                            builder: (BuildContext ctx) {
+                              final bool isPostItemLiked = PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked);
+                              final bool isPostItemSaved = PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved);
+                              final int postItemLikes = PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
+                              final int effectiveCommentsCount = CommentCountRegistry.getOr(post.id, post.commentsCount);
+                              final PostItemModel postItem = PostItemModel(
+                                id: post.id,
+                                authorId: post.authorId ?? _effectiveUserId,
+                                authorDisplayName: (post.authorDisplayName != null &&
+                                        post.authorDisplayName!.isNotEmpty)
+                                    ? post.authorDisplayName!
+                                    : currentName,
+                                username: (post.authorName != null &&
+                                        post.authorName!.isNotEmpty)
+                                    ? (post.authorName!.startsWith('@')
+                                        ? post.authorName!
+                                        : '@${post.authorName}')
+                                    : (currentUsername.startsWith('@')
+                                        ? currentUsername
+                                        : '@$currentUsername'),
+                                pronounsTime: post.createdAt ?? 'recently',
+                                avatarAsset: (post.authorAvatar != null &&
+                                        post.authorAvatar!.isNotEmpty)
+                                    ? post.authorAvatar!
+                                    : currentAvatar,
+                                content: post.body,
+                                likesCount: postItemLikes,
+                                commentsCount: effectiveCommentsCount,
+                                postImageUrl: _postImageUrls[post.id] ??
+                                    (post.postImageUrl != null && post.postImageUrl!.isNotEmpty
+                                        ? post.postImageUrl
+                                        : (post.mediaRefs.isNotEmpty
+                                            ? (post.mediaRefs.first.startsWith('http') || post.mediaRefs.first.startsWith('assets/')
+                                                ? post.mediaRefs.first
+                                                : '${AppConfig.cdnUrl}/images/original/${post.authorId ?? _effectiveUserId ?? ''}/${post.mediaRefs.first.replaceAll(RegExp(r"^/+"), "").replaceAll(RegExp(r"^media/"), "").replaceAll(RegExp(r"\.(jpg|jpeg|png|webp)$", caseSensitive: false), "")}.jpg')
+                                            : null)),
+                                postType: post.type,
+                                communityId: post.communityId,
+                                isLiked: isPostItemLiked,
+                                isSaved: isPostItemSaved,
+                                allowComments: post.allowComments,
+                                allowDownloads: post.allowDownloads,
+                                hideLikes: _profile?.hideMyLikes ?? false,
+                              );
+                              return PostFeedCard(
+                                post: postItem,
+                                isFollowing: _isFollowing,
+                                onFollowToggle: () => _handleFollowToggle(
+                                  isPrivateAccount: widget.isPrivate,
                                 ),
-                                if (post.body.isNotEmpty) ...<Widget>[
-                                  const SizedBox(height: AppSpacing.md),
-                                  Text(
-                                    post.body,
-                                    style: AppTextStyles.bodyMedium.copyWith(
-                                      color: context.themeTextPrimary,
-                                      fontSize: 13,
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                ],
-                                if ((_postImageUrls[post.id] ??
-                                        (post.mediaRefs.isNotEmpty ? post.mediaRefs.first : null)) !=
-                                    null) ...<Widget>[
-                                  Builder(
-                                    builder: (BuildContext ctx) {
-                                      final String img = _postImageUrls[post.id] ??
-                                          post.mediaRefs.first;
-                                      if (img.trim().isEmpty) return const SizedBox.shrink();
-                                      return Padding(
-                                        padding: const EdgeInsets.only(top: AppSpacing.md),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(16),
-                                          child: (img.startsWith('http://') ||
-                                                  img.startsWith('https://'))
-                                              ? Image.network(
-                                                  img.trim(),
-                                                  width: double.infinity,
-                                                  height: 220,
-                                                  fit: BoxFit.cover,
-                                                  loadingBuilder: (context, child, progress) {
-                                                    if (progress == null) return child;
-                                                    return Container(
-                                                      height: 220,
-                                                      width: double.infinity,
-                                                      color: context.isDarkMode
-                                                          ? Colors.white.withValues(alpha: 0.05)
-                                                          : Colors.black.withValues(alpha: 0.05),
-                                                      child: const Center(
-                                                        child: CircularProgressIndicator(
-                                                          color: AppColors.gradientPink,
-                                                          strokeWidth: 2,
-                                                        ),
-                                                      ),
-                                                    );
-                                                  },
-                                                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                                                )
-                                              : Image.asset(
-                                                  img.trim(),
-                                                  width: double.infinity,
-                                                  height: 220,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                                                ),
-                                        ),
+                                onCardTap: () {
+                                  PostFeedCard.openFullscreen(context, postItem);
+                                },
+                                onLikeToggle: () {
+                                  final int idx = _authorTextPosts
+                                      .indexWhere((PostResponseModel p) => p.id == post.id);
+                                  if (idx != -1) {
+                                    final bool currentLiked =
+                                        PostInteractionRegistry.isLiked(post.id, fallback: _authorTextPosts[idx].isLiked);
+                                    final bool newLiked = !currentLiked;
+                                    final int currentCount = PostInteractionRegistry.getLikeCount(post.id, fallback: _authorTextPosts[idx].likesCount);
+                                    final int newCount = newLiked
+                                        ? currentCount + 1
+                                        : (currentCount > 0
+                                            ? currentCount - 1
+                                            : 0);
+                                    PostInteractionRegistry.setLiked(post.id, newLiked, newCount: newCount);
+                                    setState(() {
+                                      _authorTextPosts[idx] =
+                                          _authorTextPosts[idx].copyWith(
+                                        isLiked: newLiked,
+                                        likesCount: newCount,
                                       );
-                                    },
-                                  ),
-                                ],
-                                const SizedBox(height: AppSpacing.md),
-                                Row(
-                                  children: <Widget>[
-                                    Icon(
-                                      post.isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                      size: 18,
-                                      color: post.isLiked ? AppColors.gradientPink : context.themeIconMuted,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${post.likesCount}',
-                                      style: AppTextStyles.caption.copyWith(
-                                        color: context.themeTextMuted,
-                                        fontSize: 12,
+                                    });
+                                    context.read<HomeFeedProvider>().toggleLikePost(
+                                      post.id,
+                                      fallbackPost: postItem.copyWith(
+                                        isLiked: newLiked,
+                                        likesCount: newCount,
                                       ),
-                                    ),
-                                    const SizedBox(width: AppSpacing.lg),
-                                    Icon(
-                                      Icons.chat_bubble_outline_rounded,
-                                      size: 16,
-                                      color: context.themeIconMuted,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${post.commentsCount}',
-                                      style: AppTextStyles.caption.copyWith(
-                                        color: context.themeTextMuted,
-                                        fontSize: 12,
+                                      explicitLiked: newLiked,
+                                    );
+                                    context.read<ProfileProvider>().updateLikedPost(
+                                      post.id,
+                                      isLiked: newLiked,
+                                      likesCount: newCount,
+                                      fallbackPost: postItem.copyWith(
+                                        isLiked: newLiked,
+                                        likesCount: newCount,
                                       ),
+                                    );
+                                  }
+                                },
+                                onSaveToggle: () {
+                                  final int idx = _authorTextPosts
+                                      .indexWhere((PostResponseModel p) => p.id == post.id);
+                                  if (idx != -1) {
+                                    final bool currentSaved =
+                                        PostInteractionRegistry.isSaved(post.id, fallback: _authorTextPosts[idx].isSaved);
+                                    final bool newSaved = !currentSaved;
+                                    PostInteractionRegistry.setSaved(post.id, newSaved);
+                                    setState(() {
+                                      _authorTextPosts[idx] =
+                                          _authorTextPosts[idx].copyWith(
+                                        isSaved: newSaved,
+                                      );
+                                    });
+                                    context.read<HomeFeedProvider>().toggleSavePost(
+                                      post.id,
+                                      fallbackPost: postItem.copyWith(isSaved: newSaved),
+                                      explicitSaved: newSaved,
+                                    );
+                                    context.read<ProfileProvider>().updateSavedPost(
+                                      post.id,
+                                      isSaved: newSaved,
+                                      fallbackPost: postItem.copyWith(isSaved: newSaved),
+                                    );
+                                  }
+                                },
+                                onOpenComments: () {
+                                  showModalBottomSheet<void>(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (_) => CommentsBottomSheet(
+                                      totalComments: CommentCountRegistry.getOr(post.id, post.commentsCount),
+                                      postId: post.id,
+                                      postAuthorId: post.authorId ?? _effectiveUserId,
+                                      communityId: post.communityId,
+                                      allowComments: post.allowComments,
+                                      allowCommentsFrom: post.allowCommentsFrom,
+                                      authorUsername: post.authorName,
+                                      onCommentAdded: () {
+                                        CommentCountRegistry.increment(post.id);
+                                        context.read<HomeFeedProvider>().incrementCommentCount(post.id);
+                                        try {
+                                          context.read<ProfileProvider>().incrementCommentCount(post.id);
+                                        } catch (_) {}
+                                        setState(() {
+                                          final int idx = _authorTextPosts.indexWhere((PostResponseModel p) => p.id == post.id);
+                                          if (idx != -1) {
+                                            _authorTextPosts[idx] = _authorTextPosts[idx].copyWith(
+                                              commentsCount: CommentCountRegistry.getOr(post.id, _authorTextPosts[idx].commentsCount + 1),
+                                            );
+                                          }
+                                        });
+                                      },
+                                      onCommentDeleted: (int deletedCount, int remainingCount) {
+                                        CommentCountRegistry.set(post.id, remainingCount);
+                                        context.read<HomeFeedProvider>().setCommentCount(post.id, remainingCount);
+                                        try {
+                                          context.read<ProfileProvider>().updatePostCommentCount(post.id, remainingCount);
+                                        } catch (_) {}
+                                        setState(() {
+                                          final int idx = _authorTextPosts.indexWhere((PostResponseModel p) => p.id == post.id);
+                                          if (idx != -1) {
+                                            _authorTextPosts[idx] = _authorTextPosts[idx].copyWith(
+                                              commentsCount: remainingCount,
+                                            );
+                                          }
+                                        });
+                                      },
+                                      onCommentCountChanged: (int count) {
+                                        CommentCountRegistry.set(post.id, count);
+                                        context.read<HomeFeedProvider>().setCommentCount(post.id, count);
+                                        try {
+                                          context.read<ProfileProvider>().updatePostCommentCount(post.id, count);
+                                        } catch (_) {}
+                                        setState(() {
+                                          final int idx = _authorTextPosts.indexWhere((PostResponseModel p) => p.id == post.id);
+                                          if (idx != -1) {
+                                            _authorTextPosts[idx] = _authorTextPosts[idx].copyWith(
+                                              commentsCount: count,
+                                            );
+                                          }
+                                        });
+                                      },
                                     ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                                  );
+                                },
+                              );
+                            },
                           ),
                         ],
                       ] else ...<Widget>[
@@ -1182,6 +1463,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     // Tab 1: Reels Grid
                     if (_selectedTabIndex == 1)
                       ProfileMediaGridWidget(
+                        isLoading: _isLoading && _authorReels.isEmpty,
                         showPlayCounts: true,
                         customReels: _authorReels,
                         emptyTitle: 'No reels yet',
@@ -1190,12 +1472,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                     // Tab 2: Saved Grid (Only on own profile)
                     if (_selectedTabIndex == 2 && isOwnProfile)
-                      const ProfileMediaGridWidget(showPlayCounts: false),
+                      ProfileMediaGridWidget(
+                        showPlayCounts: true,
+                        customReels: profile.savedReels,
+                        emptyTitle: 'No saved reels yet',
+                        emptySubtitle: 'Reels you save will appear here.',
+                        emptyIcon: Icons.bookmark_border_rounded,
+                      ),
 
                     // Tab 3: Liked Grid (Only on own profile)
                     if (_selectedTabIndex == 3 && isOwnProfile)
                       ProfileMediaGridWidget(
-                        showPlayCounts: false,
+                        showPlayCounts: true,
                         customReels: profile.likedReels,
                         emptyTitle: 'No liked reels yet',
                         emptySubtitle: 'Reels you like will appear here.',
@@ -1205,10 +1493,163 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                   const SizedBox(height: AppSpacing.xxl),
                 ],
-              ),
-            ),
+              );
+            },
+          ),
+        ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FullProfileShimmerSkeleton extends StatelessWidget {
+  const _FullProfileShimmerSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppShimmer(
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        physics: const NeverScrollableScrollPhysics(),
+        children: <Widget>[
+          const SizedBox(height: 12),
+          // Avatar + Stats row
+          Row(
+            children: <Widget>[
+              const ShimmerBox(width: 80, height: 80, isCircle: true),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: const <Widget>[
+                    Column(
+                      children: <Widget>[
+                        ShimmerBox(width: 32, height: 18, borderRadius: 4),
+                        SizedBox(height: 6),
+                        ShimmerBox(width: 44, height: 12, borderRadius: 4),
+                      ],
+                    ),
+                    Column(
+                      children: <Widget>[
+                        ShimmerBox(width: 32, height: 18, borderRadius: 4),
+                        SizedBox(height: 6),
+                        ShimmerBox(width: 54, height: 12, borderRadius: 4),
+                      ],
+                    ),
+                    Column(
+                      children: <Widget>[
+                        ShimmerBox(width: 32, height: 18, borderRadius: 4),
+                        SizedBox(height: 6),
+                        ShimmerBox(width: 54, height: 12, borderRadius: 4),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Name and bio
+          const ShimmerBox(width: 140, height: 16, borderRadius: 4),
+          const SizedBox(height: 8),
+          const ShimmerBox(width: 240, height: 12, borderRadius: 4),
+          const SizedBox(height: 6),
+          const ShimmerBox(width: 180, height: 12, borderRadius: 4),
+          const SizedBox(height: 20),
+          // Action buttons (Follow & Message)
+          Row(
+            children: const <Widget>[
+              Expanded(
+                child: ShimmerBox(height: 42, borderRadius: 24),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: ShimmerBox(height: 42, borderRadius: 24),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          // Tabs row
+          Row(
+            children: const <Widget>[
+              Expanded(
+                child: Center(
+                  child: ShimmerBox(width: 80, height: 28, borderRadius: 8),
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: ShimmerBox(width: 80, height: 28, borderRadius: 8),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Media grid skeleton
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              childAspectRatio: 0.75,
+            ),
+            itemCount: 6,
+            itemBuilder: (BuildContext context, int index) =>
+                const ShimmerBox(borderRadius: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfilePostsFeedShimmer extends StatelessWidget {
+  const _ProfilePostsFeedShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return AppShimmer(
+      child: Column(
+        children: List<Widget>.generate(2, (int index) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 20),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.04)
+                  : Colors.black.withValues(alpha: 0.03),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: const <Widget>[
+                    ShimmerBox(width: 40, height: 40, isCircle: true),
+                    SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        ShimmerBox(width: 110, height: 14, borderRadius: 4),
+                        SizedBox(height: 6),
+                        ShimmerBox(width: 60, height: 10, borderRadius: 4),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const ShimmerBox(width: double.infinity, height: 220, borderRadius: 12),
+                const SizedBox(height: 12),
+                const ShimmerBox(width: 180, height: 12, borderRadius: 4),
+              ],
+            ),
+          );
+        }),
       ),
     );
   }

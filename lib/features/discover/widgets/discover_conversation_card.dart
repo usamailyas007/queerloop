@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_shimmer.dart';
 import '../models/cotd_models.dart';
 import '../provider/cotd_provider.dart';
 import 'cotd_answers_bottom_sheet.dart';
@@ -135,31 +136,30 @@ class DiscoverConversationCard extends StatelessWidget {
   }
 
   Widget _buildSkeleton(bool isDark) {
-    final Color base = isDark
-        ? Colors.white.withValues(alpha: 0.07)
-        : Colors.black.withValues(alpha: 0.06);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1030) : const Color(0xFFF4F4F8),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: isDark
-              ? AppColors.gradientPurple.withValues(alpha: 0.2)
-              : const Color(0xFF8B5CFF).withValues(alpha: 0.12),
+    return AppShimmer(
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A1030) : const Color(0xFFF4F4F8),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isDark
+                ? AppColors.gradientPurple.withValues(alpha: 0.2)
+                : const Color(0xFF8B5CFF).withValues(alpha: 0.12),
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Container(height: 10, width: 120, color: base),
-          const SizedBox(height: AppSpacing.sm),
-          Container(height: 16, width: double.infinity, color: base),
-          const SizedBox(height: 6),
-          Container(height: 12, width: double.infinity * 0.7, color: base),
-          const SizedBox(height: AppSpacing.lg),
-          Container(height: 36, width: double.infinity, color: base),
-        ],
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            ShimmerBox(width: 120, height: 10, borderRadius: 4),
+            SizedBox(height: AppSpacing.sm),
+            ShimmerBox(width: double.infinity, height: 16, borderRadius: 4),
+            SizedBox(height: 6),
+            ShimmerBox(width: 220, height: 12, borderRadius: 4),
+            SizedBox(height: AppSpacing.lg),
+            ShimmerBox(width: double.infinity, height: 36, borderRadius: 18),
+          ],
+        ),
       ),
     );
   }

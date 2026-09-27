@@ -107,7 +107,7 @@ class NotificationItemModel {
     if (actorAvatar != null && actorAvatar!.trim().isNotEmpty) {
       return actorAvatar!.trim();
     }
-    return AppImages.user1;
+    return AppImages.defaultAvatar;
   }
 
   factory NotificationItemModel.fromJson(Map<String, dynamic> json) {

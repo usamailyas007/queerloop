@@ -101,7 +101,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authApple => 'Apple';
 
   @override
-  String get authGoogle => 'Google';
+  String get authGoogle => 'Continue with Google';
 
   @override
   String get authContinueApple => 'Continuar con Apple';
@@ -133,7 +133,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get authPasswordLengthError =>
-      'La contraseña debe tener al menos 6 caracteres';
+      'La contraseña debe tener al menos 8 caracteres';
 
   @override
   String get authEnterNameError => 'Please enter your name';

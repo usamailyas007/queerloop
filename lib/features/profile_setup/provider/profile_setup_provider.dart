@@ -524,6 +524,13 @@ class ProfileSetupProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearSearchQuery() {
+    if (_communitySearchQuery.isNotEmpty) {
+      _communitySearchQuery = '';
+      notifyListeners();
+    }
+  }
+
   void addSecretTag(String tag) {
     final String trimmed = tag.trim().replaceAll('#', '');
     if (trimmed.isNotEmpty && !_secretTags.contains(trimmed)) {

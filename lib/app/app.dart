@@ -36,13 +36,17 @@ import 'router.dart';
 import 'routes.dart';
 
 class App extends StatelessWidget {
-  const App({super.key});
+  const App({super.key, this.initialThemeMode = ThemeMode.light});
+
+  final ThemeMode initialThemeMode;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: <SingleChildWidget>[
-        ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider<ThemeProvider>(
+          create: (_) => ThemeProvider(initialMode: initialThemeMode),
+        ),
         ChangeNotifierProvider<NetworkInfo>(create: (_) => NetworkInfo()),
         Provider<ApiClient>(create: (_) => ApiClient()),
         ChangeNotifierProvider<AuthProvider>(
@@ -99,6 +103,14 @@ class App extends StatelessWidget {
                     );
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   provider.updateUser(auth.userId);
+                  provider.setGuestMode(auth.isGuest);
+                  if (auth.isSignedIn && auth.userId != null && !auth.isGuest) {
+                    try {
+                      final ProfileProvider profile = ctx.read<ProfileProvider>();
+                      profile.fetchSavedPosts();
+                      profile.fetchLikedPosts();
+                    } catch (_) {}
+                  }
                 });
                 return provider;
               },
@@ -117,7 +129,7 @@ class App extends StatelessWidget {
           create: (_) => ChatSocketService(),
           dispose: (_, ChatSocketService service) => service.dispose(),
         ),
-        ChangeNotifierProxyProvider2<AuthProvider, NetworkInfo, MessagesProvider>(
+        ChangeNotifierProxyProvider3<AuthProvider, NetworkInfo, ProfileProvider, MessagesProvider>(
           create: (BuildContext ctx) => MessagesProvider(
             service: ctx.read<ConversationsService>(),
             socketService: ctx.read<ChatSocketService>(),
@@ -127,6 +139,7 @@ class App extends StatelessWidget {
             BuildContext ctx,
             AuthProvider auth,
             NetworkInfo network,
+            ProfileProvider profile,
             MessagesProvider? existing,
           ) {
             final String? token = ctx.read<ApiClient>().authToken;
@@ -145,6 +158,10 @@ class App extends StatelessWidget {
                 token: token,
               );
               provider.notifyNetworkChange(isOnline: network.isOnline);
+              provider.updatePrivacySettings(
+                showActivityStatus: profile.showActivityStatus,
+                sendReadReceipts: profile.sendReadReceipts,
+              );
             });
             return provider;
           },
@@ -211,6 +228,7 @@ class App extends StatelessWidget {
           return MaterialApp(
             title: 'QueerLoop+',
             navigatorKey: navigatorKey,
+            scaffoldMessengerKey: rootScaffoldMessengerKey,
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
             darkTheme: AppTheme.dark,

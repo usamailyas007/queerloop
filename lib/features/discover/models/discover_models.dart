@@ -2,7 +2,9 @@
 
 import '../widgets/search_tag_tile.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_images.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 
@@ -10,8 +12,10 @@ class DiscoverSearchResult {
   const DiscoverSearchResult({
     required this.imageAsset,
     this.id,
+    this.refId,
     this.authorId,
     this.viewCount,
+    this.viewsCount = 0,
     this.caption,
     this.authorUsername,
     this.authorAvatar,
@@ -20,15 +24,23 @@ class DiscoverSearchResult {
     this.type,
     this.communityId,
     this.isLiked = false,
+    this.isSaved = false,
     this.videoUrl,
     this.thumbnailUrl,
     this.mediaRefs = const <String>[],
+    this.visibility,
+    this.allowComments = true,
+    this.allowDownloads = true,
+    this.allowCommentsFrom = 'everyone',
+    this.isAuthorPrivate = false,
   });
 
   final String imageAsset;
   final String? id;
+  final String? refId;
   final String? authorId;
   final String? viewCount;
+  final int viewsCount;
   final String? caption;
   final String? authorUsername;
   final String? authorAvatar;
@@ -37,26 +49,33 @@ class DiscoverSearchResult {
   final String? type;
   final String? communityId;
   final bool isLiked;
+  final bool isSaved;
   final String? videoUrl;
   final String? thumbnailUrl;
   final List<String> mediaRefs;
+  final String? visibility;
+  final bool allowComments;
+  final bool allowDownloads;
+  final String allowCommentsFrom;
+  final bool isAuthorPrivate;
 
   bool get isReel {
     final String t = (type ?? '').toUpperCase().trim();
     if (t == 'VIDEO' || t == 'REEL' || t == 'REELS') return true;
+    if (t == 'PHOTO' || t == 'TEXT') return false;
     if (videoUrl != null && videoUrl!.trim().isNotEmpty) return true;
     final String img = imageAsset.trim();
     if (img.endsWith('.mp4') ||
         img.endsWith('.m3u8') ||
-        img.contains('video') ||
-        img.contains('/videos/')) {
+        img.contains('/videos/') ||
+        img.contains('video')) {
       return true;
     }
     final String thumb = (thumbnailUrl ?? '').trim();
     if (thumb.endsWith('.mp4') ||
         thumb.endsWith('.m3u8') ||
-        thumb.contains('video') ||
-        thumb.contains('/videos/')) {
+        thumb.contains('/videos/') ||
+        thumb.contains('video')) {
       return true;
     }
     return false;
@@ -67,6 +86,7 @@ class DiscoverSearchResult {
     String? videoUrl,
     String? thumbnailUrl,
     String? id,
+    String? refId,
     String? authorId,
     String? viewCount,
     String? caption,
@@ -77,15 +97,24 @@ class DiscoverSearchResult {
     String? type,
     String? communityId,
     bool? isLiked,
+    bool? isSaved,
     List<String>? mediaRefs,
+    String? visibility,
+    int? viewsCount,
+    bool? allowComments,
+    bool? allowDownloads,
+    String? allowCommentsFrom,
+    bool? isAuthorPrivate,
   }) {
     return DiscoverSearchResult(
       imageAsset: imageAsset ?? this.imageAsset,
       videoUrl: videoUrl ?? this.videoUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       id: id ?? this.id,
+      refId: refId ?? this.refId,
       authorId: authorId ?? this.authorId,
       viewCount: viewCount ?? this.viewCount,
+      viewsCount: viewsCount ?? this.viewsCount,
       caption: caption ?? this.caption,
       authorUsername: authorUsername ?? this.authorUsername,
       authorAvatar: authorAvatar ?? this.authorAvatar,
@@ -94,25 +123,27 @@ class DiscoverSearchResult {
       type: type ?? this.type,
       communityId: communityId ?? this.communityId,
       isLiked: isLiked ?? this.isLiked,
+      isSaved: isSaved ?? this.isSaved,
       mediaRefs: mediaRefs ?? this.mediaRefs,
+      visibility: visibility ?? this.visibility,
+      allowComments: allowComments ?? this.allowComments,
+      allowDownloads: allowDownloads ?? this.allowDownloads,
+      allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
+      isAuthorPrivate: isAuthorPrivate ?? this.isAuthorPrivate,
     );
   }
 
   factory DiscoverSearchResult.fromPostItem(PostItemModel post) {
-    String img = (post.postImageUrl ?? post.postImageAsset ?? '').trim();
-    if (img.isEmpty) {
-      final int hash = post.id.hashCode.abs() % 6;
-      img = <String>[
-        AppImages.searchResult1,
-        AppImages.searchResult2,
-        AppImages.searchResult3,
-        AppImages.searchResult4,
-        AppImages.searchResult5,
-        AppImages.searchResult6,
-      ][hash];
-    }
+    final String img = (post.postImageUrl ?? post.postImageAsset ?? '').trim();
+    final int views = post.viewsCount;
+    final String? formattedViews = views >= 1000000
+        ? '${(views / 1000000).toStringAsFixed(1)}M'
+        : (views >= 1000
+            ? '${(views / 1000).toStringAsFixed(1)}K'
+            : (views > 0 ? '$views' : null));
     return DiscoverSearchResult(
       id: post.id,
+      refId: null,
       authorId: post.authorId,
       imageAsset: img,
       thumbnailUrl: img.isNotEmpty ? img : null,
@@ -121,33 +152,59 @@ class DiscoverSearchResult {
       authorAvatar: post.avatarAsset,
       likesCount: post.likesCount,
       commentsCount: post.commentsCount,
+      viewsCount: views,
+      viewCount: formattedViews,
       type: 'PHOTO',
       communityId: post.communityId,
       isLiked: post.isLiked,
+      isSaved: post.isSaved,
+      visibility: post.visibility,
+      allowComments: post.allowComments,
+      allowDownloads: post.allowDownloads,
+      allowCommentsFrom: post.allowCommentsFrom,
+      isAuthorPrivate: post.isAuthorPrivate,
     );
   }
 
   factory DiscoverSearchResult.fromReelItem(ReelItemModel reel) {
-    final String thumb = reel.thumbnailUrl ??
-        (reel.videoUrl != null &&
-                !reel.videoUrl!.endsWith('.mp4') &&
-                !reel.videoUrl!.endsWith('.m3u8')
-            ? reel.videoUrl!
-            : '');
+    String thumb = (reel.thumbnailUrl != null && reel.thumbnailUrl!.isNotEmpty)
+        ? reel.thumbnailUrl!
+        : '';
+    if (thumb.isEmpty && reel.videoUrl != null && reel.videoUrl!.contains('/videos/processed/')) {
+      thumb = reel.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+    }
+    if (thumb.contains('/videos/processed/') && thumb.endsWith('/thumbnail.jpg')) {
+      thumb = thumb.replaceAll('/thumbnail.jpg', '/thumb.0000000.jpg');
+    }
+    final int views = reel.viewsCount;
+    final String? formattedViews = views >= 1000000
+        ? '${(views / 1000000).toStringAsFixed(1)}M'
+        : (views >= 1000
+            ? '${(views / 1000).toStringAsFixed(1)}K'
+            : (views > 0 ? '$views' : null));
     return DiscoverSearchResult(
       id: reel.id,
+      refId: null,
       authorId: reel.authorId,
       imageAsset: thumb.isNotEmpty ? thumb : (reel.videoUrl ?? reel.videoAsset),
       videoUrl: reel.videoUrl,
-      thumbnailUrl: reel.thumbnailUrl,
+      thumbnailUrl: thumb.isNotEmpty ? thumb : null,
       caption: reel.caption,
       authorUsername: reel.username,
       authorAvatar: reel.avatarAsset,
       likesCount: reel.likesCount,
       commentsCount: reel.commentsCount,
+      viewsCount: views,
+      viewCount: formattedViews,
       type: 'VIDEO',
       communityId: reel.communityId,
       isLiked: reel.isLiked,
+      isSaved: reel.isSaved,
+      visibility: reel.visibility,
+      allowComments: reel.allowComments,
+      allowDownloads: reel.allowDownloads,
+      allowCommentsFrom: reel.allowCommentsFrom,
+      isAuthorPrivate: reel.isAuthorPrivate,
     );
   }
 
@@ -168,12 +225,21 @@ class DiscoverSearchResult {
     bool isHttpOrAsset(String s) =>
         s.startsWith('http://') || s.startsWith('https://') || s.startsWith('assets/');
 
-    // Prioritize direct imageUrl or mediaUrl
-    final dynamic rawImg = json['imageUrl'] ?? json['photoUrl'] ?? json['mediaUrl'];
+    // Prioritize direct imageUrl or mediaUrl — also check postImageUrl (backend field)
+    final dynamic rawImg = json['postImageUrl'] ??
+        json['imageUrl'] ??
+        json['photoUrl'] ??
+        json['mediaUrl'] ??
+        json['postThumbnailUrl'] ??
+        json['thumbnailAsset'];
     if (rawImg != null && rawImg.toString().trim().isNotEmpty) {
       final String s = rawImg.toString().trim();
       if (isHttpOrAsset(s)) {
         directUrl = s;
+        // If it looks like an image, use as thumbnail
+        if (!s.endsWith('.mp4') && !s.endsWith('.m3u8') && !s.contains('/videos/processed/')) {
+          resolvedThumbnailUrl ??= s;
+        }
       }
     }
 
@@ -223,10 +289,15 @@ class DiscoverSearchResult {
       directUrl = extractedMediaRefs.first;
     }
 
-    final int views = json['viewsCount'] is num
-        ? (json['viewsCount'] as num).toInt()
-        : (int.tryParse(json['viewsCount']?.toString() ?? '') ?? 0);
+    // 1. Resolve refId (media reference ID from search API)
+    final String? refId = (json['refId'] ??
+            json['ref_id'] ??
+            json['mediaRef'] ??
+            json['mediaId'])
+        ?.toString()
+        .trim();
 
+    // 2. Resolve Author details
     final String? resolvedAuthorId = (json['authorId'] ??
             json['author_id'] ??
             json['ownerId'] ??
@@ -274,37 +345,135 @@ class DiscoverSearchResult {
                 json['user']['profilePicture'])
             : null)?.toString();
 
-    final String postType = (json['type'] ?? json['postType'] ?? '').toString().toUpperCase();
+    // 3. Resolve postType: prioritize postType ('PHOTO', 'VIDEO', 'TEXT') over generic type ('post')
+    final String rawPostType =
+        (json['postType'] ?? '').toString().toUpperCase().trim();
+    final String rawType =
+        (json['type'] ?? '').toString().toUpperCase().trim();
+    String postType = rawPostType.isNotEmpty
+        ? rawPostType
+        : (rawType != 'POST' && rawType.isNotEmpty ? rawType : '');
 
-    if (postType == 'VIDEO' && resolvedVideoUrl == null && directUrl.startsWith('http')) {
-      if (directUrl.endsWith('.mp4') || directUrl.endsWith('.m3u8') || directUrl.contains('video')) {
+    final String? primaryMediaRef = (refId != null && refId.isNotEmpty)
+        ? refId
+        : (extractedMediaRefs.isNotEmpty ? extractedMediaRefs.first : null);
+
+    // 4. Resolve CDN URLs from primaryMediaRef
+    if (primaryMediaRef != null && primaryMediaRef.isNotEmpty) {
+      final String cleanRef = primaryMediaRef
+          .replaceAll(RegExp(r'^/+'), '')
+          .replaceAll(RegExp(r'^media/'), '');
+
+      final bool isExplicitVideo = postType == 'VIDEO' ||
+          postType == 'REEL' ||
+          cleanRef.endsWith('.mp4') ||
+          cleanRef.endsWith('.m3u8') ||
+          cleanRef.contains('video') ||
+          cleanRef.contains('/videos/');
+
+      if (isExplicitVideo) {
+        postType = 'VIDEO';
+        resolvedVideoUrl ??=
+            '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
+        resolvedThumbnailUrl ??=
+            '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumb.0000000.jpg';
+        directUrl = resolvedThumbnailUrl;
+        if (!extractedMediaRefs.contains(cleanRef)) {
+          extractedMediaRefs.add(cleanRef);
+        }
+      } else {
+        if (postType.isEmpty || postType == 'POST') {
+          postType = 'PHOTO';
+        }
+        if (primaryMediaRef.startsWith('http://') ||
+            primaryMediaRef.startsWith('https://')) {
+          directUrl = primaryMediaRef;
+        } else if (resolvedAuthorId != null && resolvedAuthorId.isNotEmpty) {
+          directUrl =
+              '${AppConfig.cdnUrl}/images/original/$resolvedAuthorId/$cleanRef.jpg';
+        } else {
+          directUrl = '${AppConfig.cdnUrl}/images/original/$cleanRef.jpg';
+        }
+        resolvedThumbnailUrl ??= directUrl;
+        if (!extractedMediaRefs.contains(cleanRef)) {
+          extractedMediaRefs.add(cleanRef);
+        }
+      }
+    } else if (directUrl.isNotEmpty &&
+        (directUrl.startsWith('http://') || directUrl.startsWith('https://'))) {
+      final bool isVid = directUrl.endsWith('.mp4') ||
+          directUrl.endsWith('.m3u8') ||
+          directUrl.contains('/videos/');
+      if (isVid) {
+        postType = 'VIDEO';
+        resolvedVideoUrl ??= directUrl;
+      } else if (postType.isEmpty || postType == 'POST') {
+        postType = 'PHOTO';
+      }
+    } else {
+      // Pure text post with no attached media
+      postType = 'TEXT';
+      directUrl = '';
+      resolvedThumbnailUrl = null;
+      resolvedVideoUrl = null;
+    }
+
+    if (postType == 'VIDEO' &&
+        resolvedVideoUrl == null &&
+        directUrl.startsWith('http')) {
+      if (directUrl.endsWith('.mp4') ||
+          directUrl.endsWith('.m3u8') ||
+          directUrl.contains('video')) {
         resolvedVideoUrl = directUrl;
       }
     }
 
-    if (postType != 'VIDEO' && directUrl.isEmpty) {
-      final String safeId = (json['id'] ?? json['_id'] ?? '').toString();
-      final int hash = safeId.hashCode.abs() % 6;
-      directUrl = <String>[
-        AppImages.searchResult1,
-        AppImages.searchResult2,
-        AppImages.searchResult3,
-        AppImages.searchResult4,
-        AppImages.searchResult5,
-        AppImages.searchResult6,
-      ][hash];
-    }
+    // 5. Views Count parsing (from API or counts)
+    final dynamic rawViews = json['viewsCount'] ??
+        json['viewCount'] ??
+        json['views_count'] ??
+        json['view_count'] ??
+        json['views'] ??
+        json['playCount'] ??
+        json['playsCount'] ??
+        json['play_count'] ??
+        json['plays_count'] ??
+        json['plays'] ??
+        json['totalViews'] ??
+        json['totalPlays'] ??
+        json['impressions'] ??
+        (json['metadata'] is Map
+            ? (json['metadata']['views'] ??
+                json['metadata']['plays'] ??
+                json['metadata']['viewCount'] ??
+                json['metadata']['playCount'])
+            : null) ??
+        (json['_count'] is Map
+            ? (json['_count']['views'] ??
+                json['_count']['plays'] ??
+                json['_count']['viewCount'] ??
+                json['_count']['playCount'])
+            : null);
+    final int views = rawViews is num
+        ? rawViews.toInt()
+        : (int.tryParse(rawViews?.toString() ?? '') ?? 0);
 
-    return DiscoverSearchResult(
+    final String? formattedViews = views >= 1000000
+        ? '${(views / 1000000).toStringAsFixed(1)}M'
+        : (views >= 1000
+            ? '${(views / 1000).toStringAsFixed(1)}K'
+            : (views > 0 ? '$views' : null));
+
+    final DiscoverSearchResult result = DiscoverSearchResult(
       id: json['id']?.toString() ?? json['_id']?.toString(),
+      refId: refId,
       authorId: resolvedAuthorId,
       imageAsset: directUrl,
       videoUrl: resolvedVideoUrl,
       thumbnailUrl: resolvedThumbnailUrl,
       mediaRefs: extractedMediaRefs,
-      viewCount: views > 1000
-          ? '${(views / 1000).toStringAsFixed(1)}K'
-          : (views > 0 ? '$views' : null),
+      viewCount: formattedViews,
+      viewsCount: views,
       caption: (json['body'] ??
               json['caption'] ??
               json['content'] ??
@@ -313,15 +482,140 @@ class DiscoverSearchResult {
           .toString(),
       authorUsername: resolvedAuthorUsername,
       authorAvatar: resolvedAuthorAvatar,
-      likesCount:
-          json['likesCount'] is num ? (json['likesCount'] as num).toInt() : null,
-      commentsCount: json['commentsCount'] is num
-          ? (json['commentsCount'] as num).toInt()
-          : null,
+      likesCount: () {
+        final dynamic raw = json['likesCount'] ??
+            json['likeCount'] ??
+            json['likes_count'] ??
+            json['like_count'] ??
+            json['totalLikes'] ??
+            json['total_likes'] ??
+            json['likes'] ??
+            (json['_count'] is Map ? json['_count']['likes'] : null) ??
+            (json['metadata'] is Map
+                ? (json['metadata']['likesCount'] ??
+                    json['metadata']['likeCount'] ??
+                    json['metadata']['likes_count'] ??
+                    json['metadata']['likes'])
+                : null) ??
+            (json['metrics'] is Map
+                ? (json['metrics']['likesCount'] ??
+                    json['metrics']['likeCount'] ??
+                    json['metrics']['likes'])
+                : null);
+        if (raw is num) return raw.toInt();
+        if (raw is List) return raw.length;
+        if (raw != null) return int.tryParse(raw.toString());
+        return null;
+      }(),
+      commentsCount: () {
+        final dynamic raw = json['commentsCount'] ??
+            json['commentCount'] ??
+            json['comments_count'] ??
+            json['comment_count'] ??
+            json['totalComments'] ??
+            json['total_comments'] ??
+            json['comments'] ??
+            (json['_count'] is Map ? json['_count']['comments'] : null) ??
+            (json['metadata'] is Map
+                ? (json['metadata']['commentsCount'] ??
+                    json['metadata']['commentCount'] ??
+                    json['metadata']['comments'])
+                : null) ??
+            (json['metrics'] is Map
+                ? (json['metrics']['commentsCount'] ??
+                    json['metrics']['commentCount'] ??
+                    json['metrics']['comments'])
+                : null);
+        if (raw is num) return raw.toInt();
+        if (raw is List) return raw.length;
+        if (raw != null) return int.tryParse(raw.toString());
+        return null;
+      }(),
       type: postType.isNotEmpty ? postType : null,
       communityId: json['communityId']?.toString(),
-      isLiked: json['isLiked'] == true,
+      isLiked: () {
+        final dynamic raw = json['likedByMe'] ??
+            json['liked_by_me'] ??
+            json['isLikedByMe'] ??
+            json['is_liked_by_me'] ??
+            json['isLiked'] ??
+            json['is_liked'] ??
+            json['userLiked'] ??
+            json['user_liked'] ??
+            json['liked'] ??
+            json['hasLiked'] ??
+            json['has_liked'] ??
+            (json['viewer'] is Map
+                ? (json['viewer']['isLiked'] ?? json['viewer']['liked'])
+                : null) ??
+            (json['metadata'] is Map
+                ? (json['metadata']['isLiked'] ??
+                    json['metadata']['is_liked'])
+                : null);
+        return raw == true || raw == 1 || raw == 'true';
+      }(),
+      isSaved: () {
+        final dynamic raw = json['savedByMe'] ??
+            json['saved_by_me'] ??
+            json['isSavedByMe'] ??
+            json['is_saved_by_me'] ??
+            json['isSaved'] ??
+            json['is_saved'] ??
+            json['userSaved'] ??
+            json['user_saved'] ??
+            json['saved'] ??
+            json['hasSaved'] ??
+            json['has_saved'] ??
+            (json['viewer'] is Map
+                ? (json['viewer']['isSaved'] ?? json['viewer']['saved'])
+                : null) ??
+            (json['metadata'] is Map
+                ? (json['metadata']['isSaved'] ??
+                    json['metadata']['is_saved'])
+                : null);
+        return raw == true || raw == 1 || raw == 'true';
+      }(),
+      visibility: json['visibility']?.toString(),
+      allowComments: (json['allowComments'] ?? json['allowComment']) as bool? ?? true,
+      allowDownloads: (json['allowDownloads'] ?? json['allowDownload'] ?? json['allowSharing'] ?? json['allow_downloads'] ?? json['allow_download']) as bool? ?? true,
+      allowCommentsFrom: ((json['allowCommentsFrom'] ??
+                  json['allow_comments_from'] ??
+                  (json['author'] is Map
+                      ? (json['author']['allowCommentsFrom'] ??
+                          json['author']['allow_comments_from'])
+                      : null) ??
+                  (json['user'] is Map
+                      ? (json['user']['allowCommentsFrom'] ??
+                          json['user']['allow_comments_from'])
+                      : null) ??
+                  'everyone')
+              .toString())
+          .trim()
+          .toLowerCase(),
+      isAuthorPrivate: (json['author'] is Map
+              ? (json['author']['isPrivate'] ?? json['author']['is_private'])
+              : null) ==
+          true ||
+          (json['user'] is Map
+              ? (json['user']['isPrivate'] ?? json['user']['is_private'])
+              : null) ==
+          true ||
+          json['isPrivate'] == true ||
+          json['is_private'] == true ||
+          json['isAuthorPrivate'] == true,
     );
+
+    final String? cleanId = result.id?.trim();
+    if (cleanId != null && cleanId.isNotEmpty) {
+      PostInteractionRegistry.seedFromServer(
+        cleanId,
+        isLiked: result.isLiked,
+        isSaved: result.isSaved,
+        likesCount: result.likesCount,
+        commentsCount: result.commentsCount,
+      );
+    }
+    return result;
   }
 }
 
@@ -585,6 +879,24 @@ class TrendingItem {
       tag: tagRaw,
     );
   }
+
+  TrendingItem copyWith({
+    String? rank,
+    String? hashtag,
+    String? postsCount,
+    String? thumbnailAsset,
+    String? id,
+    String? tag,
+  }) {
+    return TrendingItem(
+      rank: rank ?? this.rank,
+      hashtag: hashtag ?? this.hashtag,
+      postsCount: postsCount ?? this.postsCount,
+      thumbnailAsset: thumbnailAsset ?? this.thumbnailAsset,
+      id: id ?? this.id,
+      tag: tag ?? this.tag,
+    );
+  }
 }
 
 class RecentSearchItem {
@@ -628,28 +940,36 @@ class RecentSearchItem {
 class MultiTabSearchResults {
   const MultiTabSearchResults({
     this.posts = const <DiscoverSearchResult>[],
+    this.reels = const <DiscoverSearchResult>[],
     this.people = const <DiscoverPerson>[],
     this.tags = const <TagSearchResultItem>[],
     this.communities = const <DiscoverCommunity>[],
   });
 
   final List<DiscoverSearchResult> posts;
+  final List<DiscoverSearchResult> reels;
   final List<DiscoverPerson> people;
   final List<TagSearchResultItem> tags;
   final List<DiscoverCommunity> communities;
 
   bool get isEmpty =>
-      posts.isEmpty && people.isEmpty && tags.isEmpty && communities.isEmpty;
+      posts.isEmpty &&
+      reels.isEmpty &&
+      people.isEmpty &&
+      tags.isEmpty &&
+      communities.isEmpty;
   bool get isNotEmpty => !isEmpty;
 
   MultiTabSearchResults copyWith({
     List<DiscoverSearchResult>? posts,
+    List<DiscoverSearchResult>? reels,
     List<DiscoverPerson>? people,
     List<TagSearchResultItem>? tags,
     List<DiscoverCommunity>? communities,
   }) {
     return MultiTabSearchResults(
       posts: posts ?? this.posts,
+      reels: reels ?? this.reels,
       people: people ?? this.people,
       tags: tags ?? this.tags,
       communities: communities ?? this.communities,

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 
@@ -50,61 +48,12 @@ class ApiClient {
               options.headers['Authorization'] = 'Bearer $token';
             }
           }
-          final String path = options.path.toLowerCase();
-          final bool isTargetApi = enableApiLogging ||
-              path.contains('/restrict') ||
-              path.contains('/conversations/share') ||
-              path.contains('/share') ||
-              path.contains('/messages') ||
-              path.contains('/block');
-
-          if (isTargetApi) {
-            debugPrint('┌──────────────────────────────────────────────────────────');
-            debugPrint('🌐 [API Request] ${options.method} ${options.uri}');
-            debugPrint('🔑 Headers: Authorization: ${options.headers['Authorization'] != null ? "Bearer ..." : "None"}');
-            if (options.data != null) {
-              debugPrint('📦 Payload:\n${_prettyJson(options.data)}');
-            } else {
-              debugPrint('📦 Payload: null (no body)');
-            }
-            debugPrint('└──────────────────────────────────────────────────────────');
-          }
           handler.next(options);
         },
         onResponse: (Response<dynamic> response, ResponseInterceptorHandler handler) {
-          final String path =
-              response.requestOptions.path.toLowerCase();
-          final bool isTargetApi = enableApiLogging ||
-              path.contains('/restrict') ||
-              path.contains('/conversations/share') ||
-              path.contains('/share') ||
-              path.contains('/messages') ||
-              path.contains('/block');
-
-          if (isTargetApi) {
-            debugPrint('┌──────────────────────────────────────────────────────────');
-            debugPrint('✅ [API Response] ${response.requestOptions.method} ${response.requestOptions.path} [Status ${response.statusCode}]');
-            debugPrint('📥 Response Body:\n${_prettyJson(response.data)}');
-            debugPrint('└──────────────────────────────────────────────────────────');
-          }
           handler.next(response);
         },
         onError: (DioException error, ErrorInterceptorHandler handler) async {
-          final String path =
-              error.requestOptions.path.toLowerCase();
-          final bool isTargetApi = enableApiLogging ||
-              path.contains('/restrict') ||
-              path.contains('/conversations/share') ||
-              path.contains('/share') ||
-              path.contains('/messages') ||
-              path.contains('/block');
-
-          if (isTargetApi) {
-            debugPrint('┌──────────────────────────────────────────────────────────');
-            debugPrint('❌ [API Error] ${error.requestOptions.method} ${error.requestOptions.path} [Status ${error.response?.statusCode}]');
-            debugPrint('⚠️ Error Response Body:\n${_prettyJson(error.response?.data)}');
-            debugPrint('└──────────────────────────────────────────────────────────');
-          }
 
           final RequestOptions req = error.requestOptions;
           final int? statusCode = error.response?.statusCode;
@@ -210,18 +159,6 @@ class ApiClient {
     );
   }
 
-  static String _prettyJson(dynamic data) {
-    if (data == null) return 'null';
-    try {
-      if (data is Map || data is List) {
-        return const JsonEncoder.withIndent('  ').convert(data);
-      }
-      return data.toString();
-    } catch (_) {
-      return data.toString();
-    }
-  }
-
   String get baseUrl => _dio.options.baseUrl;
   final Dio _dio;
   late final Dio _bareDio;
@@ -296,6 +233,14 @@ class ApiClient {
   /// so it can run safely from inside the 401 interceptor (admin token refresh).
   Future<dynamic> postNoAuth(String path, {Object? body}) =>
       _send(() => _bareDio.post<dynamic>(path, data: body));
+
+  /// GET with no auth header — for public endpoints that fail when a Bearer
+  /// token is present (e.g. /posts when the auth-validation service is down).
+  Future<dynamic> getNoAuth(
+    String path, {
+    Map<String, dynamic>? query,
+  }) =>
+      _send(() => _bareDio.get<dynamic>(path, queryParameters: query));
 
   Future<dynamic> patch(String path, {Object? body, Duration? timeout}) =>
       _send(() => _dio.patch<dynamic>(

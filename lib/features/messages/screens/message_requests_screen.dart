@@ -95,7 +95,7 @@ class _MessageRequestsScreenState extends State<MessageRequestsScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: Text(
-                "These people don't follow you. Accepting moves them to your main inbox — nothing sends until you reply.",
+                "Messages from people who don't follow you or whom you've restricted. Accepting moves them to your main inbox — they won't know you read their message until you accept.",
                 style: AppTextStyles.bodySmall.copyWith(
                   color: context.themeTextSecondary,
                   fontSize: 13,
@@ -119,44 +119,52 @@ class _MessageRequestsScreenState extends State<MessageRequestsScreen> {
                         ),
                       )
                     : provider.messageRequests.isEmpty
-                        ? ListView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            children: <Widget>[
-                              SizedBox(
-                                height:
-                                    MediaQuery.of(context).size.height * 0.45,
-                                child: Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: <Widget>[
-                                      Icon(
-                                        Icons.mark_email_read_outlined,
-                                        size: 56,
-                                        color: context.themeIconMuted,
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      Text(
-                                        'No message requests',
-                                        style:
-                                            AppTextStyles.titleMedium.copyWith(
-                                          color: context.themeTextPrimary,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 16,
+                        ? LayoutBuilder(
+                            builder: (BuildContext ctx,
+                                BoxConstraints constraints) {
+                              return SingleChildScrollView(
+                                physics:
+                                    const AlwaysScrollableScrollPhysics(),
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                      minHeight: constraints.maxHeight),
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: <Widget>[
+                                        Icon(
+                                          Icons.mark_email_read_outlined,
+                                          size: 56,
+                                          color: context.themeIconMuted,
                                         ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'You have answered all incoming requests.',
-                                        style: AppTextStyles.bodySmall.copyWith(
-                                          color: context.themeTextSecondary,
-                                          fontSize: 13,
+                                        const SizedBox(height: AppSpacing.md),
+                                        Text(
+                                          'No message requests',
+                                          style: AppTextStyles.titleMedium
+                                              .copyWith(
+                                            color: context.themeTextPrimary,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 16,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'You have answered all incoming requests.',
+                                          style: AppTextStyles.bodySmall
+                                              .copyWith(
+                                            color: context.themeTextSecondary,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
+                              );
+                            },
                           )
                         : ListView.builder(
                             physics: const AlwaysScrollableScrollPhysics(),
@@ -248,19 +256,27 @@ class _MessageRequestsScreenState extends State<MessageRequestsScreen> {
                                                         height: 40,
                                                         fit: BoxFit.cover,
                                                         errorBuilder: (_, _, _) =>
-                                                            const Icon(Icons.person,
-                                                                size: 40),
+                                                            Image.asset(
+                                                              AppImages.defaultAvatar,
+                                                              width: 40,
+                                                              height: 40,
+                                                              fit: BoxFit.cover,
+                                                            ),
                                                       )
                                                     : Image.asset(
                                                         avatar.isNotEmpty
                                                             ? avatar
-                                                            : AppImages.user1,
+                                                            : AppImages.defaultAvatar,
                                                         width: 40,
                                                         height: 40,
                                                         fit: BoxFit.cover,
                                                         errorBuilder: (_, _, _) =>
-                                                            const Icon(Icons.person,
-                                                                size: 40),
+                                                            Image.asset(
+                                                              AppImages.defaultAvatar,
+                                                              width: 40,
+                                                              height: 40,
+                                                              fit: BoxFit.cover,
+                                                            ),
                                                       ),
                                               ),
                                             ),

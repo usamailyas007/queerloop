@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-
-import '../../../core/theme/app_colors.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../home/screens/reels_feed_view.dart';
-import '../../home/widgets/comments_bottom_sheet.dart';
 import '../../home/widgets/post_feed_card.dart';
 import '../models/discover_models.dart';
 
@@ -19,17 +17,61 @@ class SearchPostsGrid extends StatelessWidget {
 
   final List<DiscoverSearchResult> results;
 
+  List<DiscoverSearchResult> _filterAndDeduplicate(List<DiscoverSearchResult> list) {
+    final List<DiscoverSearchResult> unique = <DiscoverSearchResult>[];
+    final Set<String> seen = <String>{};
+
+    for (final DiscoverSearchResult item in list) {
+      final String id = (item.id ?? '').trim().toLowerCase();
+      final String refId = (item.refId ?? '')
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'^/+|^media/'), '');
+
+      if (id.isNotEmpty && DeletedPostsRegistry.isDeleted(id)) continue;
+      if (refId.isNotEmpty && DeletedPostsRegistry.isDeleted(refId)) continue;
+
+      if (id.isNotEmpty && seen.contains('id:$id')) continue;
+      if (refId.isNotEmpty && seen.contains('id:$refId')) continue;
+
+      if (item.videoUrl != null && item.videoUrl!.trim().isNotEmpty) {
+        final String v = item.videoUrl!.trim().toLowerCase();
+        final RegExpMatch? m = RegExp(r'/videos/processed/([a-zA-Z0-9_\-]+)').firstMatch(v);
+        final String vKey = m != null ? m.group(1)! : v;
+        if (seen.contains('vid:$vKey')) continue;
+        seen.add('vid:$vKey');
+      }
+
+      if (id.isNotEmpty) seen.add('id:$id');
+      if (refId.isNotEmpty) seen.add('id:$refId');
+
+      unique.add(item);
+    }
+    return unique;
+  }
+
   List<ReelItemModel> _buildSearchReels() {
-    return results.asMap().entries.map((MapEntry<int, DiscoverSearchResult> entry) {
+    final List<DiscoverSearchResult> validResults = _filterAndDeduplicate(results);
+    return validResults.asMap().entries.map((MapEntry<int, DiscoverSearchResult> entry) {
       final int i = entry.key;
       final DiscoverSearchResult res = entry.value;
 
       final String img = (res.imageAsset.isNotEmpty ? res.imageAsset : (res.thumbnailUrl ?? '')).trim();
       final bool isVideoUrl = img.startsWith('http') &&
-          (img.endsWith('.mp4') || img.endsWith('.m3u8') || img.contains('video'));
+          (img.endsWith('.mp4') || img.endsWith('.m3u8') || img.contains('video') || img.contains('/videos/'));
+
+      final String? thumb = (res.thumbnailUrl != null && res.thumbnailUrl!.isNotEmpty)
+          ? res.thumbnailUrl
+          : (res.videoUrl != null && res.videoUrl!.contains('/videos/processed/')
+              ? res.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg')
+              : (isVideoUrl ? null : (img.startsWith('http') ? img : null)));
+
+      final String effectiveId = (res.refId != null && res.refId!.trim().isNotEmpty)
+          ? res.refId!.trim()
+          : (res.id ?? 'search_reel_$i');
 
       return ReelItemModel(
-        id: res.id ?? 'search_reel_$i',
+        id: effectiveId,
         authorId: res.authorId,
         username: (res.authorUsername != null && res.authorUsername!.trim().isNotEmpty)
             ? res.authorUsername!.trim()
@@ -40,23 +82,41 @@ class SearchPostsGrid extends StatelessWidget {
             : AppImages.user1,
         videoAsset: (img.startsWith('assets/') && img.endsWith('.mp4')) ? img : '',
         videoUrl: res.videoUrl ?? (isVideoUrl ? img : (img.startsWith('http') ? img : null)),
-        thumbnailUrl: res.thumbnailUrl ?? (isVideoUrl ? null : (img.startsWith('http') ? img : null)),
+        thumbnailUrl: thumb,
         caption: res.caption ?? '',
         likesCount: res.likesCount ?? 0,
         commentsCount: res.commentsCount ?? 0,
+        viewsCount: res.viewsCount,
+        isLiked: res.isLiked,
+        isSaved: res.isSaved,
+        allowComments: res.allowComments,
+        allowDownloads: res.allowDownloads,
+        allowCommentsFrom: res.allowCommentsFrom,
+        isAuthorPrivate: res.isAuthorPrivate,
         tags: const <String>[],
       );
     }).toList();
   }
 
   void _openReelPlayer(BuildContext context, int initialIndex) {
-    final List<ReelItemModel> searchReels = _buildSearchReels();
+    final List<ReelItemModel> searchReels = _buildSearchReels().map((ReelItemModel r) {
+      final bool liked = PostInteractionRegistry.isLiked(r.id, fallback: r.isLiked);
+      final bool saved = PostInteractionRegistry.isSaved(r.id, fallback: r.isSaved);
+      final int likes = PostInteractionRegistry.getLikeCount(r.id, fallback: r.likesCount);
+      final int comments = CommentCountRegistry.getOr(r.id, r.commentsCount);
+      return r.copyWith(
+        isLiked: liked,
+        isSaved: saved,
+        likesCount: likes,
+        commentsCount: comments,
+      );
+    }).toList();
     if (searchReels.isEmpty) return;
 
     Navigator.push<void>(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => Scaffold(
+        builder: (BuildContext routeContext) => Scaffold(
           backgroundColor: Colors.black,
           body: Stack(
             children: <Widget>[
@@ -72,7 +132,8 @@ class SearchPostsGrid extends StatelessWidget {
                     vertical: 12,
                   ),
                   child: GestureDetector(
-                    onTap: () => Navigator.pop(context),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.of(routeContext).pop(),
                     child: Container(
                       width: 38,
                       height: 38,
@@ -101,90 +162,50 @@ class SearchPostsGrid extends StatelessWidget {
     final String img = (item.imageAsset.isNotEmpty ? item.imageAsset : (item.thumbnailUrl ?? '')).trim();
     final bool isHttp = img.startsWith('http://') || img.startsWith('https://');
     final bool isAsset = img.startsWith('assets/');
+    final bool isText = item.type == 'TEXT' || (img.isEmpty && item.mediaRefs.isEmpty);
+    final String postId = (item.refId != null && item.refId!.trim().isNotEmpty)
+        ? item.refId!.trim()
+        : (item.id ?? 'search_${item.caption.hashCode}');
+    final bool isLiked = PostInteractionRegistry.isLiked(postId, fallback: item.isLiked);
+    final bool isSaved = PostInteractionRegistry.isSaved(postId, fallback: item.isSaved);
+    final int likesCount = PostInteractionRegistry.getLikeCount(postId, fallback: item.likesCount ?? 0);
+    final int commentsCount = CommentCountRegistry.getOr(postId, item.commentsCount ?? 0);
 
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.8,
-        minChildSize: 0.4,
-        maxChildSize: 0.95,
-        builder: (_, ScrollController scrollController) => Container(
-          decoration: BoxDecoration(
-            color: ctx.themeBackground,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: ListView(
-            controller: scrollController,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            children: <Widget>[
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: ctx.themeBorderStrong,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              PostFeedCard(
-                post: PostItemModel(
-                  id: item.id ?? 'search_${item.caption.hashCode}',
-                  authorId: item.authorId,
-                  username: (item.authorUsername != null && item.authorUsername!.trim().isNotEmpty)
-                      ? item.authorUsername!.trim()
-                      : '@creator',
-                  pronounsTime: 'they/them · recent',
-                  avatarAsset: (item.authorAvatar != null && item.authorAvatar!.trim().isNotEmpty)
-                      ? item.authorAvatar!.trim()
-                      : AppImages.user1,
-                  content: (item.caption != null && item.caption!.trim().isNotEmpty)
-                      ? item.caption!
-                      : 'Shared post',
-                  likesCount: item.likesCount ?? 0,
-                  commentsCount: item.commentsCount ?? 0,
-                  postImageUrl: isHttp ? img : null,
-                  postImageAsset: isAsset
-                      ? img
-                      : (!isHttp
-                          ? <String>[
-                              AppImages.searchResult1,
-                              AppImages.searchResult2,
-                              AppImages.searchResult3,
-                              AppImages.searchResult4,
-                              AppImages.searchResult5,
-                              AppImages.searchResult6,
-                            ][(item.id ?? '').hashCode.abs() % 6]
-                          : null),
-                  postType: item.type ?? 'PHOTO',
-                  communityId: item.communityId,
-                  isLiked: item.isLiked,
-                ),
-                onLikeToggle: () {},
-                onSaveToggle: () {},
-                onOpenComments: () {
-                  showModalBottomSheet<void>(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => CommentsBottomSheet(
-                      totalComments: item.commentsCount ?? 0,
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+    final PostItemModel post = PostItemModel(
+      id: postId,
+      authorId: item.authorId,
+      username: (item.authorUsername != null && item.authorUsername!.trim().isNotEmpty)
+          ? item.authorUsername!.trim()
+          : '@creator',
+      pronounsTime: 'they/them · recent',
+      avatarAsset: (item.authorAvatar != null && item.authorAvatar!.trim().isNotEmpty)
+          ? item.authorAvatar!.trim()
+          : AppImages.user1,
+      content: (item.caption != null && item.caption!.trim().isNotEmpty)
+          ? item.caption!
+          : 'Shared post',
+      likesCount: likesCount,
+      commentsCount: commentsCount,
+      viewsCount: item.viewsCount,
+      postImageUrl: (!isText && isHttp) ? img : null,
+      postImageAsset: (!isText && isAsset) ? img : null,
+      postType: isText ? 'TEXT' : (item.type ?? 'PHOTO'),
+      communityId: item.communityId,
+      isLiked: isLiked,
+      isSaved: isSaved,
+      allowComments: item.allowComments,
+      allowDownloads: item.allowDownloads,
+      allowCommentsFrom: item.allowCommentsFrom,
+      isAuthorPrivate: item.isAuthorPrivate,
     );
+
+    PostFeedCard.openFullscreen(context, post);
   }
 
   void _handleTap(BuildContext context, int index) {
-    final DiscoverSearchResult item = results[index];
+    final List<DiscoverSearchResult> activeResults = _filterAndDeduplicate(results);
+    if (index >= activeResults.length) return;
+    final DiscoverSearchResult item = activeResults[index];
     if (item.isReel) {
       _openReelPlayer(context, index);
     } else {
@@ -194,7 +215,9 @@ class SearchPostsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (results.isEmpty) {
+    final List<DiscoverSearchResult> activeResults = _filterAndDeduplicate(results);
+
+    if (activeResults.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -207,14 +230,43 @@ class SearchPostsGrid extends StatelessWidget {
         mainAxisSpacing: 8,
         childAspectRatio: 0.72,
       ),
-      itemCount: results.length,
+      itemCount: activeResults.length,
       itemBuilder: (BuildContext context, int index) {
-        final DiscoverSearchResult item = results[index];
+        final DiscoverSearchResult item = activeResults[index];
         final bool isReel = item.isReel;
-        final String countText = item.viewCount ??
-            (item.likesCount != null && item.likesCount! > 0
-                ? '${item.likesCount}'
-                : '');
+        // Wrap in ListenableBuilder so count updates reactively when liked/unliked
+        return ListenableBuilder(
+          listenable: PostInteractionRegistry.notifier,
+          builder: (BuildContext ctx, _) {
+            final String postId = (item.refId != null && item.refId!.trim().isNotEmpty)
+                ? item.refId!.trim()
+                : (item.id ?? '');
+            final bool isLiked = PostInteractionRegistry.isLiked(postId, fallback: item.isLiked);
+            final int effectiveLikes = PostInteractionRegistry.getLikeCount(
+              postId,
+              fallback: (isLiked && (item.likesCount == null || item.likesCount == 0))
+                  ? 1
+                  : (item.likesCount ?? 0),
+            );
+            final int reelViews = PostInteractionRegistry.getViewsCount(
+              postId,
+              fallback: item.viewsCount > 0
+                  ? item.viewsCount
+                  : (int.tryParse(item.viewCount ?? '') ?? 0),
+            );
+            final String countText = isReel
+                ? (reelViews > 0
+                    ? (reelViews >= 1000000
+                        ? '${(reelViews / 1000000).toStringAsFixed(1)}M'
+                        : (reelViews >= 1000
+                            ? '${(reelViews / 1000).toStringAsFixed(1)}K'
+                            : '$reelViews'))
+                    : (item.viewCount != null && item.viewCount!.isNotEmpty && item.viewCount != '0'
+                        ? item.viewCount!
+                        : '0'))
+                : (effectiveLikes > 0
+                    ? '$effectiveLikes'
+                    : (item.viewCount ?? ''));
 
         return GestureDetector(
           onTap: () => _handleTap(context, index),
@@ -250,7 +302,9 @@ class SearchPostsGrid extends StatelessWidget {
                     children: <Widget>[
                       Icon(
                         isReel ? Icons.play_arrow_rounded : Icons.favorite_rounded,
-                        color: isReel ? Colors.white : Colors.redAccent.withValues(alpha: 0.9),
+                        color: isReel
+                            ? Colors.white
+                            : (isLiked ? Colors.redAccent : Colors.white70),
                         size: 14,
                       ),
                       const SizedBox(width: 3),
@@ -258,7 +312,7 @@ class SearchPostsGrid extends StatelessWidget {
                         child: Text(
                           countText.isNotEmpty
                               ? countText
-                              : (isReel ? 'Watch' : 'Post'),
+                              : (isReel ? 'Watch' : (isLiked ? '1' : 'Post')),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.caption.copyWith(
@@ -275,14 +329,27 @@ class SearchPostsGrid extends StatelessWidget {
             ),
           ),
         );
+          }, // end ListenableBuilder builder
+        ); // end ListenableBuilder
       },
     );
   }
 
   Widget _buildThumbnail(DiscoverSearchResult item) {
-    final String url = (item.thumbnailUrl != null && item.thumbnailUrl!.trim().isNotEmpty)
+    String url = (item.thumbnailUrl != null && item.thumbnailUrl!.trim().isNotEmpty)
         ? item.thumbnailUrl!.trim()
         : item.imageAsset.trim();
+
+    if (url.contains('/videos/processed/') && url.endsWith('/thumbnail.jpg')) {
+      url = url.replaceAll('/thumbnail.jpg', '/thumb.0000000.jpg');
+    } else if (url.contains('/videos/processed/') && url.endsWith('/master.m3u8')) {
+      url = url.replaceAll('/master.m3u8', '/thumb.0000000.jpg');
+    } else if (item.isReel &&
+        item.videoUrl != null &&
+        item.videoUrl!.contains('/videos/processed/') &&
+        (url.isEmpty || url.endsWith('.mp4') || url.endsWith('.m3u8'))) {
+      url = item.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+    }
 
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return Image.network(
@@ -301,19 +368,45 @@ class SearchPostsGrid extends StatelessWidget {
   }
 
   Widget _fallbackContainer(DiscoverSearchResult item) {
-    final int hash = (item.id ?? item.caption ?? '').hashCode.abs() % 6;
-    final String fallbackAsset = <String>[
-      AppImages.searchResult1,
-      AppImages.searchResult2,
-      AppImages.searchResult3,
-      AppImages.searchResult4,
-      AppImages.searchResult5,
-      AppImages.searchResult6,
-    ][hash];
-
-    return Image.asset(
-      fallbackAsset,
-      fit: BoxFit.cover,
+    if (item.isReel) {
+      return Container(
+        color: const Color(0xFF1E1B26),
+        child: const Center(
+          child: Icon(
+            Icons.play_circle_outline_rounded,
+            color: Colors.white38,
+            size: 32,
+          ),
+        ),
+      );
+    }
+    if (item.caption != null && item.caption!.isNotEmpty && item.imageAsset.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(8),
+        color: const Color(0xFF231E34),
+        child: Center(
+          child: Text(
+            item.caption!,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      );
+    }
+    return Container(
+      color: const Color(0xFF1E1E2C),
+      child: Center(
+        child: Icon(
+          item.isReel ? Icons.play_arrow_rounded : Icons.image_outlined,
+          color: Colors.white24,
+          size: 28,
+        ),
+      ),
     );
   }
 }

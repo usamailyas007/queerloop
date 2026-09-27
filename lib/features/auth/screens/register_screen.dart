@@ -1,7 +1,12 @@
+import 'dart:io';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/routes.dart';
+import '../../profile/screens/privacy_policy_screen.dart';
+import '../../profile/screens/terms_of_service_screen.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -31,12 +36,70 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _agreedToTerms = false;
+  bool _isEmailLoading = false;
+  bool _isGoogleLoading = false;
+  bool _isAppleLoading = false;
+
+  bool get _isAnyBusy =>
+      _isEmailLoading || _isGoogleLoading || _isAppleLoading;
+
+  late final TapGestureRecognizer _termsRecognizer;
+  late final TapGestureRecognizer _privacyRecognizer;
+
+  @override
+  void initState() {
+    super.initState();
+    _termsRecognizer = TapGestureRecognizer()..onTap = _navigateToTerms;
+    _privacyRecognizer = TapGestureRecognizer()..onTap = _navigateToPrivacy;
+    _emailController.addListener(_clearAuthError);
+    _passwordController.addListener(_clearAuthError);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthProvider>().clearError();
+      }
+    });
+  }
+
+  void _clearAuthError() {
+    final AuthProvider authProvider = context.read<AuthProvider>();
+    if (authProvider.error != null) {
+      authProvider.clearError();
+    }
+  }
+
+  @override
+  void deactivate() {
+    context.read<AuthProvider>().clearError();
+    super.deactivate();
+  }
 
   @override
   void dispose() {
+    _termsRecognizer.dispose();
+    _privacyRecognizer.dispose();
+    _emailController.removeListener(_clearAuthError);
+    _passwordController.removeListener(_clearAuthError);
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _navigateToTerms() {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => const TermsOfServiceScreen(),
+      ),
+    );
+  }
+
+  void _navigateToPrivacy() {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => const PrivacyPolicyScreen(),
+      ),
+    );
   }
 
   Future<void> _submit() async {
@@ -52,8 +115,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
+    if (_isAnyBusy) return;
 
     final AuthProvider authProvider = context.read<AuthProvider>();
+    authProvider.clearError();
+    setState(() => _isEmailLoading = true);
     final bool ok = await authProvider.signUp(
       email: _emailController.text.trim(),
       password: _passwordController.text.trim(),
@@ -61,6 +127,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (!ok) {
       if (mounted) {
+        setState(() => _isEmailLoading = false);
         final String? errorMsg = authProvider.error;
         if (errorMsg != null && errorMsg.isNotEmpty) {
           AppSnackBar.showError(
@@ -74,6 +141,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     if (!mounted) return;
+    setState(() => _isEmailLoading = false);
     Navigator.pushNamed(
       context,
       AppRoutes.verifyEmailOtp,
@@ -85,27 +153,73 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _handleGoogleSignIn() async {
     final AuthProvider authProvider = context.read<AuthProvider>();
-    if (authProvider.isBusy) return;
-    await _handleSocialSignInResult(await authProvider.signInWithGoogle());
+    if (_isAnyBusy || authProvider.isBusy) return;
+
+    setState(() => _isGoogleLoading = true);
+    final SocialSignInResult result;
+    try {
+      result = await authProvider.signInWithGoogle();
+    } catch (e) {
+      if (mounted) setState(() => _isGoogleLoading = false);
+      return;
+    }
+    await _handleSocialSignInResult(
+      result,
+      loadingSetter: (bool v) => setState(() => _isGoogleLoading = v),
+    );
   }
 
   Future<void> _handleAppleSignIn() async {
     final AuthProvider authProvider = context.read<AuthProvider>();
-    if (authProvider.isBusy) return;
-    await _handleSocialSignInResult(await authProvider.signInWithApple());
+    if (_isAnyBusy || authProvider.isBusy) return;
+
+    setState(() => _isAppleLoading = true);
+    final SocialSignInResult result;
+    try {
+      result = await authProvider.signInWithApple();
+    } catch (e) {
+      if (mounted) setState(() => _isAppleLoading = false);
+      return;
+    }
+    await _handleSocialSignInResult(
+      result,
+      loadingSetter: (bool v) => setState(() => _isAppleLoading = v),
+    );
   }
 
   /// Shared handler for Google + Apple sign-in — both go through the same
   /// login-then-register flow, so they land in the exact same UI states.
-  Future<void> _handleSocialSignInResult(SocialSignInResult result) async {
+  /// [loadingSetter] flips the caller's own loading flag, so each social
+  /// button's spinner stays independent of the other.
+  Future<void> _handleSocialSignInResult(
+    SocialSignInResult result, {
+    required ValueChanged<bool> loadingSetter,
+  }) async {
     if (!mounted) return;
     final AuthProvider authProvider = context.read<AuthProvider>();
 
     if (result.isCancelled) {
+      loadingSetter(false);
+      return;
+    }
+
+    if (result.accountExistsWithPassword) {
+      loadingSetter(false);
+      AppSnackBar.showInfo(
+        context,
+        title: 'Account Exists',
+        subtitle: result.errorMessage ??
+            'This email is already registered with a password. Please sign in.',
+      );
+      Navigator.pushNamed(
+        context,
+        AppRoutes.login,
+      );
       return;
     }
 
     if (result.isError) {
+      loadingSetter(false);
       final String? errorMsg = result.errorMessage ?? authProvider.error;
       if (errorMsg != null && errorMsg.isNotEmpty) {
         AppSnackBar.showError(
@@ -139,7 +253,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         context,
         AppRoutes.verifyEmailOtp,
         arguments: result.email,
-      );
+      ).then((_) {
+        if (mounted) loadingSetter(false);
+      });
       return;
     }
 
@@ -160,6 +276,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         AppRoutes.home,
         (Route<dynamic> route) => false,
       );
+    } else {
+      if (mounted) loadingSetter(false);
     }
   }
 
@@ -227,7 +345,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           if (val == null || val.isEmpty) {
                             return l10n.authEnterPasswordError;
                           }
-                          if (val.length < 6) {
+                          if (val.length < 8) {
                             return l10n.authPasswordLengthError;
                           }
                           return null;
@@ -281,6 +399,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   TextSpan(
                                     text: l10n.authTermsConditions,
                                     style: AppTextStyles.termsLinkText,
+                                    recognizer: _termsRecognizer,
                                   ),
                                   TextSpan(
                                     text: ' ${l10n.authAnd} \n',
@@ -291,6 +410,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   TextSpan(
                                     text: l10n.authPrivacyPolicy,
                                     style: AppTextStyles.termsLinkText,
+                                    recognizer: _privacyRecognizer,
                                   ),
                                   TextSpan(
                                     text: l10n.authPeriod,
@@ -308,13 +428,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: AppSpacing.xl),
 
                       // ── Sign-up button — rebuilds only when isBusy flips
-                      Selector<AuthProvider, bool>(
-                        selector: (_, AuthProvider p) => p.isBusy,
-                        builder: (_, bool busy, _) => AppGradientButton(
-                          text: l10n.authSignUpEmail,
-                          isLoading: busy,
-                          onPressed: busy ? () {} : _submit,
-                        ),
+                      AppGradientButton(
+                        text: l10n.authSignUpEmail,
+                        isLoading: _isEmailLoading,
+                        onPressed: _isAnyBusy ? () {} : _submit,
                       ),
 
                       // ── Error banner — only this Text rebuilds on error
@@ -340,19 +457,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                       const SizedBox(height: AppSpacing.md),
 
-                      AppSocialButton(
-                        text: l10n.authContinueApple,
-                        iconPath: AppIcons.apple,
-                        onPressed: _handleAppleSignIn,
-                      ),
-
-                      const SizedBox(height: AppSpacing.md),
-
-                      AppSocialButton(
-                        text: l10n.authContinueGoogle,
-                        iconPath: AppIcons.google,
-                        onPressed: _handleGoogleSignIn,
-                      ),
+                      // ── Social Sign-up Button (platform-specific) ────────
+                      // Android: Google only | iOS: Apple only
+                      if (Platform.isIOS)
+                        AppSocialButton(
+                          text: l10n.authContinueApple,
+                          iconPath: AppIcons.apple,
+                          isLoading: _isAppleLoading,
+                          onPressed: _isAnyBusy ? () {} : _handleAppleSignIn,
+                        )
+                      else
+                        AppSocialButton(
+                          text: l10n.authContinueGoogle,
+                          iconPath: AppIcons.google,
+                          isLoading: _isGoogleLoading,
+                          onPressed: _isAnyBusy ? () {} : _handleGoogleSignIn,
+                        ),
                     ],
                   ),
                 ),
@@ -389,6 +509,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     highlightedText: l10n.authSignInNow,
                     highlightColor: AppColors.gradientPink,
                     onTap: () {
+                      context.read<AuthProvider>().clearError();
                       // Replace so back doesn't loop between register ↔ login
                       Navigator.pushReplacementNamed(
                         context,

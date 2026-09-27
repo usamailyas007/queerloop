@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_images.dart';
@@ -11,16 +12,22 @@ import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../auth/auth_provider.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 import '../../home/provider/home_feed_provider.dart';
+import '../../home/services/reel_video_preloader.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/provider/profile_setup_provider.dart';
 import '../models/create_post_models.dart';
+import '../models/post_draft_model.dart';
 import '../provider/create_post_provider.dart';
+import '../services/draft_service.dart';
 import '../widgets/add_tag_bottom_sheet.dart';
 import '../widgets/custom_gradient_switch.dart';
+import '../widgets/drafts_bottom_sheet.dart';
+import '../widgets/media_processing_dialog.dart';
 import '../widgets/media_thumbnail_widget.dart';
 import '../widgets/select_community_bottom_sheet.dart';
 import 'post_success_screen.dart';
@@ -77,12 +84,17 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
   @override
   void initState() {
     super.initState();
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
     final CreatePostProvider provider = context.read<CreatePostProvider>();
     _captionController =
         _HashtagTextEditingController(text: provider.caption);
+    DraftService.init();
 
     // Auto-start upload if media is selected and in idle status
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ReelVideoPreloader.instance.pauseAll();
       if (!mounted) return;
       if (provider.selectedMedia != null &&
           provider.uploadStatus == MediaUploadStatus.idle) {
@@ -118,23 +130,14 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
       BuildContext context, CreatePostProvider provider) async {
     // 1. Client-side gating: ensure media is ready
     if (provider.selectedMedia != null && !provider.isMediaReady) {
-      if (provider.uploadStatus == MediaUploadStatus.failed) {
-        AppSnackBar.showError(
-          context,
-          title: 'Upload Failed',
-          subtitle:
-              provider.uploadError ?? 'Please retry uploading your media.',
-        );
+      final bool isVideo = provider.selectedMedia!.isVideo;
+      final bool success = await MediaProcessingDialog.show(
+        context,
+        isVideo: isVideo,
+      );
+      if (!success || !context.mounted) {
         return;
       }
-      AppSnackBar.showInfo(
-        context,
-        title: 'Processing Media',
-        subtitle: provider.uploadStatus == MediaUploadStatus.transcoding
-            ? 'AWS is transcoding your video. Ready in a few seconds.'
-            : 'Media is uploading, please wait...',
-      );
-      return;
     }
 
     // 2. Video 60-second limit check
@@ -157,20 +160,49 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
 
       final HomeFeedProvider homeProvider = context.read<HomeFeedProvider>();
       final GalleryMediaItem? item = provider.selectedMedia;
-      final bool isVideo = (item != null && item.isVideo) ||
-          (provider.mediaType == MediaType.video);
+      final bool isVideo = provider.mediaType == MediaType.video &&
+          (item == null || item.isVideo);
+
+      final ProfileProvider profile = context.read<ProfileProvider>();
+      final AuthProvider auth = context.read<AuthProvider>();
+
+      final String resolvedUsername = (profile.profile?.username != null &&
+              profile.profile!.username!.trim().isNotEmpty)
+          ? profile.profile!.username!.trim()
+          : ((auth.user?.displayName != null &&
+                  auth.user!.displayName!.trim().isNotEmpty)
+              ? auth.user!.displayName!.trim()
+              : (profile.username.isNotEmpty ? profile.username : 'you'));
+      final String handle = resolvedUsername.startsWith('@')
+          ? resolvedUsername
+          : '@$resolvedUsername';
+
+      final String pronouns = (profile.profile != null)
+          ? profile.profile!.formattedPronouns
+          : profile.pronounsFormatted;
+      final String pronounsTime = pronouns.isNotEmpty ? '$pronouns · just now' : 'just now';
+
+      final String avatar = (profile.profile?.avatarUrl != null &&
+              profile.profile!.avatarUrl!.trim().isNotEmpty)
+          ? profile.profile!.avatarUrl!.trim()
+          : ((auth.user?.avatarUrl != null &&
+                  auth.user!.avatarUrl!.trim().isNotEmpty)
+              ? auth.user!.avatarUrl!.trim()
+              : (profile.avatarUrl.isNotEmpty ? profile.avatarUrl : AppImages.user1));
 
       if (isVideo) {
         final ReelItemModel newReel = ReelItemModel(
           id: postResult?.id ?? 'reel_${DateTime.now().millisecondsSinceEpoch}',
-          username: '@you',
-          pronounsTime: 'they/them · just now',
-          avatarAsset: AppImages.user1,
-          videoAsset:
-              item?.videoAsset ?? (item?.filePath ?? 'assets/videos/video1.mp4'),
+          username: handle,
+          pronounsTime: pronounsTime,
+          avatarAsset: avatar,
+          videoAsset: item?.videoAsset ?? '',
           videoFilePath: item?.filePath,
           videoUrl: provider.uploadResult?.downloadUrl ?? provider.uploadResult?.url,
-          thumbnailUrl: provider.uploadResult?.thumbnailUrl,
+          thumbnailUrl: provider.uploadResult?.thumbnailUrl ??
+              (provider.uploadedMediaId != null && provider.uploadedMediaId!.isNotEmpty
+                  ? '${AppConfig.cdnUrl}/videos/processed/${provider.uploadedMediaId}/thumb.0000000.jpg'
+                  : null),
           caption: provider.caption,
           likesCount: 0,
           commentsCount: 0,
@@ -179,25 +211,32 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
               : <String>[provider.selectedCommunity],
           durationText:
               '0:${provider.selectedDurationSeconds.toString().padLeft(2, '0')}',
+          allowDownloads: provider.allowDownloads,
         );
         homeProvider.addNewReel(newReel);
         try {
           context.read<ProfileProvider>().addUserReel(newReel);
         } catch (_) {}
       } else {
+        final String? localPath = (item != null && item.filePath != null && item.filePath!.isNotEmpty)
+            ? item.filePath
+            : null;
         final PostItemModel newPost = PostItemModel(
           id: postResult?.id ?? 'post_${DateTime.now().millisecondsSinceEpoch}',
-          username: '@you',
-          pronounsTime: 'they/them · just now',
-          avatarAsset: AppImages.user4,
+          authorId: auth.userId,
+          authorDisplayName: profile.displayName,
+          username: handle,
+          pronounsTime: pronounsTime,
+          avatarAsset: avatar,
           content: provider.caption,
           likesCount: 0,
           commentsCount: 0,
-          postImageAsset: (item != null && item.assetPath.isNotEmpty)
-              ? item.assetPath
-              : null,
-          postImageUrl: provider.uploadResult?.downloadUrl ?? provider.uploadResult?.url,
-          postType: item != null ? 'PHOTO' : 'TEXT',
+          postImageAsset: localPath,
+          postImageUrl: provider.uploadResult?.downloadUrl ??
+              provider.uploadResult?.url ??
+              localPath,
+          postType: provider.mediaType == MediaType.text ? 'TEXT' : 'PHOTO',
+          allowDownloads: provider.allowDownloads,
         );
         homeProvider.addNewPost(newPost);
         try {
@@ -205,11 +244,17 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
         } catch (_) {}
       }
 
+      // If this post was loaded from a draft, delete the draft
+      if (provider.currentDraftId != null) {
+        await DraftService.deleteDraft(provider.currentDraftId!);
+      }
+
       // Refresh live feed in background
       homeProvider.loadFeed();
 
       provider.resetPostForm();
 
+      if (!context.mounted) return;
       Navigator.push<void>(
         context,
         MaterialPageRoute<void>(
@@ -283,7 +328,55 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                     ),
                   ),
 
-                  const SizedBox(width: 36), // Balance title centering
+                  ValueListenableBuilder<int>(
+                    valueListenable: DraftService.draftCountNotifier,
+                    builder: (BuildContext ctx, int count, _) {
+                      return GestureDetector(
+                        onTap: () => DraftsBottomSheet.show(context),
+                        child: Container(
+                          height: 36,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: context.isDarkMode
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.black.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: count > 0
+                                  ? AppColors.gradientCyan
+                                  : (context.isDarkMode
+                                      ? Colors.white12
+                                      : context.themeBorder),
+                              width: 1.1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Icon(
+                                Icons.drafts_outlined,
+                                size: 16,
+                                color: count > 0
+                                    ? AppColors.gradientCyan
+                                    : context.themeIcon,
+                              ),
+                              if (count > 0) ...<Widget>[
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$count',
+                                  style: const TextStyle(
+                                    color: AppColors.gradientCyan,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -315,7 +408,8 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                             children: <Widget>[
                               MediaThumbnailWidget(item: selectedItem),
 
-                              if (selectedItem?.isVideo ?? true) ...<Widget>[
+                              if (provider.mediaType == MediaType.video &&
+                                  (selectedItem?.isVideo ?? true)) ...<Widget>[
                                 Positioned(
                                   top: 4,
                                   left: 4,
@@ -761,13 +855,18 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                   Expanded(
                     child: AppOutlineButton(
                       text: 'Draft',
-                      onPressed: () {
+                      onPressed: () async {
+                        final PostDraft draft = provider.toDraft(
+                          caption: _captionController.text.trim(),
+                        );
+                        await DraftService.saveDraft(draft);
+                        if (!context.mounted) return;
                         AppSnackBar.showSuccess(
                           context,
                           title: 'Draft Saved',
                           subtitle: 'Your post has been saved to drafts.',
                         );
-                        Navigator.popUntil(context, (route) => route.isFirst);
+                        Navigator.popUntil(context, (Route<dynamic> route) => route.isFirst);
                       },
                     ),
                   ),
@@ -781,7 +880,7 @@ class _NewPostFormScreenState extends State<NewPostFormScreen> {
                               : (provider.uploadStatus == MediaUploadStatus.uploading ||
                                       provider.uploadStatus == MediaUploadStatus.requestingUrl
                                   ? 'Uploading...'
-                                  : 'Publish')),
+                                  : 'Upload')),
                       isEnabled: provider.canPublish,
                       isLoading: provider.isPublishing,
                       onPressed: () => _publishPost(context, provider),

@@ -11,6 +11,7 @@ import '../widgets/comments_bottom_sheet.dart';
 import '../widgets/filter_communities_bottom_sheet.dart';
 import '../widgets/home_empty_state_view.dart';
 import '../widgets/post_feed_card.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 
 class PostsFeedView extends StatelessWidget {
   const PostsFeedView({
@@ -65,6 +66,9 @@ class PostsFeedView extends StatelessWidget {
     String postId,
     int totalComments, {
     String? postAuthorId,
+    bool allowComments = true,
+    String allowCommentsFrom = 'everyone',
+    String? authorUsername,
   }) {
     showModalBottomSheet<void>(
       context: context,
@@ -74,9 +78,36 @@ class PostsFeedView extends StatelessWidget {
         return CommentsBottomSheet(
           postId: postId,
           postAuthorId: postAuthorId,
-          totalComments: totalComments,
+          totalComments: CommentCountRegistry.getOr(postId, totalComments),
+          allowComments: allowComments,
+          allowCommentsFrom: allowCommentsFrom,
+          authorUsername: authorUsername,
           onCommentAdded: () {
+            CommentCountRegistry.increment(postId);
             context.read<HomeFeedProvider>().incrementCommentCount(postId);
+            try {
+              context.read<ProfileProvider>().incrementCommentCount(postId);
+            } catch (_) {}
+          },
+          onCommentDeleted: (int deletedCount, int remainingCount) {
+            CommentCountRegistry.set(postId, remainingCount);
+            context
+                .read<HomeFeedProvider>()
+                .setCommentCount(postId, remainingCount);
+            try {
+              context
+                  .read<ProfileProvider>()
+                  .updatePostCommentCount(postId, remainingCount);
+            } catch (_) {}
+          },
+          onCommentCountChanged: (int count) {
+            CommentCountRegistry.set(postId, count);
+            context.read<HomeFeedProvider>().setCommentCount(postId, count);
+            try {
+              context
+                  .read<ProfileProvider>()
+                  .updatePostCommentCount(postId, count);
+            } catch (_) {}
           },
         );
       },
@@ -92,7 +123,7 @@ class PostsFeedView extends StatelessWidget {
     final double paddingBottom = MediaQuery.of(context).padding.bottom;
     final double systemBottomInset =
         viewPaddingBottom > paddingBottom ? viewPaddingBottom : paddingBottom;
-    final double bottomPadding = 90 + systemBottomInset;
+    final double bottomPadding = 100 + systemBottomInset;
 
     if (provider.isLoadingFeed && posts.isEmpty) {
       return Padding(
@@ -333,6 +364,9 @@ class PostsFeedView extends StatelessWidget {
                   item.id,
                   item.commentsCount,
                   postAuthorId: item.authorId,
+                  allowComments: item.allowComments,
+                  allowCommentsFrom: item.allowCommentsFrom,
+                  authorUsername: item.username,
                 );
               }
             },

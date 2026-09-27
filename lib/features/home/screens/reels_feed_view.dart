@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../auth/auth_provider.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/provider/profile_setup_provider.dart';
@@ -11,8 +11,10 @@ import '../provider/home_feed_provider.dart';
 import '../services/reel_video_preloader.dart';
 import '../widgets/comments_bottom_sheet.dart';
 import '../widgets/filter_communities_bottom_sheet.dart';
+import '../widgets/guest_action_modal_dialog.dart';
 import '../widgets/home_empty_state_view.dart';
 import '../widgets/reel_feed_card.dart';
+import '../widgets/delete_reel_bottom_sheet.dart';
 import '../widgets/safety_bottom_sheet.dart';
 import '../widgets/send_to_bottom_sheet.dart';
 import '../widgets/share_this_post_bottom_sheet.dart';
@@ -42,6 +44,7 @@ class ReelsFeedView extends StatefulWidget {
     this.initialPage = 0,
     this.customReels,
     this.hasBottomBar = true,
+    this.isProfileScreen = false,
     super.key,
   });
 
@@ -49,6 +52,7 @@ class ReelsFeedView extends StatefulWidget {
   final int initialPage;
   final List<ReelItemModel>? customReels;
   final bool hasBottomBar;
+  final bool isProfileScreen;
 
   @override
   State<ReelsFeedView> createState() => _ReelsFeedViewState();
@@ -59,6 +63,10 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
   late int _activePage;
   List<ReelItemModel> _localReels = <ReelItemModel>[];
 
+  // Guest: show signup popup after 3 reels
+  int _guestReelsWatched = 0;
+  bool _guestPopupShown = false;
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +74,11 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     _pageController = PageController(initialPage: widget.initialPage);
     if (widget.customReels != null) {
       _localReels = List<ReelItemModel>.from(widget.customReels!);
+      // Restore feed visibility for standalone/custom reel viewers.
+      // When the home feed's ReelFeedCard.didPushNext fires (e.g. user opened
+      // profile), it sets isFeedVisible=false. If the user then opens a custom
+      // reel player, that flag is still false → _canPlayAudio = false → no audio.
+      ReelVideoPreloader.instance.setFeedVisible(true);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -74,6 +87,9 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
             widget.customReels != null ? _localReels : provider.reels;
         if (reels.isNotEmpty) {
           ReelVideoPreloader.instance.preloadSurrounding(reels, _activePage);
+          if (_activePage < reels.length) {
+            provider.recordView(reels[_activePage].id);
+          }
         }
       }
     });
@@ -90,6 +106,12 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
   @override
   void deactivate() {
     ReelVideoPreloader.instance.pauseAll();
+    // Use markFeedInvisible() instead of setFeedVisible(false) — the latter
+    // triggers async pauseAll()/muteAll() platform-channel calls that complete
+    // after deactivation and throw "deactivated widget ancestor" FlutterError.
+    if (widget.customReels != null) {
+      ReelVideoPreloader.instance.markFeedInvisible();
+    }
     super.deactivate();
   }
 
@@ -145,6 +167,9 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     String postId,
     int totalComments, {
     String? postAuthorId,
+    bool allowComments = true,
+    String allowCommentsFrom = 'everyone',
+    String? authorUsername,
   }) {
     showModalBottomSheet<void>(
       context: context,
@@ -154,9 +179,36 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
         return CommentsBottomSheet(
           postId: postId,
           postAuthorId: postAuthorId,
-          totalComments: totalComments,
+          totalComments: CommentCountRegistry.getOr(postId, totalComments),
+          allowComments: allowComments,
+          allowCommentsFrom: allowCommentsFrom,
+          authorUsername: authorUsername,
           onCommentAdded: () {
+            CommentCountRegistry.increment(postId);
             context.read<HomeFeedProvider>().incrementCommentCount(postId);
+            try {
+              context.read<ProfileProvider>().incrementCommentCount(postId);
+            } catch (_) {}
+          },
+          onCommentDeleted: (int deletedCount, int remainingCount) {
+            CommentCountRegistry.set(postId, remainingCount);
+            context
+                .read<HomeFeedProvider>()
+                .setCommentCount(postId, remainingCount);
+            try {
+              context
+                  .read<ProfileProvider>()
+                  .updatePostCommentCount(postId, remainingCount);
+            } catch (_) {}
+          },
+          onCommentCountChanged: (int count) {
+            CommentCountRegistry.set(postId, count);
+            context.read<HomeFeedProvider>().setCommentCount(postId, count);
+            try {
+              context
+                  .read<ProfileProvider>()
+                  .updatePostCommentCount(postId, count);
+            } catch (_) {}
           },
         );
       },
@@ -195,26 +247,22 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     );
   }
 
-  Future<void> _showSafetySheet(ReelItemModel reel) async {
-    final AuthProvider auth = context.read<AuthProvider>();
-    final ProfileProvider profileProvider = context.read<ProfileProvider>();
-    final String? currentUserId = auth.userId ?? profileProvider.profile?.id;
-    final String myUsername = (auth.user?.displayName ?? profileProvider.username)
-        .replaceAll('@', '')
-        .trim()
-        .toLowerCase();
-    final String reelUsername =
-        reel.username.replaceAll('@', '').trim().toLowerCase();
-    final bool isOwnReel = profileProvider.userReels.any((ReelItemModel r) => r.id == reel.id) ||
-        (reel.authorId != null &&
-            currentUserId != null &&
-            reel.authorId!.trim().toLowerCase() ==
-                currentUserId.trim().toLowerCase()) ||
-        (myUsername.isNotEmpty && reelUsername == myUsername) ||
-        reel.username == '@you' ||
-        reel.username == 'you';
+  Future<void> _showDeleteSheet(ReelItemModel reel) async {
+    final bool? deleted = await DeleteReelBottomSheet.show(context, reel: reel);
+    if (deleted == true && mounted) {
+      setState(() {
+        _localReels.removeWhere((ReelItemModel r) => r.id == reel.id);
+      });
+      final List<ReelItemModel> currentReels =
+          widget.customReels != null ? _localReels : context.read<HomeFeedProvider>().reels;
+      if (currentReels.isEmpty && widget.customReels != null) {
+        Navigator.pop(context);
+      }
+    }
+  }
 
-    final dynamic deleted = await showModalBottomSheet<dynamic>(
+  Future<void> _showSafetySheet(ReelItemModel reel) async {
+    await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -225,19 +273,10 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
           authorId: reel.authorId ?? reel.username,
           communityId: reel.communityId,
           isReel: true,
-          isCreator: isOwnReel,
+          isCreator: false,
         );
       },
     );
-
-    if (deleted == true && mounted) {
-      setState(() {});
-      final List<ReelItemModel> currentReels =
-          widget.customReels ?? context.read<HomeFeedProvider>().reels;
-      if (currentReels.isEmpty && widget.customReels != null) {
-        Navigator.pop(context);
-      }
-    }
   }
 
   @override
@@ -371,6 +410,25 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
           if (index < reels.length) {
             provider.recordView(reels[index].id);
           }
+          // Guest: show signup popup after watching 3 reels
+          if (provider.isGuest && widget.customReels == null && !_guestPopupShown) {
+            _guestReelsWatched++;
+            if (_guestReelsWatched >= 3) {
+              _guestPopupShown = true;
+              Future<void>.delayed(const Duration(milliseconds: 400), () {
+                if (!mounted) return;
+                ReelVideoPreloader.instance.pauseAll();
+                GuestActionModalDialog.show(
+                  // ignore: use_build_context_synchronously
+                  context,
+                  title: 'Join QueerLoop',
+                  subtitle:
+                      'Create a free account to get your personalized For You feed, like, comment and connect with the community.',
+                  iconData: Icons.favorite_border_rounded,
+                );
+              });
+            }
+          }
         },
         itemBuilder: (context, index) {
           final ReelItemModel item = reels[index];
@@ -386,47 +444,94 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                   provider.bottomNavIndex == 0 &&
                   provider.activeSubMode == SubMode.reels);
 
+          final bool isItemLiked = PostInteractionRegistry.isLiked(item.id, fallback: item.isLiked);
+          final bool isItemSaved = PostInteractionRegistry.isSaved(item.id, fallback: item.isSaved);
+          final int itemLikesCount = PostInteractionRegistry.getLikeCount(item.id, fallback: item.likesCount);
+          final int itemCommentsCount = CommentCountRegistry.getOr(item.id, item.commentsCount);
+
           return ReelFeedCard(
             key: ValueKey<String>(item.id),
-            reel: item.copyWith(isFollowing: isAuthorFollowed),
+            reel: item.copyWith(
+              isFollowing: isAuthorFollowed,
+              isLiked: isItemLiked,
+              isSaved: isItemSaved,
+              likesCount: itemLikesCount,
+              commentsCount: itemCommentsCount,
+            ),
             isActive: isVisuallyActive,
             hasBottomBar: widget.hasBottomBar,
+            isProfileScreen: widget.isProfileScreen,
             showCommunityFilterTag: provider.activeTopTab == TopTab.communities,
             selectedCommunity: provider.selectedCommunityFilter,
             onLikeToggle: () {
               if (provider.isGuest) {
                 widget.onGuestActionTriggered?.call();
               } else {
+                final bool currentlyLiked =
+                    PostInteractionRegistry.isLiked(item.id, fallback: item.isLiked);
+                final bool newLiked = !currentlyLiked;
+                final int currentCount = PostInteractionRegistry.getLikeCount(item.id, fallback: item.likesCount);
+                final int newCount = newLiked
+                    ? currentCount + 1
+                    : (currentCount > 0 ? currentCount - 1 : 0);
+                PostInteractionRegistry.setLiked(item.id, newLiked, newCount: newCount);
+
                 if (widget.customReels != null) {
                   final int idx = _localReels.indexWhere((r) => r.id == item.id);
                   if (idx != -1) {
-                    final bool newLiked = !_localReels[idx].isLiked;
-                    final int newCount = newLiked
-                        ? _localReels[idx].likesCount + 1
-                        : (_localReels[idx].likesCount > 0 ? _localReels[idx].likesCount - 1 : 0);
                     setState(() {
                       _localReels[idx] = _localReels[idx].copyWith(
                         isLiked: newLiked,
                         likesCount: newCount,
                       );
                     });
-                    try {
-                      context.read<ProfileProvider>().updateLikedReel(
-                        item.id,
-                        isLiked: newLiked,
-                        likesCount: newCount,
-                      );
-                    } catch (_) {}
                   }
                 }
-                provider.toggleLikeReel(item.id, fallbackReel: item);
+                try {
+                  context.read<ProfileProvider>().updateLikedReel(
+                    item.id,
+                    isLiked: newLiked,
+                    likesCount: newCount,
+                    fallbackReel: item.copyWith(isLiked: newLiked, likesCount: newCount),
+                  );
+                } catch (_) {}
+                // Pass the original item so toggleLikeReel can propagate to HomeFeedProvider
+                provider.toggleLikeReel(
+                  item.id,
+                  fallbackReel: item,
+                  explicitLiked: newLiked,
+                );
               }
             },
             onSaveToggle: () {
               if (provider.isGuest) {
                 widget.onGuestActionTriggered?.call();
               } else {
-                provider.toggleSaveReel(item.id);
+                final bool currentlySaved =
+                    PostInteractionRegistry.isSaved(item.id, fallback: item.isSaved);
+                final bool newSaved = !currentlySaved;
+                PostInteractionRegistry.setSaved(item.id, newSaved);
+
+                if (widget.customReels != null) {
+                  final int idx = _localReels.indexWhere((r) => r.id == item.id);
+                  if (idx != -1) {
+                    setState(() {
+                      _localReels[idx] = _localReels[idx].copyWith(isSaved: newSaved);
+                    });
+                  }
+                }
+                try {
+                  context.read<ProfileProvider>().updateSavedReel(
+                    item.id,
+                    isSaved: newSaved,
+                    fallbackReel: item.copyWith(isSaved: newSaved),
+                  );
+                } catch (_) {}
+                provider.toggleSaveReel(
+                  item.id,
+                  fallbackReel: item,
+                  explicitSaved: newSaved,
+                );
               }
             },
             onFollowToggle: () async {
@@ -468,6 +573,9 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                   item.id,
                   item.commentsCount,
                   postAuthorId: item.authorId,
+                  allowComments: item.allowComments,
+                  allowCommentsFrom: item.allowCommentsFrom,
+                  authorUsername: item.username,
                 );
               }
             },
@@ -478,6 +586,8 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                 _showShareSheet(context, item);
               }
             },
+            isCustomView: widget.customReels != null,
+            onDelete: () => _showDeleteSheet(item),
             onOpenSafety: () => _showSafetySheet(item),
             onOpenFilterCommunities: () =>
                 _showFilterCommunitiesSheet(context, provider),

@@ -1,3 +1,4 @@
+import 'dart:ui' show FlutterView;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
@@ -21,18 +22,49 @@ class HomeBottomNavBar extends StatelessWidget {
   final ValueChanged<int> onTap;
   final bool isGuest;
 
+  static const double barHeight = 64.0;
+
+  /// Retrieves the raw hardware/system navigation bar height reliably across all devices.
+  /// Uses View.of(context) (direct from window) with fallback to MediaQuery.
+  static double getSystemNavBarHeight(BuildContext context) {
+    try {
+      final FlutterView view = View.of(context);
+      final double dpr = view.devicePixelRatio;
+      if (dpr > 0) {
+        final double viewPaddingBottom = view.viewPadding.bottom / dpr;
+        final double paddingBottom = view.padding.bottom / dpr;
+        final double raw =
+            viewPaddingBottom > paddingBottom ? viewPaddingBottom : paddingBottom;
+        if (raw > 0) return raw;
+      }
+    } catch (_) {}
+    final double mqView = MediaQuery.maybeOf(context)?.viewPadding.bottom ?? 0;
+    final double mqPad = MediaQuery.maybeOf(context)?.padding.bottom ?? 0;
+    return mqView > mqPad ? mqView : mqPad;
+  }
+
+  /// Calculates the bottom margin of the floating bar.
+  /// On devices with on-screen navigation bar: systemNavBarHeight + 8.
+  /// On devices without on-screen navigation: 10.
+  static double getBottomMargin(BuildContext context) {
+    final double systemNavBarHeight = getSystemNavBarHeight(context);
+    return systemNavBarHeight > 0 ? (systemNavBarHeight + 8.0) : 10.0;
+  }
+
+  /// Calculates the coordinate of the top edge of the floating bottom bar
+  /// from the bottom of the screen.
+  static double getTopOfBottomBar(BuildContext context) {
+    return barHeight + getBottomMargin(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool isDark = context.isDarkMode;
-
-    final double systemNavBarHeight =
-        MediaQuery.of(context).viewPadding.bottom;
-    final double bottomMargin =
-        systemNavBarHeight > 0 ? (systemNavBarHeight * 0.25 + 2) : 6;
+    final double bottomMargin = getBottomMargin(context);
 
     return Container(
-      height: 64,
+      height: barHeight,
       margin: EdgeInsets.fromLTRB(16, 0, 16, bottomMargin),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(

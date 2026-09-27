@@ -19,6 +19,14 @@ class ReelItemModel {
     this.tags = const <String>[],
     this.durationText = '',
     this.communityId,
+    this.allowComments = true,
+    this.allowDownloads = true,
+    this.isAuthorPrivate = false,
+    this.allowCommentsFrom = 'everyone',
+    this.hasLikeCount = true,
+    this.hideLikes = false,
+    this.viewsCount = 0,
+    this.visibility,
   });
 
   final String id;
@@ -37,38 +45,72 @@ class ReelItemModel {
   final bool isLiked;
   final bool isSaved;
   final bool isFollowing;
+  final bool isAuthorPrivate;
+  final String allowCommentsFrom;
+  final bool hasLikeCount;
   final List<String> tags;
   final String durationText;
   final String? communityId;
+  final bool allowComments;
+  final bool allowDownloads;
+  final bool hideLikes;
+  final int viewsCount;
+  final String? visibility;
 
   ReelItemModel copyWith({
     String? authorId,
+    String? authorDisplayName,
+    String? username,
+    String? pronounsTime,
+    String? avatarAsset,
     bool? isLiked,
     bool? isSaved,
     bool? isFollowing,
+    bool? isAuthorPrivate,
+    String? allowCommentsFrom,
+    bool? hasLikeCount,
+    bool? allowComments,
+    bool? allowDownloads,
+    bool? hideLikes,
     int? likesCount,
     int? commentsCount,
+    int? viewsCount,
     String? videoUrl,
     String? thumbnailUrl,
+    String? caption,
+    List<String>? tags,
+    String? durationText,
+    String? communityId,
+    String? visibility,
   }) {
     return ReelItemModel(
       id: id,
       authorId: authorId ?? this.authorId,
-      username: username,
-      pronounsTime: pronounsTime,
-      avatarAsset: avatarAsset,
+      authorDisplayName: authorDisplayName ?? this.authorDisplayName,
+      username: username ?? this.username,
+      pronounsTime: pronounsTime ?? this.pronounsTime,
+      avatarAsset: avatarAsset ?? this.avatarAsset,
       videoAsset: videoAsset,
       videoFilePath: videoFilePath,
       videoUrl: videoUrl ?? this.videoUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
-      caption: caption,
+      caption: caption ?? this.caption,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
+      viewsCount: viewsCount ?? this.viewsCount,
       isLiked: isLiked ?? this.isLiked,
       isSaved: isSaved ?? this.isSaved,
       isFollowing: isFollowing ?? this.isFollowing,
-      tags: tags,
-      durationText: durationText,
+      isAuthorPrivate: isAuthorPrivate ?? this.isAuthorPrivate,
+      allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
+      hasLikeCount: hasLikeCount ?? this.hasLikeCount,
+      tags: tags ?? this.tags,
+      durationText: durationText ?? this.durationText,
+      communityId: communityId ?? this.communityId,
+      allowComments: allowComments ?? this.allowComments,
+      allowDownloads: allowDownloads ?? this.allowDownloads,
+      hideLikes: hideLikes ?? this.hideLikes,
+      visibility: visibility ?? this.visibility,
     );
   }
 }

@@ -8,6 +8,8 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../auth/auth_provider.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../models/message_models.dart';
 import '../provider/messages_provider.dart';
 import '../widgets/conversation_tile.dart';
@@ -25,14 +27,28 @@ class MessagesScreen extends StatefulWidget {
 
 class _MessagesScreenState extends State<MessagesScreen> {
   late final TextEditingController _searchController;
+  MessagesProvider? _messagesProvider;
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    _searchController.addListener(() {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final MessagesProvider provider = context.read<MessagesProvider>();
+        final ProfileProvider profile = context.read<ProfileProvider>();
+        final String? uid = context.read<AuthProvider>().userId;
+        if (uid != null && uid.isNotEmpty) {
+          profile.fetchProfile(uid).catchError((_) {});
+        }
+        provider.updatePrivacySettings(
+          showActivityStatus: profile.showActivityStatus,
+          sendReadReceipts: profile.sendReadReceipts,
+        );
+        provider.setSearchQuery('');
         provider.loadConversations();
         provider.loadMessageRequests();
       }
@@ -40,8 +56,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _messagesProvider = Provider.of<MessagesProvider>(context, listen: false);
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
+    _messagesProvider?.setSearchQuery('');
     super.dispose();
   }
 
@@ -118,6 +141,24 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         color: context.themeIconMuted,
                         size: 20,
                       ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
+                                _searchController.clear();
+                                provider.setSearchQuery('');
+                                setState(() {});
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  color: context.themeIconMuted,
+                                  size: 18,
+                                ),
+                              ),
+                            )
+                          : null,
                       onChanged: provider.setSearchQuery,
                     ),
                   ),
@@ -343,7 +384,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            "$requestCount people you don't follow",
+                                            "$requestCount ${requestCount == 1 ? 'request' : 'requests'}",
                                             style: AppTextStyles.bodySmall
                                                 .copyWith(
                                               color: context.themeTextMuted,
@@ -439,12 +480,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             ),
 
                           if (isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: AppSpacing.xxl,
-                              ),
+                            SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.45,
                               child: Center(
                                 child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: <Widget>[
                                     Icon(
                                       _searchController.text.trim().isNotEmpty

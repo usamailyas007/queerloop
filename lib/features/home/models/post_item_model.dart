@@ -2,6 +2,7 @@ class PostItemModel {
   const PostItemModel({
     required this.id,
     this.authorId,
+    this.authorDisplayName,
     required this.username,
     required this.pronounsTime,
     required this.avatarAsset,
@@ -14,10 +15,19 @@ class PostItemModel {
     this.communityId,
     this.isLiked = false,
     this.isSaved = false,
+    this.allowComments = true,
+    this.allowDownloads = true,
+    this.isAuthorPrivate = false,
+    this.allowCommentsFrom = 'everyone',
+    this.hasLikeCount = true,
+    this.hideLikes = false,
+    this.viewsCount = 0,
+    this.visibility,
   });
 
   final String id;
   final String? authorId;
+  final String? authorDisplayName;
   final String username;
   final String pronounsTime;
   final String avatarAsset;
@@ -30,32 +40,75 @@ class PostItemModel {
   final String? communityId;
   final bool isLiked;
   final bool isSaved;
+  final bool allowComments;
+  final bool allowDownloads;
+  final bool isAuthorPrivate;
+  final String allowCommentsFrom;
+  final bool hasLikeCount;
+  final bool hideLikes;
+  final int viewsCount;
+  final String? visibility;
+
+  String? get authorName => username;
+
+  String? get videoUrl => (postType.toUpperCase() == 'VIDEO' ||
+          postType.toLowerCase() == 'reel' ||
+          (postImageUrl != null &&
+              (postImageUrl!.endsWith('.mp4') ||
+                  postImageUrl!.endsWith('.m3u8') ||
+                  postImageUrl!.contains('video') ||
+                  postImageUrl!.contains('/videos/'))))
+      ? postImageUrl
+      : null;
 
   PostItemModel copyWith({
     String? authorId,
+    String? authorDisplayName,
+    String? username,
+    String? pronounsTime,
+    String? avatarAsset,
+    String? content,
     bool? isLiked,
     bool? isSaved,
+    bool? allowComments,
+    bool? allowDownloads,
+    bool? isAuthorPrivate,
+    String? allowCommentsFrom,
+    bool? hasLikeCount,
+    bool? hideLikes,
     int? likesCount,
     int? commentsCount,
+    int? viewsCount,
+    String? postImageAsset,
     String? postImageUrl,
     String? postType,
     String? communityId,
+    String? visibility,
   }) {
     return PostItemModel(
       id: id,
       authorId: authorId ?? this.authorId,
-      username: username,
-      pronounsTime: pronounsTime,
-      avatarAsset: avatarAsset,
-      content: content,
+      authorDisplayName: authorDisplayName ?? this.authorDisplayName,
+      username: username ?? this.username,
+      pronounsTime: pronounsTime ?? this.pronounsTime,
+      avatarAsset: avatarAsset ?? this.avatarAsset,
+      content: content ?? this.content,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
-      postImageAsset: postImageAsset,
+      viewsCount: viewsCount ?? this.viewsCount,
+      postImageAsset: postImageAsset ?? this.postImageAsset,
       postImageUrl: postImageUrl ?? this.postImageUrl,
       postType: postType ?? this.postType,
       communityId: communityId ?? this.communityId,
       isLiked: isLiked ?? this.isLiked,
       isSaved: isSaved ?? this.isSaved,
+      allowComments: allowComments ?? this.allowComments,
+      allowDownloads: allowDownloads ?? this.allowDownloads,
+      isAuthorPrivate: isAuthorPrivate ?? this.isAuthorPrivate,
+      allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
+      hasLikeCount: hasLikeCount ?? this.hasLikeCount,
+      hideLikes: hideLikes ?? this.hideLikes,
+      visibility: visibility ?? this.visibility,
     );
   }
 }

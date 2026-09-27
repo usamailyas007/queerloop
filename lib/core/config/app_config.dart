@@ -9,6 +9,7 @@ abstract final class AppConfig {
   );
 
   static const String baseUrl = String.fromEnvironment('BASE_URL');
+  static const String cdnUrl = 'https://d1gkk7mpfaivqk.cloudfront.net';
 
   static String get socketUrl {
     const String customSocket = String.fromEnvironment('SOCKET_URL');

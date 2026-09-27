@@ -15,8 +15,11 @@ import '../../auth/auth_provider.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../models/reel_item_model.dart';
+import '../provider/home_feed_provider.dart';
 import '../screens/profile_tab_screen.dart';
+import '../../create_post/models/create_post_models.dart';
 import '../services/reel_video_preloader.dart';
+import 'delete_reel_bottom_sheet.dart';
 
 class ReelFeedCard extends StatefulWidget {
   const ReelFeedCard({
@@ -32,6 +35,9 @@ class ReelFeedCard extends StatefulWidget {
     this.selectedCommunity = 'All Communities',
     this.isActive = true,
     this.hasBottomBar = true,
+    this.isCustomView = false,
+    this.isProfileScreen = false,
+    this.onDelete,
     super.key,
   });
 
@@ -43,11 +49,15 @@ class ReelFeedCard extends StatefulWidget {
   final VoidCallback onOpenShare;
   final VoidCallback onOpenSafety;
   final VoidCallback onOpenFilterCommunities;
+  final VoidCallback? onDelete;
   final bool showCommunityFilterTag;
   final String selectedCommunity;
+
   /// Whether this card is the currently visible page (controls auto-play).
   final bool isActive;
   final bool hasBottomBar;
+  final bool isCustomView;
+  final bool isProfileScreen;
 
   @override
   State<ReelFeedCard> createState() => _ReelFeedCardState();
@@ -60,32 +70,66 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   bool _videoInitialized = false;
   bool _isPaused = false;
   bool _isDisposed = false;
+  bool _isCoveredByRoute = false;
+
+  bool get _canPlayAudio =>
+      widget.isActive &&
+      !_isPaused &&
+      !_isDisposed &&
+      !_isCoveredByRoute &&
+      ReelVideoPreloader.instance.isFeedVisible;
 
   // ── Double-tap heart animation ───────────────────────────────────────────
   late AnimationController _animController;
   late Animation<double> _scaleAnim;
   bool _showDoubleTapHeart = false;
+  ModalRoute<void>? _route;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final ModalRoute<void>? route = ModalRoute.of(context);
-    if (route != null) {
-      appRouteObserver.subscribe(this, route);
+    if (route != null && route != _route) {
+      if (_route != null) {
+        try {
+          appRouteObserver.unsubscribe(this);
+        } catch (_) {}
+      }
+      _route = route;
+      try {
+        appRouteObserver.subscribe(this, route);
+      } catch (_) {}
     }
   }
 
   @override
   void didPushNext() {
-    // A new route was pushed on top of this screen (e.g. SearchScreen, ProfileScreen, Comments)
+    // A new route was pushed on top — pause AND mute so audio never leaks
+    _isCoveredByRoute = true;
     _videoController?.pause();
+    _videoController?.setVolume(0);
+    ReelVideoPreloader.instance.setFeedVisible(false);
+    ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
   }
 
   @override
   void didPopNext() {
-    // User returned to this screen
-    if (widget.isActive && !_isPaused && _videoInitialized && !_isDisposed) {
+    if (!mounted) return;
+    // User returned — restore only if this route is currently active
+    _isCoveredByRoute = false;
+    final bool isCurrentRoute = _route?.isCurrent ?? false;
+    if (isCurrentRoute &&
+        widget.isActive &&
+        !_isPaused &&
+        _videoInitialized &&
+        !_isDisposed) {
+      ReelVideoPreloader.instance.setFeedVisible(true);
+      ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
       _videoController?.play();
+    } else {
+      _videoController?.pause();
+      _videoController?.setVolume(0);
     }
   }
 
@@ -93,6 +137,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   void didPop() {
     // This route is being popped
     _videoController?.pause();
+    _videoController?.setVolume(0);
   }
 
   @override
@@ -110,22 +155,32 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     );
 
     // Synchronous instant attach if preloader already has initialized controller
-    final VideoPlayerController? existing =
-        ReelVideoPreloader.instance.getExisting(widget.reel.id);
+    if (widget.isActive) {
+      ReelVideoPreloader.instance.markActive(widget.reel.id);
+    }
+    final VideoPlayerController? existing = ReelVideoPreloader.instance
+        .getExisting(widget.reel.id);
     if (existing != null && existing.value.isInitialized) {
       _videoController = existing;
       _videoInitialized = true;
-      if (widget.isActive && !_isPaused) {
-        existing.play();
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isDisposed) return;
+        if (_canPlayAudio) {
+          ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
+          existing.play();
+        } else {
+          existing.pause();
+          existing.setVolume(0);
+        }
+      });
     } else {
       _initVideo();
     }
   }
 
   Future<void> _initVideo() async {
-    final VideoPlayerController? existing =
-        ReelVideoPreloader.instance.getExisting(widget.reel.id);
+    final VideoPlayerController? existing = ReelVideoPreloader.instance
+        .getExisting(widget.reel.id);
     if (existing != null && existing.value.isInitialized) {
       if (_isDisposed || !mounted) return;
       _videoController = existing;
@@ -139,8 +194,9 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     }
 
     try {
-      final VideoPlayerController? controller =
-          await ReelVideoPreloader.instance.getOrCreate(widget.reel);
+      final VideoPlayerController? controller = await ReelVideoPreloader
+          .instance
+          .getOrCreate(widget.reel);
       if (_isDisposed || !mounted) return;
       if (controller == null) return;
 
@@ -149,30 +205,42 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         if (mounted) {
           setState(() => _videoInitialized = true);
         }
-        if (widget.isActive && !_isPaused && !_isDisposed) {
-          controller.play();
-        } else {
-          controller.pause();
-        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _isDisposed) return;
+          if (_canPlayAudio) {
+            ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
+            controller.play();
+          } else {
+            controller.pause();
+            controller.setVolume(0);
+          }
+        });
       } else {
         void onReady() {
           if (_isDisposed || !mounted) {
             try {
               controller.removeListener(onReady);
               controller.pause();
+              controller.setVolume(0);
             } catch (_) {}
             return;
           }
           if (controller.value.isInitialized) {
             controller.removeListener(onReady);
             setState(() => _videoInitialized = true);
-            if (widget.isActive && !_isPaused && !_isDisposed) {
-              controller.play();
-            } else {
-              controller.pause();
-            }
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted || _isDisposed) return;
+              if (_canPlayAudio) {
+                ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
+                controller.play();
+              } else {
+                controller.pause();
+                controller.setVolume(0);
+              }
+            });
           }
         }
+
         controller.addListener(onReady);
       }
     } catch (e) {
@@ -187,8 +255,11 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.hidden) {
       _videoController?.pause();
+      _videoController?.setVolume(0);
+      ReelVideoPreloader.instance.pauseAll();
     } else if (state == AppLifecycleState.resumed) {
-      if (widget.isActive && !_isPaused && _videoInitialized) {
+      if (_canPlayAudio && _videoInitialized) {
+        ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
         _videoController?.play();
       }
     }
@@ -197,6 +268,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   @override
   void deactivate() {
     _videoController?.pause();
+    _videoController?.setVolume(0);
     super.deactivate();
   }
 
@@ -204,15 +276,23 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   void didUpdateWidget(ReelFeedCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
+      ReelVideoPreloader.instance.markActive(widget.reel.id);
+      ReelVideoPreloader.instance.markInactive(oldWidget.reel.id);
       if (_videoInitialized && _videoController != null) {
-        if (!_isPaused) {
+        if (_canPlayAudio) {
+          ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
           _videoController?.play();
+        } else {
+          _videoController?.pause();
+          _videoController?.setVolume(0);
         }
       } else {
         _initVideo();
       }
     } else if (!widget.isActive && oldWidget.isActive) {
+      ReelVideoPreloader.instance.markInactive(widget.reel.id);
       _videoController?.pause();
+      _videoController?.setVolume(0);
     }
   }
 
@@ -220,17 +300,84 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   void dispose() {
     _isDisposed = true;
     try {
+      ReelVideoPreloader.instance.markInactive(widget.reel.id);
+    } catch (_) {}
+    try {
       appRouteObserver.unsubscribe(this);
     } catch (_) {}
+    _route = null;
     WidgetsBinding.instance.removeObserver(this);
-    try {
-      _videoController?.pause();
-      _videoController = null;
-    } catch (e) {
-      debugPrint('Error pausing reel video: $e');
-    }
+    // NOTE: deactivate() already calls pause()/setVolume() safely before the
+    // widget tree is torn down. Repeating them here triggers async platform
+    // channel calls that look up a deactivated ancestor → FlutterError.
+    _videoController = null;
     _animController.dispose();
     super.dispose();
+  }
+
+  bool get _isControllerUsable {
+    if (_isDisposed || !_videoInitialized || _videoController == null) {
+      return false;
+    }
+    if (!ReelVideoPreloader.instance.isAlive(_videoController)) {
+      return false;
+    }
+    try {
+      return _videoController!.value.isInitialized &&
+          !_videoController!.value.hasError;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Returns true only if [url] looks like a decodable image URL.
+  ///
+  /// CloudFront returns HTTP 403 XML for missing/untranscoded thumbnails.
+  /// Android's ImageDecoder then throws "Failed to create image decoder:
+  /// unimplemented" because XML bytes are not a valid image format.
+  /// We guard against this by only accepting URLs with known image extensions
+  /// or known CDN image path patterns.
+  static bool _isSafeThumbnailUrl(String url) {
+    final String lower = url.toLowerCase();
+    // Must be an HTTP/HTTPS URL
+    if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
+      return false;
+    }
+    // Known image extensions — safe to decode
+    if (lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.gif') ||
+        lower.endsWith('.avif')) {
+      return true;
+    }
+    // HLS playlists are NOT images — never pass to Image.network
+    if (lower.contains('.m3u8') || lower.contains('/master.')) {
+      return false;
+    }
+    // CDN path patterns we know serve images
+    if (lower.contains('/images/original/') ||
+        lower.contains('/thumbnails/') ||
+        lower.contains('/thumb') ||
+        lower.contains('/poster')) {
+      return true;
+    }
+    // Any other URL without a recognisable image extension → unsafe
+    return false;
+  }
+
+  /// Builds the thumbnail widget, guarding against broken CDN URLs that would
+  /// cause the native ImageDecoder to crash with 'unimplemented'.
+  Widget _buildSafeThumbnail(String? url) {
+    if (url == null || url.isEmpty) return const SizedBox.shrink();
+    if (!_isSafeThumbnailUrl(url)) return const SizedBox.shrink();
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    );
   }
 
   void _handleTap() {
@@ -251,19 +398,103 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     });
   }
 
-  String _getDurationText(ReelItemModel item) {
-    if (_videoInitialized && _videoController != null) {
-      final Duration d = _videoController!.value.duration;
-      if (d.inSeconds > 0) {
-        final int minutes = d.inMinutes;
-        final int seconds = d.inSeconds % 60;
-        return '$minutes:${seconds.toString().padLeft(2, '0')}';
-      }
+  String _formatDuration(Duration d) {
+    final int minutes = d.inMinutes;
+    final int seconds = d.inSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildDurationPill(ReelItemModel item) {
+    if (!_videoInitialized || _videoController == null) {
+      final String fallback = item.durationText.isNotEmpty
+          ? item.durationText
+          : '0:30';
+      return Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            SvgPicture.asset(
+              AppIcons.play,
+              width: 10,
+              height: 10,
+              colorFilter: const ColorFilter.mode(
+                Colors.white,
+                BlendMode.srcIn,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              fallback,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
     }
-    if (item.durationText.isNotEmpty) {
-      return item.durationText;
-    }
-    return '0:30';
+
+    return ValueListenableBuilder<VideoPlayerValue>(
+      valueListenable: _videoController!,
+      builder: (BuildContext context, VideoPlayerValue val, Widget? _) {
+        final bool isPlaying = val.isPlaying && !_isPaused;
+        final Duration pos = val.position;
+        final Duration dur = val.duration;
+
+        final String posText = _formatDuration(pos);
+        final String durText = dur.inSeconds > 0
+            ? _formatDuration(dur)
+            : (item.durationText.isNotEmpty ? item.durationText : '0:30');
+
+        final String timeLabel = '$posText / $durText';
+
+        return GestureDetector(
+          onTap: _handleTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            margin: const EdgeInsets.only(right: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isPlaying
+                    ? AppColors.gradientCyan.withValues(alpha: 0.6)
+                    : Colors.white.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  size: 13,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  timeLabel,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -271,65 +502,110 @@ class _ReelFeedCardState extends State<ReelFeedCard>
     final ReelItemModel item = widget.reel;
     final AuthProvider auth = context.watch<AuthProvider>();
     final ProfileProvider profileProvider = context.watch<ProfileProvider>();
+    final HomeFeedProvider homeFeed = context.watch<HomeFeedProvider>();
+    final int effectiveCommentsCount =
+        homeFeed.getCommentCount(item.id) ??
+        profileProvider.getCommentCount(item.id) ??
+        item.commentsCount;
     final String? currentUserId = auth.userId ?? profileProvider.profile?.id;
-    final String myUsername = (auth.user?.displayName ?? profileProvider.username)
+    final String myUsername =
+        (auth.user?.displayName ?? profileProvider.username)
+            .replaceAll('@', '')
+            .trim()
+            .toLowerCase();
+    final String reelUsername = item.username
         .replaceAll('@', '')
         .trim()
         .toLowerCase();
-    final String reelUsername =
-        item.username.replaceAll('@', '').trim().toLowerCase();
-    final bool isOwnReel = (item.authorId != null &&
+    final bool isOwnReel =
+        profileProvider.userReels.any((ReelItemModel r) => r.id == item.id) ||
+        (item.authorId != null &&
             currentUserId != null &&
             item.authorId!.trim().toLowerCase() ==
                 currentUserId.trim().toLowerCase()) ||
         (myUsername.isNotEmpty && reelUsername == myUsername) ||
-        item.username == '@you';
-    final double viewPaddingBottom = MediaQuery.of(context).viewPadding.bottom;
+        item.username == '@you' ||
+        item.username == 'you';
+
+    final String reelAuthorId = (item.authorId ?? '').trim().toLowerCase();
+    final AuthorInfo? cachedAuthor = reelAuthorId.isNotEmpty
+        ? AuthorProfileCache.get(reelAuthorId)
+        : null;
+    final bool authorHidesLikes =
+        item.hideLikes || (cachedAuthor?.hideMyLikes == true);
+    final bool myProfileHidesLikes = profileProvider.hideMyLikes;
+    final bool shouldHideLikes =
+        !isOwnReel &&
+        (authorHidesLikes ||
+            (reelAuthorId.isNotEmpty &&
+                currentUserId != null &&
+                reelAuthorId == currentUserId.trim().toLowerCase() &&
+                myProfileHidesLikes));
     final double paddingBottom = MediaQuery.of(context).padding.bottom;
-    final double systemBottomInset =
-        viewPaddingBottom > paddingBottom ? viewPaddingBottom : paddingBottom;
+    final double viewPaddingBottom = MediaQuery.of(context).viewPadding.bottom;
+    final double systemBottomInset = viewPaddingBottom > paddingBottom
+        ? viewPaddingBottom
+        : paddingBottom;
+
+    // Flutter Scaffold with extendBody: true automatically sets body padding.bottom
+    // to the exact top coordinate of the floating bottomNavigationBar (e.g. 74 on devices
+    // without onscreen nav, ~120 on devices with 3-button onscreen nav).
+    // Minimum bottom bar top is 64 (height) + 10 (margin) = 74.
+    final double bottomBarTop = paddingBottom >= 74.0
+        ? paddingBottom
+        : (74.0 + (systemBottomInset > 0 ? systemBottomInset : 0.0));
+
     final double rightActionsBottom = widget.hasBottomBar
-        ? (66.0 + (systemBottomInset > 0 ? systemBottomInset * 0.25 : 0))
-        : (20.0 + systemBottomInset);
+        ? (bottomBarTop + 8.0)
+        : (systemBottomInset > 0 ? (systemBottomInset + 20.0) : 26.0);
     final double leftDetailsBottom = widget.hasBottomBar
-        ? (62.0 + (systemBottomInset > 0 ? systemBottomInset * 0.25 : 0))
-        : (14.0 + systemBottomInset);
+        ? (bottomBarTop + 6.0)
+        : (systemBottomInset > 0 ? (systemBottomInset + 14.0) : 20.0);
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return GestureDetector(
       onTap: _handleTap,
       onDoubleTap: _handleDoubleTap,
+      onLongPress: isOwnReel
+          ? (widget.onDelete ??
+                () => DeleteReelBottomSheet.show(context, reel: widget.reel))
+          : null,
       child: Stack(
         fit: StackFit.expand,
         children: <Widget>[
-          // ── 1. Video Player (full-bleed, cover-fit) ───────────────────────
-          _videoInitialized && _videoController != null
-              ? SizedBox.expand(
-                  child: FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                      width: _videoController!.value.size.width > 0
-                          ? _videoController!.value.size.width
-                          : 16,
-                      height: _videoController!.value.size.height > 0
-                          ? _videoController!.value.size.height
-                          : 9,
-                      child: VideoPlayer(_videoController!),
-                    ),
-                  ),
-                )
-              : Container(
-                  color: Colors.black,
-                  child: widget.reel.thumbnailUrl != null &&
-                          widget.reel.thumbnailUrl!.isNotEmpty
-                      ? Image.network(
-                          widget.reel.thumbnailUrl!,
-                          fit: BoxFit.cover,
-                          gaplessPlayback: true,
-                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                        )
-                      : const SizedBox.shrink(),
+          // ── 1. Thumbnail Background (persists beneath video for zero-flicker transitions) ──
+          Container(
+            color: Colors.black,
+            child: _buildSafeThumbnail(widget.reel.thumbnailUrl),
+          ),
+
+          // ── 2. Video Player (full-bleed, cover-fit) ───────────────────────
+          if (_isControllerUsable)
+            SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _videoController!.value.size.width > 0
+                      ? _videoController!.value.size.width
+                      : 16,
+                  height: _videoController!.value.size.height > 0
+                      ? _videoController!.value.size.height
+                      : 9,
+                  child: VideoPlayer(_videoController!),
                 ),
+              ),
+            )
+          else if (widget.isActive)
+            const Center(
+              child: SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                ),
+              ),
+            ),
 
           // ── 2. Top & Bottom Dark Gradient Overlay ─────────────────────────
           Container(
@@ -398,7 +674,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                 // Like
                 _RightActionButton(
                   onTap: widget.onLikeToggle,
-                  label: '${item.likesCount}',
+                  label: shouldHideLikes ? '' : '${item.likesCount}',
                   child: Image.asset(
                     item.isLiked ? AppIcons.likedLogo : AppIcons.unlikeLogo,
                     width: 28,
@@ -406,22 +682,24 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                   ),
                 ),
 
-                const SizedBox(height: 18),
+                if (item.allowComments) ...<Widget>[
+                  const SizedBox(height: 18),
 
-                // Comment
-                _RightActionButton(
-                  onTap: widget.onOpenComments,
-                  label: '${item.commentsCount}',
-                  child: SvgPicture.asset(
-                    AppIcons.comment,
-                    width: 26,
-                    height: 26,
-                    colorFilter: const ColorFilter.mode(
-                      Colors.white,
-                      BlendMode.srcIn,
+                  // Comment
+                  _RightActionButton(
+                    onTap: widget.onOpenComments,
+                    label: '$effectiveCommentsCount',
+                    child: SvgPicture.asset(
+                      AppIcons.comment,
+                      width: 26,
+                      height: 26,
+                      colorFilter: const ColorFilter.mode(
+                        Colors.white,
+                        BlendMode.srcIn,
+                      ),
                     ),
                   ),
-                ),
+                ],
 
                 const SizedBox(height: 18),
 
@@ -445,23 +723,31 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                 // Save
                 _RightActionButton(
                   onTap: widget.onSaveToggle,
-                  label: l10n.homeSave,
-                  child: SvgPicture.asset(
-                    AppIcons.save,
-                    width: 24,
-                    height: 24,
-                    colorFilter: ColorFilter.mode(
-                      item.isSaved ? AppColors.gradientCyan : Colors.white,
-                      BlendMode.srcIn,
-                    ),
+                  label: item.isSaved ? 'Saved' : l10n.homeSave,
+                  child: Icon(
+                    item.isSaved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                    size: 28,
+                    color: item.isSaved ? AppColors.gradientCyan : Colors.white,
                   ),
                 ),
 
                 const SizedBox(height: 18),
 
-                // Safety
+                // More / Options button (for both own reels and other users' reels)
                 GestureDetector(
-                  onTap: widget.onOpenSafety,
+                  onTap: () {
+                    if (isOwnReel) {
+                      if (widget.onDelete != null) {
+                        widget.onDelete!();
+                      } else {
+                        DeleteReelBottomSheet.show(context, reel: widget.reel);
+                      }
+                    } else {
+                      widget.onOpenSafety();
+                    }
+                  },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -474,21 +760,17 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                         color: Colors.white.withValues(alpha: 0.3),
                       ),
                     ),
-                    child: Column(
+                    child: const Column(
                       children: <Widget>[
-                        SvgPicture.asset(
-                          AppIcons.safety,
-                          width: 20,
-                          height: 20,
-                          colorFilter: const ColorFilter.mode(
-                            Colors.white,
-                            BlendMode.srcIn,
-                          ),
+                        Icon(
+                          Icons.more_horiz_rounded,
+                          color: Colors.white,
+                          size: 22,
                         ),
-                        const SizedBox(height: 2),
+                        SizedBox(height: 2),
                         Text(
-                          l10n.homeSafety,
-                          style: const TextStyle(
+                          'More',
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
@@ -531,7 +813,9 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: <BoxShadow>[
                                 BoxShadow(
-                                  color: AppColors.gradientCyan.withValues(alpha: 0.3),
+                                  color: AppColors.gradientCyan.withValues(
+                                    alpha: 0.3,
+                                  ),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -567,44 +851,8 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                         const SizedBox(width: 6),
                       ],
 
-                      // 2. Duration Pill (from video controller / API / fallback)
-                      Container(
-                        margin: const EdgeInsets.only(right: 6),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.25),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            SvgPicture.asset(
-                              AppIcons.play,
-                              width: 10,
-                              height: 10,
-                              colorFilter: const ColorFilter.mode(
-                                Colors.white,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              _getDurationText(item),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      // 2. Duration & Playback Pill (dynamic timer + play/pause toggle)
+                      _buildDurationPill(item),
 
                       // 3. All Tags from API response
                       for (final String tag in item.tags) ...<Widget>[
@@ -647,12 +895,20 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                         final String? currentUserId = auth.userId;
                         final String? authorId = item.authorId;
 
-                        final bool isCurrentUser = authorId != null &&
+                        final bool isCurrentUser =
+                            authorId != null &&
                             currentUserId != null &&
                             authorId.trim().toLowerCase() ==
                                 currentUserId.trim().toLowerCase();
 
+                        ReelVideoPreloader.instance.setFeedVisible(false);
+                        ReelVideoPreloader.instance.pauseAll();
+                        ReelVideoPreloader.instance.muteAll();
                         if (isCurrentUser) {
+                          if (widget.isProfileScreen) {
+                            Navigator.pop(context);
+                            return;
+                          }
                           Navigator.push<void>(
                             context,
                             MaterialPageRoute<void>(
@@ -666,13 +922,14 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                               builder: (_) => UserProfileScreen(
                                 userId: item.authorId,
                                 username: item.username.replaceAll('@', ''),
-                                name: (item.authorDisplayName != null &&
+                                name:
+                                    (item.authorDisplayName != null &&
                                         item.authorDisplayName!.isNotEmpty)
                                     ? item.authorDisplayName!
                                     : item.username
-                                        .replaceAll('@', '')
-                                        .split('.')
-                                        .first,
+                                          .replaceAll('@', '')
+                                          .split('.')
+                                          .first,
                                 avatarAsset: item.avatarAsset,
                               ),
                             ),
@@ -687,19 +944,76 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              Text(
-                                item.username,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Flexible(
+                                    child: Text(
+                                      (item.authorDisplayName != null &&
+                                              item.authorDisplayName!
+                                                  .trim()
+                                                  .isNotEmpty)
+                                          ? item.authorDisplayName!.trim()
+                                          : item.username,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        shadows: <Shadow>[
+                                          Shadow(
+                                            color: Colors.black54,
+                                            blurRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  if (item.authorDisplayName != null &&
+                                      item.authorDisplayName!
+                                          .trim()
+                                          .isNotEmpty &&
+                                      item.authorDisplayName!
+                                              .trim()
+                                              .toLowerCase() !=
+                                          item.username
+                                              .replaceAll('@', '')
+                                              .trim()
+                                              .toLowerCase()) ...<Widget>[
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        item.username,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w400,
+                                          shadows: <Shadow>[
+                                            Shadow(
+                                              color: Colors.black54,
+                                              blurRadius: 4,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                               Text(
                                 item.pronounsTime,
                                 style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 11,
+                                  shadows: <Shadow>[
+                                    Shadow(
+                                      color: Colors.black54,
+                                      blurRadius: 4,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -707,16 +1021,16 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                         ],
                       ),
                     ),
-                  if (!isOwnReel) ...<Widget>[
-                    const SizedBox(width: 12),
-                    AppFollowButton(
-                      isFollowing: item.isFollowing,
-                      isOverMedia: true,
-                      onTap: widget.onFollowToggle,
-                    ),
+                    if (!isOwnReel) ...<Widget>[
+                      const SizedBox(width: 12),
+                      AppFollowButton(
+                        isFollowing: item.isFollowing,
+                        isOverMedia: true,
+                        onTap: widget.onFollowToggle,
+                      ),
+                    ],
                   ],
-                ],
-              ),
+                ),
 
                 const SizedBox(height: 6),
 
@@ -850,8 +1164,10 @@ class _SafeVideoProgressIndicatorState
     final RenderObject? renderBox = context.findRenderObject();
     if (renderBox is! RenderBox) return;
     final Offset localPosition = renderBox.globalToLocal(globalPosition);
-    final double relative =
-        (localPosition.dx / renderBox.size.width).clamp(0.0, 1.0);
+    final double relative = (localPosition.dx / renderBox.size.width).clamp(
+      0.0,
+      1.0,
+    );
     final Duration duration = widget.controller.value.duration;
     if (duration > Duration.zero) {
       widget.controller.seekTo(duration * relative);
@@ -894,10 +1210,7 @@ class _SafeVideoProgressIndicatorState
               return Stack(
                 children: <Widget>[
                   // Background track
-                  Container(
-                    width: width,
-                    color: widget.backgroundColor,
-                  ),
+                  Container(width: width, color: widget.backgroundColor),
                   // Buffered track
                   if (maxBuffered > 0)
                     Container(
@@ -905,10 +1218,7 @@ class _SafeVideoProgressIndicatorState
                       color: widget.bufferedColor,
                     ),
                   // Played progress track
-                  Container(
-                    width: width * progress,
-                    color: widget.playedColor,
-                  ),
+                  Container(width: width * progress, color: widget.playedColor),
                 ],
               );
             },

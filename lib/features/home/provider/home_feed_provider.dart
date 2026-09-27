@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/cache/cache_manager.dart';
+import '../../../core/cache/user_relationship_cache.dart';
+import '../../../core/config/api_endpoints.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_images.dart';
 import '../../create_post/models/create_post_models.dart';
@@ -9,6 +12,7 @@ import '../../create_post/services/post_content_service.dart';
 import '../models/post_item_model.dart';
 import '../models/reel_item_model.dart';
 import '../services/reel_video_preloader.dart';
+import '../../../core/utils/video_size_logger.dart';
 
 enum TopTab { following, forYou, communities }
 enum SubMode { reels, posts }
@@ -33,6 +37,32 @@ class HomeFeedProvider extends ChangeNotifier {
 
   String? _currentUserId;
   final Set<String> _userLikedPostIds = <String>{};
+  final Set<String> _userSavedPostIds = <String>{};
+
+  bool isPostSaved(String id) =>
+      PostInteractionRegistry.isSaved(id, fallback: _userSavedPostIds.contains(id));
+  bool isPostLiked(String id) =>
+      PostInteractionRegistry.isLiked(id, fallback: _userLikedPostIds.contains(id));
+
+  int? getCommentCount(String id) => CommentCountRegistry.get(id);
+
+  void setCommentCount(String id, int count) {
+    final int safeCount = count.clamp(0, 999999);
+    CommentCountRegistry.set(id, safeCount);
+    _updatePostInAllLists(id, (p) => p.copyWith(commentsCount: safeCount));
+    _updateReelInAllLists(id, (r) => r.copyWith(commentsCount: safeCount));
+    notifyListeners();
+  }
+
+  void incrementCommentCount(String id) {
+    final int cur = CommentCountRegistry.getOr(id, _getExistingCommentsCount(id));
+    setCommentCount(id, cur + 1);
+  }
+
+  void decrementCommentCount(String id, {int amount = 1}) {
+    final int cur = CommentCountRegistry.getOr(id, _getExistingCommentsCount(id));
+    setCommentCount(id, (cur - amount).clamp(0, 999999));
+  }
 
   bool _isGuest = false;
   int _bottomNavIndex = 0; // 0: Home, 1: Discover, 2: Create, 3: Messages, 4: Profile
@@ -41,36 +71,9 @@ class HomeFeedProvider extends ChangeNotifier {
   String _selectedCommunityFilter = 'All Communities';
   String? _selectedCommunityId;
 
-  static final List<PostItemModel> _defaultForYouPosts = <PostItemModel>[
-    const PostItemModel(
-      id: 'post_1',
-      username: '@theo.vance',
-      pronounsTime: 'he/him · 18m',
-      avatarAsset: AppImages.user4,
-      content:
-          'Told my grandma about Dev over the phone and she said "finally, you sounded lonely in December." Eleven months of rehearsing a speech for nothing.',
-      likesCount: 5600,
-      commentsCount: 311,
-      postImageAsset: AppImages.forYouImg,
-      isLiked: false,
-    ),
-    const PostItemModel(
-      id: 'post_2',
-      username: '@nadia.builds',
-      pronounsTime: 'she/her · 1h',
-      avatarAsset: AppImages.user1,
-      content:
-          'Reminder that the Tuesday support call is open to anyone, camera off is normal, and nobody has to speak.',
-      likesCount: 1200,
-      commentsCount: 311,
-      isLiked: false,
-    ),
-  ];
-
   // Tab-specific feed stores to keep tabs independent and smooth
   final List<ReelItemModel> _forYouReels = <ReelItemModel>[];
-  final List<PostItemModel> _forYouPosts =
-      List<PostItemModel>.from(_defaultForYouPosts);
+  final List<PostItemModel> _forYouPosts = <PostItemModel>[];
 
   final List<ReelItemModel> _followingReels = <ReelItemModel>[];
   final List<PostItemModel> _followingPosts = <PostItemModel>[];
@@ -93,6 +96,7 @@ class HomeFeedProvider extends ChangeNotifier {
   SubMode get activeSubMode => _activeSubMode;
   String get selectedCommunityFilter => _selectedCommunityFilter;
   String? get selectedCommunityId => _selectedCommunityId;
+  MediaUploadService? get mediaService => _mediaService;
 
   bool get isLoadingFeed {
     switch (_activeTopTab) {
@@ -106,13 +110,40 @@ class HomeFeedProvider extends ChangeNotifier {
   }
 
   String _prefsKeyForUser(String userId) => 'user_liked_posts_$userId';
+  String _prefsKeyForSaved(String userId) => 'user_saved_posts_$userId';
 
   /// Synchronize feed with currently authenticated user.
   /// Isolates like states per user so each account has their own likes.
-  Future<void> updateUser(String? newUserId) async {
+  Future<void> updateUser(String? newUserId, {dynamic currentUser}) async {
+    if (newUserId != null && currentUser != null) {
+      try {
+        final String? u = (currentUser.username as String?)?.trim();
+        final String? d = (currentUser.displayName as String?)?.trim();
+        final String? a = (currentUser.avatarUrl as String?)?.trim();
+        final bool? h = (currentUser.hideMyLikes as bool?);
+        if (u != null && u.isNotEmpty) {
+          final AuthorInfo selfInfo = AuthorInfo(
+            id: newUserId,
+            username: u,
+            displayName: (d != null && d.isNotEmpty) ? d : u,
+            avatarUrl: a,
+            hideMyLikes: h,
+          );
+          AuthorProfileCache.set(newUserId, selfInfo);
+          _enrichFeedWithAuthor(selfInfo);
+        }
+      } catch (_) {}
+    }
+
     if (_currentUserId == newUserId) return;
     _currentUserId = newUserId;
+    if (newUserId != null && newUserId.isNotEmpty) {
+      _isGuest = false;
+    } else {
+      _isGuest = true;
+    }
     _userLikedPostIds.clear();
+    _userSavedPostIds.clear();
 
     if (newUserId != null && newUserId.isNotEmpty) {
       try {
@@ -121,27 +152,205 @@ class HomeFeedProvider extends ChangeNotifier {
             prefs.getStringList(_prefsKeyForUser(newUserId));
         if (savedLikes != null) {
           _userLikedPostIds.addAll(savedLikes);
+          for (final String id in savedLikes) {
+            PostInteractionRegistry.seedPersisted(id, isLiked: true);
+          }
+        }
+        final List<String>? savedPosts =
+            prefs.getStringList(_prefsKeyForSaved(newUserId));
+        if (savedPosts != null) {
+          _userSavedPostIds.addAll(savedPosts);
+          for (final String id in savedPosts) {
+            PostInteractionRegistry.seedPersisted(id, isSaved: true);
+          }
         }
       } catch (e) {
-        debugPrint('⚠️ [HomeFeedProvider] Error loading user likes: $e');
+        debugPrint('⚠️ [HomeFeedProvider] Error loading user likes/saves: $e');
       }
     }
 
     _syncInMemLikedState();
     notifyListeners();
 
+    // Fetch live likes and saves from backend API at start
+    if (newUserId != null && newUserId.isNotEmpty) {
+      _fetchBackendLikesAndSaves(newUserId);
+    }
+
     // Refresh active feed to fetch latest like counts
     await loadFeed(force: true);
+  }
+
+  /// Query /users/me/likes and /users/me/saved at startup so all liked & saved items are known
+  Future<void> _fetchBackendLikesAndSaves(String userId) async {
+    if (_contentService == null || _isGuest) return;
+    try {
+      final List<dynamic> results = await Future.wait<dynamic>(<Future<dynamic>>[
+        _contentService!.getLikedPosts(),
+        _contentService!.getSavedPosts(),
+      ]);
+
+      if (_currentUserId != userId) return;
+
+      final List<PostResponseModel> liked = results[0] as List<PostResponseModel>;
+      final List<PostResponseModel> saved = results[1] as List<PostResponseModel>;
+
+      bool changed = false;
+
+      if (liked.isNotEmpty) {
+        for (final PostResponseModel p in liked) {
+          if (p.id.isNotEmpty && _userLikedPostIds.add(p.id)) {
+            changed = true;
+          }
+          // Seed registry so like state is immediately available across all screens
+          PostInteractionRegistry.seedFromServer(
+            p.id,
+            isLiked: true,
+            isSaved: _userSavedPostIds.contains(p.id),
+            likesCount: p.likesCount,
+            commentsCount: p.commentsCount,
+          );
+        }
+      }
+
+      if (saved.isNotEmpty) {
+        for (final PostResponseModel p in saved) {
+          if (p.id.isNotEmpty && _userSavedPostIds.add(p.id)) {
+            changed = true;
+          }
+          // Seed registry so save state is immediately available across all screens
+          PostInteractionRegistry.seedFromServer(
+            p.id,
+            isLiked: _userLikedPostIds.contains(p.id),
+            isSaved: true,
+            likesCount: p.likesCount,
+            commentsCount: p.commentsCount,
+          );
+        }
+      }
+
+      if (changed) {
+        await _persistUserLikes();
+        await _persistUserSaved();
+        _syncInMemLikedState();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('⚠️ [HomeFeedProvider] Failed to fetch backend likes/saves: $e');
+    }
+  }
+
+  Future<void> _resolveAuthorsForPosts(List<PostResponseModel> posts) async {
+    if (_contentService == null) return;
+
+    final Set<String> needed = <String>{};
+    for (final PostResponseModel post in posts) {
+      final String? id = post.authorId?.trim();
+      if (id != null && id.isNotEmpty && !AuthorProfileCache.contains(id)) {
+        needed.add(id);
+      }
+    }
+
+    if (needed.isEmpty) return;
+
+    try {
+      await Future.wait(
+        needed.map((String id) async {
+          try {
+            final AuthorInfo? info = await _contentService!.getAuthorInfo(id);
+            if (info != null) {
+              _enrichFeedWithAuthor(info);
+            }
+          } catch (_) {}
+        }),
+      );
+    } catch (_) {}
+  }
+
+  void _enrichFeedWithAuthor(AuthorInfo info) {
+    final String cleanId = info.id.trim();
+    final String formattedUsername =
+        info.username.startsWith('@') ? info.username : '@${info.username}';
+
+    bool changed = false;
+
+    void updateReelList(List<ReelItemModel> list) {
+      for (int i = 0; i < list.length; i++) {
+        if (list[i].authorId?.trim() == cleanId) {
+          list[i] = list[i].copyWith(
+            authorDisplayName: info.displayName,
+            username: formattedUsername,
+            avatarAsset: (info.avatarUrl != null && info.avatarUrl!.isNotEmpty)
+                ? info.avatarUrl
+                : list[i].avatarAsset,
+            isAuthorPrivate: info.isPrivate,
+            allowCommentsFrom: info.allowCommentsFrom,
+          );
+          changed = true;
+        }
+      }
+    }
+
+    void updatePostList(List<PostItemModel> list) {
+      for (int i = 0; i < list.length; i++) {
+        if (list[i].authorId?.trim() == cleanId) {
+          list[i] = list[i].copyWith(
+            authorDisplayName: info.displayName,
+            username: formattedUsername,
+            avatarAsset: (info.avatarUrl != null && info.avatarUrl!.isNotEmpty)
+                ? info.avatarUrl
+                : list[i].avatarAsset,
+            isAuthorPrivate: info.isPrivate,
+            allowCommentsFrom: info.allowCommentsFrom,
+          );
+          changed = true;
+        }
+      }
+    }
+
+    updateReelList(_forYouReels);
+    updateReelList(_followingReels);
+    updateReelList(_communityReels);
+    updatePostList(_forYouPosts);
+    updatePostList(_followingPosts);
+    updatePostList(_communityPosts);
+
+    // If author is private and current viewer does NOT follow them and is not author,
+    // evict from For You feed immediately.
+    if (info.isPrivate) {
+      final bool isCurrentUser = _currentUserId != null &&
+          _currentUserId!.trim().toLowerCase() == cleanId.toLowerCase();
+      final bool isFollowing = UserRelationshipCache.isFollowing(
+        userId: cleanId,
+        username: info.username,
+      );
+      if (!isCurrentUser && !isFollowing) {
+        final int beforeR = _forYouReels.length;
+        _forYouReels.removeWhere((ReelItemModel r) => r.authorId?.trim() == cleanId);
+        final int beforeP = _forYouPosts.length;
+        _forYouPosts.removeWhere((PostItemModel p) => p.authorId?.trim() == cleanId);
+        if (_forYouReels.length != beforeR || _forYouPosts.length != beforeP) {
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      notifyListeners();
+    }
   }
 
   void _syncInMemLikedState() {
     void syncReels(List<ReelItemModel> list) {
       for (int i = 0; i < list.length; i++) {
         final ReelItemModel r = list[i];
-        final bool shouldBeLiked =
-            _currentUserId != null && _userLikedPostIds.contains(r.id);
-        if (r.isLiked != shouldBeLiked) {
-          list[i] = r.copyWith(isLiked: shouldBeLiked);
+        final bool shouldBeLiked = _userLikedPostIds.contains(r.id);
+        final bool shouldBeSaved = _userSavedPostIds.contains(r.id);
+        if (r.isLiked != shouldBeLiked || r.isSaved != shouldBeSaved) {
+          list[i] = r.copyWith(
+            isLiked: shouldBeLiked,
+            isSaved: shouldBeSaved,
+          );
         }
       }
     }
@@ -149,10 +358,13 @@ class HomeFeedProvider extends ChangeNotifier {
     void syncPosts(List<PostItemModel> list) {
       for (int i = 0; i < list.length; i++) {
         final PostItemModel p = list[i];
-        final bool shouldBeLiked =
-            _currentUserId != null && _userLikedPostIds.contains(p.id);
-        if (p.isLiked != shouldBeLiked) {
-          list[i] = p.copyWith(isLiked: shouldBeLiked);
+        final bool shouldBeLiked = _userLikedPostIds.contains(p.id);
+        final bool shouldBeSaved = _userSavedPostIds.contains(p.id);
+        if (p.isLiked != shouldBeLiked || p.isSaved != shouldBeSaved) {
+          list[i] = p.copyWith(
+            isLiked: shouldBeLiked,
+            isSaved: shouldBeSaved,
+          );
         }
       }
     }
@@ -179,6 +391,19 @@ class HomeFeedProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> _persistUserSaved() async {
+    if (_currentUserId == null || _currentUserId!.isEmpty) return;
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        _prefsKeyForSaved(_currentUserId!),
+        _userSavedPostIds.toList(),
+      );
+    } catch (e) {
+      debugPrint('⚠️ [HomeFeedProvider] Error saving user saves: $e');
+    }
+  }
+
   List<ReelItemModel> get reels {
     switch (_activeTopTab) {
       case TopTab.following:
@@ -192,13 +417,17 @@ class HomeFeedProvider extends ChangeNotifier {
 
   bool _isValidPostItem(PostItemModel p) {
     final String t = p.postType.toUpperCase().trim();
-    if (t == 'VIDEO' || t == 'REEL') return false;
+    // Only PHOTO, IMAGE, or TEXT are allowed in the posts feed
+    if (t != 'PHOTO' && t != 'IMAGE' && t != 'TEXT') return false;
+
     final String? img = p.postImageUrl?.toLowerCase();
     if (img != null &&
         (img.endsWith('.mp4') ||
             img.endsWith('.mov') ||
             img.endsWith('.webm') ||
-            img.endsWith('.mkv'))) {
+            img.endsWith('.mkv') ||
+            img.contains('/videos/') ||
+            img.contains('/video/'))) {
       return false;
     }
     final bool hasText = p.content.trim().isNotEmpty;
@@ -220,6 +449,19 @@ class HomeFeedProvider extends ChangeNotifier {
           lower.contains('/videos/') ||
           lower.contains('/video/')) {
         return true;
+      }
+      final MediaUploadResult? cached = _mediaCache[ref];
+      if (cached != null) {
+        final String? u = (cached.url ?? cached.downloadUrl)?.toLowerCase();
+        if (u != null &&
+            (u.endsWith('.mp4') ||
+                u.endsWith('.mov') ||
+                u.endsWith('.webm') ||
+                u.endsWith('.mkv') ||
+                u.contains('/videos/') ||
+                u.contains('/video/'))) {
+          return true;
+        }
       }
     }
     return false;
@@ -250,7 +492,7 @@ class HomeFeedProvider extends ChangeNotifier {
   }
 
   // ── Helpers to Build Reel & Post Models from Backend Response ──────────────
-  Future<ReelItemModel> _buildReelItem(PostResponseModel post) async {
+  ReelItemModel _buildReelItem(PostResponseModel post) {
     String? videoUrl;
     String? thumbnailUrl;
 
@@ -258,41 +500,127 @@ class HomeFeedProvider extends ChangeNotifier {
       final String mediaId = post.mediaRefs.first.trim();
       if (mediaId.startsWith('http://') || mediaId.startsWith('https://')) {
         videoUrl = mediaId;
-      } else if (_mediaService != null) {
-        MediaUploadResult? media = _mediaCache[mediaId];
-        if (media == null) {
-          try {
-            media = await _mediaService!.getMediaStatus(mediaId);
-            _mediaCache[mediaId] = media;
-          } catch (e) {
-            debugPrint('⚠️ [HomeFeed] Could not resolve reel media $mediaId: $e');
-          }
+        if (mediaId.contains('/videos/processed/')) {
+          thumbnailUrl = mediaId.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+        } else {
+          thumbnailUrl = (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty)
+              ? post.thumbnailUrl
+              : (post.postImageUrl != null &&
+                      !post.postImageUrl!.endsWith('.mp4') &&
+                      !post.postImageUrl!.endsWith('.m3u8'))
+                  ? post.postImageUrl
+                  : null;
         }
-        videoUrl = media?.url ?? media?.downloadUrl;
-        thumbnailUrl = media?.thumbnailUrl;
+      } else {
+        // mediaRef is a raw UUID from the upload step.
+        // Build the HLS playlist URL for ExoPlayer.
+        final String clean = mediaId
+            .replaceAll(RegExp(r'^/+'), '')
+            .replaceAll(RegExp(r'^media/'), '');
+        videoUrl = '${AppConfig.cdnUrl}/videos/processed/$clean/master.m3u8';
+        thumbnailUrl = (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty)
+            ? post.thumbnailUrl
+            : '${AppConfig.cdnUrl}/videos/processed/$clean/thumb.0000000.jpg';
       }
     }
 
-    final bool isLiked = _currentUserId != null &&
-        (_userLikedPostIds.contains(post.id) || post.isLiked);
-    if (isLiked && _currentUserId != null) {
-      _userLikedPostIds.add(post.id);
+    if ((thumbnailUrl == null || thumbnailUrl.isEmpty) &&
+        post.thumbnailUrl != null &&
+        post.thumbnailUrl!.isNotEmpty) {
+      thumbnailUrl = post.thumbnailUrl;
     }
 
-    final String resolvedUsername = (post.authorName != null && post.authorName!.isNotEmpty)
-        ? (post.authorName!.startsWith('@') ? post.authorName! : '@${post.authorName!}')
-        : (post.authorId != null && post.authorId!.length >= 6
-            ? '@user_${post.authorId!.substring(0, 6)}'
-            : (post.id.length >= 6 ? '@user_${post.id.substring(0, 6)}' : '@creator'));
+    // Prefer the backend-supplied postImageUrl (verified CDN URL) as thumbnail if valid image.
+    if ((thumbnailUrl == null || thumbnailUrl.isEmpty) &&
+        post.postImageUrl != null &&
+        post.postImageUrl!.isNotEmpty &&
+        !post.postImageUrl!.endsWith('.mp4') &&
+        !post.postImageUrl!.endsWith('.m3u8')) {
+      thumbnailUrl = post.postImageUrl;
+    }
+
+    if ((thumbnailUrl == null || thumbnailUrl.isEmpty) &&
+        videoUrl != null &&
+        videoUrl.contains('/videos/processed/')) {
+      thumbnailUrl = videoUrl.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+    }
+
+    final bool isLiked = PostInteractionRegistry.isLiked(
+      post.id,
+      fallback: _userLikedPostIds.contains(post.id) || post.isLiked,
+    );
+    if (isLiked) {
+      _userLikedPostIds.add(post.id);
+    }
+    final bool isSaved = PostInteractionRegistry.isSaved(
+      post.id,
+      fallback: _userSavedPostIds.contains(post.id) || post.isSaved,
+    );
+    if (isSaved) {
+      _userSavedPostIds.add(post.id);
+    }
+    final int baseCount = post.likesCount;
+    final int effectiveLikesCount = PostInteractionRegistry.getLikeCount(
+      post.id,
+      fallback: (isLiked && baseCount == 0) ? 1 : baseCount,
+    );
+    final int effectiveCommentsCount =
+        CommentCountRegistry.getOr(post.id, post.commentsCount);
+
+    // Seed registry so counts/states are available across all screens
+    PostInteractionRegistry.seedFromServer(
+      post.id,
+      isLiked: isLiked,
+      isSaved: isSaved,
+      likesCount: effectiveLikesCount,
+      commentsCount: post.commentsCount,
+    );
+
+    final AuthorInfo? cachedAuthor =
+        (post.authorId != null) ? AuthorProfileCache.get(post.authorId!) : null;
+
+    final String? rawReelDisplayName = (cachedAuthor != null && cachedAuthor.displayName.isNotEmpty)
+        ? cachedAuthor.displayName
+        : ((post.authorDisplayName != null && post.authorDisplayName!.trim().isNotEmpty)
+            ? post.authorDisplayName!.trim()
+            : null);
+
+    final String resolvedReelDisplayName = rawReelDisplayName ??
+        ((cachedAuthor != null && cachedAuthor.username.isNotEmpty)
+            ? cachedAuthor.username
+            : ((post.authorName != null && post.authorName!.trim().isNotEmpty)
+                ? post.authorName!.trim()
+                : (post.authorId != null && post.authorId!.length >= 6
+                    ? 'User ${post.authorId!.substring(0, 6)}'
+                    : 'Creator')));
+
+    final String resolvedUsername = (cachedAuthor != null && cachedAuthor.username.isNotEmpty)
+        ? (cachedAuthor.username.startsWith('@') ? cachedAuthor.username : '@${cachedAuthor.username}')
+        : ((post.authorName != null && post.authorName!.trim().isNotEmpty)
+            ? (post.authorName!.trim().startsWith('@') ? post.authorName!.trim() : '@${post.authorName!.trim()}')
+            : (rawReelDisplayName != null
+                ? '@${rawReelDisplayName.toLowerCase().replaceAll(' ', '_')}'
+                : (post.authorId != null && post.authorId!.length >= 6
+                    ? '@user_${post.authorId!.substring(0, 6)}'
+                    : (post.id.length >= 6 ? '@user_${post.id.substring(0, 6)}' : '@creator'))));
 
     final String resolvedAvatar = (post.authorAvatar != null && post.authorAvatar!.isNotEmpty)
         ? post.authorAvatar!
-        : AppImages.user1;
+        : ((cachedAuthor?.avatarUrl != null && cachedAuthor!.avatarUrl!.isNotEmpty)
+            ? cachedAuthor.avatarUrl!
+            : AppImages.defaultAvatar);
+
+    final bool resolvedIsAuthorPrivate =
+        post.isAuthorPrivate || (cachedAuthor?.isPrivate == true);
+    final String resolvedAllowCommentsFrom =
+        (post.allowCommentsFrom.isNotEmpty && post.allowCommentsFrom != 'everyone')
+            ? post.allowCommentsFrom
+            : (cachedAuthor?.allowCommentsFrom ?? post.allowCommentsFrom);
 
     return ReelItemModel(
       id: post.id,
       authorId: post.authorId,
-      authorDisplayName: post.authorDisplayName,
+      authorDisplayName: resolvedReelDisplayName,
       username: resolvedUsername,
       pronounsTime: _formatTime(post.createdAt),
       avatarAsset: resolvedAvatar,
@@ -300,9 +628,18 @@ class HomeFeedProvider extends ChangeNotifier {
       videoUrl: videoUrl,
       thumbnailUrl: thumbnailUrl,
       caption: post.body.isNotEmpty ? post.body : post.caption,
-      likesCount: post.likesCount,
-      commentsCount: post.commentsCount,
+      likesCount: effectiveLikesCount,
+      commentsCount: effectiveCommentsCount,
+      viewsCount: post.viewsCount,
       isLiked: isLiked,
+      isSaved: isSaved,
+      allowComments: post.allowComments,
+      allowDownloads: post.allowDownloads,
+      isAuthorPrivate: resolvedIsAuthorPrivate,
+      allowCommentsFrom: resolvedAllowCommentsFrom,
+      hasLikeCount: post.hasLikeCount,
+      hideLikes: post.hideLikes || (cachedAuthor?.hideMyLikes == true),
+      visibility: post.visibility,
       tags: post.tags,
       communityId: post.communityId,
       durationText: (post.duration != null && post.duration!.isNotEmpty)
@@ -311,8 +648,9 @@ class HomeFeedProvider extends ChangeNotifier {
     );
   }
 
-  Future<PostItemModel> _buildPostItem(PostResponseModel post) async {
+  PostItemModel _buildPostItem(PostResponseModel post) {
     String? imageUrl = post.postImageUrl;
+    bool isActuallyVideo = false;
 
     if (imageUrl == null || imageUrl.isEmpty) {
       if (post.mediaRefs.isNotEmpty) {
@@ -323,119 +661,232 @@ class HomeFeedProvider extends ChangeNotifier {
           final bool isVideoFile = lower.endsWith('.mp4') ||
               lower.endsWith('.mov') ||
               lower.endsWith('.webm') ||
-              lower.endsWith('.mkv');
-          if (isVideoFile) continue;
+              lower.endsWith('.mkv') ||
+              lower.contains('/videos/') ||
+              lower.contains('/video/');
+          if (isVideoFile) {
+            isActuallyVideo = true;
+            continue;
+          }
 
-          if (ref.startsWith('http://') || ref.startsWith('https://')) {
+          if (ref.startsWith('http://') ||
+              ref.startsWith('https://') ||
+              ref.startsWith('assets/')) {
             imageUrl = ref;
             break;
-          } else if (ref.startsWith('assets/')) {
-            imageUrl = ref;
+          } else if (post.authorId != null && post.authorId!.isNotEmpty) {
+            final String clean = ref
+                .replaceAll(RegExp(r'^/+'), '')
+                .replaceAll(RegExp(r'^media/'), '');
+            imageUrl =
+                '${AppConfig.cdnUrl}/images/original/${post.authorId}/$clean.jpg';
             break;
-          } else if (ref.startsWith('/') ||
-              lower.endsWith('.jpg') ||
-              lower.endsWith('.jpeg') ||
-              lower.endsWith('.png') ||
-              lower.endsWith('.webp') ||
-              lower.endsWith('.gif')) {
-            final String base = AppConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
-            final String path = ref.startsWith('/') ? ref : '/$ref';
-            imageUrl = '$base$path';
+          } else if (AppConfig.baseUrl.isNotEmpty) {
+            final String clean = ref
+                .replaceAll(RegExp(r'^/+'), '')
+                .replaceAll(RegExp(r'^media/'), '');
+            imageUrl =
+                '${AppConfig.baseUrl.replaceAll(RegExp(r"/+$"), "")}/media/$clean';
             break;
-          } else if (_mediaService != null) {
-
-            MediaUploadResult? media = _mediaCache[ref];
-            if (media == null) {
-              try {
-                media = await _mediaService!.getMediaStatus(ref);
-                _mediaCache[ref] = media;
-              } catch (e) {
-                debugPrint('⚠️ [HomeFeed] Could not resolve post media $ref: $e');
-              }
-            }
-            final String? resolved =
-                media?.url ?? media?.downloadUrl ?? media?.thumbnailUrl;
-            if (resolved != null && resolved.isNotEmpty) {
-              final String resLower = resolved.toLowerCase();
-              if (!resLower.endsWith('.mp4') &&
-                  !resLower.endsWith('.mov') &&
-                  !resLower.endsWith('.webm') &&
-                  !resLower.endsWith('.mkv')) {
-                imageUrl = resolved;
-                break;
-              }
-            } else if (ref.length >= 24 && AppConfig.baseUrl.isNotEmpty) {
-              // Direct gateway media endpoint fallback
-              final String base = AppConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
-              imageUrl = '$base/media/$ref';
-              break;
-            }
-          } else {
-            // No mediaService — use gateway endpoint directly for opaque IDs
-            if (ref.length >= 24 && AppConfig.baseUrl.isNotEmpty) {
-              final String base = AppConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
-              imageUrl = '$base/media/$ref';
-              break;
-            }
           }
         }
       }
     }
 
-    final bool isLiked = _currentUserId != null &&
-        (_userLikedPostIds.contains(post.id) || post.isLiked);
-    if (isLiked && _currentUserId != null) {
-      _userLikedPostIds.add(post.id);
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      final String trimmed = imageUrl.trim();
+      if (!trimmed.startsWith('http://') &&
+          !trimmed.startsWith('https://') &&
+          !trimmed.startsWith('assets/')) {
+        final String clean = trimmed
+            .replaceAll(RegExp(r'^/+'), '')
+            .replaceAll(RegExp(r'^media/'), '');
+        if (post.authorId != null && post.authorId!.isNotEmpty) {
+          imageUrl =
+              '${AppConfig.cdnUrl}/images/original/${post.authorId}/$clean.jpg';
+        } else {
+          final String base = AppConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
+          imageUrl = '$base/media/$clean';
+        }
+      }
     }
 
-    final String resolvedPostUsername = (post.authorName != null && post.authorName!.isNotEmpty)
-        ? (post.authorName!.startsWith('@') ? post.authorName! : '@${post.authorName!}')
-        : (post.authorId != null && post.authorId!.length >= 6
-            ? '@user_${post.authorId!.substring(0, 6)}'
-            : (post.id.length >= 6 ? '@user_${post.id.substring(0, 6)}' : '@creator'));
+    final bool isLiked = PostInteractionRegistry.isLiked(
+      post.id,
+      fallback: _userLikedPostIds.contains(post.id) || post.isLiked,
+    );
+    if (isLiked) {
+      _userLikedPostIds.add(post.id);
+    }
+    final bool isSaved = PostInteractionRegistry.isSaved(
+      post.id,
+      fallback: _userSavedPostIds.contains(post.id) || post.isSaved,
+    );
+    if (isSaved) {
+      _userSavedPostIds.add(post.id);
+    }
+    final int baseCount = post.likesCount;
+    final int effectiveLikesCount = PostInteractionRegistry.getLikeCount(
+      post.id,
+      fallback: (isLiked && baseCount == 0) ? 1 : baseCount,
+    );
+    final int effectiveCommentsCount =
+        CommentCountRegistry.getOr(post.id, post.commentsCount);
+
+    // Seed registry so counts/states are available across all screens
+    PostInteractionRegistry.seedFromServer(
+      post.id,
+      isLiked: isLiked,
+      isSaved: isSaved,
+      likesCount: effectiveLikesCount,
+      commentsCount: post.commentsCount,
+    );
+
+    final AuthorInfo? cachedAuthor =
+        (post.authorId != null) ? AuthorProfileCache.get(post.authorId!) : null;
+
+    final String? rawPostDisplayName = (cachedAuthor != null && cachedAuthor.displayName.isNotEmpty)
+        ? cachedAuthor.displayName
+        : ((post.authorDisplayName != null && post.authorDisplayName!.trim().isNotEmpty)
+            ? post.authorDisplayName!.trim()
+            : null);
+
+    final String resolvedPostDisplayName = rawPostDisplayName ??
+        ((cachedAuthor != null && cachedAuthor.username.isNotEmpty)
+            ? cachedAuthor.username
+            : ((post.authorName != null && post.authorName!.trim().isNotEmpty)
+                ? post.authorName!.trim()
+                : (post.authorId != null && post.authorId!.length >= 6
+                    ? 'User ${post.authorId!.substring(0, 6)}'
+                    : 'Creator')));
+
+    final String resolvedPostUsername = (cachedAuthor != null && cachedAuthor.username.isNotEmpty)
+        ? (cachedAuthor.username.startsWith('@') ? cachedAuthor.username : '@${cachedAuthor.username}')
+        : ((post.authorName != null && post.authorName!.trim().isNotEmpty)
+            ? (post.authorName!.trim().startsWith('@') ? post.authorName!.trim() : '@${post.authorName!.trim()}')
+            : (rawPostDisplayName != null
+                ? '@${rawPostDisplayName.toLowerCase().replaceAll(' ', '_')}'
+                : (post.authorId != null && post.authorId!.length >= 6
+                    ? '@user_${post.authorId!.substring(0, 6)}'
+                    : (post.id.length >= 6 ? '@user_${post.id.substring(0, 6)}' : '@creator'))));
 
     final String resolvedPostAvatar = (post.authorAvatar != null && post.authorAvatar!.isNotEmpty)
         ? post.authorAvatar!
-        : AppImages.user4;
+        : ((cachedAuthor?.avatarUrl != null && cachedAuthor!.avatarUrl!.isNotEmpty)
+            ? cachedAuthor.avatarUrl!
+            : AppImages.defaultAvatar);
+
+    final bool isFinalVideo = isActuallyVideo ||
+        post.type.toUpperCase() == 'VIDEO' ||
+        post.type.toUpperCase() == 'REEL';
+
+    final String normalizedType;
+    if (isFinalVideo) {
+      normalizedType = 'VIDEO';
+    } else if (post.type.isNotEmpty) {
+      final String ut = post.type.toUpperCase().trim();
+      normalizedType = (ut == 'PHOTO' || ut == 'IMAGE') ? 'PHOTO' : (ut == 'TEXT' ? 'TEXT' : ut);
+    } else {
+      normalizedType = (imageUrl != null && imageUrl.isNotEmpty) ? 'PHOTO' : 'TEXT';
+    }
+
+    final bool resolvedIsAuthorPrivate =
+        post.isAuthorPrivate || (cachedAuthor?.isPrivate == true);
+    final String resolvedAllowCommentsFrom =
+        (post.allowCommentsFrom.isNotEmpty && post.allowCommentsFrom != 'everyone')
+            ? post.allowCommentsFrom
+            : (cachedAuthor?.allowCommentsFrom ?? post.allowCommentsFrom);
 
     return PostItemModel(
       id: post.id,
       authorId: post.authorId,
+      authorDisplayName: resolvedPostDisplayName,
       username: resolvedPostUsername,
       pronounsTime: _formatTime(post.createdAt),
       avatarAsset: resolvedPostAvatar,
       content: post.body.isNotEmpty ? post.body : post.caption,
-      likesCount: post.likesCount,
-      commentsCount: post.commentsCount,
+      likesCount: effectiveLikesCount,
+      commentsCount: effectiveCommentsCount,
+      viewsCount: post.viewsCount,
       postImageUrl: imageUrl,
-      postType: post.type,
+      postType: normalizedType,
       communityId: post.communityId,
       isLiked: isLiked,
+      isSaved: isSaved,
+      allowComments: post.allowComments,
+      allowDownloads: post.allowDownloads,
+      isAuthorPrivate: resolvedIsAuthorPrivate,
+      allowCommentsFrom: resolvedAllowCommentsFrom,
+      hasLikeCount: post.hasLikeCount,
+      hideLikes: post.hideLikes || (cachedAuthor?.hideMyLikes == true),
+      visibility: post.visibility,
     );
   }
 
   // ── Unified Post & Reel Parser (used by Following & Community feeds) ───────
-  Future<_FeedBatch> _processPosts(List<PostResponseModel> rawPosts) async {
+  _FeedBatch _processPosts(List<PostResponseModel> rawPosts) {
     final List<ReelItemModel> parsedReels = <ReelItemModel>[];
     final List<PostItemModel> parsedPosts = <PostItemModel>[];
 
     for (final PostResponseModel post in rawPosts) {
+      if (post.isDeleted) {
+        continue;
+      }
+      final AuthorInfo? cachedAuthor =
+          (post.authorId != null) ? AuthorProfileCache.get(post.authorId!) : null;
+      final bool isAuthorPrivate =
+          post.isAuthorPrivate || (cachedAuthor?.isPrivate == true);
+
+      final bool isFollowing = UserRelationshipCache.isFollowing(
+        userId: post.authorId,
+        username: post.authorName,
+      );
+
+      if (!PostVisibilityFilter.canViewPost(
+        visibility: post.visibility,
+        authorId: post.authorId,
+        authorUsername: post.authorName,
+        currentUserId: _currentUserId,
+        isGuest: _isGuest,
+        isFollowing: isFollowing,
+        isAuthorPrivate: isAuthorPrivate,
+      )) {
+        continue;
+      }
+
       final bool isVideo = _isReelOrVideo(post);
 
       if (isVideo) {
-        parsedReels.add(await _buildReelItem(post));
+        parsedReels.add(_buildReelItem(post));
       } else {
-        final PostItemModel item = await _buildPostItem(post);
-        if (_isValidPostItem(item)) {
+        final PostItemModel item = _buildPostItem(post);
+        final String itemType = item.postType.toUpperCase().trim();
+        if (itemType == 'VIDEO' || itemType == 'REEL') {
+          parsedReels.add(_buildReelItem(post));
+        } else if ((itemType == 'PHOTO' || itemType == 'IMAGE' || itemType == 'TEXT') &&
+            _isValidPostItem(item)) {
           parsedPosts.add(item);
         }
+      }
+    }
+
+    for (final ReelItemModel r in parsedReels) {
+      if (r.videoUrl != null && r.videoUrl!.isNotEmpty) {
+        VideoSizeLogger.logFeedVideoSize(
+          id: r.id,
+          title: r.username.isNotEmpty ? '@${r.username}' : r.caption,
+          videoUrl: r.videoUrl,
+          stage: 'Feed API Fetched',
+        );
       }
     }
 
     return _FeedBatch(reels: parsedReels, posts: parsedPosts);
   }
 
-  // ── 1. Load For You Feed (Strict Separation of Posts & Reels) ──────────────
+  // ── 1. Load For You Feed ─────────────────────────────────────────────────
+  // Logged-in: GET /feed/for-you (personalized, with Bearer token)
+  // Guest:     GET /posts/trending (no auth required)
   Future<void> loadForYouFeed({bool force = false}) async {
     if (_contentService == null) {
       _isLoadingForYou = false;
@@ -443,10 +894,7 @@ class HomeFeedProvider extends ChangeNotifier {
       return;
     }
 
-    if (!force &&
-        _forYouReels.isNotEmpty &&
-        _forYouPosts.isNotEmpty &&
-        !_forYouPosts.any((PostItemModel p) => p.id.startsWith('post_'))) {
+    if (!force && (_forYouReels.isNotEmpty || _forYouPosts.isNotEmpty)) {
       _isLoadingForYou = false;
       return;
     }
@@ -455,76 +903,52 @@ class HomeFeedProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Fetch Trending Reels (From /posts/trending, all treated as reels)
-      List<PostResponseModel> trendingPosts = <PostResponseModel>[];
-      try {
-        trendingPosts = await _contentService!.getTrendingPosts();
-      } catch (e) {
-        debugPrint('⚠️ [HomeFeedProvider] Error getting trending posts: $e');
-      }
+      final bool isAuthenticated =
+          !_isGuest && _currentUserId != null && _currentUserId!.isNotEmpty;
 
-      final List<ReelItemModel> liveReels = <ReelItemModel>[];
-      for (final PostResponseModel post in trendingPosts) {
+      List<PostResponseModel> rawPosts = <PostResponseModel>[];
+
+      if (isAuthenticated) {
+        // Logged-in: ONLY call GET /feed/for-you
         try {
-          liveReels.add(await _buildReelItem(post));
-        } catch (e) {
-          debugPrint('⚠️ [HomeFeedProvider] Error building reel: $e');
-        }
-      }
-
-      // 2. Fetch General Feed Posts (/posts, /search, /feed/community)
-      List<PostResponseModel> feedPosts = <PostResponseModel>[];
-      try {
-        feedPosts = await _contentService!.getFeedPosts();
-      } catch (e) {
-        debugPrint('⚠️ [HomeFeedProvider] Error getting feed posts: $e');
-      }
-
-      final List<PostItemModel> livePosts = <PostItemModel>[];
-      for (final PostResponseModel post in feedPosts) {
+          rawPosts = await _contentService!.getForYouFeed();
+        } catch (_) {}
+      } else {
+        // Guest: ONLY call GET /posts/trending
         try {
-          final bool isVideoOrReel = _isReelOrVideo(post);
-
-          // Video/Reel posts belong exclusively to Reels
-          if (isVideoOrReel) {
-            if (!liveReels.any((r) => r.id == post.id)) {
-              liveReels.add(await _buildReelItem(post));
-            }
-          } else {
-            final PostItemModel item = await _buildPostItem(post);
-            if (_isValidPostItem(item)) {
-              livePosts.add(item);
-            }
-          }
-        } catch (e) {
-          debugPrint('⚠️ [HomeFeedProvider] Error building post: $e');
-        }
+          rawPosts = await _contentService!.getTrendingPosts();
+        } catch (_) {}
       }
 
-      // Important: Never add trendingPosts to livePosts since trendingPosts are exclusively reels!
+      if (rawPosts.isNotEmpty) {
+        if (isAuthenticated) {
+          try {
+            final List<PostResponseModel> followingPosts =
+                await _contentService!.getFollowingFeed();
+            for (final PostResponseModel p in followingPosts) {
+              UserRelationshipCache.add(
+                userId: p.authorId,
+                username: p.authorName,
+              );
+            }
+          } catch (_) {}
+        }
+        await _resolveAuthorsForPosts(rawPosts);
+        final _FeedBatch batch = _processPosts(rawPosts);
 
-      if (liveReels.isNotEmpty || _forYouReels.isEmpty) {
         _forYouReels
           ..clear()
-          ..addAll(liveReels);
-      }
+          ..addAll(batch.reels);
 
-      if (livePosts.isNotEmpty) {
         _forYouPosts
           ..clear()
-          ..addAll(livePosts);
-      } else {
-        // Fallback to high quality default curated posts if no feed posts exist
-        _forYouPosts
-          ..clear()
-          ..addAll(_defaultForYouPosts);
-      }
+          ..addAll(batch.posts);
 
-      if (_forYouReels.isNotEmpty && _activeTopTab == TopTab.forYou) {
-        ReelVideoPreloader.instance.preloadSurrounding(_forYouReels, 0);
+        if (_forYouReels.isNotEmpty && _activeTopTab == TopTab.forYou) {
+          ReelVideoPreloader.instance.preloadSurrounding(_forYouReels, 0);
+        }
       }
-    } catch (e) {
-      debugPrint('❌ [HomeFeedProvider] Failed to load For You feed: $e');
+    } catch (_) {
     } finally {
       _isLoadingForYou = false;
       notifyListeners();
@@ -547,7 +971,17 @@ class HomeFeedProvider extends ChangeNotifier {
       final List<PostResponseModel> rawPosts =
           await _contentService!.getFollowingFeed();
 
-      final _FeedBatch batch = await _processPosts(rawPosts);
+      // Pre-resolve missing authors before building feed items
+      await _resolveAuthorsForPosts(rawPosts);
+
+      for (final PostResponseModel p in rawPosts) {
+        UserRelationshipCache.add(
+          userId: p.authorId,
+          username: p.authorName,
+        );
+      }
+
+      final _FeedBatch batch = _processPosts(rawPosts);
 
       _followingReels
         ..clear()
@@ -568,7 +1002,7 @@ class HomeFeedProvider extends ChangeNotifier {
     }
   }
 
-  // ── 3. Load Community Feed (GET /feed/community?...) ───────────────────────
+  // ── 3. Load Community Feed (All Communities -> GET /posts; Filtered -> GET /posts?communityId=:id) ──
   Future<void> loadCommunityFeed({bool force = false}) async {
     if (_contentService == null) return;
     if (_isLoadingCommunities) return;
@@ -585,16 +1019,22 @@ class HomeFeedProvider extends ChangeNotifier {
     try {
       final List<PostResponseModel> rawPosts;
       if (_selectedCommunityId != null && _selectedCommunityId!.isNotEmpty) {
-        rawPosts = await _contentService!.getCommunityFeed(
-          communityId: _selectedCommunityId,
+        debugPrint(
+            '🏘️ [HomeFeed] Fetching posts for community: $_selectedCommunityId (GET ${ApiEndpoints.postsByCommunity(_selectedCommunityId!)})');
+        rawPosts = await _contentService!.getPostsByCommunity(
+          _selectedCommunityId!,
         );
       } else {
-        rawPosts = await _contentService!.getCommunityFeed(
-          scope: 'joined',
-        );
+        // "All Communities" -> Always call GET /posts directly
+        debugPrint(
+            '🏘️ [HomeFeed] Fetching All Communities posts (GET ${ApiEndpoints.posts})');
+        rawPosts = await _contentService!.getFeedPosts();
       }
 
-      final _FeedBatch batch = await _processPosts(rawPosts);
+      // Pre-resolve missing authors before building feed items
+      await _resolveAuthorsForPosts(rawPosts);
+
+      final _FeedBatch batch = _processPosts(rawPosts);
 
       _communityReels
         ..clear()
@@ -603,6 +1043,8 @@ class HomeFeedProvider extends ChangeNotifier {
       _communityPosts
         ..clear()
         ..addAll(batch.posts);
+
+      debugPrint('🏘️ [HomeFeed] Populated Community Feed: ${_communityReels.length} reels, ${_communityPosts.length} posts');
 
       if (_communityReels.isNotEmpty && _activeTopTab == TopTab.communities) {
         ReelVideoPreloader.instance.preloadSurrounding(_communityReels, 0);
@@ -646,8 +1088,13 @@ class HomeFeedProvider extends ChangeNotifier {
 
   // Record a view for a post/reel
   void recordView(String postId) {
-    if (_contentService != null && postId.contains('-')) {
+    if (_contentService != null &&
+        postId.isNotEmpty &&
+        !postId.startsWith('mock_') &&
+        !postId.startsWith('profile_reel_')) {
       _contentService!.recordView(postId);
+      _updateReelInAllLists(postId, (r) => r.copyWith(viewsCount: r.viewsCount + 1));
+      _updatePostInAllLists(postId, (p) => p.copyWith(viewsCount: p.viewsCount + 1));
     }
   }
 
@@ -674,11 +1121,14 @@ class HomeFeedProvider extends ChangeNotifier {
     updateInList(_communityPosts);
   }
 
-  // Increment comment count locally when comment is added
-  void incrementCommentCount(String postId) {
-    _updatePostInAllLists(postId, (p) => p.copyWith(commentsCount: p.commentsCount + 1));
-    _updateReelInAllLists(postId, (r) => r.copyWith(commentsCount: r.commentsCount + 1));
-    notifyListeners();
+  int _getExistingCommentsCount(String postId) {
+    for (final PostItemModel p in <PostItemModel>[..._forYouPosts, ..._followingPosts, ..._communityPosts]) {
+      if (p.id == postId) return p.commentsCount;
+    }
+    for (final ReelItemModel r in <ReelItemModel>[..._forYouReels, ..._followingReels, ..._communityReels]) {
+      if (r.id == postId) return r.commentsCount;
+    }
+    return 0;
   }
 
   // Actions
@@ -690,7 +1140,11 @@ class HomeFeedProvider extends ChangeNotifier {
 
   void setBottomNavIndex(int index) {
     if (index != 0) {
+      ReelVideoPreloader.instance.setFeedVisible(false);
       ReelVideoPreloader.instance.pauseAll();
+      ReelVideoPreloader.instance.muteAll();
+    } else {
+      ReelVideoPreloader.instance.setFeedVisible(true);
     }
     if (index == 0 && _bottomNavIndex != 0) {
       _activeTopTab = TopTab.forYou;
@@ -700,7 +1154,9 @@ class HomeFeedProvider extends ChangeNotifier {
   }
 
   void resetToHome() {
+    ReelVideoPreloader.instance.setFeedVisible(false);
     ReelVideoPreloader.instance.pauseAll();
+    ReelVideoPreloader.instance.muteAll();
     _bottomNavIndex = 0;
     _activeTopTab = TopTab.forYou;
     _activeSubMode = SubMode.reels;
@@ -732,7 +1188,7 @@ class HomeFeedProvider extends ChangeNotifier {
         break;
       case TopTab.communities:
         if (_communityReels.isEmpty && _communityPosts.isEmpty && !_isLoadingCommunities) {
-          loadCommunityFeed();
+          loadCommunityFeed(force: true);
         } else if (_communityReels.isNotEmpty) {
           ReelVideoPreloader.instance.preloadSurrounding(_communityReels, 0);
         }
@@ -746,6 +1202,12 @@ class HomeFeedProvider extends ChangeNotifier {
       ReelVideoPreloader.instance.pauseAll();
       if (_activeTopTab == TopTab.forYou && _forYouPosts.isEmpty) {
         loadForYouFeed();
+      } else if (_activeTopTab == TopTab.communities && _communityPosts.isEmpty) {
+        loadCommunityFeed(force: true);
+      }
+    } else if (mode == SubMode.reels) {
+      if (_activeTopTab == TopTab.communities && _communityReels.isEmpty) {
+        loadCommunityFeed(force: true);
       }
     }
     _activeSubMode = mode;
@@ -754,7 +1216,34 @@ class HomeFeedProvider extends ChangeNotifier {
 
   void setSelectedCommunityFilter(String val, {String? communityId}) {
     _selectedCommunityFilter = val;
-    _selectedCommunityId = communityId;
+    final bool isAllCommunities =
+        val.trim().toLowerCase() == 'all communities' || val.trim().isEmpty;
+    if (isAllCommunities) {
+      _selectedCommunityId = null;
+    } else {
+      _selectedCommunityId =
+          (communityId != null && communityId.trim().isNotEmpty)
+              ? communityId.trim()
+              : null;
+      if (_selectedCommunityId == null) {
+        try {
+          final dynamic cached = CacheManager.instance.get('all_communities');
+          if (cached is List) {
+            for (final dynamic item in cached) {
+              if (item is Map &&
+                  (item['name']?.toString().toLowerCase() ==
+                          val.toLowerCase() ||
+                      item['title']?.toString().toLowerCase() ==
+                          val.toLowerCase())) {
+                _selectedCommunityId =
+                    item['id']?.toString() ?? item['_id']?.toString();
+                break;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    }
     if (_activeTopTab != TopTab.communities) {
       _activeTopTab = TopTab.communities;
     }
@@ -762,7 +1251,7 @@ class HomeFeedProvider extends ChangeNotifier {
     loadCommunityFeed(force: true);
   }
 
-  Future<void> toggleLikeReel(String id, {ReelItemModel? fallbackReel}) async {
+  Future<void> toggleLikeReel(String id, {ReelItemModel? fallbackReel, bool? explicitLiked}) async {
     ReelItemModel? target;
     for (final List<ReelItemModel> list in <List<ReelItemModel>>[
       _forYouReels,
@@ -778,35 +1267,36 @@ class HomeFeedProvider extends ChangeNotifier {
     if (target == null && fallbackReel != null) {
       target = fallbackReel;
     }
-    if (target == null) {
-      final bool alreadyLiked = _userLikedPostIds.contains(id);
-      target = ReelItemModel(
-        id: id,
-        username: '@creator',
-        pronounsTime: '',
-        avatarAsset: '',
-        videoAsset: '',
-        caption: '',
-        likesCount: alreadyLiked ? 1 : 0,
-        commentsCount: 0,
-        isLiked: alreadyLiked,
-      );
-    }
+    final bool currentlyLiked = PostInteractionRegistry.isLiked(
+      id,
+      fallback: _userLikedPostIds.contains(id) || (target != null && target.isLiked),
+    );
+    final bool newLiked = explicitLiked ?? !currentlyLiked;
 
-    final bool newLiked = !target.isLiked;
-    final int newCount = newLiked
-        ? target.likesCount + 1
-        : (target.likesCount > 0 ? target.likesCount - 1 : 0);
+    final int currentCount = PostInteractionRegistry.getLikeCount(
+      id,
+      fallback: target?.likesCount ?? (currentlyLiked ? 1 : 0),
+    );
+
+    int newCount;
+    if (newLiked) {
+      newCount = currentlyLiked ? currentCount : currentCount + 1;
+      if (newCount < 1) newCount = 1;
+    } else {
+      newCount = currentlyLiked ? (currentCount > 0 ? currentCount - 1 : 0) : currentCount;
+    }
 
     _updateReelInAllLists(id, (r) => r.copyWith(isLiked: newLiked, likesCount: newCount));
     _updatePostInAllLists(id, (p) => p.copyWith(isLiked: newLiked, likesCount: newCount));
 
+    PostInteractionRegistry.setLiked(id, newLiked, newCount: newCount);
+
+    if (newLiked) {
+      _userLikedPostIds.add(id);
+    } else {
+      _userLikedPostIds.remove(id);
+    }
     if (_currentUserId != null) {
-      if (newLiked) {
-        _userLikedPostIds.add(id);
-      } else {
-        _userLikedPostIds.remove(id);
-      }
       _persistUserLikes();
     }
 
@@ -822,16 +1312,20 @@ class HomeFeedProvider extends ChangeNotifier {
         }
       } catch (err) {
         debugPrint('Error syncing like for reel $id: $err');
+        // Rollback optimistic update
+        final bool rollbackLiked = currentlyLiked;
+        final int rollbackCount = currentCount;
         _updateReelInAllLists(
           id,
-          (r) => r.copyWith(isLiked: target!.isLiked, likesCount: target.likesCount),
+          (r) => r.copyWith(isLiked: rollbackLiked, likesCount: rollbackCount),
         );
         _updatePostInAllLists(
           id,
-          (p) => p.copyWith(isLiked: target!.isLiked, likesCount: target.likesCount),
+          (p) => p.copyWith(isLiked: rollbackLiked, likesCount: rollbackCount),
         );
+        PostInteractionRegistry.setLiked(id, rollbackLiked, newCount: rollbackCount);
         if (_currentUserId != null) {
-          if (target.isLiked) {
+          if (rollbackLiked) {
             _userLikedPostIds.add(id);
           } else {
             _userLikedPostIds.remove(id);
@@ -843,7 +1337,7 @@ class HomeFeedProvider extends ChangeNotifier {
     }
   }
 
-  void toggleSaveReel(String id) {
+  void toggleSaveReel(String id, {ReelItemModel? fallbackReel, bool? explicitSaved}) {
     ReelItemModel? target;
     for (final List<ReelItemModel> list in <List<ReelItemModel>>[
       _forYouReels,
@@ -856,11 +1350,35 @@ class HomeFeedProvider extends ChangeNotifier {
         break;
       }
     }
-    final bool newSaved = !(target?.isSaved ?? false);
+    if (target == null && fallbackReel != null) {
+      target = fallbackReel;
+    }
+    final bool currentSaved = PostInteractionRegistry.isSaved(
+      id,
+      fallback: _userSavedPostIds.contains(id) || (target != null && target.isSaved),
+    );
+    final bool newSaved = explicitSaved ?? !currentSaved;
+
     _updateReelInAllLists(id, (r) => r.copyWith(isSaved: newSaved));
+    _updatePostInAllLists(id, (p) => p.copyWith(isSaved: newSaved));
+
+    PostInteractionRegistry.setSaved(id, newSaved);
+
+    if (_currentUserId != null) {
+      if (newSaved) {
+        _userSavedPostIds.add(id);
+      } else {
+        _userSavedPostIds.remove(id);
+      }
+      _persistUserSaved();
+    }
+
     notifyListeners();
 
-    if (_contentService != null && id.contains('-')) {
+    final bool isRealBackendId = !id.startsWith('profile_reel_') &&
+        !id.startsWith('search_reel_') &&
+        !id.startsWith('mock_');
+    if (_contentService != null && (id.contains('-') || isRealBackendId)) {
       if (newSaved) {
         _contentService!.savePost(id).catchError((dynamic e) {
           debugPrint('⚠️ [HomeFeed] Save reel failed: $e');
@@ -930,7 +1448,7 @@ class HomeFeedProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> toggleLikePost(String id) async {
+  Future<void> toggleLikePost(String id, {PostItemModel? fallbackPost, bool? explicitLiked}) async {
     PostItemModel? target;
     for (final List<PostItemModel> list in <List<PostItemModel>>[
       _forYouPosts,
@@ -943,28 +1461,48 @@ class HomeFeedProvider extends ChangeNotifier {
         break;
       }
     }
-    if (target == null) return;
+    if (target == null && fallbackPost != null) {
+      target = fallbackPost;
+    }
+    final bool currentlyLiked = PostInteractionRegistry.isLiked(
+      id,
+      fallback: _userLikedPostIds.contains(id) || (target != null && target.isLiked),
+    );
+    final bool newLiked = explicitLiked ?? !currentlyLiked;
 
-    final bool newLiked = !target.isLiked;
-    final int newCount = newLiked
-        ? target.likesCount + 1
-        : (target.likesCount > 0 ? target.likesCount - 1 : 0);
+    final int currentCount = PostInteractionRegistry.getLikeCount(
+      id,
+      fallback: target?.likesCount ?? (currentlyLiked ? 1 : 0),
+    );
+
+    int newCount;
+    if (newLiked) {
+      newCount = currentlyLiked ? currentCount : currentCount + 1;
+      if (newCount < 1) newCount = 1;
+    } else {
+      newCount = currentlyLiked ? (currentCount > 0 ? currentCount - 1 : 0) : currentCount;
+    }
 
     _updatePostInAllLists(id, (p) => p.copyWith(isLiked: newLiked, likesCount: newCount));
     _updateReelInAllLists(id, (r) => r.copyWith(isLiked: newLiked, likesCount: newCount));
 
+    PostInteractionRegistry.setLiked(id, newLiked, newCount: newCount);
+
+    if (newLiked) {
+      _userLikedPostIds.add(id);
+    } else {
+      _userLikedPostIds.remove(id);
+    }
     if (_currentUserId != null) {
-      if (newLiked) {
-        _userLikedPostIds.add(id);
-      } else {
-        _userLikedPostIds.remove(id);
-      }
       _persistUserLikes();
     }
 
     notifyListeners();
 
-    if (_contentService != null && id.contains('-')) {
+    final bool isRealBackendId = !id.startsWith('profile_reel_') &&
+        !id.startsWith('search_reel_') &&
+        !id.startsWith('mock_');
+    if (_contentService != null && (id.contains('-') || isRealBackendId)) {
       try {
         if (newLiked) {
           await _contentService!.likePost(id);
@@ -973,20 +1511,24 @@ class HomeFeedProvider extends ChangeNotifier {
         }
       } catch (err) {
         debugPrint('Error syncing like for post $id: $err');
+        // Rollback optimistic update
+        final bool rollbackLiked = currentlyLiked;
+        final int rollbackCount = currentCount;
         _updatePostInAllLists(
           id,
-          (p) => p.copyWith(isLiked: target!.isLiked, likesCount: target.likesCount),
+          (p) => p.copyWith(isLiked: rollbackLiked, likesCount: rollbackCount),
         );
         _updateReelInAllLists(
           id,
-          (r) => r.copyWith(isLiked: target!.isLiked, likesCount: target.likesCount),
+          (r) => r.copyWith(isLiked: rollbackLiked, likesCount: rollbackCount),
         );
+        PostInteractionRegistry.setLiked(id, rollbackLiked, newCount: rollbackCount);
+        if (rollbackLiked) {
+          _userLikedPostIds.add(id);
+        } else {
+          _userLikedPostIds.remove(id);
+        }
         if (_currentUserId != null) {
-          if (target.isLiked) {
-            _userLikedPostIds.add(id);
-          } else {
-            _userLikedPostIds.remove(id);
-          }
           _persistUserLikes();
         }
         notifyListeners();
@@ -994,7 +1536,7 @@ class HomeFeedProvider extends ChangeNotifier {
     }
   }
 
-  void toggleSavePost(String id) {
+  void toggleSavePost(String id, {PostItemModel? fallbackPost, bool? explicitSaved}) {
     PostItemModel? target;
     for (final List<PostItemModel> list in <List<PostItemModel>>[
       _forYouPosts,
@@ -1007,11 +1549,35 @@ class HomeFeedProvider extends ChangeNotifier {
         break;
       }
     }
-    final bool newSaved = !(target?.isSaved ?? false);
+    if (target == null && fallbackPost != null) {
+      target = fallbackPost;
+    }
+    final bool currentSaved = PostInteractionRegistry.isSaved(
+      id,
+      fallback: _userSavedPostIds.contains(id) || (target != null && target.isSaved),
+    );
+    final bool newSaved = explicitSaved ?? !currentSaved;
+
     _updatePostInAllLists(id, (p) => p.copyWith(isSaved: newSaved));
+    _updateReelInAllLists(id, (r) => r.copyWith(isSaved: newSaved));
+
+    PostInteractionRegistry.setSaved(id, newSaved);
+
+    if (newSaved) {
+      _userSavedPostIds.add(id);
+    } else {
+      _userSavedPostIds.remove(id);
+    }
+    if (_currentUserId != null) {
+      _persistUserSaved();
+    }
+
     notifyListeners();
 
-    if (_contentService != null && id.contains('-')) {
+    final bool isRealBackendId = !id.startsWith('profile_reel_') &&
+        !id.startsWith('search_reel_') &&
+        !id.startsWith('mock_');
+    if (_contentService != null && (id.contains('-') || isRealBackendId)) {
       if (newSaved) {
         _contentService!.savePost(id).catchError((dynamic e) {
           debugPrint('⚠️ [HomeFeed] Save post failed: $e');
@@ -1025,6 +1591,7 @@ class HomeFeedProvider extends ChangeNotifier {
   }
 
   Future<bool> deletePost(String id) async {
+    DeletedPostsRegistry.markDeleted(id);
     // Optimistically remove from all post and reel feeds
     _forYouPosts.removeWhere((PostItemModel p) => p.id == id);
     _forYouReels.removeWhere((ReelItemModel r) => r.id == id);

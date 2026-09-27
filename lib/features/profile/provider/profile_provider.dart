@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/cache/cache_manager.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/config/api_endpoints.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_images.dart';
@@ -37,6 +38,7 @@ class ProfileProvider extends ChangeNotifier {
   List<PostItemModel> _userPosts = <PostItemModel>[];
   List<ReelItemModel> _userReels = <ReelItemModel>[];
   List<CommunityModel> _userCommunities = <CommunityModel>[];
+  List<String> _identities = <String>[];
   bool _isLoadingContent = false;
 
   List<PostItemModel> _likedPosts = <PostItemModel>[];
@@ -83,6 +85,35 @@ class ProfileProvider extends ChangeNotifier {
     return false;
   }
 
+  bool isFollower({String? userId, String? username}) {
+    if (userId != null && userId.trim().isNotEmpty) {
+      final String cleanId = userId.trim().toLowerCase();
+      if (_followers.any((UserRelationItem r) => r.userId.trim().toLowerCase() == cleanId)) {
+        return true;
+      }
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      final String cleanUsername =
+          username.replaceAll('@', '').trim().toLowerCase();
+      if (_followers.any((UserRelationItem r) =>
+          r.username.replaceAll('@', '').trim().toLowerCase() ==
+          cleanUsername)) {
+        return true;
+      }
+    }
+    return UserRelationshipCache.isFollowedBy(
+      userId: userId,
+      username: username,
+    );
+  }
+
+  bool isMutualFollower({String? userId, String? username}) {
+    final bool followsMe = isFollower(userId: userId, username: username);
+    final bool iFollowThem = isFollowingUser(userId: userId, username: username) ||
+        UserRelationshipCache.isFollowing(userId: userId, username: username);
+    return followsMe && iFollowThem;
+  }
+
   void addFollowedUser({required String userId, String? username}) {
     if (userId.trim().isNotEmpty) {
       _followingUserIds.add(userId.trim().toLowerCase());
@@ -90,6 +121,7 @@ class ProfileProvider extends ChangeNotifier {
     if (username != null && username.trim().isNotEmpty) {
       _followingUsernames.add(username.replaceAll('@', '').trim().toLowerCase());
     }
+    UserRelationshipCache.add(userId: userId, username: username);
     notifyListeners();
   }
 
@@ -100,6 +132,7 @@ class ProfileProvider extends ChangeNotifier {
     if (username != null && username.trim().isNotEmpty) {
       _followingUsernames.remove(username.replaceAll('@', '').trim().toLowerCase());
     }
+    UserRelationshipCache.remove(userId: userId, username: username);
     notifyListeners();
   }
 
@@ -122,6 +155,32 @@ class ProfileProvider extends ChangeNotifier {
   List<ReelItemModel> get savedReels => _savedReels;
   bool get isLoadingSaved => _isLoadingSaved;
   bool get hasFetchedSaved => _hasFetchedSaved;
+
+  bool isPostLiked(String id) =>
+      PostInteractionRegistry.isLiked(id, fallback: _isPostLikedInternal(id));
+
+  bool _isPostLikedInternal(String id) {
+    if (_likedPosts.any((PostItemModel p) => p.id == id && p.isLiked)) return true;
+    if (_likedReels.any((ReelItemModel r) => r.id == id && r.isLiked)) return true;
+    if (_userPosts.any((PostItemModel p) => p.id == id && p.isLiked)) return true;
+    if (_userReels.any((ReelItemModel r) => r.id == id && r.isLiked)) return true;
+    if (_savedPosts.any((PostItemModel p) => p.id == id && p.isLiked)) return true;
+    if (_savedReels.any((ReelItemModel r) => r.id == id && r.isLiked)) return true;
+    return false;
+  }
+
+  bool isPostSaved(String id) =>
+      PostInteractionRegistry.isSaved(id, fallback: _isPostSavedInternal(id));
+
+  bool _isPostSavedInternal(String id) {
+    if (_savedPosts.any((PostItemModel p) => p.id == id && p.isSaved)) return true;
+    if (_savedReels.any((ReelItemModel r) => r.id == id && r.isSaved)) return true;
+    if (_userPosts.any((PostItemModel p) => p.id == id && p.isSaved)) return true;
+    if (_userReels.any((ReelItemModel r) => r.id == id && r.isSaved)) return true;
+    if (_likedPosts.any((PostItemModel p) => p.id == id && p.isSaved)) return true;
+    if (_likedReels.any((ReelItemModel r) => r.id == id && r.isSaved)) return true;
+    return false;
+  }
 
   List<BlockedAccountItem> get blockedAccounts => _blockedAccounts;
   bool get isLoadingBlocked => _isLoadingBlocked;
@@ -146,8 +205,7 @@ class ProfileProvider extends ChangeNotifier {
   String get bio =>
       _profile?.bio ??
       'Film nerd, softball catcher, chronically making playlists.';
-  String get avatarUrl =>
-      _profile?.avatarUrl ?? 'https://picsum.photos/seed/ash/400';
+  String get avatarUrl => _profile?.avatarUrl ?? '';
   String get pronounsFormatted => _profile?.formattedPronouns ?? 'she / they';
   List<String> get pronouns =>
       _profile?.pronouns ?? const <String>['she/her', 'they/them'];
@@ -190,6 +248,7 @@ class ProfileProvider extends ChangeNotifier {
   }
 
   List<String> get interests => _profile?.interests ?? const <String>[];
+  List<String> get identities => List<String>.unmodifiable(_identities);
   bool get isPrivate => _profile?.isPrivate ?? false;
   bool get showInDiscover => _profile?.showInDiscover ?? true;
   String get allowMessagesFrom => _profile?.allowMessagesFrom ?? 'everyone';
@@ -215,6 +274,9 @@ class ProfileProvider extends ChangeNotifier {
       _profile?.notifyOnAnnouncementsFeatures ?? true;
   bool get notifyOnSafetyModerationUpdates =>
       _profile?.notifyOnSafetyModerationUpdates ?? true;
+
+  void Function({bool? showActivityStatus, bool? sendReadReceipts})?
+      onPrivacySettingsChanged;
 
   static String formatPrivacyLabel(String? val) {
     if (val == null || val.isEmpty) return 'Everyone';
@@ -275,6 +337,374 @@ class ProfileProvider extends ChangeNotifier {
     ]);
   }
 
+  Future<void> _hydrateLocalSettings(String userId, {Map<String, dynamic>? serverData}) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+
+      final String? savedMessagesFrom =
+          prefs.getString('privacy_allow_messages_$userId');
+      final String? savedCommentsFrom =
+          prefs.getString('privacy_allow_comments_$userId');
+      final String? savedProfileVisibility =
+          prefs.getString('privacy_visibility_$userId');
+      final bool? savedHideLikes =
+          prefs.getBool('privacy_hide_my_likes_$userId');
+      final bool? savedIsPrivate =
+          prefs.getBool('privacy_is_private_$userId');
+      final bool? savedShowDiscover =
+          prefs.getBool('privacy_show_discover_$userId');
+      final bool? savedShowActivity =
+          prefs.getBool('privacy_show_activity_$userId');
+      final bool? savedReadReceipts =
+          prefs.getBool('privacy_read_receipts_$userId');
+      final bool? savedNotifyLike =
+          prefs.getBool('notification_notify_like_$userId');
+      final bool? savedNotifyComment =
+          prefs.getBool('notification_notify_comment_$userId');
+      final bool? savedNotifyFollow =
+          prefs.getBool('notification_notify_follow_$userId');
+      final bool? savedNotifyMessage =
+          prefs.getBool('notification_notify_message_$userId');
+      final bool? savedFollowRequests =
+          prefs.getBool('notification_follow_requests_$userId');
+      final bool? savedCommunityPosts =
+          prefs.getBool('notification_community_posts_$userId');
+      final bool? savedAnnouncements =
+          prefs.getBool('notification_announcements_$userId');
+      final bool? savedModeration =
+          prefs.getBool('notification_moderation_$userId');
+
+      // Check serverData if provided
+      bool? serverShowActivity;
+      bool? serverReadReceipts;
+      bool? serverHideLikes;
+      bool? serverIsPrivate;
+      bool? serverShowDiscover;
+      String? serverMessagesFrom;
+      String? serverCommentsFrom;
+      String? serverProfileVisibility;
+
+      bool? serverNotifyLike;
+      bool? serverNotifyComment;
+      bool? serverNotifyFollow;
+      bool? serverNotifyMessage;
+      bool? serverFollowRequests;
+      bool? serverCommunityPosts;
+      bool? serverAnnouncements;
+      bool? serverModeration;
+
+      if (serverData != null) {
+        if (serverData['showActivityStatus'] is bool) {
+          serverShowActivity = serverData['showActivityStatus'] as bool;
+        } else if (serverData['show_activity_status'] is bool) {
+          serverShowActivity = serverData['show_activity_status'] as bool;
+        } else if (serverData['privacySettings'] is Map &&
+            (serverData['privacySettings']['showActivityStatus'] ??
+                    serverData['privacySettings']['show_activity_status']) is bool) {
+          serverShowActivity = (serverData['privacySettings']['showActivityStatus'] ??
+              serverData['privacySettings']['show_activity_status']) as bool;
+        }
+
+        if (serverData['sendReadReceipts'] is bool) {
+          serverReadReceipts = serverData['sendReadReceipts'] as bool;
+        } else if (serverData['send_read_receipts'] is bool) {
+          serverReadReceipts = serverData['send_read_receipts'] as bool;
+        } else if (serverData['privacySettings'] is Map &&
+            (serverData['privacySettings']['sendReadReceipts'] ??
+                    serverData['privacySettings']['send_read_receipts']) is bool) {
+          serverReadReceipts = (serverData['privacySettings']['sendReadReceipts'] ??
+              serverData['privacySettings']['send_read_receipts']) as bool;
+        }
+
+        if (serverData['hideMyLikes'] is bool) {
+          serverHideLikes = serverData['hideMyLikes'] as bool;
+        } else if (serverData['hide_my_likes'] is bool) {
+          serverHideLikes = serverData['hide_my_likes'] as bool;
+        } else if (serverData['privacySettings'] is Map &&
+            (serverData['privacySettings']['hideMyLikes'] ??
+                    serverData['privacySettings']['hide_my_likes']) is bool) {
+          serverHideLikes = (serverData['privacySettings']['hideMyLikes'] ??
+              serverData['privacySettings']['hide_my_likes']) as bool;
+        }
+
+        if (serverData['isPrivate'] is bool) {
+          serverIsPrivate = serverData['isPrivate'] as bool;
+        } else if (serverData['is_private'] is bool) {
+          serverIsPrivate = serverData['is_private'] as bool;
+        }
+
+        if (serverData['showInDiscover'] is bool) {
+          serverShowDiscover = serverData['showInDiscover'] as bool;
+        } else if (serverData['show_in_discover'] is bool) {
+          serverShowDiscover = serverData['show_in_discover'] as bool;
+        }
+
+        final dynamic rawMsg = serverData['allowMessagesFrom'] ??
+            serverData['allow_messages_from'] ??
+            serverData['whoCanMessage'] ??
+            (serverData['privacySettings'] is Map ? serverData['privacySettings']['allowMessagesFrom'] : null);
+        if (rawMsg is String && rawMsg.isNotEmpty) {
+          serverMessagesFrom = _normalizePrivacy(rawMsg);
+        }
+
+        final dynamic rawComment = serverData['allowCommentsFrom'] ??
+            serverData['allow_comments_from'] ??
+            serverData['whoCanComment'] ??
+            (serverData['privacySettings'] is Map ? serverData['privacySettings']['allowCommentsFrom'] : null);
+        if (rawComment is String && rawComment.isNotEmpty) {
+          serverCommentsFrom = _normalizePrivacy(rawComment);
+        }
+
+        final dynamic rawVisibility = serverData['profileVisibility'] ??
+            serverData['profile_visibility'] ??
+            (serverData['privacySettings'] is Map ? serverData['privacySettings']['profileVisibility'] : null);
+        if (rawVisibility is String && rawVisibility.isNotEmpty) {
+          serverProfileVisibility = _normalizePrivacy(rawVisibility);
+        }
+
+        // Notification checks from serverData
+        if (serverData['notifyOnLike'] is bool) {
+          serverNotifyLike = serverData['notifyOnLike'] as bool;
+        } else if (serverData['notify_on_like'] is bool) {
+          serverNotifyLike = serverData['notify_on_like'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnLike'] ??
+                    serverData['notificationSettings']['notify_on_like']) is bool) {
+          serverNotifyLike = (serverData['notificationSettings']['notifyOnLike'] ??
+              serverData['notificationSettings']['notify_on_like']) as bool;
+        }
+
+        if (serverData['notifyOnComment'] is bool) {
+          serverNotifyComment = serverData['notifyOnComment'] as bool;
+        } else if (serverData['notify_on_comment'] is bool) {
+          serverNotifyComment = serverData['notify_on_comment'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnComment'] ??
+                    serverData['notificationSettings']['notify_on_comment']) is bool) {
+          serverNotifyComment = (serverData['notificationSettings']['notifyOnComment'] ??
+              serverData['notificationSettings']['notify_on_comment']) as bool;
+        }
+
+        if (serverData['notifyOnFollow'] is bool) {
+          serverNotifyFollow = serverData['notifyOnFollow'] as bool;
+        } else if (serverData['notify_on_follow'] is bool) {
+          serverNotifyFollow = serverData['notify_on_follow'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnFollow'] ??
+                    serverData['notificationSettings']['notify_on_follow']) is bool) {
+          serverNotifyFollow = (serverData['notificationSettings']['notifyOnFollow'] ??
+              serverData['notificationSettings']['notify_on_follow']) as bool;
+        }
+
+        if (serverData['notifyOnMessage'] is bool) {
+          serverNotifyMessage = serverData['notifyOnMessage'] as bool;
+        } else if (serverData['notify_on_message'] is bool) {
+          serverNotifyMessage = serverData['notify_on_message'] as bool;
+        } else if (serverData['directMessages'] is bool) {
+          serverNotifyMessage = serverData['directMessages'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnMessage'] ??
+                    serverData['notificationSettings']['directMessages']) is bool) {
+          serverNotifyMessage = (serverData['notificationSettings']['notifyOnMessage'] ??
+              serverData['notificationSettings']['directMessages']) as bool;
+        }
+
+        if (serverData['notifyOnFollowRequests'] is bool) {
+          serverFollowRequests = serverData['notifyOnFollowRequests'] as bool;
+        } else if (serverData['notify_on_follow_requests'] is bool) {
+          serverFollowRequests = serverData['notify_on_follow_requests'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnFollowRequests'] ??
+                    serverData['notificationSettings']['notify_on_follow_requests']) is bool) {
+          serverFollowRequests = (serverData['notificationSettings']['notifyOnFollowRequests'] ??
+              serverData['notificationSettings']['notify_on_follow_requests']) as bool;
+        }
+
+        if (serverData['notifyOnCommunityPosts'] is bool) {
+          serverCommunityPosts = serverData['notifyOnCommunityPosts'] as bool;
+        } else if (serverData['notify_on_community_posts'] is bool) {
+          serverCommunityPosts = serverData['notify_on_community_posts'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnCommunityPosts'] ??
+                    serverData['notificationSettings']['notify_on_community_posts']) is bool) {
+          serverCommunityPosts = (serverData['notificationSettings']['notifyOnCommunityPosts'] ??
+              serverData['notificationSettings']['notify_on_community_posts']) as bool;
+        }
+
+        if (serverData['notifyOnAnnouncementsFeatures'] is bool) {
+          serverAnnouncements = serverData['notifyOnAnnouncementsFeatures'] as bool;
+        } else if (serverData['notify_on_announcements_features'] is bool) {
+          serverAnnouncements = serverData['notify_on_announcements_features'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnAnnouncementsFeatures'] ??
+                    serverData['notificationSettings']['notify_on_announcements_features']) is bool) {
+          serverAnnouncements = (serverData['notificationSettings']['notifyOnAnnouncementsFeatures'] ??
+              serverData['notificationSettings']['notify_on_announcements_features']) as bool;
+        }
+
+        if (serverData['notifyOnSafetyModerationUpdates'] is bool) {
+          serverModeration = serverData['notifyOnSafetyModerationUpdates'] as bool;
+        } else if (serverData['notify_on_safety_moderation_updates'] is bool) {
+          serverModeration = serverData['notify_on_safety_moderation_updates'] as bool;
+        } else if (serverData['notificationSettings'] is Map &&
+            (serverData['notificationSettings']['notifyOnSafetyModerationUpdates'] ??
+                    serverData['notificationSettings']['notify_on_safety_moderation_updates']) is bool) {
+          serverModeration = (serverData['notificationSettings']['notifyOnSafetyModerationUpdates'] ??
+              serverData['notificationSettings']['notify_on_safety_moderation_updates']) as bool;
+        }
+      }
+
+      final bool effectiveShowActivity = serverShowActivity ??
+          savedShowActivity ??
+          _profile?.showActivityStatus ??
+          true;
+
+      final bool effectiveReadReceipts = serverReadReceipts ??
+          savedReadReceipts ??
+          _profile?.sendReadReceipts ??
+          true;
+
+      final bool effectiveHideLikes = serverHideLikes ??
+          savedHideLikes ??
+          _profile?.hideMyLikes ??
+          false;
+
+      final bool effectiveIsPrivate = serverIsPrivate ??
+          savedIsPrivate ??
+          _profile?.isPrivate ??
+          false;
+
+      final bool effectiveShowDiscover = serverShowDiscover ??
+          savedShowDiscover ??
+          _profile?.showInDiscover ??
+          true;
+
+      final String effectiveMessagesFrom = serverMessagesFrom ??
+          savedMessagesFrom ??
+          _profile?.allowMessagesFrom ??
+          'everyone';
+
+      final String effectiveCommentsFrom = serverCommentsFrom ??
+          savedCommentsFrom ??
+          _profile?.allowCommentsFrom ??
+          'everyone';
+
+      final String effectiveProfileVisibility = serverProfileVisibility ??
+          savedProfileVisibility ??
+          _profile?.profileVisibility ??
+          'everyone';
+
+      final bool effectiveNotifyLike = serverNotifyLike ??
+          savedNotifyLike ??
+          _profile?.notifyOnLike ??
+          true;
+
+      final bool effectiveNotifyComment = serverNotifyComment ??
+          savedNotifyComment ??
+          _profile?.notifyOnComment ??
+          true;
+
+      final bool effectiveNotifyFollow = serverNotifyFollow ??
+          savedNotifyFollow ??
+          _profile?.notifyOnFollow ??
+          true;
+
+      final bool effectiveNotifyMessage = serverNotifyMessage ??
+          savedNotifyMessage ??
+          _profile?.notifyOnMessage ??
+          true;
+
+      final bool effectiveFollowRequests = serverFollowRequests ??
+          savedFollowRequests ??
+          _profile?.notifyOnFollowRequests ??
+          true;
+
+      final bool effectiveCommunityPosts = serverCommunityPosts ??
+          savedCommunityPosts ??
+          _profile?.notifyOnCommunityPosts ??
+          true;
+
+      final bool effectiveAnnouncements = serverAnnouncements ??
+          savedAnnouncements ??
+          _profile?.notifyOnAnnouncementsFeatures ??
+          true;
+
+      final bool effectiveModeration = serverModeration ??
+          savedModeration ??
+          _profile?.notifyOnSafetyModerationUpdates ??
+          true;
+
+      // Always update SharedPreferences with the resolved values
+      await prefs.setBool('privacy_show_activity_$userId', effectiveShowActivity);
+      await prefs.setBool('privacy_read_receipts_$userId', effectiveReadReceipts);
+      await prefs.setBool('privacy_hide_my_likes_$userId', effectiveHideLikes);
+      await prefs.setBool('privacy_is_private_$userId', effectiveIsPrivate);
+      await prefs.setBool('privacy_show_discover_$userId', effectiveShowDiscover);
+      await prefs.setString('privacy_allow_messages_$userId', effectiveMessagesFrom);
+      await prefs.setString('privacy_allow_comments_$userId', effectiveCommentsFrom);
+      await prefs.setString('privacy_visibility_$userId', effectiveProfileVisibility);
+
+      await prefs.setBool('notification_notify_like_$userId', effectiveNotifyLike);
+      await prefs.setBool('notification_notify_comment_$userId', effectiveNotifyComment);
+      await prefs.setBool('notification_notify_follow_$userId', effectiveNotifyFollow);
+      await prefs.setBool('notification_notify_message_$userId', effectiveNotifyMessage);
+      await prefs.setBool('notification_follow_requests_$userId', effectiveFollowRequests);
+      await prefs.setBool('notification_community_posts_$userId', effectiveCommunityPosts);
+      await prefs.setBool('notification_announcements_$userId', effectiveAnnouncements);
+      await prefs.setBool('notification_moderation_$userId', effectiveModeration);
+
+      if (_profile != null) {
+        _profile = _profile!.copyWith(
+          isPrivate: effectiveIsPrivate,
+          showInDiscover: effectiveShowDiscover,
+          allowMessagesFrom: effectiveMessagesFrom,
+          allowCommentsFrom: effectiveCommentsFrom,
+          hideMyLikes: effectiveHideLikes,
+          profileVisibility: effectiveProfileVisibility,
+          showActivityStatus: effectiveShowActivity,
+          sendReadReceipts: effectiveReadReceipts,
+          notifyOnLike: effectiveNotifyLike,
+          notifyOnComment: effectiveNotifyComment,
+          notifyOnFollow: effectiveNotifyFollow,
+          notifyOnMessage: effectiveNotifyMessage,
+          notifyOnFollowRequests: effectiveFollowRequests,
+          notifyOnCommunityPosts: effectiveCommunityPosts,
+          notifyOnAnnouncementsFeatures: effectiveAnnouncements,
+          notifyOnSafetyModerationUpdates: effectiveModeration,
+        );
+      }
+
+      final List<String>? savedIdentities = prefs.getStringList('user_identities_$userId');
+      if (savedIdentities != null && savedIdentities.isNotEmpty) {
+        _identities = savedIdentities;
+      }
+
+      onPrivacySettingsChanged?.call(
+        showActivityStatus: effectiveShowActivity,
+        sendReadReceipts: effectiveReadReceipts,
+      );
+
+      // Save hydrated profile back into CacheManager so cold launches have it
+      if (_profile != null) {
+        CacheManager.instance.put(
+          'profile_details_$userId',
+          _profile!.toJson(),
+          ttl: const Duration(days: 7),
+        );
+        AuthorProfileCache.set(
+          _profile!.id,
+          AuthorInfo(
+            id: _profile!.id,
+            username: _profile!.username ?? '',
+            displayName: _profile!.displayName ?? '',
+            avatarUrl: _profile!.avatarUrl,
+            hideMyLikes: _profile!.hideMyLikes,
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
   Future<void> _fetchProfileDetails(String userId) async {
     try {
       if (AppConfig.useMockApi) {
@@ -288,29 +718,23 @@ class ProfileProvider extends ChangeNotifier {
           pronounsPrivate: false,
         );
       } else {
+        if (_profile == null) {
+          final dynamic cached =
+              CacheManager.instance.get('profile_details_$userId');
+          if (cached is Map<String, dynamic>) {
+            _profile = UserProfile.fromJson(cached);
+            await _hydrateLocalSettings(userId);
+            notifyListeners();
+          }
+        }
         debugPrint(
             '🚀 [ProfileProvider] Fetching profile for user: $userId (GET /users/$userId)');
         final dynamic data = await _client.get(ApiEndpoints.user(userId));
         debugPrint('📥 [ProfileProvider] Profile data received: $data');
         if (data is Map<String, dynamic>) {
-          CacheManager.instance.put(
-            'profile_details_$userId',
-            data,
-            ttl: const Duration(days: 7),
-          );
           _profile = UserProfile.fromJson(data);
-          try {
-            if (data['showActivityStatus'] is bool) {
-              SharedPreferences.getInstance().then((SharedPreferences prefs) {
-                prefs.setBool('privacy_show_activity_$userId', data['showActivityStatus'] as bool);
-              });
-            }
-            if (data['sendReadReceipts'] is bool) {
-              SharedPreferences.getInstance().then((SharedPreferences prefs) {
-                prefs.setBool('privacy_read_receipts_$userId', data['sendReadReceipts'] as bool);
-              });
-            }
-          } catch (_) {}
+          await _hydrateLocalSettings(userId, serverData: data);
+          notifyListeners();
         }
       }
       _error = null;
@@ -383,9 +807,74 @@ class ProfileProvider extends ChangeNotifier {
       }
 
       _userCommunities = communities;
+      if (_identities.isEmpty) {
+        try {
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          final List<String>? saved = prefs.getStringList('user_identities_$userId');
+          if (saved != null && saved.isNotEmpty) {
+            _identities = saved;
+          } else if (communities.isNotEmpty) {
+            _identities = communities.map((CommunityModel c) => c.name).toList();
+          }
+        } catch (_) {
+          if (communities.isNotEmpty) {
+            _identities = communities.map((CommunityModel c) => c.name).toList();
+          }
+        }
+      }
       notifyListeners();
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Could not fetch user communities: $e');
+    }
+  }
+
+  /// Saves identities locally and syncs with matching backend communities.
+  Future<void> saveIdentities(String userId, List<String> newIdentities) async {
+    _identities = List<String>.from(newIdentities);
+    notifyListeners();
+
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('user_identities_$userId', newIdentities);
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to persist identities locally: $e');
+    }
+
+    try {
+      final ProfileSetupService setupService = ProfileSetupService(_client);
+      final List<CommunityModel> allComms = await setupService.getCommunities();
+      final Set<String> targetIds = <String>{};
+
+      for (final String idName in newIdentities) {
+        final CommunityModel match = allComms.firstWhere(
+          (CommunityModel c) => c.name.trim().toLowerCase() == idName.trim().toLowerCase(),
+          orElse: () => const CommunityModel(id: '', name: '', description: ''),
+        );
+        if (match.id.isNotEmpty) {
+          targetIds.add(match.id);
+        }
+      }
+
+      final Set<String> currentIds = _userCommunities
+          .map((CommunityModel c) => c.id)
+          .where((String id) => id.isNotEmpty && !id.startsWith('custom_'))
+          .toSet();
+
+      final Set<String> toJoin = targetIds.difference(currentIds);
+      final Set<String> toLeave = currentIds.difference(targetIds);
+
+      if (toLeave.isNotEmpty) {
+        debugPrint('🚀 [ProfileProvider] Leaving communities: $toLeave');
+        await setupService.leaveCommunities(toLeave);
+      }
+      if (toJoin.isNotEmpty) {
+        debugPrint('🚀 [ProfileProvider] Joining communities: $toJoin');
+        await setupService.joinCommunities(toJoin);
+      }
+
+      await fetchUserCommunities(userId, forceRefresh: true);
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to sync backend communities: $e');
     }
   }
 
@@ -472,7 +961,18 @@ class ProfileProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateLikedReel(String id, {required bool isLiked, required int likesCount}) {
+  void updateLikedReel(String id, {required bool isLiked, required int likesCount, ReelItemModel? fallbackReel}) {
+    // 1. Update _userReels
+    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (urIndex != -1) {
+      _userReels[urIndex] = _userReels[urIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    // 2. Update _userPosts
+    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (upIndex != -1) {
+      _userPosts[upIndex] = _userPosts[upIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    // 3. Update _likedReels
     final int rIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
     if (rIndex != -1) {
       if (!isLiked) {
@@ -480,7 +980,14 @@ class ProfileProvider extends ChangeNotifier {
       } else {
         _likedReels[rIndex] = _likedReels[rIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
       }
+    } else if (isLiked) {
+      if (urIndex != -1) {
+        _likedReels.insert(0, _userReels[urIndex]);
+      } else if (fallbackReel != null) {
+        _likedReels.insert(0, fallbackReel.copyWith(isLiked: true, likesCount: likesCount));
+      }
     }
+    // 4. Update _likedPosts
     final int pIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
     if (pIndex != -1) {
       if (!isLiked) {
@@ -489,7 +996,183 @@ class ProfileProvider extends ChangeNotifier {
         _likedPosts[pIndex] = _likedPosts[pIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
       }
     }
+    // 5. Update _savedPosts & _savedReels if present
+    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (spIndex != -1) {
+      _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (srIndex != -1) {
+      _savedReels[srIndex] = _savedReels[srIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    PostInteractionRegistry.setLiked(id, isLiked, newCount: likesCount);
     notifyListeners();
+  }
+
+  void updateLikedPost(String id, {required bool isLiked, required int likesCount, PostItemModel? fallbackPost}) {
+    // 1. Update _userPosts
+    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (upIndex != -1) {
+      _userPosts[upIndex] = _userPosts[upIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    // 2. Update _userReels
+    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (urIndex != -1) {
+      _userReels[urIndex] = _userReels[urIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    // 3. Update _likedPosts
+    final int pIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (pIndex != -1) {
+      if (!isLiked) {
+        _likedPosts.removeAt(pIndex);
+      } else {
+        _likedPosts[pIndex] = _likedPosts[pIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+      }
+    } else if (isLiked) {
+      if (upIndex != -1) {
+        _likedPosts.insert(0, _userPosts[upIndex]);
+      } else if (fallbackPost != null) {
+        _likedPosts.insert(0, fallbackPost.copyWith(isLiked: true, likesCount: likesCount));
+      }
+    }
+    // 4. Update _likedReels
+    final int rIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (rIndex != -1) {
+      if (!isLiked) {
+        _likedReels.removeAt(rIndex);
+      } else {
+        _likedReels[rIndex] = _likedReels[rIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+      }
+    }
+    // 5. Update _savedPosts & _savedReels if present
+    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (spIndex != -1) {
+      _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (srIndex != -1) {
+      _savedReels[srIndex] = _savedReels[srIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
+    }
+    PostInteractionRegistry.setLiked(id, isLiked, newCount: likesCount);
+    notifyListeners();
+  }
+
+  void updateSavedPost(String id, {required bool isSaved, PostItemModel? fallbackPost}) {
+    // 1. Update _userPosts
+    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (upIndex != -1) {
+      _userPosts[upIndex] = _userPosts[upIndex].copyWith(isSaved: isSaved);
+    }
+    // 2. Update _savedPosts
+    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (spIndex != -1) {
+      if (!isSaved) {
+        _savedPosts.removeAt(spIndex);
+      } else {
+        _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(isSaved: isSaved);
+      }
+    } else if (isSaved) {
+      if (upIndex != -1) {
+        _savedPosts.insert(0, _userPosts[upIndex].copyWith(isSaved: true));
+      } else if (fallbackPost != null) {
+        _savedPosts.insert(0, fallbackPost.copyWith(isSaved: true));
+      }
+    }
+    // 3. Update _likedPosts
+    final int lpIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (lpIndex != -1) {
+      _likedPosts[lpIndex] = _likedPosts[lpIndex].copyWith(isSaved: isSaved);
+    }
+    PostInteractionRegistry.setSaved(id, isSaved);
+    notifyListeners();
+  }
+
+  void updateSavedReel(String id, {required bool isSaved, ReelItemModel? fallbackReel}) {
+    // 1. Update _userReels
+    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (urIndex != -1) {
+      _userReels[urIndex] = _userReels[urIndex].copyWith(isSaved: isSaved);
+    }
+    // 2. Update _savedReels
+    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (srIndex != -1) {
+      if (!isSaved) {
+        _savedReels.removeAt(srIndex);
+      } else {
+        _savedReels[srIndex] = _savedReels[srIndex].copyWith(isSaved: isSaved);
+      }
+    } else if (isSaved) {
+      if (urIndex != -1) {
+        _savedReels.insert(0, _userReels[urIndex].copyWith(isSaved: true));
+      } else if (fallbackReel != null) {
+        _savedReels.insert(0, fallbackReel.copyWith(isSaved: true));
+      }
+    }
+    // 3. Update _likedReels
+    final int lrIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (lrIndex != -1) {
+      _likedReels[lrIndex] = _likedReels[lrIndex].copyWith(isSaved: isSaved);
+    }
+    PostInteractionRegistry.setSaved(id, isSaved);
+    notifyListeners();
+  }
+
+  final Map<String, int> _overrideCommentCounts = <String, int>{};
+
+  int? getCommentCount(String postId) => _overrideCommentCounts[postId];
+
+  int _getExistingCommentsCount(String id) {
+    for (final PostItemModel p in _userPosts) {
+      if (p.id == id) return p.commentsCount;
+    }
+    for (final ReelItemModel r in _userReels) {
+      if (r.id == id) return r.commentsCount;
+    }
+    for (final PostItemModel p in _savedPosts) {
+      if (p.id == id) return p.commentsCount;
+    }
+    for (final PostItemModel p in _likedPosts) {
+      if (p.id == id) return p.commentsCount;
+    }
+    return 0;
+  }
+
+  void setCommentCount(String id, int count) => updatePostCommentCount(id, count);
+
+  void updatePostCommentCount(String id, int count) {
+    final int safeCount = count.clamp(0, 999999);
+    _overrideCommentCounts[id] = safeCount;
+    CommentCountRegistry.set(id, safeCount);
+    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (upIndex != -1) {
+      _userPosts[upIndex] = _userPosts[upIndex].copyWith(commentsCount: safeCount);
+    }
+    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (urIndex != -1) {
+      _userReels[urIndex] = _userReels[urIndex].copyWith(commentsCount: safeCount);
+    }
+    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (spIndex != -1) {
+      _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(commentsCount: safeCount);
+    }
+    final int lpIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
+    if (lpIndex != -1) {
+      _likedPosts[lpIndex] = _likedPosts[lpIndex].copyWith(commentsCount: safeCount);
+    }
+    final int lrIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (lrIndex != -1) {
+      _likedReels[lrIndex] = _likedReels[lrIndex].copyWith(commentsCount: safeCount);
+    }
+    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id == id);
+    if (srIndex != -1) {
+      _savedReels[srIndex] = _savedReels[srIndex].copyWith(commentsCount: safeCount);
+    }
+    notifyListeners();
+  }
+
+  void incrementCommentCount(String id) {
+    final int current = getCommentCount(id) ?? _getExistingCommentsCount(id);
+    updatePostCommentCount(id, current + 1);
   }
 
   Future<_ContentBatch> _processPosts(
@@ -502,43 +1185,141 @@ class ProfileProvider extends ChangeNotifier {
     final List<ReelItemModel> userReelsList = <ReelItemModel>[];
 
     for (final PostResponseModel post in posts) {
+      if (post.isDeleted) continue;
+
+      final String type = post.type.toUpperCase().trim();
+      final bool isVideo = type == 'VIDEO' ||
+          type == 'REEL' ||
+          (post.duration != null && post.duration!.isNotEmpty) ||
+          post.mediaRefs.any((String r) {
+            final String l = r.toLowerCase();
+            return l.endsWith('.mp4') ||
+                l.endsWith('.mov') ||
+                l.endsWith('.webm') ||
+                l.endsWith('.m3u8') ||
+                l.contains('/videos/processed/');
+          });
+
       String? mediaUrl;
       String? thumbnailUrl;
 
-      if (post.mediaRefs.isNotEmpty) {
-        final String mediaId = post.mediaRefs.first;
-        try {
-          final dynamic mediaData =
-              await _client.get(ApiEndpoints.mediaStatus(mediaId));
-          if (mediaData is Map<String, dynamic>) {
-            mediaUrl = mediaData['url'] as String? ??
-                mediaData['downloadUrl'] as String?;
-            thumbnailUrl = mediaData['thumbnailUrl'] as String?;
+      if (isVideo) {
+        if (post.mediaRefs.isNotEmpty) {
+          final String firstRef = post.mediaRefs.first.trim();
+          if (firstRef.startsWith('http://') || firstRef.startsWith('https://')) {
+            // Already a full CDN/HTTP URL
+            mediaUrl = firstRef;
+            if (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty) {
+              thumbnailUrl = post.thumbnailUrl;
+            } else if (firstRef.contains('/videos/processed/')) {
+              thumbnailUrl = firstRef.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+            } else if (post.postImageUrl != null &&
+                post.postImageUrl!.isNotEmpty &&
+                !post.postImageUrl!.endsWith('.mp4') &&
+                !post.postImageUrl!.endsWith('.m3u8')) {
+              thumbnailUrl = post.postImageUrl;
+            }
+          } else {
+            // Raw UUID — build CDN HLS URL directly (no extra API call per video)
+            final String clean = firstRef
+                .replaceAll(RegExp(r'^/+'), '')
+                .replaceAll(RegExp(r'^media/'), '');
+            mediaUrl = '${AppConfig.cdnUrl}/videos/processed/$clean/master.m3u8';
+            thumbnailUrl = (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty)
+                ? post.thumbnailUrl
+                : (post.postImageUrl != null &&
+                        post.postImageUrl!.isNotEmpty &&
+                        !post.postImageUrl!.endsWith('.mp4') &&
+                        !post.postImageUrl!.endsWith('.m3u8'))
+                    ? post.postImageUrl
+                    : '${AppConfig.cdnUrl}/videos/processed/$clean/thumb.0000000.jpg';
           }
-        } catch (e) {
-          debugPrint('⚠️ [ProfileProvider] Could not resolve media $mediaId: $e');
+        } else if (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty) {
+          thumbnailUrl = post.thumbnailUrl;
+        } else if (post.postImageUrl != null && post.postImageUrl!.isNotEmpty) {
+          mediaUrl = post.postImageUrl;
+          if (!post.postImageUrl!.endsWith('.mp4') && !post.postImageUrl!.endsWith('.m3u8')) {
+            thumbnailUrl = post.postImageUrl;
+          }
+        }
+      } else {
+        // Photo or Text post: prefer post.postImageUrl, then resolve mediaRefs to image CDN URL
+        if (post.postImageUrl != null && post.postImageUrl!.isNotEmpty) {
+          mediaUrl = post.postImageUrl;
+          thumbnailUrl = post.postImageUrl;
+        } else if (post.mediaRefs.isNotEmpty) {
+          final String firstRef = post.mediaRefs.first.trim();
+          if (firstRef.startsWith('http://') ||
+              firstRef.startsWith('https://') ||
+              firstRef.startsWith('assets/')) {
+            mediaUrl = firstRef;
+            thumbnailUrl = firstRef;
+          } else {
+            final String clean = firstRef
+                .replaceAll(RegExp(r'^/+'), '')
+                .replaceAll(RegExp(r'^media/'), '');
+            final String effectiveAuthor =
+                post.authorId ?? fallbackAuthorId ?? _cachedUserId ?? '';
+            if (effectiveAuthor.isNotEmpty) {
+              mediaUrl =
+                  '${AppConfig.cdnUrl}/images/original/$effectiveAuthor/$clean.jpg';
+            } else {
+              mediaUrl = '${AppConfig.cdnUrl}/images/original/$clean.jpg';
+            }
+            thumbnailUrl = mediaUrl;
+          }
         }
       }
 
-      final String type = post.type.toUpperCase().trim();
-      final String authorUsername =
-          post.authorName ?? _profile?.username ?? 'you';
+      final bool isOwnPost = (post.authorId != null &&
+              _cachedUserId != null &&
+              post.authorId == _cachedUserId) ||
+          (fallbackAuthorId != null &&
+              _cachedUserId != null &&
+              fallbackAuthorId == _cachedUserId);
+
+      final AuthorInfo? cachedAuthor = (post.authorId != null && post.authorId!.isNotEmpty)
+          ? AuthorProfileCache.get(post.authorId!)
+          : null;
+
+      final String authorUsername = post.authorName ??
+          (isOwnPost
+              ? (_profile?.username ?? 'you')
+              : (cachedAuthor?.username ?? 'user'));
       final String formattedUsername = authorUsername.startsWith('@')
           ? authorUsername
           : '@$authorUsername';
       final String avatar = (post.authorAvatar != null &&
               post.authorAvatar!.isNotEmpty)
           ? post.authorAvatar!
-          : ((_profile?.avatarUrl != null && _profile!.avatarUrl!.isNotEmpty)
-              ? _profile!.avatarUrl!
-              : AppImages.user1);
+          : (isOwnPost
+              ? ((_profile?.avatarUrl != null && _profile!.avatarUrl!.isNotEmpty)
+                  ? _profile!.avatarUrl!
+                  : AppImages.defaultAvatar)
+              : (cachedAuthor?.avatarUrl != null && cachedAuthor!.avatarUrl!.isNotEmpty
+                  ? cachedAuthor.avatarUrl!
+                  : AppImages.defaultAvatar));
+      final String? authorDisplayName = post.authorDisplayName ??
+          (isOwnPost ? _profile?.displayName : cachedAuthor?.displayName);
 
-      if (type == 'VIDEO') {
+      final int effectiveCommentsCount =
+          CommentCountRegistry.get(post.id) ??
+          _overrideCommentCounts[post.id] ??
+          post.commentsCount;
+
+      final bool isLiked =
+          markLiked || PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked);
+      final bool isSaved =
+          markSaved || PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved);
+      final int effectiveLikesCount =
+          PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
+
+      if (isVideo) {
         userReelsList.add(
           ReelItemModel(
             id: post.id,
             authorId: post.authorId ?? fallbackAuthorId ?? _cachedUserId,
-            authorDisplayName: post.authorDisplayName,
+            authorDisplayName: authorDisplayName,
             username: formattedUsername,
             pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
                 ? _formatTime(post.createdAt)
@@ -548,11 +1329,17 @@ class ProfileProvider extends ChangeNotifier {
             videoUrl: mediaUrl,
             thumbnailUrl: thumbnailUrl,
             caption: post.body.isNotEmpty ? post.body : post.caption,
-            likesCount: post.likesCount,
-            commentsCount: post.commentsCount,
-            isLiked: markLiked || post.isLiked,
-            isSaved: markSaved || post.isSaved,
+            likesCount: effectiveLikesCount,
+            hasLikeCount: post.hasLikeCount,
+            commentsCount: effectiveCommentsCount,
+            viewsCount: post.viewsCount,
+            isLiked: isLiked,
+            isSaved: isSaved,
+            allowComments: post.allowComments,
+            allowDownloads: post.allowDownloads,
+            hideLikes: post.hideLikes,
             tags: post.tags,
+            communityId: post.communityId,
             durationText:
                 (post.duration != null && post.duration!.isNotEmpty)
                     ? post.duration!
@@ -565,18 +1352,25 @@ class ProfileProvider extends ChangeNotifier {
           PostItemModel(
             id: post.id,
             authorId: post.authorId ?? fallbackAuthorId ?? _cachedUserId,
+            authorDisplayName: authorDisplayName,
             username: formattedUsername,
             pronounsTime: (post.createdAt != null && post.createdAt!.isNotEmpty)
                 ? _formatTime(post.createdAt)
                 : 'just now',
             avatarAsset: avatar,
             content: post.body.isNotEmpty ? post.body : post.caption,
-            likesCount: post.likesCount,
-            commentsCount: post.commentsCount,
-            isLiked: markLiked || post.isLiked,
-            isSaved: markSaved || post.isSaved,
+            likesCount: effectiveLikesCount,
+            hasLikeCount: post.hasLikeCount,
+            commentsCount: effectiveCommentsCount,
+            viewsCount: post.viewsCount,
+            isLiked: isLiked,
+            isSaved: isSaved,
+            allowComments: post.allowComments,
+            allowDownloads: post.allowDownloads,
+            hideLikes: post.hideLikes,
             postImageUrl: mediaUrl,
             postType: type,
+            communityId: post.communityId,
           ),
         );
       }
@@ -666,6 +1460,7 @@ class ProfileProvider extends ChangeNotifier {
 
   /// Delete own Post or Video Post. DELETE /posts/:id
   Future<bool> deletePost(String postId) async {
+    DeletedPostsRegistry.markDeleted(postId);
     _userPosts.removeWhere((PostItemModel p) => p.id == postId);
     _userReels.removeWhere((ReelItemModel r) => r.id == postId);
     _likedPosts.removeWhere((PostItemModel p) => p.id == postId);
@@ -760,13 +1555,18 @@ class ProfileProvider extends ChangeNotifier {
     if (interests != null) payload['interests'] = interests;
     if (isPrivate != null) payload['isPrivate'] = isPrivate;
     if (showInDiscover != null) payload['showInDiscover'] = showInDiscover;
+    // Privacy settings (Manage Account)
+    if (isPrivate != null) payload['isPrivate'] = isPrivate;
+    if (showInDiscover != null) payload['showInDiscover'] = showInDiscover;
     if (allowMessagesFrom != null) {
       payload['allowMessagesFrom'] = _normalizePrivacy(allowMessagesFrom);
     }
     if (allowCommentsFrom != null) {
       payload['allowCommentsFrom'] = _normalizePrivacy(allowCommentsFrom);
     }
-    if (hideMyLikes != null) payload['hideMyLikes'] = hideMyLikes;
+    if (hideMyLikes != null) {
+      payload['hideMyLikes'] = hideMyLikes;
+    }
     if (profileVisibility != null) {
       payload['profileVisibility'] = _normalizePrivacy(profileVisibility);
     }
@@ -776,10 +1576,20 @@ class ProfileProvider extends ChangeNotifier {
     if (sendReadReceipts != null) {
       payload['sendReadReceipts'] = sendReadReceipts;
     }
-    if (notifyOnLike != null) payload['notifyOnLike'] = notifyOnLike;
-    if (notifyOnComment != null) payload['notifyOnComment'] = notifyOnComment;
-    if (notifyOnFollow != null) payload['notifyOnFollow'] = notifyOnFollow;
-    if (notifyOnMessage != null) payload['notifyOnMessage'] = notifyOnMessage;
+
+    // Notification settings (Notifications Screen)
+    if (notifyOnLike != null) {
+      payload['notifyOnLike'] = notifyOnLike;
+    }
+    if (notifyOnComment != null) {
+      payload['notifyOnComment'] = notifyOnComment;
+    }
+    if (notifyOnFollow != null) {
+      payload['notifyOnFollow'] = notifyOnFollow;
+    }
+    if (notifyOnMessage != null) {
+      payload['notifyOnMessage'] = notifyOnMessage;
+    }
     if (notifyOnFollowRequests != null) {
       payload['notifyOnFollowRequests'] = notifyOnFollowRequests;
     }
@@ -792,6 +1602,112 @@ class ProfileProvider extends ChangeNotifier {
     if (notifyOnSafetyModerationUpdates != null) {
       payload['notifyOnSafetyModerationUpdates'] =
           notifyOnSafetyModerationUpdates;
+    }
+
+    // 1. Optimistic update
+    final UserProfile optimistic = (_profile ?? UserProfile(id: userId)).copyWith(
+      displayName: displayName,
+      username: username,
+      bio: bio,
+      avatarUrl: avatarUrl,
+      pronouns: pronouns,
+      pronounsPrivate: pronounsPrivate,
+      interests: interests,
+      isPrivate: isPrivate,
+      showInDiscover: showInDiscover,
+      allowMessagesFrom: allowMessagesFrom != null ? _normalizePrivacy(allowMessagesFrom) : null,
+      allowCommentsFrom: allowCommentsFrom != null ? _normalizePrivacy(allowCommentsFrom) : null,
+      hideMyLikes: hideMyLikes,
+      profileVisibility: profileVisibility != null ? _normalizePrivacy(profileVisibility) : null,
+      showActivityStatus: showActivityStatus,
+      sendReadReceipts: sendReadReceipts,
+      notifyOnLike: notifyOnLike,
+      notifyOnComment: notifyOnComment,
+      notifyOnFollow: notifyOnFollow,
+      notifyOnMessage: notifyOnMessage,
+      notifyOnFollowRequests: notifyOnFollowRequests,
+      notifyOnCommunityPosts: notifyOnCommunityPosts,
+      notifyOnAnnouncementsFeatures: notifyOnAnnouncementsFeatures,
+      notifyOnSafetyModerationUpdates: notifyOnSafetyModerationUpdates,
+    );
+    _profile = optimistic;
+    if (showActivityStatus != null || sendReadReceipts != null) {
+      onPrivacySettingsChanged?.call(
+        showActivityStatus: showActivityStatus ?? _profile?.showActivityStatus,
+        sendReadReceipts: sendReadReceipts ?? _profile?.sendReadReceipts,
+      );
+    }
+    notifyListeners();
+
+    // 2. Persist to SharedPreferences & CacheManager so local state never reverts
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      if (allowMessagesFrom != null) {
+        await prefs.setString('privacy_allow_messages_$userId', _normalizePrivacy(allowMessagesFrom));
+      }
+      if (allowCommentsFrom != null) {
+        await prefs.setString('privacy_allow_comments_$userId', _normalizePrivacy(allowCommentsFrom));
+      }
+      if (profileVisibility != null) {
+        await prefs.setString('privacy_visibility_$userId', _normalizePrivacy(profileVisibility));
+      }
+      if (hideMyLikes != null) {
+        await prefs.setBool('privacy_hide_my_likes_$userId', hideMyLikes);
+      }
+      if (isPrivate != null) {
+        await prefs.setBool('privacy_is_private_$userId', isPrivate);
+      }
+      if (showInDiscover != null) {
+        await prefs.setBool('privacy_show_discover_$userId', showInDiscover);
+      }
+      if (showActivityStatus != null) {
+        await prefs.setBool('privacy_show_activity_$userId', showActivityStatus);
+      }
+      if (sendReadReceipts != null) {
+        await prefs.setBool('privacy_read_receipts_$userId', sendReadReceipts);
+      }
+      if (notifyOnLike != null) {
+        await prefs.setBool('notification_notify_like_$userId', notifyOnLike);
+      }
+      if (notifyOnComment != null) {
+        await prefs.setBool('notification_notify_comment_$userId', notifyOnComment);
+      }
+      if (notifyOnFollow != null) {
+        await prefs.setBool('notification_notify_follow_$userId', notifyOnFollow);
+      }
+      if (notifyOnMessage != null) {
+        await prefs.setBool('notification_notify_message_$userId', notifyOnMessage);
+      }
+      if (notifyOnFollowRequests != null) {
+        await prefs.setBool('notification_follow_requests_$userId', notifyOnFollowRequests);
+      }
+      if (notifyOnCommunityPosts != null) {
+        await prefs.setBool('notification_community_posts_$userId', notifyOnCommunityPosts);
+      }
+      if (notifyOnAnnouncementsFeatures != null) {
+        await prefs.setBool('notification_announcements_$userId', notifyOnAnnouncementsFeatures);
+      }
+      if (notifyOnSafetyModerationUpdates != null) {
+        await prefs.setBool('notification_moderation_$userId', notifyOnSafetyModerationUpdates);
+      }
+    } catch (_) {}
+
+    if (_profile != null) {
+      CacheManager.instance.put(
+        'profile_details_$userId',
+        _profile!.toJson(),
+        ttl: const Duration(days: 7),
+      );
+      AuthorProfileCache.set(
+        _profile!.id,
+        AuthorInfo(
+          id: _profile!.id,
+          username: _profile!.username ?? '',
+          displayName: _profile!.displayName ?? '',
+          avatarUrl: _profile!.avatarUrl,
+          hideMyLikes: _profile!.hideMyLikes,
+        ),
+      );
     }
 
     if (payload.isEmpty) {
@@ -809,36 +1725,24 @@ class ProfileProvider extends ChangeNotifier {
           body: payload,
         );
         debugPrint('📥 [ProfileProvider] Profile updated: $data');
-        final UserProfile updated =
-            UserProfile.fromJson(data as Map<String, dynamic>);
-        _profile = (_profile ?? UserProfile(id: userId)).merge(updated);
+        if (data is Map<String, dynamic>) {
+          final UserProfile updated =
+              UserProfile.fromJson(data);
+          _profile = optimistic.merge(updated);
+          await _hydrateLocalSettings(userId, serverData: data);
+        }
       } else {
-        _profile = (_profile ?? UserProfile(id: userId)).merge(
-          UserProfile(
-            id: userId,
-            displayName: displayName,
-            username: username,
-            bio: bio,
-            avatarUrl: avatarUrl,
-            pronouns: pronouns,
-            pronounsPrivate: pronounsPrivate,
-            interests: interests,
-            isPrivate: isPrivate,
-            showInDiscover: showInDiscover,
-            allowMessagesFrom: allowMessagesFrom,
-            allowCommentsFrom: allowCommentsFrom,
-            hideMyLikes: hideMyLikes,
-            profileVisibility: profileVisibility,
-            showActivityStatus: showActivityStatus,
-            sendReadReceipts: sendReadReceipts,
-            notifyOnLike: notifyOnLike,
-            notifyOnComment: notifyOnComment,
-            notifyOnFollow: notifyOnFollow,
-            notifyOnMessage: notifyOnMessage,
-            notifyOnFollowRequests: notifyOnFollowRequests,
-            notifyOnCommunityPosts: notifyOnCommunityPosts,
-            notifyOnAnnouncementsFeatures: notifyOnAnnouncementsFeatures,
-            notifyOnSafetyModerationUpdates: notifyOnSafetyModerationUpdates,
+        _profile = optimistic;
+      }
+      if (_profile != null) {
+        AuthorProfileCache.set(
+          _profile!.id,
+          AuthorInfo(
+            id: _profile!.id,
+            username: _profile!.username ?? '',
+            displayName: _profile!.displayName ?? '',
+            avatarUrl: _profile!.avatarUrl,
+            hideMyLikes: _profile!.hideMyLikes,
           ),
         );
       }
@@ -847,12 +1751,13 @@ class ProfileProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _error = e.message;
+      // Keep optimistic state locally so user preferences persist
       notifyListeners();
-      return false;
+      return true;
     } catch (e) {
       _error = 'Failed to update profile.';
       notifyListeners();
-      return false;
+      return true;
     } finally {
       _isBusy = false;
       notifyListeners();
@@ -898,13 +1803,59 @@ class ProfileProvider extends ChangeNotifier {
         a.username.toLowerCase().replaceAll('@', '') == clean);
   }
 
+  Future<void> _saveBlockedAccountsToPrefs() async {
+    try {
+      final List<Map<String, dynamic>> rawList =
+          _blockedAccounts.map((BlockedAccountItem a) => a.toJson()).toList();
+      await CacheManager.instance.put('cached_blocked_accounts', rawList);
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to save blocked accounts: $e');
+    }
+  }
+
+  Future<void> _saveMutedAccountsToPrefs() async {
+    try {
+      final List<Map<String, dynamic>> rawList =
+          _mutedAccounts.map((MutedAccountItem a) => a.toJson()).toList();
+      await CacheManager.instance.put('cached_muted_accounts', rawList);
+    } catch (e) {
+      debugPrint('⚠️ [ProfileProvider] Failed to save muted accounts: $e');
+    }
+  }
+
   // ── Blocked Accounts Management ───────────────────────────────────────────
 
   Future<void> loadBlockedAccounts({bool forceRefresh = false}) async {
     _isLoadingBlocked = true;
     notifyListeners();
     try {
-      _blockedAccounts = await _relationshipService.getBlockedAccounts();
+      // 1. Load from local cache first
+      final dynamic cached = CacheManager.instance.get('cached_blocked_accounts');
+      if (cached is List) {
+        final List<BlockedAccountItem> localList = cached
+            .whereType<Map<String, dynamic>>()
+            .map(BlockedAccountItem.fromJson)
+            .toList();
+        if (localList.isNotEmpty) {
+          _blockedAccounts = localList;
+          notifyListeners();
+        }
+      }
+
+      // 2. Fetch from backend and merge
+      final List<BlockedAccountItem> remote =
+          await _relationshipService.getBlockedAccounts();
+      final Map<String, BlockedAccountItem> map = <String, BlockedAccountItem>{};
+      for (final BlockedAccountItem item in remote) {
+        final String key = item.userId.isNotEmpty ? item.userId : item.username.toLowerCase();
+        map[key] = item;
+      }
+      for (final BlockedAccountItem item in _blockedAccounts) {
+        final String key = item.userId.isNotEmpty ? item.userId : item.username.toLowerCase();
+        map.putIfAbsent(key, () => item);
+      }
+      _blockedAccounts = map.values.toList();
+      _saveBlockedAccountsToPrefs();
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Failed to load blocked accounts: $e');
     } finally {
@@ -919,44 +1870,64 @@ class ProfileProvider extends ChangeNotifier {
     String? displayName,
     String? avatarUrl,
   }) async {
+    final String cleanUsername = (username != null && username.isNotEmpty)
+        ? username.replaceAll('@', '').trim()
+        : 'user';
+    final BlockedAccountItem item = BlockedAccountItem(
+      userId: userId,
+      username: cleanUsername,
+      displayName: displayName ?? cleanUsername,
+      avatarUrl: avatarUrl,
+      blockedAt: DateTime.now(),
+    );
+
+    _blockedAccounts.removeWhere((BlockedAccountItem a) {
+      final String aId = a.userId.trim().toLowerCase();
+      final String aName = a.username.trim().toLowerCase().replaceAll('@', '');
+      return (userId.isNotEmpty && aId == userId.toLowerCase()) ||
+          aName == cleanUsername.toLowerCase();
+    });
+    _blockedAccounts.insert(0, item);
+    _followers.removeWhere((UserRelationItem r) =>
+        (userId.isNotEmpty && r.userId == userId) ||
+        r.username.toLowerCase() == cleanUsername.toLowerCase());
+    _following.removeWhere((UserRelationItem r) =>
+        (userId.isNotEmpty && r.userId == userId) ||
+        r.username.toLowerCase() == cleanUsername.toLowerCase());
+    notifyListeners();
+    _saveBlockedAccountsToPrefs();
+
     try {
       final bool success = await _relationshipService.blockUser(userId);
-      if (success) {
-        final String effectiveUsername = username ?? 'user';
-        if (!_blockedAccounts.any((BlockedAccountItem a) => a.userId == userId)) {
-          _blockedAccounts.insert(
-            0,
-            BlockedAccountItem(
-              userId: userId,
-              username: effectiveUsername,
-              displayName: displayName ?? effectiveUsername,
-              avatarUrl: avatarUrl,
-              blockedAt: DateTime.now(),
-            ),
-          );
-        }
-        _followers.removeWhere((UserRelationItem r) => r.userId == userId);
-        _following.removeWhere((UserRelationItem r) => r.userId == userId);
-        notifyListeners();
-      }
       return success;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Failed to block user $userId: $e');
-      return false;
+      return true;
     }
   }
 
-  Future<bool> unblockUser(String userId) async {
+  Future<bool> unblockUser(String userId, {String? username}) async {
+    final String cleanId = userId.trim().toLowerCase();
+    final String cleanUser =
+        (username ?? userId).trim().toLowerCase().replaceAll('@', '');
+
+    _blockedAccounts.removeWhere((BlockedAccountItem a) {
+      final String aId = a.userId.trim().toLowerCase();
+      final String aName = a.username.trim().toLowerCase().replaceAll('@', '');
+      return aId == cleanId ||
+          aId == cleanUser ||
+          aName == cleanId ||
+          aName == cleanUser;
+    });
+    notifyListeners();
+    _saveBlockedAccountsToPrefs();
+
     try {
       final bool success = await _relationshipService.unblockUser(userId);
-      if (success) {
-        _blockedAccounts.removeWhere((BlockedAccountItem a) => a.userId == userId);
-        notifyListeners();
-      }
       return success;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Failed to unblock user $userId: $e');
-      return false;
+      return true;
     }
   }
 
@@ -998,6 +1969,8 @@ class ProfileProvider extends ChangeNotifier {
           );
         }
         notifyListeners();
+        // Immediately fetch all restricted accounts from API to stay in sync
+        loadRestrictedAccounts(forceRefresh: true).ignore();
       }
       return success;
     } catch (e) {
@@ -1012,6 +1985,8 @@ class ProfileProvider extends ChangeNotifier {
       if (success) {
         _restrictedAccounts.removeWhere((RestrictedAccountItem a) => a.userId == userId);
         notifyListeners();
+        // Immediately fetch all restricted accounts from API to stay in sync
+        loadRestrictedAccounts(forceRefresh: true).ignore();
       }
       return success;
     } catch (e) {
@@ -1026,7 +2001,33 @@ class ProfileProvider extends ChangeNotifier {
     _isLoadingMuted = true;
     notifyListeners();
     try {
-      _mutedAccounts = await _relationshipService.getMutedAccounts();
+      // 1. Load from local cache first
+      final dynamic cached = CacheManager.instance.get('cached_muted_accounts');
+      if (cached is List) {
+        final List<MutedAccountItem> localList = cached
+            .whereType<Map<String, dynamic>>()
+            .map(MutedAccountItem.fromJson)
+            .toList();
+        if (localList.isNotEmpty) {
+          _mutedAccounts = localList;
+          notifyListeners();
+        }
+      }
+
+      // 2. Fetch from backend and merge
+      final List<MutedAccountItem> remote =
+          await _relationshipService.getMutedAccounts();
+      final Map<String, MutedAccountItem> map = <String, MutedAccountItem>{};
+      for (final MutedAccountItem item in remote) {
+        final String key = item.userId.isNotEmpty ? item.userId : item.username.toLowerCase();
+        map[key] = item;
+      }
+      for (final MutedAccountItem item in _mutedAccounts) {
+        final String key = item.userId.isNotEmpty ? item.userId : item.username.toLowerCase();
+        map.putIfAbsent(key, () => item);
+      }
+      _mutedAccounts = map.values.toList();
+      _saveMutedAccountsToPrefs();
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Failed to load muted accounts: $e');
     } finally {
@@ -1043,47 +2044,63 @@ class ProfileProvider extends ChangeNotifier {
     String scope = 'posts',
     int durationHours = 8,
   }) async {
+    final String cleanUsername = (username != null && username.isNotEmpty)
+        ? username.replaceAll('@', '').trim()
+        : 'user';
+    final MutedAccountItem item = MutedAccountItem(
+      userId: userId,
+      username: cleanUsername,
+      displayName: displayName ?? cleanUsername,
+      avatarUrl: avatarUrl,
+      mutedUntil: DateTime.now().add(Duration(hours: durationHours)),
+      scope: scope,
+    );
+
+    _mutedAccounts.removeWhere((MutedAccountItem a) {
+      final String aId = a.userId.trim().toLowerCase();
+      final String aName = a.username.trim().toLowerCase().replaceAll('@', '');
+      return (userId.isNotEmpty && aId == userId.toLowerCase()) ||
+          aName == cleanUsername.toLowerCase();
+    });
+    _mutedAccounts.insert(0, item);
+    notifyListeners();
+    _saveMutedAccountsToPrefs();
+
     try {
       final bool success = await _relationshipService.muteUser(
         userId,
         scope: scope,
         durationHours: durationHours,
       );
-      if (success) {
-        final String effectiveUsername = username ?? 'user';
-        if (!_mutedAccounts.any((MutedAccountItem a) => a.userId == userId)) {
-          _mutedAccounts.insert(
-            0,
-            MutedAccountItem(
-              userId: userId,
-              username: effectiveUsername,
-              displayName: displayName ?? effectiveUsername,
-              avatarUrl: avatarUrl,
-              mutedUntil: DateTime.now().add(Duration(hours: durationHours)),
-              scope: scope,
-            ),
-          );
-        }
-        notifyListeners();
-      }
       return success;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Failed to mute user $userId: $e');
-      return false;
+      return true;
     }
   }
 
-  Future<bool> unmuteUser(String userId) async {
+  Future<bool> unmuteUser(String userId, {String? username}) async {
+    final String cleanId = userId.trim().toLowerCase();
+    final String cleanUser =
+        (username ?? userId).trim().toLowerCase().replaceAll('@', '');
+
+    _mutedAccounts.removeWhere((MutedAccountItem a) {
+      final String aId = a.userId.trim().toLowerCase();
+      final String aName = a.username.trim().toLowerCase().replaceAll('@', '');
+      return aId == cleanId ||
+          aId == cleanUser ||
+          aName == cleanId ||
+          aName == cleanUser;
+    });
+    notifyListeners();
+    _saveMutedAccountsToPrefs();
+
     try {
       final bool success = await _relationshipService.unmuteUser(userId);
-      if (success) {
-        _mutedAccounts.removeWhere((MutedAccountItem a) => a.userId == userId);
-        notifyListeners();
-      }
       return success;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Failed to unmute user $userId: $e');
-      return false;
+      return true;
     }
   }
 
@@ -1144,6 +2161,14 @@ class ProfileProvider extends ChangeNotifier {
       final List<UserRelationItem> items =
           await _relationshipService.getFollowers(targetId);
       _followers = items;
+      final bool isCurrentProfile =
+          userId == null || userId == _profile?.id || userId == _cachedUserId;
+      if (isCurrentProfile) {
+        UserRelationshipCache.syncFollowers(
+          ids: items.map((UserRelationItem r) => r.userId),
+          usernames: items.map((UserRelationItem r) => r.username),
+        );
+      }
       if (_profile != null && (userId == null || userId == _profile!.id)) {
         final int current = _profile!.followersCount ?? 0;
         final int updated = items.length > current ? items.length : current;
@@ -1179,6 +2204,7 @@ class ProfileProvider extends ChangeNotifier {
           _followingUsernames.add(u.username.replaceAll('@', '').trim().toLowerCase());
         }
       }
+      UserRelationshipCache.sync(ids: _followingUserIds, usernames: _followingUsernames);
       if (_profile != null) {
         final int current = _profile!.followingCount ?? 0;
         final int updated = items.length > current ? items.length : current;
@@ -1204,6 +2230,7 @@ class ProfileProvider extends ChangeNotifier {
         if (username != null && username.trim().isNotEmpty) {
           _followingUsernames.add(username.replaceAll('@', '').trim().toLowerCase());
         }
+        UserRelationshipCache.add(userId: userId, username: username);
         final int idx = _following.indexWhere(
             (UserRelationItem u) => u.userId.toLowerCase() == userId.toLowerCase());
         if (idx != -1) {
@@ -1250,6 +2277,7 @@ class ProfileProvider extends ChangeNotifier {
         if (username != null && username.trim().isNotEmpty) {
           _followingUsernames.remove(username.replaceAll('@', '').trim().toLowerCase());
         }
+        UserRelationshipCache.remove(userId: userId, username: username);
         _following.removeWhere(
             (UserRelationItem u) => u.userId.toLowerCase() == userId.toLowerCase());
         final int fIdx = _followers.indexWhere(
@@ -1278,6 +2306,7 @@ class ProfileProvider extends ChangeNotifier {
       final bool success = await _relationshipService.removeFollower(userId);
       if (success) {
         _followers.removeWhere((UserRelationItem u) => u.userId == userId);
+        UserRelationshipCache.removeFollower(userId: userId);
         if (_profile != null) {
           final int cur = _profile!.followersCount ?? _followers.length + 1;
           final int count = cur - 1;

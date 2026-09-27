@@ -10,6 +10,7 @@ import '../widgets/home_top_header_tabs.dart';
 import '../../auth/auth_provider.dart';
 import '../../create_post/widgets/create_post_type_bottom_sheet.dart';
 import '../../discover/screens/discover_screen.dart';
+import '../../messages/provider/messages_provider.dart';
 import '../../messages/screens/messages_screen.dart';
 import '../../profile/provider/profile_provider.dart';
 import 'discover_tab_screen.dart';
@@ -43,12 +44,14 @@ class _HomeScreenContent extends StatefulWidget {
   State<_HomeScreenContent> createState() => _HomeScreenContentState();
 }
 
-class _HomeScreenContentState extends State<_HomeScreenContent> {
+class _HomeScreenContentState extends State<_HomeScreenContent>
+    with WidgetsBindingObserver {
   bool _showGuestOverlayCard = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final HomeFeedProvider feed = context.read<HomeFeedProvider>();
@@ -64,6 +67,22 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
         }
       }
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !widget.isGuest) {
+      final String? uid = context.read<AuthProvider>().userId;
+      if (uid != null && uid.isNotEmpty) {
+        context.read<ProfileProvider>().fetchProfile(uid).catchError((_) {});
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override
@@ -120,12 +139,23 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
       }
     }
     if (!provider.isGuest && index == 2) {
+      ReelVideoPreloader.instance.setFeedVisible(false);
       ReelVideoPreloader.instance.pauseAll();
+      ReelVideoPreloader.instance.muteAll();
       CreatePostTypeBottomSheet.show(context);
       return;
     }
     if (index != 0) {
+      ReelVideoPreloader.instance.setFeedVisible(false);
       ReelVideoPreloader.instance.pauseAll();
+      ReelVideoPreloader.instance.muteAll();
+    } else {
+      ReelVideoPreloader.instance.setFeedVisible(true);
+    }
+    if (index == 3) {
+      try {
+        context.read<MessagesProvider>().setSearchQuery('');
+      } catch (_) {}
     }
     provider.setBottomNavIndex(index);
   }
@@ -147,18 +177,21 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
         bodyContent = Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            if (provider.activeSubMode == SubMode.reels)
-              ReelsFeedView(
-                onGuestActionTriggered: () {
-                  _triggerGuestAction(context, provider);
-                },
-              )
-            else
-              PostsFeedView(
-                onGuestActionTriggered: () {
-                  _triggerGuestAction(context, provider);
-                },
-              ),
+            IndexedStack(
+              index: provider.activeSubMode == SubMode.reels ? 0 : 1,
+              children: <Widget>[
+                ReelsFeedView(
+                  onGuestActionTriggered: () {
+                    _triggerGuestAction(context, provider);
+                  },
+                ),
+                PostsFeedView(
+                  onGuestActionTriggered: () {
+                    _triggerGuestAction(context, provider);
+                  },
+                ),
+              ],
+            ),
             Positioned(
               top: MediaQuery.of(context).padding.top + 10,
               left: 0,
@@ -222,10 +255,13 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
         bodyContent = Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            if (provider.activeSubMode == SubMode.reels)
-              const ReelsFeedView()
-            else
-              const PostsFeedView(),
+            IndexedStack(
+              index: provider.activeSubMode == SubMode.reels ? 0 : 1,
+              children: const <Widget>[
+                ReelsFeedView(),
+                PostsFeedView(),
+              ],
+            ),
             Positioned(
               top: MediaQuery.of(context).padding.top + 10,
               left: 0,

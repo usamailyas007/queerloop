@@ -33,47 +33,52 @@ class ProfileFeedTabsWidget extends StatelessWidget {
 
             return Expanded(
               child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () => onTabSelected(index),
-                child: Column(
-                  children: <Widget>[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        Text(
-                          tabs[index],
-                          style: AppTextStyles.titleSmall.copyWith(
-                            color: isSelected
-                                ? context.themeTextPrimary
-                                : context.themeTextMuted,
-                            fontWeight:
-                                isSelected ? FontWeight.w700 : FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
-                        if (hasLock) ...<Widget>[
-                          const SizedBox(width: 4),
-                          SvgPicture.asset(
-                            AppIcons.password,
-                            width: 12,
-                            height: 12,
-                            colorFilter: ColorFilter.mode(
-                              isSelected
+                child: Container(
+                  color: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    children: <Widget>[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          Text(
+                            tabs[index],
+                            style: AppTextStyles.titleSmall.copyWith(
+                              color: isSelected
                                   ? context.themeTextPrimary
                                   : context.themeTextMuted,
-                              BlendMode.srcIn,
+                              fontWeight:
+                                  isSelected ? FontWeight.w700 : FontWeight.w500,
+                              fontSize: 13,
                             ),
                           ),
+                          if (hasLock) ...<Widget>[
+                            const SizedBox(width: 4),
+                            SvgPicture.asset(
+                              AppIcons.password,
+                              width: 12,
+                              height: 12,
+                              colorFilter: ColorFilter.mode(
+                                isSelected
+                                    ? context.themeTextPrimary
+                                    : context.themeTextMuted,
+                                BlendMode.srcIn,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      height: 2.5,
-                      color: isSelected
-                          ? AppColors.gradientPink
-                          : Colors.transparent,
-                    ),
-                  ],
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 2.5,
+                        color: isSelected
+                            ? AppColors.gradientPink
+                            : Colors.transparent,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );

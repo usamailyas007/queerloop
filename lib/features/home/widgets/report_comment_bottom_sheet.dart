@@ -156,18 +156,26 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
                               width: 32,
                               height: 32,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) =>
-                                  const Icon(Icons.person, size: 32),
+                              errorBuilder: (_, _, _) => Image.asset(
+                                  AppImages.defaultAvatar,
+                                  width: 32,
+                                  height: 32,
+                                  fit: BoxFit.cover,
+                                ),
                             )
                           : Image.asset(
                               widget.avatarAsset.isNotEmpty
                                   ? widget.avatarAsset
-                                  : AppImages.user1,
+                                  : AppImages.defaultAvatar,
                               width: 32,
                               height: 32,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) =>
-                                  const Icon(Icons.person, size: 32),
+                              errorBuilder: (_, _, _) => Image.asset(
+                                  AppImages.defaultAvatar,
+                                  width: 32,
+                                  height: 32,
+                                  fit: BoxFit.cover,
+                                ),
                             ),
                     ),
                     const SizedBox(width: AppSpacing.md),

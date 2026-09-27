@@ -63,6 +63,8 @@ class _ChatScreenContent extends StatefulWidget {
 class _ChatScreenContentState extends State<_ChatScreenContent> {
   late final TextEditingController _messageController;
   late final ScrollController _scrollController;
+  late final FocusNode _focusNode;
+  ChatMessageModel? _replyingToMessage;
   Timer? _typingTimer;
   bool _isTypingSent = false;
   int _lastMessageCount = 0;
@@ -121,6 +123,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
     super.initState();
     _messageController = TextEditingController();
     _scrollController = ScrollController();
+    _focusNode = FocusNode();
     _messageController.addListener(_handleTypingChange);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
@@ -189,7 +192,113 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
     _messageController.removeListener(_handleTypingChange);
     _messageController.dispose();
     _scrollController.dispose();
+    _focusNode.dispose();
     super.dispose();
+  }
+
+  Widget _buildReplyPreviewBanner(
+    BuildContext context,
+    ConversationModel activeConv,
+  ) {
+    if (_replyingToMessage == null) return const SizedBox.shrink();
+
+    final String senderDisplay = _replyingToMessage!.isMe
+        ? 'yourself'
+        : (_replyingToMessage!.senderUsername.isNotEmpty &&
+                _replyingToMessage!.senderUsername != 'User'
+            ? (_replyingToMessage!.senderUsername.startsWith('@')
+                ? _replyingToMessage!.senderUsername
+                : '@${_replyingToMessage!.senderUsername}')
+            : (activeConv.displayName != null &&
+                    activeConv.displayName!.isNotEmpty
+                ? activeConv.displayName!
+                : (activeConv.username.startsWith('@')
+                    ? activeConv.username
+                    : '@${activeConv.username}')));
+
+    final String previewContent = _replyingToMessage!.text != null &&
+            _replyingToMessage!.text!.trim().isNotEmpty
+        ? _replyingToMessage!.text!.trim()
+        : (_replyingToMessage!.type == MessageType.image
+            ? 'Photo'
+            : (_replyingToMessage!.type == MessageType.postShare
+                ? 'Shared Post'
+                : 'Message'));
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: context.themeCardBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.gradientCyan.withValues(alpha: 0.5),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 3,
+            height: 32,
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradientButton,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(
+            Icons.reply_rounded,
+            color: AppColors.gradientCyan,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  'Replying to $senderDisplay',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.gradientCyan,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  previewContent,
+                  style: AppTextStyles.caption.copyWith(
+                    color: context.themeTextSecondary,
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _replyingToMessage = null;
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: context.themeIconMuted,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -752,6 +861,15 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                                     context,
                                     messageText: msg.text ?? '',
                                     isMe: msg.isMe,
+                                    onReply: () {
+                                      setState(() {
+                                        _replyingToMessage = msg;
+                                      });
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
+                                        _focusNode.requestFocus();
+                                      });
+                                    },
                                     onEmojiReaction: (String emoji) {
                                       provider.toggleReaction(
                                         activeConv.id,
@@ -925,107 +1043,140 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
               // Standard Input Bar
               Padding(
                 padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    // Gallery Icon
-                    GestureDetector(
-                      onTap: () async {
-                        try {
-                          final ImagePicker picker = ImagePicker();
-                          final XFile? file = await picker.pickImage(
-                            source: ImageSource.gallery,
-                          );
-                          if (file != null) {
-                            provider.sendImageMessage(
-                              activeConv.id,
-                              imageFilePath: file.path,
-                            );
-                          }
-                        } catch (e) {
-                          debugPrint(
-                            'Error picking chat image from gallery: $e',
-                          );
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          Icons.image_outlined,
-                          color: context.themeIconMuted,
-                          size: 24,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-
-                    // Camera Icon
-                    GestureDetector(
-                      onTap: () async {
-                        try {
-                          final ImagePicker picker = ImagePicker();
-                          final XFile? file = await picker.pickImage(
-                            source: ImageSource.camera,
-                          );
-                          if (file != null) {
-                            provider.sendImageMessage(
-                              activeConv.id,
-                              imageFilePath: file.path,
-                            );
-                          }
-                        } catch (e) {
-                          debugPrint('Error capturing chat image: $e');
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          Icons.camera_alt_outlined,
-                          color: context.themeIconMuted,
-                          size: 24,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-
-                    // Message Input Field
-                    Expanded(
-                      child: AppTextField(
-                        controller: _messageController,
-                        hintText: 'Message...',
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-
-                    // Send Button
-                    GestureDetector(
-                      onTap: () {
-                        final String text = _messageController.text.trim();
-                        if (text.isNotEmpty) {
-                          _typingTimer?.cancel();
-                          if (_isTypingSent) {
-                            _isTypingSent = false;
-                            provider.sendTyping(activeConv.id, false);
-                          }
-                          provider.sendMessage(activeConv.id, text);
-                          _messageController.clear();
-                          _scrollToBottom(animated: true);
-                        }
-                      },
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: const BoxDecoration(
-                          gradient: AppColors.secondaryGradientButton,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.send_rounded,
-                            color: Colors.white,
-                            size: 18,
+                    if (_replyingToMessage != null)
+                      _buildReplyPreviewBanner(context, activeConv),
+                    Row(
+                      children: <Widget>[
+                        // Gallery Icon
+                        GestureDetector(
+                          onTap: () async {
+                            try {
+                              final ImagePicker picker = ImagePicker();
+                              final XFile? file = await picker.pickImage(
+                                source: ImageSource.gallery,
+                              );
+                              if (file != null) {
+                                provider.sendImageMessage(
+                                  activeConv.id,
+                                  imageFilePath: file.path,
+                                );
+                              }
+                            } catch (e) {
+                              debugPrint(
+                                'Error picking chat image from gallery: $e',
+                              );
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.image_outlined,
+                              color: context.themeIconMuted,
+                              size: 24,
+                            ),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: AppSpacing.sm),
+
+                        // Camera Icon
+                        GestureDetector(
+                          onTap: () async {
+                            try {
+                              final ImagePicker picker = ImagePicker();
+                              final XFile? file = await picker.pickImage(
+                                source: ImageSource.camera,
+                              );
+                              if (file != null) {
+                                provider.sendImageMessage(
+                                  activeConv.id,
+                                  imageFilePath: file.path,
+                                );
+                              }
+                            } catch (e) {
+                              debugPrint('Error capturing chat image: $e');
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.camera_alt_outlined,
+                              color: context.themeIconMuted,
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+
+                        // Message Input Field
+                        Expanded(
+                          child: AppTextField(
+                            controller: _messageController,
+                            focusNode: _focusNode,
+                            hintText: 'Message...',
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+
+                        // Send Button
+                        GestureDetector(
+                          onTap: () {
+                            final String text = _messageController.text.trim();
+                            if (text.isNotEmpty) {
+                              _typingTimer?.cancel();
+                              if (_isTypingSent) {
+                                _isTypingSent = false;
+                                provider.sendTyping(activeConv.id, false);
+                              }
+                              final String? replySender = _replyingToMessage != null
+                                  ? (_replyingToMessage!.isMe
+                                      ? 'You'
+                                      : (_replyingToMessage!.senderUsername.isNotEmpty &&
+                                              _replyingToMessage!.senderUsername != 'User'
+                                          ? _replyingToMessage!.senderUsername
+                                          : (activeConv.displayName ?? activeConv.username)))
+                                  : null;
+                              final String? replyText = _replyingToMessage != null
+                                  ? ((_replyingToMessage!.text != null &&
+                                          _replyingToMessage!.text!.trim().isNotEmpty)
+                                      ? _replyingToMessage!.text
+                                      : (_replyingToMessage!.mediaUrl != null
+                                          ? '📷 Photo'
+                                          : null))
+                                  : null;
+                              provider.sendMessage(
+                                activeConv.id,
+                                text,
+                                replyToId: _replyingToMessage?.id,
+                                replyToText: replyText,
+                                replyToSender: replySender,
+                              );
+                              _messageController.clear();
+                              setState(() {
+                                _replyingToMessage = null;
+                              });
+                              _scrollToBottom(animated: true);
+                            }
+                          },
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: const BoxDecoration(
+                              gradient: AppColors.secondaryGradientButton,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.send_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

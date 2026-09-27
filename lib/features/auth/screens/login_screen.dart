@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -37,9 +39,45 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _staySignedIn = true;
   bool _isPreloadingFeed = false;
+  bool _isEmailLoading = false;
+  bool _isGoogleLoading = false;
+  bool _isAppleLoading = false;
+
+  bool get _isAnyBusy =>
+      _isEmailLoading ||
+      _isGoogleLoading ||
+      _isAppleLoading ||
+      _isPreloadingFeed;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController.addListener(_clearAuthError);
+    _passwordController.addListener(_clearAuthError);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthProvider>().clearError();
+      }
+    });
+  }
+
+  void _clearAuthError() {
+    final AuthProvider auth = context.read<AuthProvider>();
+    if (auth.error != null) {
+      auth.clearError();
+    }
+  }
+
+  @override
+  void deactivate() {
+    context.read<AuthProvider>().clearError();
+    super.deactivate();
+  }
 
   @override
   void dispose() {
+    _emailController.removeListener(_clearAuthError);
+    _passwordController.removeListener(_clearAuthError);
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -53,9 +91,14 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
+    if (_isAnyBusy) return;
 
     final AuthProvider authProvider = context.read<AuthProvider>();
-    setState(() => _isPreloadingFeed = true);
+    setState(() {
+      _isEmailLoading = true;
+      _isPreloadingFeed = true;
+    });
+
     final bool ok = await authProvider.signIn(
           email: _emailController.text.trim(),
           password: _passwordController.text,
@@ -63,7 +106,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!ok) {
       if (mounted) {
-        setState(() => _isPreloadingFeed = false);
+        setState(() {
+          _isEmailLoading = false;
+          _isPreloadingFeed = false;
+        });
         if (authProvider.errorCode == 'EMAIL_NOT_VERIFIED') {
           final String email = _emailController.text.trim();
           authProvider.resendEmailOtp(email);
@@ -172,35 +218,74 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleGoogleSignIn() async {
     final AuthProvider authProvider = context.read<AuthProvider>();
-    if (authProvider.isBusy) return;
+    if (_isAnyBusy || authProvider.isBusy) return;
+
+    setState(() => _isGoogleLoading = true);
+    final SocialSignInResult result;
+    try {
+      result = await authProvider.signInWithGoogle();
+    } catch (e) {
+      if (mounted) setState(() => _isGoogleLoading = false);
+      return;
+    }
     await _handleSocialSignInResult(
-      await authProvider.signInWithGoogle(),
+      result,
       authProvider,
+      loadingSetter: (bool v) => setState(() => _isGoogleLoading = v),
     );
   }
 
   Future<void> _handleAppleSignIn() async {
     final AuthProvider authProvider = context.read<AuthProvider>();
-    if (authProvider.isBusy) return;
+    if (_isAnyBusy || authProvider.isBusy) return;
+
+    setState(() => _isAppleLoading = true);
+    final SocialSignInResult result;
+    try {
+      result = await authProvider.signInWithApple();
+    } catch (e) {
+      if (mounted) setState(() => _isAppleLoading = false);
+      return;
+    }
     await _handleSocialSignInResult(
-      await authProvider.signInWithApple(),
+      result,
       authProvider,
+      loadingSetter: (bool v) => setState(() => _isAppleLoading = v),
     );
   }
 
   /// Shared handler for Google + Apple sign-in — both go through the same
   /// login-then-register flow, so they land in the exact same UI states.
+  /// [loadingSetter] flips the caller's own loading flag, so each social
+  /// button's spinner stays independent of the other.
   Future<void> _handleSocialSignInResult(
     SocialSignInResult result,
-    AuthProvider authProvider,
-  ) async {
+    AuthProvider authProvider, {
+    required ValueChanged<bool> loadingSetter,
+  }) async {
     if (!mounted) return;
 
     if (result.isCancelled) {
+      loadingSetter(false);
+      return;
+    }
+
+    if (result.accountExistsWithPassword) {
+      loadingSetter(false);
+      if (result.email != null && result.email!.isNotEmpty) {
+        _emailController.text = result.email!;
+      }
+      AppSnackBar.showInfo(
+        context,
+        title: 'Account Exists',
+        subtitle: result.errorMessage ??
+            'This email is already registered with a password. Please sign in with your email and password.',
+      );
       return;
     }
 
     if (result.isError) {
+      loadingSetter(false);
       final String? errorMsg = result.errorMessage ?? authProvider.error;
       if (errorMsg != null && errorMsg.isNotEmpty) {
         AppSnackBar.showError(
@@ -234,7 +319,9 @@ class _LoginScreenState extends State<LoginScreen> {
         context,
         AppRoutes.verifyEmailOtp,
         arguments: result.email,
-      );
+      ).then((_) {
+        if (mounted) loadingSetter(false);
+      });
       return;
     }
 
@@ -249,46 +336,51 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     // Case 3: Already registered and profile completed -> Preload feed and Go Home
+    // Keep the loading flag true so the button shows the loader until _goHome completes.
     if (result.isSuccess) {
       await _warmUpFeedAndGoHome(authProvider);
     }
   }
 
   /// Resets the feed, pre-fetches the profile + first reel, then navigates
-  /// home. Shared by both the password login path and social sign-in.
+  /// home. Shared by both Google and Apple sign-in.
   Future<void> _warmUpFeedAndGoHome(AuthProvider authProvider) async {
-    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
-    homeFeed.resetToHome();
-    final String? uid = authProvider.userId;
-    final List<Future<dynamic>> warmUpTasks = <Future<dynamic>>[];
-    if (uid != null && uid.isNotEmpty) {
-      warmUpTasks.add(
-        context.read<ProfileProvider>().fetchProfile(uid).catchError((_) {}),
-      );
-    }
-    warmUpTasks.add(() async {
-      try {
-        await homeFeed.loadFeed();
-        if (homeFeed.reels.isNotEmpty) {
-          final firstReel = homeFeed.reels.first;
-          final controller =
-              await ReelVideoPreloader.instance.getOrCreate(firstReel);
-          if (controller != null && !controller.value.isInitialized) {
-            await controller.initialize().timeout(
-                  const Duration(seconds: 4),
-                  onTimeout: () => controller,
-                );
-          }
-          ReelVideoPreloader.instance.preloadSurrounding(homeFeed.reels, 0);
-        }
-      } catch (e) {
-        debugPrint('⚠️ [Login] Social pre-fetching feed failed: $e');
+    try {
+      final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+      homeFeed.resetToHome();
+      final String? uid = authProvider.userId;
+      final List<Future<dynamic>> warmUpTasks = <Future<dynamic>>[];
+      if (uid != null && uid.isNotEmpty) {
+        warmUpTasks.add(
+          context.read<ProfileProvider>().fetchProfile(uid).catchError((_) {}),
+        );
       }
-    }());
-    await Future.wait(warmUpTasks).timeout(
-      const Duration(seconds: 5),
-      onTimeout: () => <dynamic>[],
-    );
+      warmUpTasks.add(() async {
+        try {
+          await homeFeed.loadFeed();
+          if (homeFeed.reels.isNotEmpty) {
+            final firstReel = homeFeed.reels.first;
+            final controller =
+                await ReelVideoPreloader.instance.getOrCreate(firstReel);
+            if (controller != null && !controller.value.isInitialized) {
+              await controller.initialize().timeout(
+                    const Duration(seconds: 4),
+                    onTimeout: () => controller,
+                  );
+            }
+            ReelVideoPreloader.instance.preloadSurrounding(homeFeed.reels, 0);
+          }
+        } catch (e) {
+          debugPrint('⚠️ [Login] Social pre-fetching feed failed: $e');
+        }
+      }());
+      await Future.wait(warmUpTasks).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => <dynamic>[],
+      );
+    } catch (e) {
+      debugPrint('⚠️ [Login] Social warmup error: $e');
+    }
 
     if (!mounted) return;
     _goHome(context);
@@ -381,7 +473,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             if (value == null || value.isEmpty) {
                               return l10n.authEnterPasswordError;
                             }
-                            if (value.length < 6) {
+                            if (value.length < 8) {
                               return l10n.authPasswordLengthError;
                             }
                             return null;
@@ -443,13 +535,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: AppSpacing.xl),
 
                       // ── Login button — rebuilds when busy or preloading
-                      Selector<AuthProvider, bool>(
-                        selector: (_, AuthProvider p) => p.isBusy,
-                        builder: (_, bool busy, _) => AppGradientButton(
-                          text: l10n.authLogIn,
-                          isLoading: busy || _isPreloadingFeed,
-                          onPressed: (busy || _isPreloadingFeed) ? () {} : _submit,
-                        ),
+                      AppGradientButton(
+                        text: l10n.authLogIn,
+                        isLoading: _isEmailLoading || _isPreloadingFeed,
+                        onPressed: _isAnyBusy ? () {} : _submit,
                       ),
 
                       const SizedBox(height: AppSpacing.lg),
@@ -458,32 +547,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: AppSpacing.lg),
 
-                      // ── Social Login Row ─────────────────────────────────
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Selector<AuthProvider, bool>(
-                              selector: (_, AuthProvider p) => p.isBusy,
-                              builder: (_, bool busy, _) => AppSocialButton(
-                                text: l10n.authApple,
-                                iconPath: AppIcons.apple,
-                                onPressed: busy ? () {} : _handleAppleSignIn,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Selector<AuthProvider, bool>(
-                              selector: (_, AuthProvider p) => p.isBusy,
-                              builder: (_, bool busy, _) => AppSocialButton(
-                                text: l10n.authGoogle,
-                                iconPath: AppIcons.google,
-                                onPressed: busy ? () {} : _handleGoogleSignIn,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      // ── Social Login Button (platform-specific) ──────────
+                      // iOS: Apple only | Android: Google only
+                      if (Platform.isIOS)
+                        AppSocialButton(
+                          text: l10n.authContinueApple,
+                          iconPath: AppIcons.apple,
+                          isLoading: _isAppleLoading,
+                          onPressed: _isAnyBusy ? () {} : _handleAppleSignIn,
+                        )
+                      else
+                        AppSocialButton(
+                          text: l10n.authGoogle,
+                          iconPath: AppIcons.google,
+                          isLoading: _isGoogleLoading,
+                          onPressed:
+                              _isAnyBusy ? () {} : _handleGoogleSignIn,
+                        ),
                     ],
                   ),
                 ),
@@ -513,6 +593,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     highlightedText: l10n.authCreateAnAccount,
                     highlightColor: AppColors.gradientPink,
                     onTap: () {
+                      context.read<AuthProvider>().clearError();
                       // Replace so back doesn't loop between login ↔ register
                       Navigator.pushReplacementNamed(
                         context,

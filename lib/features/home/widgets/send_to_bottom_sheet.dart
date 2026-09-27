@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -21,6 +22,7 @@ class SendToBottomSheet extends StatefulWidget {
     this.reel,
     this.postId,
     this.postAuthor,
+    this.postAuthorId,
     this.postThumbnail,
     this.postCaption,
     super.key,
@@ -29,6 +31,7 @@ class SendToBottomSheet extends StatefulWidget {
   final ReelItemModel? reel;
   final String? postId;
   final String? postAuthor;
+  final String? postAuthorId;
   final String? postThumbnail;
   final String? postCaption;
 
@@ -135,11 +138,27 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
           }).toList();
 
     final String shareTargetId = widget.reel?.id ?? widget.postId ?? '';
-    final String postAuthorDisplay = widget.reel?.username ?? widget.postAuthor ?? 'Creator';
+    final String rawAuthor =
+        widget.reel?.username ?? widget.postAuthor ?? 'Creator';
+    final String cleanAuthor = rawAuthor.replaceAll(RegExp(r'^@+'), '').trim();
+    final String postAuthorDisplay =
+        cleanAuthor.isNotEmpty ? cleanAuthor : 'Creator';
     final String postDescDisplay = widget.reel != null
         ? (widget.reel!.caption.isNotEmpty ? widget.reel!.caption : 'Reel')
         : (widget.postCaption ?? 'Post');
-    final String? postThumb = widget.reel?.thumbnailUrl ?? widget.postThumbnail;
+    String? postThumb = widget.reel?.thumbnailUrl ?? widget.postThumbnail;
+    if (postThumb == null || postThumb.isEmpty) {
+      if (widget.reel?.videoUrl != null && widget.reel!.videoUrl!.contains('/videos/processed/')) {
+        postThumb = widget.reel!.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+      }
+    }
+    if (postThumb != null) {
+      if (postThumb.contains('/videos/processed/') && postThumb.endsWith('/thumbnail.jpg')) {
+        postThumb = postThumb.replaceAll('/thumbnail.jpg', '/thumb.0000000.jpg');
+      } else if (postThumb.contains('/videos/processed/') && postThumb.endsWith('/master.m3u8')) {
+        postThumb = postThumb.replaceAll('/master.m3u8', '/thumb.0000000.jpg');
+      }
+    }
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.82,
@@ -230,18 +249,34 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                                   width: 44,
                                   height: 44,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => Image.asset(
-                                    AppImages.forYouImg,
+                                  errorBuilder: (_, _, _) => Container(
                                     width: 44,
                                     height: 44,
-                                    fit: BoxFit.cover,
+                                    color: context.isDarkMode
+                                        ? Colors.white12
+                                        : Colors.black12,
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.play_circle_outline_rounded,
+                                        color: Colors.white38,
+                                        size: 24,
+                                      ),
+                                    ),
                                   ),
                                 )
-                              : Image.asset(
-                                  AppImages.forYouImg,
+                              : Container(
                                   width: 44,
                                   height: 44,
-                                  fit: BoxFit.cover,
+                                  color: context.isDarkMode
+                                      ? Colors.white12
+                                      : Colors.black12,
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.play_circle_outline_rounded,
+                                      color: Colors.white38,
+                                      size: 24,
+                                    ),
+                                  ),
                                 ),
                         ),
                         const SizedBox(width: AppSpacing.md),
@@ -371,26 +406,36 @@ class _SendToBottomSheetState extends State<SendToBottomSheet> {
                         }
                       }
 
+                      final int recipientCount = _selectedUserIds.length;
+                      final String contentTypeLabel =
+                          widget.reel != null ? 'Reel' : 'Post';
+                      final String subtitleText = recipientCount == 1
+                          ? 'Shared to @${_selectedUserIds.first}!'
+                          : 'Shared with $recipientCount recipient(s)!';
+
+                      AppSnackBar.showSuccess(
+                        context,
+                        title: '$contentTypeLabel shared',
+                        subtitle: subtitleText,
+                      );
+
                       Navigator.pop(context);
 
                       if (shareTargetId.isNotEmpty) {
-                        await msgProvider.sharePost(
-                          sharedPostId: shareTargetId,
-                          conversationIds: targetConvIds.isNotEmpty ? targetConvIds : null,
-                          recipientUserIds: targetUserIds.isNotEmpty ? targetUserIds : null,
-                          message: _messageController.text.trim().isNotEmpty
-                              ? _messageController.text.trim()
-                              : null,
-                          contentType: widget.reel != null ? 'reel' : 'post',
+                        unawaited(
+                          msgProvider.sharePost(
+                            sharedPostId: shareTargetId,
+                            conversationIds: targetConvIds.isNotEmpty ? targetConvIds : null,
+                            recipientUserIds: targetUserIds.isNotEmpty ? targetUserIds : null,
+                            message: _messageController.text.trim().isNotEmpty
+                                ? _messageController.text.trim()
+                                : null,
+                            contentType: widget.reel != null ? 'reel' : 'post',
+                            reel: widget.reel,
+                            postAuthorId: widget.reel?.authorId ?? widget.postAuthorId,
+                          ),
                         );
                       }
-
-                      if (!context.mounted) return;
-                      AppSnackBar.showSuccess(
-                        context,
-                        title: 'Sent',
-                        subtitle: 'Shared with ${_selectedUserIds.length} recipient(s)!',
-                      );
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -450,16 +495,24 @@ class _ContactListTile extends StatelessWidget {
                       width: 40,
                       height: 40,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) =>
-                          const Icon(Icons.person, size: 40),
+                      errorBuilder: (_, _, _) => Image.asset(
+                          AppImages.defaultAvatar,
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                        ),
                     )
                   : Image.asset(
-                      avatarAsset.isNotEmpty ? avatarAsset : AppImages.user1,
+                      avatarAsset.isNotEmpty ? avatarAsset : AppImages.defaultAvatar,
                       width: 40,
                       height: 40,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) =>
-                          const Icon(Icons.person, size: 40),
+                      errorBuilder: (_, _, _) => Image.asset(
+                          AppImages.defaultAvatar,
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                        ),
                     ),
             ),
             const SizedBox(width: AppSpacing.md),

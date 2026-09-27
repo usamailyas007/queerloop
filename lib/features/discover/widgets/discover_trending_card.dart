@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../home/screens/hashtag_posts_screen.dart';
 import '../models/discover_models.dart';
+import '../provider/discover_provider.dart';
 
 /// Single row card for a trending hashtag item.
 class DiscoverTrendingCard extends StatelessWidget {
@@ -20,8 +22,8 @@ class DiscoverTrendingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        Navigator.push<void>(
+      onTap: () async {
+        await Navigator.push<void>(
           context,
           MaterialPageRoute<void>(
             builder: (_) => HashtagPostsScreen(
@@ -31,6 +33,9 @@ class DiscoverTrendingCard extends StatelessWidget {
             ),
           ),
         );
+        if (context.mounted) {
+          context.read<DiscoverProvider>().fetchTrendingHashtags();
+        }
       },
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -50,24 +55,12 @@ class DiscoverTrendingCard extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    item.hashtag,
-                    style: AppTextStyles.titleSmall.copyWith(
-                      color: context.themeTextPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.postsCount,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.themeTextMuted,
-                    ),
-                  ),
-                ],
+              child: Text(
+                item.hashtag,
+                style: AppTextStyles.titleSmall.copyWith(
+                  color: context.themeTextPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
             ClipRRect(

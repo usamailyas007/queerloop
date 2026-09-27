@@ -11,6 +11,7 @@ import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../provider/profile_provider.dart';
 import '../services/user_relationship_service.dart';
+import '../../messages/provider/messages_provider.dart';
 import '../../messages/widgets/block_user_modal_dialog.dart';
 import '../../messages/widgets/mute_duration_bottom_sheet.dart';
 import '../../messages/widgets/report_conversation_bottom_sheet.dart';
@@ -134,8 +135,12 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
         profileProvider.isRestricted(userId) || profileProvider.isRestricted(username);
     final bool isCurrentlyMuted =
         profileProvider.isMuted(userId) || profileProvider.isMuted(username);
+    final MessagesProvider msgProvider = context.watch<MessagesProvider>();
     final bool isCurrentlyBlocked =
-        profileProvider.isBlocked(userId) || profileProvider.isBlocked(username);
+        profileProvider.isBlocked(userId) ||
+        profileProvider.isBlocked(username) ||
+        msgProvider.isBlocked(userId) ||
+        msgProvider.isBlocked(username);
 
     return Container(
       decoration: BoxDecoration(
@@ -226,6 +231,11 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                         (targetId != null && targetId.isNotEmpty) ? targetId : username;
 
                     await profileProvider.unrestrictUser(effectiveId);
+                    try {
+                      if (context.mounted) {
+                        context.read<MessagesProvider>().unrestrictUser(effectiveId, username: username);
+                      }
+                    } catch (_) {}
                     if (!context.mounted) return;
                     AppSnackBar.show(
                       context,
@@ -235,6 +245,11 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                       actionLabel: 'Undo',
                       onAction: () async {
                         await profileProvider.restrictUser(effectiveId, username: username);
+                        try {
+                          if (context.mounted) {
+                            context.read<MessagesProvider>().restrictUser(effectiveId, username: username);
+                          }
+                        } catch (_) {}
                       },
                     );
                   }();
@@ -253,6 +268,11 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                           (targetId != null && targetId.isNotEmpty) ? targetId : username;
 
                       await profileProvider.restrictUser(effectiveId, username: username);
+                      try {
+                        if (context.mounted) {
+                          context.read<MessagesProvider>().restrictUser(effectiveId, username: username);
+                        }
+                      } catch (_) {}
                     },
                   );
                 }
@@ -324,7 +344,7 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                     final String effectiveId =
                         (targetId != null && targetId.isNotEmpty) ? targetId : username;
 
-                    await profileProvider.unmuteUser(effectiveId);
+                    await profileProvider.unmuteUser(effectiveId, username: username);
                     if (!context.mounted) return;
                     AppSnackBar.show(
                       context,
@@ -375,7 +395,7 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                         subtitle: "You won't see their posts in your feed",
                         actionLabel: 'Undo',
                         onAction: () async {
-                          await profileProvider.unmuteUser(effectiveId);
+                          await profileProvider.unmuteUser(effectiveId, username: username);
                         },
                       );
                     },
@@ -416,7 +436,12 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                     final String effectiveId =
                         (targetId != null && targetId.isNotEmpty) ? targetId : username;
 
-                    await profileProvider.unblockUser(effectiveId);
+                    await profileProvider.unblockUser(effectiveId, username: username);
+                    try {
+                      if (context.mounted) {
+                        context.read<MessagesProvider>().unblockUser(effectiveId, username: username);
+                      }
+                    } catch (_) {}
                     if (!context.mounted) return;
                     AppSnackBar.show(
                       context,
@@ -426,6 +451,11 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                       actionLabel: 'Undo',
                       onAction: () async {
                         await profileProvider.blockUser(effectiveId, username: username);
+                        try {
+                          if (context.mounted) {
+                            context.read<MessagesProvider>().blockUser(effectiveId, username: username);
+                          }
+                        } catch (_) {}
                       },
                     );
                   }();
@@ -447,6 +477,11 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                         effectiveId,
                         username: username,
                       );
+                      try {
+                        if (context.mounted) {
+                          context.read<MessagesProvider>().blockUser(effectiveId, username: username);
+                        }
+                      } catch (_) {}
                     },
                     onConfirmUnblock: () async {
                       String? targetId = userId;
@@ -459,6 +494,11 @@ class UserProfileOptionsBottomSheet extends StatelessWidget {
                           (targetId != null && targetId.isNotEmpty) ? targetId : username;
 
                       await profileProvider.unblockUser(effectiveId);
+                      try {
+                        if (context.mounted) {
+                          context.read<MessagesProvider>().unblockUser(effectiveId, username: username);
+                        }
+                      } catch (_) {}
                     },
                   );
                 }

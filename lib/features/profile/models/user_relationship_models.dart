@@ -251,6 +251,14 @@ class BlockedAccountItem {
   final String? displayName;
   final String? avatarUrl;
   final DateTime? blockedAt;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'userId': userId,
+        'username': username,
+        'displayName': displayName,
+        'avatarUrl': avatarUrl,
+        'blockedAt': blockedAt?.toIso8601String(),
+      };
 }
 
 class RestrictedAccountItem {
@@ -318,6 +326,14 @@ class RestrictedAccountItem {
   final String? displayName;
   final String? avatarUrl;
   final DateTime? restrictedAt;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'userId': userId,
+        'username': username,
+        'displayName': displayName,
+        'avatarUrl': avatarUrl,
+        'restrictedAt': restrictedAt?.toIso8601String(),
+      };
 }
 
 class MutedAccountItem {
@@ -390,4 +406,13 @@ class MutedAccountItem {
   final String? avatarUrl;
   final DateTime? mutedUntil;
   final String? scope;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'userId': userId,
+        'username': username,
+        'displayName': displayName,
+        'avatarUrl': avatarUrl,
+        'mutedUntil': mutedUntil?.toIso8601String(),
+        'scope': scope,
+      };
 }

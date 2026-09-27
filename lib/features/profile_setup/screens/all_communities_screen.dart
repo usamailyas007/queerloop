@@ -25,11 +25,14 @@ class AllCommunitiesScreen extends StatefulWidget {
 
 class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
   final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
   bool _isJoining = false;
 
   @override
   void initState() {
     super.initState();
+    _searchQuery = '';
+    _searchController.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final ProfileProvider profile = context.read<ProfileProvider>();
@@ -37,6 +40,7 @@ class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
           context.read<ProfileSetupProvider>();
       final AuthProvider auth = context.read<AuthProvider>();
 
+      setupProvider.setSearchQuery('');
       setupProvider.fetchCommunities();
 
       final String? uid = auth.userId ?? auth.user?.id;
@@ -50,6 +54,12 @@ class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
         );
       }
     });
+  }
+
+  @override
+  void deactivate() {
+    context.read<ProfileSetupProvider>().setSearchQuery('');
+    super.deactivate();
   }
 
   @override
@@ -102,49 +112,87 @@ class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
   Widget build(BuildContext context) {
     final ProfileSetupProvider provider =
         context.watch<ProfileSetupProvider>();
-    final List<CommunityModel> communities = provider.filteredCommunities;
+    final String query = _searchQuery.trim().toLowerCase();
+    final List<CommunityModel> communities = query.isEmpty
+        ? provider.allCommunities
+        : provider.allCommunities
+            .where((CommunityModel c) =>
+                c.name.toLowerCase().contains(query))
+            .toList();
     final int joinedCount = provider.joinedCount;
     final AppLocalizations l10n = AppLocalizations.of(context);
 
-    return Scaffold(
-      backgroundColor: context.themeBackground,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.screenPaddingHorizontal,
-          ),
-          child: Column(
-            children: <Widget>[
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: <Widget>[
-                  const AuthBackButton(),
-                  const SizedBox(width: AppSpacing.lg),
-                  Text(
-                    l10n.profileAllCommunitiesTitle,
-                    style: AppTextStyles.authHeaderTitle.copyWith(
-                      fontSize: 22,
-                      color: context.themeTextPrimary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics(),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      AppTextField(
-                        controller: _searchController,
-                        hintText: l10n.profileSearchCommunities,
-                        prefixIconPath: AppIcons.searchSvg,
-                        onChanged: (String val) => provider.setSearchQuery(val),
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (didPop) {
+          context.read<ProfileSetupProvider>().setSearchQuery('');
+        }
+      },
+      child: Scaffold(
+        backgroundColor: context.themeBackground,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPaddingHorizontal,
+            ),
+            child: Column(
+              children: <Widget>[
+                const SizedBox(height: AppSpacing.md),
+                Row(
+                  children: <Widget>[
+                    const AuthBackButton(),
+                    const SizedBox(width: AppSpacing.lg),
+                    Text(
+                      l10n.profileAllCommunitiesTitle,
+                      style: AppTextStyles.authHeaderTitle.copyWith(
+                        fontSize: 22,
+                        color: context.themeTextPrimary,
                       ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        AppTextField(
+                          controller: _searchController,
+                          hintText: l10n.profileSearchCommunities,
+                          prefixIconPath: AppIcons.searchSvg,
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(
+                                    Icons.clear_rounded,
+                                    color: context.themeIconMuted,
+                                    size: 20,
+                                  ),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchQuery = '';
+                                    });
+                                    context
+                                        .read<ProfileSetupProvider>()
+                                        .setSearchQuery('');
+                                  },
+                                )
+                              : null,
+                          onChanged: (String val) {
+                            setState(() {
+                              _searchQuery = val.trim();
+                            });
+                            context
+                                .read<ProfileSetupProvider>()
+                                .setSearchQuery(val);
+                          },
+                        ),
 
                       const SizedBox(height: AppSpacing.lg),
 
@@ -226,6 +274,7 @@ class _AllCommunitiesScreenState extends State<AllCommunitiesScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 }

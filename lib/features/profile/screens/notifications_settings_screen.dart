@@ -19,28 +19,16 @@ class NotificationsSettingsScreen extends StatefulWidget {
 class _NotificationsSettingsScreenState
     extends State<NotificationsSettingsScreen> {
   bool _masterPush = true;
-  late bool _likes;
-  late bool _comments;
-  late bool _newFollowers;
-  bool _followRequests = false;
-  late bool _messages;
-  bool _communityPosts = false;
-
-  bool _moderationUpdates = false;
-  bool _announcements = false;
 
   @override
   void initState() {
     super.initState();
-    final ProfileProvider provider = context.read<ProfileProvider>();
-    _likes = provider.notifyOnLike;
-    _comments = provider.notifyOnComment;
-    _newFollowers = provider.notifyOnFollow;
-    _messages = provider.notifyOnMessage;
-    _followRequests = provider.notifyOnFollowRequests;
-    _communityPosts = provider.notifyOnCommunityPosts;
-    _announcements = provider.notifyOnAnnouncementsFeatures;
-    _moderationUpdates = provider.notifyOnSafetyModerationUpdates;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final String? uid = context.read<AuthProvider>().userId;
+      if (uid != null && uid.isNotEmpty) {
+        context.read<ProfileProvider>().fetchProfile(uid).catchError((_) {});
+      }
+    });
   }
 
   void _syncSetting({
@@ -115,6 +103,16 @@ class _NotificationsSettingsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final ProfileProvider provider = context.watch<ProfileProvider>();
+    final bool likes = provider.notifyOnLike;
+    final bool comments = provider.notifyOnComment;
+    final bool newFollowers = provider.notifyOnFollow;
+    final bool followRequests = provider.notifyOnFollowRequests;
+    final bool messages = provider.notifyOnMessage;
+    final bool communityPosts = provider.notifyOnCommunityPosts;
+    final bool moderationUpdates = provider.notifyOnSafetyModerationUpdates;
+    final bool announcements = provider.notifyOnAnnouncementsFeatures;
+
     return Scaffold(
       backgroundColor: context.themeBackground,
       body: SafeArea(
@@ -252,41 +250,33 @@ class _NotificationsSettingsScreenState
                         _buildToggleRow(
                           title: 'Likes',
                           subtitle: 'When someone likes your post or reel',
-                          value: _likes,
-                          onChanged: (bool val) {
-                            setState(() => _likes = val);
-                            _syncSetting(notifyOnLike: val);
-                          },
+                          value: likes,
+                          onChanged: (bool val) =>
+                              _syncSetting(notifyOnLike: val),
                         ),
                         Divider(color: context.themeDivider, height: 1),
                         _buildToggleRow(
                           title: 'Comments',
                           subtitle: 'When someone comments on your post',
-                          value: _comments,
-                          onChanged: (bool val) {
-                            setState(() => _comments = val);
-                            _syncSetting(notifyOnComment: val);
-                          },
+                          value: comments,
+                          onChanged: (bool val) =>
+                              _syncSetting(notifyOnComment: val),
                         ),
                         Divider(color: context.themeDivider, height: 1),
                         _buildToggleRow(
                           title: 'New followers',
                           subtitle: 'When someone follows your profile',
-                          value: _newFollowers,
-                          onChanged: (bool val) {
-                            setState(() => _newFollowers = val);
-                            _syncSetting(notifyOnFollow: val);
-                          },
+                          value: newFollowers,
+                          onChanged: (bool val) =>
+                              _syncSetting(notifyOnFollow: val),
                         ),
                         Divider(color: context.themeDivider, height: 1),
                         _buildToggleRow(
                           title: 'Follow requests',
                           subtitle: 'When someone requests to follow you',
-                          value: _followRequests,
-                          onChanged: (bool val) {
-                            setState(() => _followRequests = val);
-                            _syncSetting(notifyOnFollowRequests: val);
-                          },
+                          value: followRequests,
+                          onChanged: (bool val) =>
+                              _syncSetting(notifyOnFollowRequests: val),
                         ),
                       ],
                     ),
@@ -323,21 +313,17 @@ class _NotificationsSettingsScreenState
                         _buildToggleRow(
                           title: 'Direct messages',
                           subtitle: 'When someone sends you a message',
-                          value: _messages,
-                          onChanged: (bool val) {
-                            setState(() => _messages = val);
-                            _syncSetting(notifyOnMessage: val);
-                          },
+                          value: messages,
+                          onChanged: (bool val) =>
+                              _syncSetting(notifyOnMessage: val),
                         ),
                         Divider(color: context.themeDivider, height: 1),
                         _buildToggleRow(
                           title: 'Community posts',
                           subtitle: 'Trending posts in communities you joined',
-                          value: _communityPosts,
-                          onChanged: (bool val) {
-                            setState(() => _communityPosts = val);
-                            _syncSetting(notifyOnCommunityPosts: val);
-                          },
+                          value: communityPosts,
+                          onChanged: (bool val) =>
+                              _syncSetting(notifyOnCommunityPosts: val),
                         ),
                       ],
                     ),
@@ -374,21 +360,17 @@ class _NotificationsSettingsScreenState
                         _buildToggleRow(
                           title: 'Safety & moderation updates',
                           subtitle: 'Reports you filed and policy updates',
-                          value: _moderationUpdates,
-                          onChanged: (bool val) {
-                            setState(() => _moderationUpdates = val);
-                            _syncSetting(notifyOnSafetyModerationUpdates: val);
-                          },
+                          value: moderationUpdates,
+                          onChanged: (bool val) =>
+                              _syncSetting(notifyOnSafetyModerationUpdates: val),
                         ),
                         Divider(color: context.themeDivider, height: 1),
                         _buildToggleRow(
                           title: 'Announcements & features',
                           subtitle: 'New features and community events',
-                          value: _announcements,
-                          onChanged: (bool val) {
-                            setState(() => _announcements = val);
-                            _syncSetting(notifyOnAnnouncementsFeatures: val);
-                          },
+                          value: announcements,
+                          onChanged: (bool val) =>
+                              _syncSetting(notifyOnAnnouncementsFeatures: val),
                         ),
                       ],
                     ),
