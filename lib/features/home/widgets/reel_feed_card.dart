@@ -165,7 +165,8 @@ class _ReelFeedCardState extends State<ReelFeedCard>
       _videoInitialized = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _isDisposed) return;
-        if (_canPlayAudio) {
+        if (widget.isActive && !_isPaused && !_isCoveredByRoute) {
+          ReelVideoPreloader.instance.setFeedVisible(true);
           ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
           existing.play();
         } else {
@@ -185,7 +186,9 @@ class _ReelFeedCardState extends State<ReelFeedCard>
       if (_isDisposed || !mounted) return;
       _videoController = existing;
       setState(() => _videoInitialized = true);
-      if (widget.isActive && !_isPaused) {
+      if (widget.isActive && !_isPaused && !_isCoveredByRoute) {
+        ReelVideoPreloader.instance.setFeedVisible(true);
+        ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
         existing.play();
       } else {
         existing.pause();
@@ -207,7 +210,8 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         }
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted || _isDisposed) return;
-          if (_canPlayAudio) {
+          if (widget.isActive && !_isPaused && !_isCoveredByRoute) {
+            ReelVideoPreloader.instance.setFeedVisible(true);
             ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
             controller.play();
           } else {
@@ -230,7 +234,8 @@ class _ReelFeedCardState extends State<ReelFeedCard>
             setState(() => _videoInitialized = true);
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted || _isDisposed) return;
-              if (_canPlayAudio) {
+              if (widget.isActive && !_isPaused && !_isCoveredByRoute) {
+                ReelVideoPreloader.instance.setFeedVisible(true);
                 ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
                 controller.play();
               } else {
@@ -276,10 +281,12 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   void didUpdateWidget(ReelFeedCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
+      _isPaused = false;
+      ReelVideoPreloader.instance.setFeedVisible(true);
       ReelVideoPreloader.instance.markActive(widget.reel.id);
       ReelVideoPreloader.instance.markInactive(oldWidget.reel.id);
       if (_videoInitialized && _videoController != null) {
-        if (_canPlayAudio) {
+        if (!_isCoveredByRoute) {
           ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
           _videoController?.play();
         } else {
@@ -382,9 +389,17 @@ class _ReelFeedCardState extends State<ReelFeedCard>
 
   void _handleTap() {
     if (!_videoInitialized || _videoController == null) return;
+    final bool isActuallyPlaying = _videoController!.value.isPlaying;
     setState(() {
-      _isPaused = !_isPaused;
-      _isPaused ? _videoController!.pause() : _videoController!.play();
+      if (isActuallyPlaying) {
+        _isPaused = true;
+        _videoController!.pause();
+      } else {
+        _isPaused = false;
+        ReelVideoPreloader.instance.setFeedVisible(true);
+        ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
+        _videoController!.play();
+      }
     });
   }
 

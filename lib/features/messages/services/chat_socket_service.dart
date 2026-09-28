@@ -1,9 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 
 import '../../../core/config/app_config.dart';
+
+void chatLog(String msg) {
+  debugPrint('🟣 $msg');
+  developer.log(msg, name: 'CHAT');
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +39,8 @@ class SocketNewMessageEvent {
     required this.messageId,
     required this.senderId,
     required this.body,
+    this.mediaUrl,
+    this.replyToMessageId,
     this.raw = const <String, dynamic>{},
   });
 
@@ -40,6 +48,8 @@ class SocketNewMessageEvent {
   final String messageId;
   final String senderId;
   final String body;
+  final String? mediaUrl;
+  final String? replyToMessageId;
   final Map<String, dynamic> raw;
 
   factory SocketNewMessageEvent.fromJson(dynamic data) {
@@ -74,6 +84,12 @@ class SocketNewMessageEvent {
               payload['content'] ??
               '')
           .toString(),
+      mediaUrl: (payload['mediaUrl'] ?? payload['media_url'])?.toString(),
+      replyToMessageId: (payload['replyToMessageId'] ??
+              payload['reply_to_message_id'] ??
+              payload['replyTo']?['id'] ??
+              payload['replyTo']?['_id'])
+          ?.toString(),
       raw: Map<String, dynamic>.from(payload is Map ? payload : map),
     );
   }
@@ -448,7 +464,7 @@ class ChatSocketService {
     String? serverUrl,
   }) {
     if (token.isEmpty) {
-      debugPrint('⚠️ [ChatSocketService] Cannot connect: auth token is empty.');
+      chatLog('⚠️ [ChatSocketService] Cannot connect: auth token is empty.');
       return;
     }
 
@@ -469,13 +485,13 @@ class ChatSocketService {
 
     // If socket already connected with same token and url, return
     if (_socket != null && _socket!.connected) {
-      debugPrint('ℹ️ [ChatSocketService] Socket already connected. ID: ${_socket?.id}');
+      chatLog('ℹ️ [ChatSocketService] Socket already connected. ID: ${_socket?.id}');
       return;
     }
 
     disconnect();
 
-    debugPrint('🔌 [ChatSocketService] Connecting to $url via websocket transport with token (length: ${token.length})...');
+    chatLog('🔌 [ChatSocketService] Connecting to $url via websocket transport with token (length: ${token.length})...');
 
     try {
       final String rawToken = token.startsWith('Bearer ')
@@ -487,24 +503,38 @@ class ChatSocketService {
           .setTransports(<String>['websocket'])
           .disableAutoConnect()
           .enableReconnection()
-                    .setExtraHeaders(<String, String>{
+          .setReconnectionAttempts(20)
+          .setReconnectionDelay(1000)
+          .setReconnectionDelayMax(5000)
+          .enableForceNew()
+          .setAuth(<String, dynamic>{
+            'token': rawToken,
+            'accessToken': rawToken,
+            'Authorization': bearerToken,
+          })
+          .setQuery(<String, dynamic>{
+            'token': rawToken,
+            'accessToken': rawToken,
+          })
+          .setExtraHeaders(<String, String>{
             'Authorization': bearerToken,
             'authorization': bearerToken,
             'token': rawToken,
             'accessToken': rawToken,
           });
 
+      chatLog('🔌 [ChatSocketService] Connecting to $url ...');
       _socket = socket_io.io(url, builder.build());
 
       _registerSocketEvents();
       _socket!.connect();
     } catch (e, stack) {
-      debugPrint('❌ [ChatSocketService] Error creating socket connection: $e\n$stack');
+      chatLog('❌ [ChatSocketService] Error creating socket connection: $e\n$stack');
     }
   }
 
   void _logEmit(String event, dynamic payload) {
-    print('''
+    chatLog('''
 ╔════════════════════════════════════════════════════════════════
 ║ 📤 [SOCKET EMIT]
 ║ Event:   $event
@@ -513,7 +543,7 @@ class ChatSocketService {
   }
 
   void _logInbound(String event, dynamic data) {
-    print('''
+    chatLog('''
 ╔════════════════════════════════════════════════════════════════
 ║ 📥 [SOCKET RESPONSE / INBOUND EVENT]
 ║ Event:    $event
@@ -536,7 +566,7 @@ class ChatSocketService {
 
     // ── Lifecycle Events ───────────────────────────────────────────────────────
     _socket!.onConnect((_) {
-      debugPrint('✅ [ChatSocketService] Socket connected successfully. ID: ${_socket?.id}');
+      chatLog('✅ [ChatSocketService] Socket connected successfully! ID: ${_socket?.id}');
       _isConnected = true;
       _connectionStateController.add(true);
 
@@ -597,19 +627,19 @@ class ChatSocketService {
     });
 
     _socket!.onDisconnect((dynamic reason) {
-      debugPrint('⚠️ [ChatSocketService] Socket disconnected: $reason');
+      chatLog('⚠️ [ChatSocketService] Socket disconnected: $reason');
       _isConnected = false;
       _connectionStateController.add(false);
     });
 
     _socket!.onConnectError((dynamic err) {
-      debugPrint('❌ [ChatSocketService] Connection error: $err');
+      chatLog('❌ [ChatSocketService] Connection error: $err');
       _isConnected = false;
       _connectionStateController.add(false);
     });
 
     _socket!.onError((dynamic err) {
-      debugPrint('❌ [ChatSocketService] Socket error: $err');
+      chatLog('❌ [ChatSocketService] Socket error: $err');
     });
 
     // ── Backend Inbound Events ────────────────────────────────────────────────
@@ -617,7 +647,7 @@ class ChatSocketService {
     // 1. message:new -> { conversationId, messageId, senderId, body }
     // 1. message:new / new_message -> { conversationId, messageId, senderId, body, ... }
     void handleNewMessage(dynamic data, String eventName) {
-      debugPrint('''
+      chatLog('''
 ════════════════════════════════════════════════════════════════
 📥 [SOCKET INBOUND $eventName]
 Data: $data
@@ -629,7 +659,7 @@ Data: $data
           _newMessageController.add(event);
         }
       } catch (e) {
-        debugPrint('⚠️ [ChatSocketService] Error parsing "$eventName": $e');
+        chatLog('⚠️ [ChatSocketService] Error parsing "$eventName": $e');
       }
     }
     _socket!.on('message:new', (dynamic data) => handleNewMessage(data, 'message:new'));
@@ -646,7 +676,7 @@ Data: $data
           _messageReadController.add(event);
         }
       } catch (e) {
-        debugPrint('⚠️ [ChatSocketService] Error parsing "$eventName": $e');
+        chatLog('⚠️ [ChatSocketService] Error parsing "$eventName": $e');
       }
     }
     _socket!.on('message_read', (dynamic d) => handleMessageRead(d, 'message_read'));
@@ -833,11 +863,12 @@ Data: $data
     _joinedRooms.add(cleanId);
 
     _ensureConnected();
-    _logEmit('join', roomName);
+    chatLog('🚪 [ChatSocketService] Joining conversation room: $cleanId');
     _socket?.emit('join', roomName);
     _socket?.emit('join', cleanId);
-    _socket?.emit('conversation:join', roomName);
     _socket?.emit('conversation:join', cleanId);
+    _socket?.emit('conversation:join', roomName);
+    _socket?.emit('conversation:join', <String, dynamic>{'conversationId': cleanId});
   }
 
   /// 2. conversation:typing & typing_indicator
@@ -974,7 +1005,11 @@ Data: $data
     String? replyToSender,
   }) {
     final String cleanId = cleanConversationId(conversationId);
-    if (cleanId.isEmpty) return;
+    chatLog('🚀 [ChatSocketService.sendMessage] convId: "$conversationId", cleanId: "$cleanId", replyToId: "$replyToId", socketConnected: ${_socket?.connected}, socketId: ${_socket?.id}');
+    if (cleanId.isEmpty) {
+      chatLog('❌ [ChatSocketService.sendMessage] cleanId is EMPTY! Aborting send.');
+      return;
+    }
 
     _ensureConnected();
 
@@ -994,25 +1029,16 @@ Data: $data
     final Map<String, dynamic> payload = <String, dynamic>{
       'conversationId': cleanId,
       'body': finalBody,
-      'mediaUrl': null,
-      if (sharedPostId != null && sharedPostId.isNotEmpty)
-        'sharedPostId': sharedPostId,
+      if (text != null && text.trim().isNotEmpty) 'text': text.trim(),
+      if (mediaRef != null && mediaRef.trim().isNotEmpty) 'mediaRef': mediaRef.trim(),
+      if (sharedPostId != null && sharedPostId.isNotEmpty) 'sharedPostId': sharedPostId,
       if (replyToId != null && replyToId.trim().isNotEmpty) ...<String, dynamic>{
         'replyToMessageId': replyToId.trim(),
         'replyToId': replyToId.trim(),
-        'replyTo': <String, dynamic>{
-          'id': replyToId.trim(),
-          if (replyToText != null && replyToText.trim().isNotEmpty)
-            'body': replyToText.trim(),
-          if (replyToText != null && replyToText.trim().isNotEmpty)
-            'text': replyToText.trim(),
-          if (replyToSender != null && replyToSender.trim().isNotEmpty)
-            'sender': replyToSender.trim(),
-        },
       },
     };
 
-    debugPrint('''
+    chatLog('''
 ════════════════════════════════════════════════════════════════
 📤 [SOCKET EMIT send_message]
 Payload: ${jsonEncode(payload)}
@@ -1021,13 +1047,31 @@ Payload: ${jsonEncode(payload)}
     _logEmit('send_message', payload);
     try {
       _socket?.emitWithAck('send_message', payload, ack: (dynamic ackData) {
-        debugPrint('''
+        chatLog('''
 ════════════════════════════════════════════════════════════════
 📥 [SOCKET ACK RESPONSE for send_message]
 Ack Data: $ackData
 ════════════════════════════════════════════════════════════════''');
+        if (ackData is Map) {
+          final Map<String, dynamic> ackMap = ackData.cast<String, dynamic>();
+          final dynamic data = ackMap['data'] ?? ackMap['message'];
+          if (data is Map) {
+            try {
+              final SocketNewMessageEvent event = SocketNewMessageEvent.fromJson(
+                data.cast<String, dynamic>(),
+              );
+              if (event.conversationId.isNotEmpty) {
+                chatLog('✅ [ChatSocketService] Pushing confirmed message from ACK: ${event.messageId}');
+                _newMessageController.add(event);
+              }
+            } catch (e) {
+              chatLog('⚠️ [ChatSocketService] Error parsing message from ACK data: $e');
+            }
+          }
+        }
       });
-    } catch (_) {
+    } catch (e) {
+      chatLog('⚠️ [ChatSocketService] emitWithAck failed: $e. Falling back to emit.');
       _socket?.emit('send_message', payload);
     }
   }

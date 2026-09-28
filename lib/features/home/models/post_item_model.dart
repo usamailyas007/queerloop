@@ -23,9 +23,11 @@ class PostItemModel {
     this.hideLikes = false,
     this.viewsCount = 0,
     this.visibility,
+    this.status = 'published',
   });
 
   final String id;
+  final String? status;
   final String? authorId;
   final String? authorDisplayName;
   final String username;
@@ -61,6 +63,8 @@ class PostItemModel {
       ? postImageUrl
       : null;
 
+  bool get isPublished => (status ?? '').toLowerCase().trim() == 'published';
+
   PostItemModel copyWith({
     String? authorId,
     String? authorDisplayName,
@@ -84,9 +88,11 @@ class PostItemModel {
     String? postType,
     String? communityId,
     String? visibility,
+    String? status,
   }) {
     return PostItemModel(
       id: id,
+      status: status ?? this.status,
       authorId: authorId ?? this.authorId,
       authorDisplayName: authorDisplayName ?? this.authorDisplayName,
       username: username ?? this.username,

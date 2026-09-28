@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/cache/user_relationship_cache.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
+import '../../home/provider/home_feed_provider.dart';
 import '../../home/screens/reels_feed_view.dart';
 import '../../home/widgets/post_feed_card.dart';
+import '../../profile/provider/profile_provider.dart';
 import '../models/discover_models.dart';
 
 /// 3-column grid of search result cards with dynamic image/video thumbnails and playback.
@@ -22,6 +26,7 @@ class SearchPostsGrid extends StatelessWidget {
     final Set<String> seen = <String>{};
 
     for (final DiscoverSearchResult item in list) {
+      if (!item.isPublished) continue;
       final String id = (item.id ?? '').trim().toLowerCase();
       final String refId = (item.refId ?? '')
           .trim()
@@ -60,10 +65,21 @@ class SearchPostsGrid extends StatelessWidget {
       final bool isVideoUrl = img.startsWith('http') &&
           (img.endsWith('.mp4') || img.endsWith('.m3u8') || img.contains('video') || img.contains('/videos/'));
 
+      String? resolvedVideo = res.videoUrl;
+      if (resolvedVideo == null || resolvedVideo.isEmpty) {
+        if (res.mediaRefs.isNotEmpty) {
+          final String m = res.mediaRefs.first.replaceAll(RegExp(r'^/+|^media/'), '').trim();
+          resolvedVideo = '${AppConfig.cdnUrl}/videos/processed/$m/master.m3u8';
+        } else if (res.refId != null && res.refId!.trim().isNotEmpty) {
+          final String rId = res.refId!.trim().replaceAll(RegExp(r'^/+|^media/'), '');
+          resolvedVideo = '${AppConfig.cdnUrl}/videos/processed/$rId/master.m3u8';
+        }
+      }
+
       final String? thumb = (res.thumbnailUrl != null && res.thumbnailUrl!.isNotEmpty)
           ? res.thumbnailUrl
-          : (res.videoUrl != null && res.videoUrl!.contains('/videos/processed/')
-              ? res.videoUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg')
+          : (resolvedVideo != null && resolvedVideo.contains('/videos/processed/')
+              ? resolvedVideo.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg')
               : (isVideoUrl ? null : (img.startsWith('http') ? img : null)));
 
       final String effectiveId = (res.refId != null && res.refId!.trim().isNotEmpty)
@@ -81,7 +97,7 @@ class SearchPostsGrid extends StatelessWidget {
             ? res.authorAvatar!.trim()
             : AppImages.user1,
         videoAsset: (img.startsWith('assets/') && img.endsWith('.mp4')) ? img : '',
-        videoUrl: res.videoUrl ?? (isVideoUrl ? img : (img.startsWith('http') ? img : null)),
+        videoUrl: resolvedVideo ?? (isVideoUrl ? img : (img.startsWith('http') ? img : null)),
         thumbnailUrl: thumb,
         caption: res.caption ?? '',
         likesCount: res.likesCount ?? 0,
@@ -93,15 +109,46 @@ class SearchPostsGrid extends StatelessWidget {
         allowDownloads: res.allowDownloads,
         allowCommentsFrom: res.allowCommentsFrom,
         isAuthorPrivate: res.isAuthorPrivate,
+        communityId: res.communityId,
+        status: res.status,
         tags: const <String>[],
       );
     }).toList();
   }
 
   void _openReelPlayer(BuildContext context, int initialIndex) {
-    final List<ReelItemModel> searchReels = _buildSearchReels().map((ReelItemModel r) {
-      final bool liked = PostInteractionRegistry.isLiked(r.id, fallback: r.isLiked);
-      final bool saved = PostInteractionRegistry.isSaved(r.id, fallback: r.isSaved);
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    final ProfileProvider profile = context.read<ProfileProvider>();
+    final List<DiscoverSearchResult> validResults = _filterAndDeduplicate(results);
+    final List<ReelItemModel> searchReels = _buildSearchReels().asMap().entries.map((MapEntry<int, ReelItemModel> entry) {
+      final int i = entry.key;
+      final ReelItemModel r = entry.value;
+      final DiscoverSearchResult? res = i < validResults.length ? validResults[i] : null;
+      final String? docId = res?.id?.trim();
+      final String? refId = res?.refId?.trim();
+
+      final bool liked = PostInteractionRegistry.isLiked(r.id) ||
+          (docId != null && PostInteractionRegistry.isLiked(docId)) ||
+          (refId != null && PostInteractionRegistry.isLiked(refId)) ||
+          homeFeed.isPostLiked(r.id) ||
+          (docId != null && homeFeed.isPostLiked(docId)) ||
+          (refId != null && homeFeed.isPostLiked(refId)) ||
+          profile.isPostLiked(r.id) ||
+          (docId != null && profile.isPostLiked(docId)) ||
+          (refId != null && profile.isPostLiked(refId)) ||
+          r.isLiked;
+
+      final bool saved = PostInteractionRegistry.isSaved(r.id) ||
+          (docId != null && PostInteractionRegistry.isSaved(docId)) ||
+          (refId != null && PostInteractionRegistry.isSaved(refId)) ||
+          homeFeed.isPostSaved(r.id) ||
+          (docId != null && homeFeed.isPostSaved(docId)) ||
+          (refId != null && homeFeed.isPostSaved(refId)) ||
+          profile.isPostSaved(r.id) ||
+          (docId != null && profile.isPostSaved(docId)) ||
+          (refId != null && profile.isPostSaved(refId)) ||
+          r.isSaved;
+
       final int likes = PostInteractionRegistry.getLikeCount(r.id, fallback: r.likesCount);
       final int comments = CommentCountRegistry.getOr(r.id, r.commentsCount);
       return r.copyWith(
@@ -159,15 +206,40 @@ class SearchPostsGrid extends StatelessWidget {
   }
 
   void _openPostViewer(BuildContext context, DiscoverSearchResult item) {
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    final ProfileProvider profile = context.read<ProfileProvider>();
     final String img = (item.imageAsset.isNotEmpty ? item.imageAsset : (item.thumbnailUrl ?? '')).trim();
     final bool isHttp = img.startsWith('http://') || img.startsWith('https://');
     final bool isAsset = img.startsWith('assets/');
     final bool isText = item.type == 'TEXT' || (img.isEmpty && item.mediaRefs.isEmpty);
-    final String postId = (item.refId != null && item.refId!.trim().isNotEmpty)
-        ? item.refId!.trim()
-        : (item.id ?? 'search_${item.caption.hashCode}');
-    final bool isLiked = PostInteractionRegistry.isLiked(postId, fallback: item.isLiked);
-    final bool isSaved = PostInteractionRegistry.isSaved(postId, fallback: item.isSaved);
+    final String? docId = item.id?.trim();
+    final String? refId = item.refId?.trim();
+    final String postId = (refId != null && refId.isNotEmpty)
+        ? refId
+        : (docId ?? 'search_${item.caption.hashCode}');
+
+    final bool isLiked = PostInteractionRegistry.isLiked(postId) ||
+        (docId != null && PostInteractionRegistry.isLiked(docId)) ||
+        (refId != null && PostInteractionRegistry.isLiked(refId)) ||
+        homeFeed.isPostLiked(postId) ||
+        (docId != null && homeFeed.isPostLiked(docId)) ||
+        (refId != null && homeFeed.isPostLiked(refId)) ||
+        profile.isPostLiked(postId) ||
+        (docId != null && profile.isPostLiked(docId)) ||
+        (refId != null && profile.isPostLiked(refId)) ||
+        item.isLiked;
+
+    final bool isSaved = PostInteractionRegistry.isSaved(postId) ||
+        (docId != null && PostInteractionRegistry.isSaved(docId)) ||
+        (refId != null && PostInteractionRegistry.isSaved(refId)) ||
+        homeFeed.isPostSaved(postId) ||
+        (docId != null && homeFeed.isPostSaved(docId)) ||
+        (refId != null && homeFeed.isPostSaved(refId)) ||
+        profile.isPostSaved(postId) ||
+        (docId != null && profile.isPostSaved(docId)) ||
+        (refId != null && profile.isPostSaved(refId)) ||
+        item.isSaved;
+
     final int likesCount = PostInteractionRegistry.getLikeCount(postId, fallback: item.likesCount ?? 0);
     final int commentsCount = CommentCountRegistry.getOr(postId, item.commentsCount ?? 0);
 
@@ -197,6 +269,7 @@ class SearchPostsGrid extends StatelessWidget {
       allowDownloads: item.allowDownloads,
       allowCommentsFrom: item.allowCommentsFrom,
       isAuthorPrivate: item.isAuthorPrivate,
+      status: item.status,
     );
 
     PostFeedCard.openFullscreen(context, post);
@@ -241,32 +314,21 @@ class SearchPostsGrid extends StatelessWidget {
             final String postId = (item.refId != null && item.refId!.trim().isNotEmpty)
                 ? item.refId!.trim()
                 : (item.id ?? '');
-            final bool isLiked = PostInteractionRegistry.isLiked(postId, fallback: item.isLiked);
-            final int effectiveLikes = PostInteractionRegistry.getLikeCount(
-              postId,
-              fallback: (isLiked && (item.likesCount == null || item.likesCount == 0))
-                  ? 1
-                  : (item.likesCount ?? 0),
-            );
-            final int reelViews = PostInteractionRegistry.getViewsCount(
+            final int views = PostInteractionRegistry.getViewsCount(
               postId,
               fallback: item.viewsCount > 0
                   ? item.viewsCount
                   : (int.tryParse(item.viewCount ?? '') ?? 0),
             );
-            final String countText = isReel
-                ? (reelViews > 0
-                    ? (reelViews >= 1000000
-                        ? '${(reelViews / 1000000).toStringAsFixed(1)}M'
-                        : (reelViews >= 1000
-                            ? '${(reelViews / 1000).toStringAsFixed(1)}K'
-                            : '$reelViews'))
-                    : (item.viewCount != null && item.viewCount!.isNotEmpty && item.viewCount != '0'
-                        ? item.viewCount!
-                        : '0'))
-                : (effectiveLikes > 0
-                    ? '$effectiveLikes'
-                    : (item.viewCount ?? ''));
+            final String countText = views > 0
+                ? (views >= 1000000
+                    ? '${(views / 1000000).toStringAsFixed(1)}M'
+                    : (views >= 1000
+                        ? '${(views / 1000).toStringAsFixed(1)}K'
+                        : '$views'))
+                : (item.viewCount != null && item.viewCount!.isNotEmpty && item.viewCount != '0'
+                    ? item.viewCount!
+                    : '0');
 
         return GestureDetector(
           onTap: () => _handleTap(context, index),
@@ -293,7 +355,7 @@ class SearchPostsGrid extends StatelessWidget {
                   ),
                 ),
 
-                // Views count & play or heart icon
+                // Views count & view/play icon
                 Positioned(
                   left: 6,
                   bottom: 6,
@@ -301,18 +363,14 @@ class SearchPostsGrid extends StatelessWidget {
                   child: Row(
                     children: <Widget>[
                       Icon(
-                        isReel ? Icons.play_arrow_rounded : Icons.favorite_rounded,
-                        color: isReel
-                            ? Colors.white
-                            : (isLiked ? Colors.redAccent : Colors.white70),
+                        isReel ? Icons.play_arrow_rounded : Icons.visibility_outlined,
+                        color: Colors.white.withValues(alpha: 0.9),
                         size: 14,
                       ),
                       const SizedBox(width: 3),
                       Expanded(
                         child: Text(
-                          countText.isNotEmpty
-                              ? countText
-                              : (isReel ? 'Watch' : (isLiked ? '1' : 'Post')),
+                          countText,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.caption.copyWith(

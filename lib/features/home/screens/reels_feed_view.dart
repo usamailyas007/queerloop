@@ -72,13 +72,10 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     super.initState();
     _activePage = widget.initialPage;
     _pageController = PageController(initialPage: widget.initialPage);
+    // Ensure feed is visible so reel starts playing automatically on entry or login
+    ReelVideoPreloader.instance.setFeedVisible(true);
     if (widget.customReels != null) {
       _localReels = List<ReelItemModel>.from(widget.customReels!);
-      // Restore feed visibility for standalone/custom reel viewers.
-      // When the home feed's ReelFeedCard.didPushNext fires (e.g. user opened
-      // profile), it sets isFeedVisible=false. If the user then opens a custom
-      // reel player, that flag is still false → _canPlayAudio = false → no audio.
-      ReelVideoPreloader.instance.setFeedVisible(true);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {

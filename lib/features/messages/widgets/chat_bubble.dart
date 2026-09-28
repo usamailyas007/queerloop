@@ -918,50 +918,74 @@ class ChatBubble extends StatelessWidget {
                                         ),
                                       ),
                                     ),
-                                  // Bottom badge: Views or Likes
+                                  // Bottom badge: Views (for Reels) or Likes (for Posts)
                                   Positioned(
                                     bottom: 8,
                                     left: 8,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.6,
-                                        ),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: <Widget>[
-                                          Icon(
-                                            message.postType == 'reel'
-                                                ? Icons.play_arrow_rounded
-                                                : Icons.favorite_rounded,
-                                            color: Colors.white,
-                                            size: 13,
+                                    child: ListenableBuilder(
+                                      listenable: PostInteractionRegistry.notifier,
+                                      builder: (BuildContext ctx, _) {
+                                        final bool isReel = message.postType == 'reel' ||
+                                            (cachedPost?.type == 'reel') ||
+                                            (message.mediaUrl != null &&
+                                                (message.mediaUrl!.contains('/videos/') ||
+                                                    message.mediaUrl!.endsWith('.m3u8') ||
+                                                    message.mediaUrl!.endsWith('.mp4')));
+
+                                        final String countText;
+                                        if (isReel) {
+                                          final int views = PostInteractionRegistry.getViewsCount(
+                                            message.sharedPostId,
+                                            fallback: (cachedPost != null && cachedPost.views > 0)
+                                                ? cachedPost.views
+                                                : (int.tryParse(message.postViews ?? '') ?? 0),
+                                          );
+                                          countText = _formatCount(views);
+                                        } else {
+                                          final int likes = PostInteractionRegistry.getLikeCount(
+                                            message.sharedPostId,
+                                            fallback: (cachedPost != null && cachedPost.likes > 0)
+                                                ? cachedPost.likes
+                                                : (message.postLikes ?? 0),
+                                          );
+                                          countText = _formatCount(likes);
+                                        }
+
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
                                           ),
-                                          const SizedBox(width: 3),
-                                          Text(
-                                            (message.postViews != null && message.postViews != '0')
-                                                ? message.postViews!
-                                                : (cachedPost != null && cachedPost.views > 0
-                                                    ? '${cachedPost.views}'
-                                                    : (message.postViews ??
-                                                        (message.postLikes != null
-                                                            ? '${message.postLikes}'
-                                                            : '0'))),
-                                            style: AppTextStyles.caption
-                                                .copyWith(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 11,
-                                                ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.6,
+                                            ),
+                                            borderRadius: BorderRadius.circular(10),
                                           ),
-                                        ],
-                                      ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: <Widget>[
+                                              Icon(
+                                                isReel
+                                                    ? Icons.play_arrow_rounded
+                                                    : Icons.favorite_rounded,
+                                                color: Colors.white,
+                                                size: 13,
+                                              ),
+                                              const SizedBox(width: 3),
+                                              Text(
+                                                countText,
+                                                style: AppTextStyles.caption
+                                                    .copyWith(
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 11,
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ),
                                 ],
@@ -1052,5 +1076,14 @@ class ChatBubble extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static String _formatCount(int count) {
+    if (count >= 1000000) {
+      return '${(count / 1000000).toStringAsFixed(1)}M';
+    } else if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1)}K';
+    }
+    return '$count';
   }
 }

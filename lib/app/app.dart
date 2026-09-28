@@ -162,6 +162,12 @@ class App extends StatelessWidget {
                 showActivityStatus: profile.showActivityStatus,
                 sendReadReceipts: profile.sendReadReceipts,
               );
+              profile.onPrivacySettingsChanged = ({bool? showActivityStatus, bool? sendReadReceipts}) {
+                provider.updatePrivacySettings(
+                  showActivityStatus: showActivityStatus,
+                  sendReadReceipts: sendReadReceipts,
+                );
+              };
             });
             return provider;
           },
@@ -183,9 +189,22 @@ class App extends StatelessWidget {
         Provider<CotdService>(
           create: (BuildContext ctx) => CotdService(ctx.read<ApiClient>()),
         ),
-        ChangeNotifierProvider<CotdProvider>(
+        ChangeNotifierProxyProvider<AuthProvider, CotdProvider>(
           create: (BuildContext ctx) =>
               CotdProvider(service: ctx.read<CotdService>()),
+          update: (
+            BuildContext ctx,
+            AuthProvider auth,
+            CotdProvider? existing,
+          ) {
+            final CotdProvider provider =
+                existing ?? CotdProvider(service: ctx.read<CotdService>());
+            provider.updateUserInfo(
+              userId: auth.userId,
+              username: auth.user?.displayName,
+            );
+            return provider;
+          },
         ),
         ChangeNotifierProvider<SpotlightsProvider>(
           create: (BuildContext ctx) =>

@@ -151,8 +151,6 @@ class DiscoverService {
     }
   }
 
-  static final Map<String, Map<String, String>> _mediaStatusCache =
-      <String, Map<String, String>>{};
 
   // ── Posts API (Live Existing Posts) ─────────────────────────────────────────
   /// GET /posts
@@ -247,6 +245,7 @@ class DiscoverService {
       final Map<String, int> liveTagCounts = <String, int>{};
 
       for (final PostResponseModel lp in livePosts) {
+        if (!lp.isPublished) continue;
         if (DeletedPostsRegistry.isDeleted(lp.id)) continue;
         livePostsById[lp.id.toLowerCase()] = lp;
         for (final String m in lp.mediaRefs) {
@@ -269,8 +268,13 @@ class DiscoverService {
       for (final DiscoverSearchResult p in results.posts) {
         final String id = (p.id ?? '').trim();
         if (id.isNotEmpty && DeletedPostsRegistry.isDeleted(id)) continue;
+        if (p.status != null && p.status!.trim().toLowerCase() != 'published') continue;
 
-        final String? cleanRef = (p.refId ?? (p.mediaRefs.isNotEmpty ? p.mediaRefs.first : null))
+        // refId in search API is the post ID (e.g. 223bcc3f-0770-4f52-a639-ca196e26cad7)
+        final String? postRefId = (p.refId != null && p.refId!.trim().isNotEmpty)
+            ? p.refId!.trim()
+            : null;
+        final String? cleanRef = (postRefId ?? (p.mediaRefs.isNotEmpty ? p.mediaRefs.first : null))
             ?.replaceAll(RegExp(r'^/+|^media/'), '')
             .trim();
 
@@ -288,76 +292,152 @@ class DiscoverService {
 
         if (matchingLive == null && cleanRefLower.isNotEmpty) {
           try {
-            final dynamic postData = await _client.get(
-              ApiEndpoints.post(cleanRefLower),
-              useCache: false,
-            );
-            if (postData is Map<String, dynamic>) {
-              final dynamic postMap = postData['data'] is Map<String, dynamic>
+            dynamic postData;
+            try {
+              postData = await _client.get(
+                ApiEndpoints.post(cleanRefLower),
+                useCache: false,
+              );
+            } catch (_) {
+              postData = await _client.getNoAuth(ApiEndpoints.post(cleanRefLower));
+            }
+            if (postData is Map) {
+              final dynamic postMap = postData['data'] is Map
                   ? postData['data']
                   : postData;
-              matchingLive = PostResponseModel.fromJson(postMap as Map<String, dynamic>);
+              matchingLive = PostResponseModel.fromJson(
+                (postMap as Map).cast<String, dynamic>(),
+              );
               livePostsById[cleanRefLower] = matchingLive;
             }
-          } catch (_) {}
-        }
-
-        // If livePosts API is active and this post is missing from livePosts, it has been deleted!
-        if (livePosts.isNotEmpty && matchingLive == null) {
-          debugPrint('🗑️ [DiscoverService] Skipping deleted post: id=$id, refId=$cleanRef');
-          continue;
-        }
-
-        final String? effectiveRefId = p.refId ??
-            (matchingLive != null && matchingLive.mediaRefs.isNotEmpty ? matchingLive.mediaRefs.first : null) ??
-            cleanRef;
-
-        // Resolve media URL from refId (NOT id)
-        String? mediaUrl;
-        if (effectiveRefId != null && effectiveRefId.isNotEmpty) {
-          if (effectiveRefId.startsWith('http://') || effectiveRefId.startsWith('https://')) {
-            mediaUrl = effectiveRefId;
-          } else if (matchingLive?.authorId != null && matchingLive!.authorId!.isNotEmpty) {
-            mediaUrl = '${AppConfig.cdnUrl}/images/original/${matchingLive.authorId}/$effectiveRefId.jpg';
-          } else if (p.authorId != null && p.authorId!.isNotEmpty) {
-            mediaUrl = '${AppConfig.cdnUrl}/images/original/${p.authorId}/$effectiveRefId.jpg';
-          } else {
-            mediaUrl = '${AppConfig.cdnUrl}/images/original/$effectiveRefId.jpg';
+          } catch (err) {
+            debugPrint('⚠️ [DiscoverService] Failed to fetch post $cleanRefLower: $err');
           }
         }
 
-        final int vCount = matchingLive?.viewsCount ?? p.viewsCount;
+        // If post was explicitly marked as deleted in registry, skip
+        if (matchingLive != null && DeletedPostsRegistry.isDeleted(matchingLive.id)) {
+          continue;
+        }
+
+        // Only show posts whose status is "published"
+        final String effectivePostStatus = (matchingLive?.status ?? p.status ?? '').trim().toLowerCase();
+        if (effectivePostStatus != 'published') {
+          continue;
+        }
+
+        // Resolve real media URLs from matchingLive or mediaRefs
+        String? resolvedImageUrl;
+        String? resolvedThumbUrl;
+        List<String> effectiveMediaRefs = p.mediaRefs;
+
+        if (matchingLive != null) {
+          effectiveMediaRefs = matchingLive.mediaRefs;
+          resolvedImageUrl = matchingLive.postImageUrl;
+          resolvedThumbUrl = matchingLive.postImageUrl;
+
+          if (resolvedImageUrl == null && matchingLive.mediaRefs.isNotEmpty) {
+            final String m = matchingLive.mediaRefs.first.replaceAll(RegExp(r'^/+|^media/'), '').trim();
+            if (m.startsWith('http://') || m.startsWith('https://')) {
+              resolvedImageUrl = m;
+            } else if (matchingLive.authorId != null && matchingLive.authorId!.isNotEmpty) {
+              resolvedImageUrl = '${AppConfig.cdnUrl}/images/original/${matchingLive.authorId}/$m.jpg';
+            } else {
+              resolvedImageUrl = '${AppConfig.cdnUrl}/images/original/$m.jpg';
+            }
+            resolvedThumbUrl = resolvedImageUrl;
+          }
+        } else if (p.mediaRefs.isNotEmpty) {
+          final String m = p.mediaRefs.first.replaceAll(RegExp(r'^/+|^media/'), '').trim();
+          if (m.startsWith('http://') || m.startsWith('https://')) {
+            resolvedImageUrl = m;
+          } else if (p.authorId != null && p.authorId!.isNotEmpty) {
+            resolvedImageUrl = '${AppConfig.cdnUrl}/images/original/${p.authorId}/$m.jpg';
+          } else {
+            resolvedImageUrl = '${AppConfig.cdnUrl}/images/original/$m.jpg';
+          }
+          resolvedThumbUrl = resolvedImageUrl;
+        } else if (p.imageAsset.isNotEmpty &&
+            (p.imageAsset.startsWith('http://') || p.imageAsset.startsWith('https://') || p.imageAsset.startsWith('assets/')) &&
+            !(postRefId != null && p.imageAsset.contains(postRefId))) {
+          // Only preserve existing imageAsset if it wasn't fabricated with postRefId
+          resolvedImageUrl = p.imageAsset;
+          resolvedThumbUrl = p.thumbnailUrl ?? p.imageAsset;
+        }
+
+        final String? effectiveId = (p.refId != null && p.refId!.trim().isNotEmpty)
+            ? p.refId!.trim()
+            : p.id?.trim();
+        final int regPostViews = PostInteractionRegistry.getViewsCount(
+          effectiveId,
+          fallback: p.id != null ? PostInteractionRegistry.getViewsCount(p.id) : 0,
+        );
+        final int vCount = (matchingLive?.viewsCount ?? 0) > 0
+            ? matchingLive!.viewsCount
+            : (p.viewsCount > 0 ? p.viewsCount : regPostViews);
+
+        if (vCount > 0) {
+          if (effectiveId != null && effectiveId.isNotEmpty) {
+            PostInteractionRegistry.setViewsCount(effectiveId, vCount);
+          }
+          if (p.id != null && p.id!.isNotEmpty) {
+            PostInteractionRegistry.setViewsCount(p.id!, vCount);
+          }
+        }
+
         final String? formattedV = vCount >= 1000000
             ? '${(vCount / 1000000).toStringAsFixed(1)}M'
             : (vCount >= 1000
                 ? '${(vCount / 1000).toStringAsFixed(1)}K'
                 : (vCount > 0 ? '$vCount' : null));
 
-        final String? effectiveId = p.id?.trim();
         if (effectiveId != null && effectiveId.isNotEmpty) {
           seenPostKeys.add('id:${effectiveId.toLowerCase()}');
         }
         if (cleanRefLower.isNotEmpty) {
           seenPostKeys.add('id:$cleanRefLower');
         }
-        if (effectiveRefId != null && effectiveRefId.trim().isNotEmpty) {
-          seenPostKeys.add('id:${effectiveRefId.trim().toLowerCase()}');
-        }
+
+        final bool isPostLiked = (effectiveId != null && PostInteractionRegistry.isLiked(effectiveId)) ||
+            (p.id != null && PostInteractionRegistry.isLiked(p.id!)) ||
+            (p.refId != null && PostInteractionRegistry.isLiked(p.refId!)) ||
+            (matchingLive != null && PostInteractionRegistry.isLiked(matchingLive.id)) ||
+            (matchingLive?.isLiked ?? p.isLiked);
+
+        final bool isPostSaved = (effectiveId != null && PostInteractionRegistry.isSaved(effectiveId)) ||
+            (p.id != null && PostInteractionRegistry.isSaved(p.id!)) ||
+            (p.refId != null && PostInteractionRegistry.isSaved(p.refId!)) ||
+            (matchingLive != null && PostInteractionRegistry.isSaved(matchingLive.id)) ||
+            (matchingLive?.isSaved ?? p.isSaved);
+
+        final int postLikes = PostInteractionRegistry.getLikeCount(
+          effectiveId ?? p.id ?? '',
+          fallback: matchingLive?.likesCount ?? p.likesCount ?? 0,
+        );
 
         verifiedPosts.add(p.copyWith(
-          refId: effectiveRefId,
-          imageAsset: mediaUrl ?? matchingLive?.postImageUrl ?? p.imageAsset,
-          thumbnailUrl: mediaUrl ?? matchingLive?.postImageUrl ?? p.thumbnailUrl,
+          id: matchingLive?.id ?? p.id,
+          refId: postRefId ?? p.refId,
+          status: matchingLive?.status ?? p.status,
+          imageAsset: resolvedImageUrl ?? '',
+          thumbnailUrl: resolvedThumbUrl ?? resolvedImageUrl,
+          mediaRefs: effectiveMediaRefs,
           caption: matchingLive?.caption ?? p.caption,
-          likesCount: matchingLive?.likesCount ?? p.likesCount,
+          likesCount: postLikes,
           commentsCount: matchingLive?.commentsCount ?? p.commentsCount,
           viewsCount: vCount,
           viewCount: formattedV ?? p.viewCount,
-          isLiked: matchingLive?.isLiked ?? p.isLiked,
-          isSaved: matchingLive?.isSaved ?? p.isSaved,
+          isLiked: isPostLiked,
+          isSaved: isPostSaved,
           authorId: matchingLive?.authorId ?? p.authorId,
           authorUsername: matchingLive?.authorName ?? matchingLive?.authorDisplayName ?? p.authorUsername,
           authorAvatar: matchingLive?.authorAvatar ?? p.authorAvatar,
+          type: (matchingLive?.type != null && matchingLive!.type.isNotEmpty) ? matchingLive.type : p.type,
+          allowComments: matchingLive?.allowComments ?? p.allowComments,
+          allowDownloads: matchingLive?.allowDownloads ?? p.allowDownloads,
+          allowCommentsFrom: matchingLive?.allowCommentsFrom ?? p.allowCommentsFrom,
+          isAuthorPrivate: matchingLive?.isAuthorPrivate ?? p.isAuthorPrivate,
+          communityId: matchingLive?.communityId ?? p.communityId,
         ));
 
         // ── DEBUG: print each verified post ───────────────────────────────
@@ -376,6 +456,7 @@ class DiscoverService {
       if (verifiedPosts.isEmpty && livePosts.isNotEmpty) {
         final String qLower = q.toLowerCase();
         for (final PostResponseModel lp in livePosts) {
+          if (!lp.isPublished) continue;
           final String lpIdLower = lp.id.trim().toLowerCase();
           if (seenPostKeys.contains('id:$lpIdLower')) continue;
           if (DeletedPostsRegistry.isDeleted(lp.id)) continue;
@@ -394,9 +475,21 @@ class DiscoverService {
                 url = '${AppConfig.cdnUrl}/images/original/${lp.authorId}/$ref.jpg';
               }
             }
+            final bool isLpLiked = PostInteractionRegistry.isLiked(lp.id) ||
+                (ref != null && PostInteractionRegistry.isLiked(ref)) ||
+                lp.isLiked;
+            final bool isLpSaved = PostInteractionRegistry.isSaved(lp.id) ||
+                (ref != null && PostInteractionRegistry.isSaved(ref)) ||
+                lp.isSaved;
+            final int lpLikes = PostInteractionRegistry.getLikeCount(
+              ref ?? lp.id,
+              fallback: lp.likesCount,
+            );
+
             verifiedPosts.add(DiscoverSearchResult(
               id: lp.id,
               refId: ref,
+              status: lp.status,
               caption: lp.caption,
               type: lp.type,
               authorId: lp.authorId,
@@ -405,11 +498,11 @@ class DiscoverService {
               imageAsset: url ?? '',
               thumbnailUrl: url,
               mediaRefs: lp.mediaRefs,
-              likesCount: lp.likesCount,
+              likesCount: lpLikes,
               commentsCount: lp.commentsCount,
               viewsCount: lp.viewsCount,
-              isLiked: lp.isLiked,
-              isSaved: lp.isSaved,
+              isLiked: isLpLiked,
+              isSaved: isLpSaved,
               communityId: lp.communityId,
             ));
             seenPostKeys.add('id:$lpIdLower');
@@ -426,6 +519,7 @@ class DiscoverService {
       for (final DiscoverSearchResult r in results.reels) {
         final String id = (r.id ?? '').trim();
         if (id.isNotEmpty && DeletedPostsRegistry.isDeleted(id)) continue;
+        if (r.status != null && r.status!.trim().toLowerCase() != 'published') continue;
 
         final String? refId = r.refId ?? (r.mediaRefs.isNotEmpty ? r.mediaRefs.first : null);
         if (refId == null || refId.trim().isEmpty) {
@@ -442,162 +536,154 @@ class DiscoverService {
         if (idLower.isNotEmpty && seenReelKeys.contains('id:$idLower')) continue;
         if (cleanRefLower.isNotEmpty && seenReelKeys.contains('id:$cleanRefLower')) continue;
 
-        // Check if media resolution is already cached
-        if (_mediaStatusCache.containsKey(cleanRef)) {
-          final Map<String, String> cached = _mediaStatusCache[cleanRef]!;
-          if (cached['exists'] == 'false') {
-            // Media does not exist -> skip!
-            continue;
-          }
-          final String? url = cached['url'];
-          final String? thumb = cached['thumbnailUrl'];
-          if (idLower.isNotEmpty) seenReelKeys.add('id:$idLower');
-          if (cleanRefLower.isNotEmpty) seenReelKeys.add('id:$cleanRefLower');
-          verifiedReels.add(r.copyWith(
-            refId: cleanRef,
-            videoUrl: url ?? r.videoUrl,
-            thumbnailUrl: thumb ?? r.thumbnailUrl,
-            imageAsset: thumb ?? url ?? r.imageAsset,
-          ));
-          continue;
-        }
 
         // Check against live posts first: by refId (post ID), search doc id, or media ref
-        PostResponseModel? matchingLive = (cleanRef.isNotEmpty ? livePostsById[cleanRef.toLowerCase()] : null) ??
-            (id.isNotEmpty ? livePostsById[id.toLowerCase()] : null) ??
-            livePostsByMediaRef[cleanRef.toLowerCase()];
+        PostResponseModel? matchingLive = (cleanRef.isNotEmpty ? livePostsById[cleanRefLower] : null) ??
+            (idLower.isNotEmpty ? livePostsById[idLower] : null) ??
+            (cleanRefLower.isNotEmpty ? livePostsByMediaRef[cleanRefLower] : null);
 
         // If not in livePosts (since livePosts only fetches the latest 10 items), fetch post by id directly
         if (matchingLive == null && cleanRef.isNotEmpty) {
           try {
-            final dynamic postData = await _client.get(
-              ApiEndpoints.post(cleanRef),
-              useCache: false,
-            );
-            if (postData is Map<String, dynamic>) {
-              final dynamic postMap = postData['data'] is Map<String, dynamic>
+            dynamic postData;
+            try {
+              postData = await _client.get(
+                ApiEndpoints.post(cleanRef),
+                useCache: false,
+              );
+            } catch (_) {
+              postData = await _client.getNoAuth(ApiEndpoints.post(cleanRef));
+            }
+            if (postData is Map) {
+              final dynamic postMap = postData['data'] is Map
                   ? postData['data']
                   : postData;
-              matchingLive = PostResponseModel.fromJson(postMap as Map<String, dynamic>);
-              livePostsById[cleanRef.toLowerCase()] = matchingLive;
+              matchingLive = PostResponseModel.fromJson(
+                (postMap as Map).cast<String, dynamic>(),
+              );
+              livePostsById[cleanRefLower] = matchingLive;
             }
           } catch (_) {
-            // cleanRef may be a media ref or mediaStatus is needed
+            // cleanRef may be a media ref
           }
         }
 
-        // If still not found, verify with Media Status API
-        if (matchingLive == null) {
-          try {
-            final dynamic mediaData = await _client.get(
-              ApiEndpoints.mediaStatus(cleanRef),
-              useCache: false,
-            );
-            if (mediaData is Map<String, dynamic>) {
-              final String? url = mediaData['url'] as String? ?? mediaData['downloadUrl'] as String?;
-              final String? thumb = mediaData['thumbnailUrl'] as String?;
-              final String? status = mediaData['status']?.toString().toLowerCase();
-
-              if (status == 'failed' || (url == null && thumb == null)) {
-                _mediaStatusCache[cleanRef] = <String, String>{'exists': 'false'};
-                continue;
-              }
-
-              final String resolvedVid = url ?? '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
-              final String resolvedThumb = thumb ?? '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumb.0000000.jpg';
-
-              _mediaStatusCache[cleanRef] = <String, String>{
-                'exists': 'true',
-                'url': resolvedVid,
-                'thumbnailUrl': resolvedThumb,
-              };
-
-              final int vCount = r.viewsCount;
-              final String? vFormatted = vCount >= 1000000
-                  ? '${(vCount / 1000000).toStringAsFixed(1)}M'
-                  : (vCount >= 1000
-                      ? '${(vCount / 1000).toStringAsFixed(1)}K'
-                      : (vCount > 0 ? '$vCount' : r.viewCount));
-
-              if (idLower.isNotEmpty) seenReelKeys.add('id:$idLower');
-              if (cleanRefLower.isNotEmpty) seenReelKeys.add('id:$cleanRefLower');
-              verifiedReels.add(r.copyWith(
-                refId: cleanRef,
-                videoUrl: resolvedVid,
-                thumbnailUrl: resolvedThumb,
-                imageAsset: resolvedThumb,
-                viewsCount: vCount,
-                viewCount: vFormatted,
-              ));
-            } else {
-              _mediaStatusCache[cleanRef] = <String, String>{'exists': 'false'};
-              continue;
-            }
-          } catch (e) {
-            debugPrint('⚠️ [DiscoverService] Reel media $cleanRef not found: $e');
-            _mediaStatusCache[cleanRef] = <String, String>{'exists': 'false'};
-            continue;
-          }
-        } else {
-          // Reel exists in live posts / was fetched from posts service!
-          final String resolvedVid = matchingLive.postImageUrl ??
-              '${AppConfig.cdnUrl}/videos/processed/$cleanRef/master.m3u8';
-          final String resolvedThumb = matchingLive.thumbnailUrl ??
-              '${AppConfig.cdnUrl}/videos/processed/$cleanRef/thumb.0000000.jpg';
-
-          _mediaStatusCache[cleanRef] = <String, String>{
-            'exists': 'true',
-            'url': resolvedVid,
-            'thumbnailUrl': resolvedThumb,
-          };
-
-          final int effectiveViews = matchingLive.viewsCount > 0 ? matchingLive.viewsCount : r.viewsCount;
-          final String? formattedViews = effectiveViews >= 1000000
-              ? '${(effectiveViews / 1000000).toStringAsFixed(1)}M'
-              : (effectiveViews >= 1000
-                  ? '${(effectiveViews / 1000).toStringAsFixed(1)}K'
-                  : (effectiveViews > 0 ? '$effectiveViews' : null));
-
-          if (idLower.isNotEmpty) seenReelKeys.add('id:$idLower');
-          if (cleanRefLower.isNotEmpty) seenReelKeys.add('id:$cleanRefLower');
-          verifiedReels.add(r.copyWith(
-            refId: cleanRef,
-            videoUrl: resolvedVid,
-            thumbnailUrl: resolvedThumb,
-            imageAsset: resolvedThumb,
-            caption: matchingLive.caption.isNotEmpty ? matchingLive.caption : r.caption,
-            likesCount: matchingLive.likesCount,
-            commentsCount: matchingLive.commentsCount,
-            viewsCount: effectiveViews,
-            viewCount: formattedViews ?? r.viewCount,
-            isLiked: matchingLive.isLiked,
-            isSaved: matchingLive.isSaved,
-            authorId: matchingLive.authorId ?? r.authorId,
-            authorUsername: matchingLive.authorName ?? matchingLive.authorDisplayName ?? r.authorUsername,
-            authorAvatar: matchingLive.authorAvatar ?? r.authorAvatar,
-          ));
+        // If post was explicitly marked as deleted in registry, skip
+        if (matchingLive != null && DeletedPostsRegistry.isDeleted(matchingLive.id)) {
+          continue;
         }
+
+        // Only show reels whose status is "published"
+        final String effectiveReelStatus = (matchingLive?.status ?? r.status ?? '').trim().toLowerCase();
+        if (effectiveReelStatus != 'published') {
+          continue;
+        }
+
+        // Determine actual media ref for the video
+        final String mediaId = (matchingLive != null && matchingLive.mediaRefs.isNotEmpty)
+            ? matchingLive.mediaRefs.first.replaceAll(RegExp(r'^/+|^media/'), '').trim()
+            : cleanRef;
+
+        final String resolvedVid = (mediaId.startsWith('http://') || mediaId.startsWith('https://'))
+            ? mediaId
+            : '${AppConfig.cdnUrl}/videos/processed/$mediaId/master.m3u8';
+
+        final String resolvedThumb = (matchingLive?.thumbnailUrl != null && matchingLive!.thumbnailUrl!.isNotEmpty)
+            ? matchingLive.thumbnailUrl!
+            : (matchingLive?.postImageUrl != null && matchingLive!.postImageUrl!.isNotEmpty && !matchingLive.postImageUrl!.endsWith('.m3u8'))
+                ? matchingLive.postImageUrl!
+                : ((mediaId.startsWith('http://') || mediaId.startsWith('https://'))
+                    ? mediaId.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg')
+                    : '${AppConfig.cdnUrl}/videos/processed/$mediaId/thumb.0000000.jpg');
+
+        final String reelEffectiveId = matchingLive?.id ?? (id.isNotEmpty ? id : cleanRef);
+        final int regViews = PostInteractionRegistry.getViewsCount(
+          reelEffectiveId,
+          fallback: PostInteractionRegistry.getViewsCount(
+            cleanRef,
+            fallback: id.isNotEmpty ? PostInteractionRegistry.getViewsCount(id) : 0,
+          ),
+        );
+        final int effectiveViews = (matchingLive?.viewsCount ?? 0) > 0
+            ? matchingLive!.viewsCount
+            : (r.viewsCount > 0 ? r.viewsCount : regViews);
+
+        if (effectiveViews > 0) {
+          PostInteractionRegistry.setViewsCount(reelEffectiveId, effectiveViews);
+          if (cleanRef.isNotEmpty) PostInteractionRegistry.setViewsCount(cleanRef, effectiveViews);
+          if (id.isNotEmpty) PostInteractionRegistry.setViewsCount(id, effectiveViews);
+        }
+
+        final String? formattedViews = effectiveViews >= 1000000
+            ? '${(effectiveViews / 1000000).toStringAsFixed(1)}M'
+            : (effectiveViews >= 1000
+                ? '${(effectiveViews / 1000).toStringAsFixed(1)}K'
+                : (effectiveViews > 0 ? '$effectiveViews' : null));
+
+        if (idLower.isNotEmpty) seenReelKeys.add('id:$idLower');
+        if (cleanRefLower.isNotEmpty) seenReelKeys.add('id:$cleanRefLower');
+        final bool isReelLiked = PostInteractionRegistry.isLiked(reelEffectiveId) ||
+            (id.isNotEmpty && PostInteractionRegistry.isLiked(id)) ||
+            (cleanRef.isNotEmpty && PostInteractionRegistry.isLiked(cleanRef)) ||
+            (r.id != null && PostInteractionRegistry.isLiked(r.id!)) ||
+            (r.refId != null && PostInteractionRegistry.isLiked(r.refId!)) ||
+            (matchingLive != null && PostInteractionRegistry.isLiked(matchingLive.id)) ||
+            (matchingLive?.isLiked ?? r.isLiked);
+
+        final bool isReelSaved = PostInteractionRegistry.isSaved(reelEffectiveId) ||
+            (id.isNotEmpty && PostInteractionRegistry.isSaved(id)) ||
+            (cleanRef.isNotEmpty && PostInteractionRegistry.isSaved(cleanRef)) ||
+            (r.id != null && PostInteractionRegistry.isSaved(r.id!)) ||
+            (r.refId != null && PostInteractionRegistry.isSaved(r.refId!)) ||
+            (matchingLive != null && PostInteractionRegistry.isSaved(matchingLive.id)) ||
+            (matchingLive?.isSaved ?? r.isSaved);
+
+        final int reelLikes = PostInteractionRegistry.getLikeCount(
+          reelEffectiveId,
+          fallback: matchingLive?.likesCount ?? r.likesCount ?? 0,
+        );
+
+        verifiedReels.add(r.copyWith(
+          id: reelEffectiveId,
+          refId: cleanRef,
+          status: matchingLive?.status ?? r.status,
+          videoUrl: resolvedVid,
+          thumbnailUrl: resolvedThumb,
+          imageAsset: resolvedThumb,
+          caption: (matchingLive?.caption != null && matchingLive!.caption.isNotEmpty)
+              ? matchingLive.caption
+              : r.caption,
+          likesCount: reelLikes,
+          commentsCount: matchingLive?.commentsCount ?? r.commentsCount,
+          viewsCount: effectiveViews,
+          viewCount: formattedViews ?? r.viewCount,
+          isLiked: isReelLiked,
+          isSaved: isReelSaved,
+          authorId: matchingLive?.authorId ?? r.authorId,
+          authorUsername: matchingLive?.authorName ?? matchingLive?.authorDisplayName ?? r.authorUsername,
+          authorAvatar: matchingLive?.authorAvatar ?? r.authorAvatar,
+          communityId: matchingLive?.communityId ?? r.communityId,
+          isAuthorPrivate: matchingLive?.isAuthorPrivate ?? r.isAuthorPrivate,
+          allowComments: matchingLive?.allowComments ?? r.allowComments,
+          allowDownloads: matchingLive?.allowDownloads ?? r.allowDownloads,
+          allowCommentsFrom: matchingLive?.allowCommentsFrom ?? r.allowCommentsFrom,
+        ));
       }
 
-      // 5. Process Tags: Do not display tags from deleted posts; verify against live posts
+      // 5. Process Tags: Preserve all search tags and supplement with live tags
       final List<TagSearchResultItem> verifiedTags = <TagSearchResultItem>[];
       final Set<String> addedTagNames = <String>{};
 
       for (final TagSearchResultItem t in results.tags) {
         final String cleanTag = t.name.replaceAll('#', '').trim().toLowerCase();
-        if (livePosts.isNotEmpty) {
-          // If we have live posts, only show tags that actually exist in live posts!
-          if (liveTagCounts.containsKey(cleanTag) && liveTagCounts[cleanTag]! > 0) {
-            verifiedTags.add(TagSearchResultItem(
-              name: t.name,
-              postsCount: '${liveTagCounts[cleanTag]!}',
-            ));
-            addedTagNames.add(cleanTag);
-          }
-        } else {
-          verifiedTags.add(t);
-          addedTagNames.add(cleanTag);
-        }
+        final String count = (liveTagCounts.containsKey(cleanTag) && liveTagCounts[cleanTag]! > 0)
+            ? '${liveTagCounts[cleanTag]!}'
+            : (t.postsCount.isNotEmpty ? t.postsCount : '0');
+        verifiedTags.add(TagSearchResultItem(
+          name: t.name,
+          postsCount: count,
+        ));
+        addedTagNames.add(cleanTag);
       }
 
       // Also add any live tags matching search query that were not returned by search API
@@ -714,13 +800,14 @@ class DiscoverService {
   // ── Helpers ────────────────────────────────────────────────────────────────
   List<dynamic> _extractList(dynamic res, {required List<String> keys}) {
     if (res is List) return res;
-    if (res is Map<String, dynamic>) {
+    if (res is Map) {
       for (final String key in keys) {
         if (res[key] is List) return res[key] as List<dynamic>;
-        if (res[key] is Map<String, dynamic>) {
+        if (res[key] is Map) {
+          final Map sub = res[key] as Map;
           for (final String subKey in keys) {
-            if ((res[key] as Map<String, dynamic>)[subKey] is List) {
-              return (res[key] as Map<String, dynamic>)[subKey] as List<dynamic>;
+            if (sub[subKey] is List) {
+              return sub[subKey] as List<dynamic>;
             }
           }
         }
@@ -733,11 +820,11 @@ class DiscoverService {
     if (res == null) return const MultiTabSearchResults();
 
     Map<String, dynamic>? dataMap;
-    if (res is Map<String, dynamic>) {
-      if (res['data'] is Map<String, dynamic>) {
-        dataMap = res['data'] as Map<String, dynamic>;
+    if (res is Map) {
+      if (res['data'] is Map) {
+        dataMap = (res['data'] as Map).cast<String, dynamic>();
       } else {
-        dataMap = res;
+        dataMap = res.cast<String, dynamic>();
       }
     }
 
@@ -751,28 +838,38 @@ class DiscoverService {
     if (res is List) {
       switch (activeTab) {
         case 'posts':
-          posts.addAll(res.whereType<Map<String, dynamic>>().map(DiscoverSearchResult.fromJson));
+          posts.addAll(
+            res.whereType<Map>().map((Map m) => DiscoverSearchResult.fromJson(m.cast<String, dynamic>())),
+          );
           break;
         case 'reels':
           for (final dynamic item in res) {
-            if (item is Map<String, dynamic>) {
-              final Map<String, dynamic> rMap = Map<String, dynamic>.from(item);
+            if (item is Map) {
+              final Map<String, dynamic> rMap = item.cast<String, dynamic>();
               rMap['postType'] ??= 'VIDEO';
               reels.add(DiscoverSearchResult.fromJson(rMap));
             }
           }
           break;
         case 'people':
-          people.addAll(res.whereType<Map<String, dynamic>>().map(DiscoverPerson.fromJson));
+          people.addAll(
+            res.whereType<Map>().map((Map m) => DiscoverPerson.fromJson(m.cast<String, dynamic>())),
+          );
           break;
         case 'tags':
-          tags.addAll(res.whereType<Map<String, dynamic>>().map(TagSearchResultItem.fromJson));
+          tags.addAll(
+            res.whereType<Map>().map((Map m) => TagSearchResultItem.fromJson(m.cast<String, dynamic>())),
+          );
           break;
         case 'communities':
-          communities.addAll(res.whereType<Map<String, dynamic>>().map(DiscoverCommunity.fromJson));
+          communities.addAll(
+            res.whereType<Map>().map((Map m) => DiscoverCommunity.fromJson(m.cast<String, dynamic>())),
+          );
           break;
         default:
-          posts.addAll(res.whereType<Map<String, dynamic>>().map(DiscoverSearchResult.fromJson));
+          posts.addAll(
+            res.whereType<Map>().map((Map m) => DiscoverSearchResult.fromJson(m.cast<String, dynamic>())),
+          );
           break;
       }
       return MultiTabSearchResults(
@@ -792,7 +889,9 @@ class DiscoverService {
             ? (dataMap['items'] ?? dataMap['results'] ?? dataMap['data'])
             : null);
     if (postsRaw is List) {
-      posts.addAll(postsRaw.whereType<Map<String, dynamic>>().map(DiscoverSearchResult.fromJson));
+      posts.addAll(
+        postsRaw.whereType<Map>().map((Map m) => DiscoverSearchResult.fromJson(m.cast<String, dynamic>())),
+      );
     }
 
     // Parse Reels
@@ -802,8 +901,8 @@ class DiscoverService {
             : null);
     if (reelsRaw is List) {
       for (final dynamic r in reelsRaw) {
-        if (r is Map<String, dynamic>) {
-          final Map<String, dynamic> rMap = Map<String, dynamic>.from(r);
+        if (r is Map) {
+          final Map<String, dynamic> rMap = Map<String, dynamic>.from(r.cast<String, dynamic>());
           rMap['postType'] ??= 'VIDEO';
           reels.add(DiscoverSearchResult.fromJson(rMap));
         }
@@ -815,7 +914,9 @@ class DiscoverService {
         dataMap['users'] ??
         (activeTab == 'people' ? (dataMap['items'] ?? dataMap['results']) : null);
     if (peopleRaw is List) {
-      people.addAll(peopleRaw.whereType<Map<String, dynamic>>().map(DiscoverPerson.fromJson));
+      people.addAll(
+        peopleRaw.whereType<Map>().map((Map m) => DiscoverPerson.fromJson(m.cast<String, dynamic>())),
+      );
     }
 
     // Parse Tags / Hashtags
@@ -824,8 +925,8 @@ class DiscoverService {
         (activeTab == 'tags' ? (dataMap['items'] ?? dataMap['results']) : null);
     if (tagsRaw is List) {
       for (final dynamic t in tagsRaw) {
-        if (t is Map<String, dynamic>) {
-          tags.add(TagSearchResultItem.fromJson(t));
+        if (t is Map) {
+          tags.add(TagSearchResultItem.fromJson(t.cast<String, dynamic>()));
         } else if (t is String) {
           tags.add(TagSearchResultItem(name: t.startsWith('#') ? t : '#$t'));
         }
@@ -837,7 +938,7 @@ class DiscoverService {
         (activeTab == 'communities' ? (dataMap['items'] ?? dataMap['results']) : null);
     if (communitiesRaw is List) {
       communities.addAll(
-        communitiesRaw.whereType<Map<String, dynamic>>().map(DiscoverCommunity.fromJson),
+        communitiesRaw.whereType<Map>().map((Map m) => DiscoverCommunity.fromJson(m.cast<String, dynamic>())),
       );
     }
 

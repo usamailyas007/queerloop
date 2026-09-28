@@ -33,6 +33,7 @@ class DiscoverSearchResult {
     this.allowDownloads = true,
     this.allowCommentsFrom = 'everyone',
     this.isAuthorPrivate = false,
+    this.status,
   });
 
   final String imageAsset;
@@ -58,6 +59,9 @@ class DiscoverSearchResult {
   final bool allowDownloads;
   final String allowCommentsFrom;
   final bool isAuthorPrivate;
+  final String? status;
+
+  bool get isPublished => (status ?? '').toLowerCase().trim() == 'published';
 
   bool get isReel {
     final String t = (type ?? '').toUpperCase().trim();
@@ -105,6 +109,7 @@ class DiscoverSearchResult {
     bool? allowDownloads,
     String? allowCommentsFrom,
     bool? isAuthorPrivate,
+    String? status,
   }) {
     return DiscoverSearchResult(
       imageAsset: imageAsset ?? this.imageAsset,
@@ -130,6 +135,7 @@ class DiscoverSearchResult {
       allowDownloads: allowDownloads ?? this.allowDownloads,
       allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
       isAuthorPrivate: isAuthorPrivate ?? this.isAuthorPrivate,
+      status: status ?? this.status,
     );
   }
 
@@ -163,6 +169,7 @@ class DiscoverSearchResult {
       allowDownloads: post.allowDownloads,
       allowCommentsFrom: post.allowCommentsFrom,
       isAuthorPrivate: post.isAuthorPrivate,
+      status: post.status,
     );
   }
 
@@ -205,6 +212,7 @@ class DiscoverSearchResult {
       allowDownloads: reel.allowDownloads,
       allowCommentsFrom: reel.allowCommentsFrom,
       isAuthorPrivate: reel.isAuthorPrivate,
+      status: reel.status,
     );
   }
 
@@ -354,9 +362,12 @@ class DiscoverSearchResult {
         ? rawPostType
         : (rawType != 'POST' && rawType.isNotEmpty ? rawType : '');
 
-    final String? primaryMediaRef = (refId != null && refId.isNotEmpty)
-        ? refId
-        : (extractedMediaRefs.isNotEmpty ? extractedMediaRefs.first : null);
+    final String? explicitMediaRef = (json['mediaRef'] ?? json['mediaId'])?.toString().trim();
+    final String? primaryMediaRef = extractedMediaRefs.isNotEmpty
+        ? extractedMediaRefs.first
+        : (explicitMediaRef != null && explicitMediaRef.isNotEmpty
+            ? explicitMediaRef
+            : (refId != null && refId.isNotEmpty ? refId : null));
 
     // 4. Resolve CDN URLs from primaryMediaRef
     if (primaryMediaRef != null && primaryMediaRef.isNotEmpty) {
@@ -603,9 +614,24 @@ class DiscoverSearchResult {
           json['isPrivate'] == true ||
           json['is_private'] == true ||
           json['isAuthorPrivate'] == true,
+      status: json['status']?.toString().trim(),
     );
 
     final String? cleanId = result.id?.trim();
+    final String? cleanRef = result.refId?.trim();
+    if (cleanRef != null && cleanRef.isNotEmpty) {
+      PostInteractionRegistry.seedFromServer(
+        cleanRef,
+        isLiked: result.isLiked,
+        isSaved: result.isSaved,
+        likesCount: result.likesCount,
+        commentsCount: result.commentsCount,
+        viewsCount: result.viewsCount,
+      );
+      if (result.commentsCount != null) {
+        CommentCountRegistry.set(cleanRef, result.commentsCount!);
+      }
+    }
     if (cleanId != null && cleanId.isNotEmpty) {
       PostInteractionRegistry.seedFromServer(
         cleanId,
@@ -613,7 +639,11 @@ class DiscoverSearchResult {
         isSaved: result.isSaved,
         likesCount: result.likesCount,
         commentsCount: result.commentsCount,
+        viewsCount: result.viewsCount,
       );
+      if (result.commentsCount != null) {
+        CommentCountRegistry.set(cleanId, result.commentsCount!);
+      }
     }
     return result;
   }

@@ -6,8 +6,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/app_gradient_button.dart';
-import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_tag_chip.dart';
 import '../../auth/auth_provider.dart';
 import '../../home/models/post_item_model.dart';
@@ -21,7 +19,6 @@ import '../models/discover_models.dart';
 import '../provider/discover_provider.dart';
 import '../widgets/clear_search_history_dialog.dart';
 import '../widgets/discover_community_tile.dart';
-import '../widgets/discover_creator_circle.dart';
 import '../widgets/discover_section_label.dart';
 import '../widgets/search_bar_row.dart';
 import '../widgets/search_person_tile.dart';
@@ -113,23 +110,7 @@ class _SearchScreenState extends State<SearchScreen> {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
                 child: provider.isSearching
-                    ? (provider.isLoadingSearch
-                        ? const Center(
-                            key: ValueKey<String>('loading'),
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                AppColors.gradientCyan,
-                              ),
-                            ),
-                          )
-                        : (provider.hasResults
-                            ? const _SearchResultsBody(
-                                key: ValueKey<String>('results'))
-                            : _NoResultsBody(
-                                key: const ValueKey<String>('no-results'),
-                                query: provider.searchQuery,
-                              )))
+                    ? const _SearchResultsBody(key: ValueKey<String>('results'))
                     : _SearchIdleBody(
                         key: const ValueKey<String>('idle'),
                         onSelectQuery: (String q) {
@@ -326,8 +307,56 @@ class _SearchResultsBody extends StatelessWidget {
             children: <Widget>[
               // ── Tab 0: All (Comprehensive Overview) ────────────────────────
               if (provider.selectedSearchTab == 0) ...<Widget>[
-                // 1. TOP REELS Section
-                if (provider.reelsResults.isNotEmpty) ...<Widget>[
+                if (provider.reelsResults.isEmpty &&
+                    provider.postsResults.isEmpty &&
+                    provider.peopleResults.isEmpty &&
+                    provider.tagResults.isEmpty &&
+                    provider.communityResults.isEmpty)
+                  if (provider.isLoadingSearch)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.gradientCyan),
+                        ),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.search_off_rounded,
+                              size: 48,
+                              color: context.themeTextMuted,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No results found',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: context.themeTextPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              "We couldn't find anything matching '${provider.searchQuery}'.",
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.themeTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                else ...<Widget>[
+                  // 1. TOP REELS Section
+                  if (provider.reelsResults.isNotEmpty) ...<Widget>[
                   _buildSectionHeader(
                     context: context,
                     title: 'TOP REELS',
@@ -359,14 +388,41 @@ class _SearchResultsBody extends StatelessWidget {
                       final bool isAsset = img.startsWith('assets/');
                       final bool isText = res.type == 'TEXT' ||
                           (img.isEmpty && res.mediaRefs.isEmpty);
+                      final String? docId = res.id?.trim();
+                      final String? refId = res.refId?.trim();
+                      final String effectivePostId = (refId != null && refId.isNotEmpty)
+                          ? refId
+                          : (docId ?? 'search_${res.caption.hashCode}');
+                      final HomeFeedProvider hf = context.watch<HomeFeedProvider>();
+                      final ProfileProvider pp = context.watch<ProfileProvider>();
+
+                      final bool isLiked = PostInteractionRegistry.isLiked(effectivePostId) ||
+                          (docId != null && PostInteractionRegistry.isLiked(docId)) ||
+                          (refId != null && PostInteractionRegistry.isLiked(refId)) ||
+                          hf.isPostLiked(effectivePostId) ||
+                          (docId != null && hf.isPostLiked(docId)) ||
+                          (refId != null && hf.isPostLiked(refId)) ||
+                          pp.isPostLiked(effectivePostId) ||
+                          (docId != null && pp.isPostLiked(docId)) ||
+                          (refId != null && pp.isPostLiked(refId)) ||
+                          res.isLiked;
+
+                      final bool isSaved = PostInteractionRegistry.isSaved(effectivePostId) ||
+                          (docId != null && PostInteractionRegistry.isSaved(docId)) ||
+                          (refId != null && PostInteractionRegistry.isSaved(refId)) ||
+                          hf.isPostSaved(effectivePostId) ||
+                          (docId != null && hf.isPostSaved(docId)) ||
+                          (refId != null && hf.isPostSaved(refId)) ||
+                          pp.isPostSaved(effectivePostId) ||
+                          (docId != null && pp.isPostSaved(docId)) ||
+                          (refId != null && pp.isPostSaved(refId)) ||
+                          res.isSaved;
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.md),
                         child: PostFeedCard(
                           post: PostItemModel(
-                            id: (res.refId != null && res.refId!.trim().isNotEmpty)
-                                ? res.refId!.trim()
-                                : (res.id ?? 'search_${res.caption.hashCode}'),
+                            id: effectivePostId,
                             authorId: res.authorId,
                             username: (res.authorUsername != null &&
                                     res.authorUsername!.trim().isNotEmpty)
@@ -381,46 +437,64 @@ class _SearchResultsBody extends StatelessWidget {
                                     res.caption!.trim().isNotEmpty)
                                 ? res.caption!
                                 : 'Shared post',
-                            likesCount: PostInteractionRegistry.getLikeCount(res.id ?? '', fallback: res.likesCount ?? 0),
-                            commentsCount: CommentCountRegistry.getOr(res.id ?? '', res.commentsCount ?? 0),
+                            likesCount: PostInteractionRegistry.getLikeCount(effectivePostId, fallback: res.likesCount ?? 0),
+                            commentsCount: CommentCountRegistry.getOr(effectivePostId, res.commentsCount ?? 0),
                             viewsCount: res.viewsCount,
                             postImageUrl: (!isText && isHttp) ? img : null,
                             postImageAsset: (!isText && isAsset) ? img : null,
                             postType: isText ? 'TEXT' : (res.type ?? 'PHOTO'),
                             communityId: res.communityId,
-                            isLiked: PostInteractionRegistry.isLiked(res.id ?? '', fallback: res.isLiked),
-                            isSaved: PostInteractionRegistry.isSaved(res.id ?? '', fallback: res.isSaved),
+                            isLiked: isLiked,
+                            isSaved: isSaved,
+                            allowComments: res.allowComments,
+                            allowDownloads: res.allowDownloads,
+                            allowCommentsFrom: res.allowCommentsFrom,
+                            isAuthorPrivate: res.isAuthorPrivate,
+                            status: res.status,
                           ),
                           onPostDeleted: () {
-                            if (res.id != null) {
+                            provider.notifyPostDeleted(effectivePostId);
+                            if (res.id != null && res.id != effectivePostId) {
                               provider.notifyPostDeleted(res.id!);
                             }
                           },
                           onLikeToggle: () {
-                            final String pid = res.id ?? '';
+                            final String pid = effectivePostId;
                             if (pid.isNotEmpty) {
-                              final HomeFeedProvider hf = context.read<HomeFeedProvider>();
-                              final ProfileProvider pp = context.read<ProfileProvider>();
-                              final bool currentlyLiked = PostInteractionRegistry.isLiked(pid, fallback: res.isLiked);
+                              final HomeFeedProvider feedProv = context.read<HomeFeedProvider>();
+                              final ProfileProvider profProv = context.read<ProfileProvider>();
+                              final bool currentlyLiked = isLiked;
                               final bool newLiked = !currentlyLiked;
                               final int curCount = PostInteractionRegistry.getLikeCount(pid, fallback: res.likesCount ?? 0);
                               final int nextCount = newLiked ? curCount + 1 : (curCount > 0 ? curCount - 1 : 0);
                               PostInteractionRegistry.setLiked(pid, newLiked, newCount: nextCount);
-                              hf.toggleLikePost(pid, explicitLiked: newLiked);
-                              pp.updateLikedPost(pid, isLiked: newLiked, likesCount: nextCount);
+                              if (docId != null && docId != pid) {
+                                PostInteractionRegistry.setLiked(docId, newLiked, newCount: nextCount);
+                              }
+                              if (refId != null && refId != pid) {
+                                PostInteractionRegistry.setLiked(refId, newLiked, newCount: nextCount);
+                              }
+                              feedProv.toggleLikePost(pid, explicitLiked: newLiked);
+                              profProv.updateLikedPost(pid, isLiked: newLiked, likesCount: nextCount);
                             }
                           },
                           onSaveToggle: () {
-                            final String pid = res.id ?? '';
+                            final String pid = effectivePostId;
                             if (pid.isNotEmpty) {
-                              final HomeFeedProvider hf = context.read<HomeFeedProvider>();
-                              final ProfileProvider pp = context.read<ProfileProvider>();
-                              final bool currentlySaved = PostInteractionRegistry.isSaved(pid, fallback: res.isSaved);
+                              final HomeFeedProvider feedProv = context.read<HomeFeedProvider>();
+                              final ProfileProvider profProv = context.read<ProfileProvider>();
+                              final bool currentlySaved = isSaved;
                               final bool newSaved = !currentlySaved;
                               PostInteractionRegistry.setSaved(pid, newSaved);
-                              hf.toggleSavePost(pid, explicitSaved: newSaved);
+                              if (docId != null && docId != pid) {
+                                PostInteractionRegistry.setSaved(docId, newSaved);
+                              }
+                              if (refId != null && refId != pid) {
+                                PostInteractionRegistry.setSaved(refId, newSaved);
+                              }
+                              feedProv.toggleSavePost(pid, explicitSaved: newSaved);
                               try {
-                                pp.updateSavedPost(pid, isSaved: newSaved);
+                                profProv.updateSavedPost(pid, isSaved: newSaved);
                               } catch (_) {}
                             }
                           },
@@ -430,15 +504,20 @@ class _SearchResultsBody extends StatelessWidget {
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
                               builder: (_) => CommentsBottomSheet(
-                                postId: res.id,
+                                postId: effectivePostId,
                                 postAuthorId: res.authorId,
                                 communityId: res.communityId,
-                                totalComments: CommentCountRegistry.getOr(res.id ?? '', res.commentsCount ?? 0),
+                                totalComments: CommentCountRegistry.getOr(effectivePostId, res.commentsCount ?? 0),
                                 allowComments: res.allowComments,
                                 allowCommentsFrom: res.allowCommentsFrom,
                                 authorUsername: res.authorUsername,
                                 onCommentAdded: () {
-                                  if (res.id != null) {
+                                  CommentCountRegistry.increment(effectivePostId);
+                                  context.read<HomeFeedProvider>().incrementCommentCount(effectivePostId);
+                                  try {
+                                    context.read<ProfileProvider>().incrementCommentCount(effectivePostId);
+                                  } catch (_) {}
+                                  if (res.id != null && res.id != effectivePostId) {
                                     CommentCountRegistry.increment(res.id!);
                                     context.read<HomeFeedProvider>().incrementCommentCount(res.id!);
                                     try {
@@ -447,7 +526,12 @@ class _SearchResultsBody extends StatelessWidget {
                                   }
                                 },
                                 onCommentDeleted: (int deletedCount, int remainingCount) {
-                                  if (res.id != null) {
+                                  CommentCountRegistry.set(effectivePostId, remainingCount);
+                                  context.read<HomeFeedProvider>().setCommentCount(effectivePostId, remainingCount);
+                                  try {
+                                    context.read<ProfileProvider>().updatePostCommentCount(effectivePostId, remainingCount);
+                                  } catch (_) {}
+                                  if (res.id != null && res.id != effectivePostId) {
                                     CommentCountRegistry.set(res.id!, remainingCount);
                                     context.read<HomeFeedProvider>().setCommentCount(res.id!, remainingCount);
                                     try {
@@ -456,7 +540,12 @@ class _SearchResultsBody extends StatelessWidget {
                                   }
                                 },
                                 onCommentCountChanged: (int count) {
-                                  if (res.id != null) {
+                                  CommentCountRegistry.set(effectivePostId, count);
+                                  context.read<HomeFeedProvider>().setCommentCount(effectivePostId, count);
+                                  try {
+                                    context.read<ProfileProvider>().updatePostCommentCount(effectivePostId, count);
+                                  } catch (_) {}
+                                  if (res.id != null && res.id != effectivePostId) {
                                     CommentCountRegistry.set(res.id!, count);
                                     context.read<HomeFeedProvider>().setCommentCount(res.id!, count);
                                     try {
@@ -574,41 +663,53 @@ class _SearchResultsBody extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xl),
                 ],
               ],
+            ],
 
               // ── Tab 1: Posts (Full Posts Feed) ─────────────────────────────
               if (provider.selectedSearchTab == 1) ...<Widget>[
                 if (provider.postsResults.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 48),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Icon(
-                            Icons.article_outlined,
-                            size: 48,
-                            color: context.themeTextMuted,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'No posts found',
-                            style: AppTextStyles.titleMedium.copyWith(
-                              color: context.themeTextPrimary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            "No photo or text posts matching '${provider.searchQuery}'.",
-                            textAlign: TextAlign.center,
-                            style: AppTextStyles.caption.copyWith(
+                  if (provider.isLoadingSearch)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.gradientCyan),
+                        ),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.article_outlined,
+                              size: 48,
                               color: context.themeTextMuted,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 12),
+                            Text(
+                              'No posts found',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: context.themeTextPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              "No photo or text posts matching '${provider.searchQuery}'.",
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.themeTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  )
+                    )
                 else
                   ...provider.postsResults.map(
                     (DiscoverSearchResult res) {
@@ -621,14 +722,41 @@ class _SearchResultsBody extends StatelessWidget {
                       final bool isAsset = img.startsWith('assets/');
                       final bool isText = res.type == 'TEXT' ||
                           (img.isEmpty && res.mediaRefs.isEmpty);
+                      final String? docId = res.id?.trim();
+                      final String? refId = res.refId?.trim();
+                      final String effectivePostId = (refId != null && refId.isNotEmpty)
+                          ? refId
+                          : (docId ?? 'search_${res.caption.hashCode}');
+                      final HomeFeedProvider hf = context.watch<HomeFeedProvider>();
+                      final ProfileProvider pp = context.watch<ProfileProvider>();
+
+                      final bool isLiked = PostInteractionRegistry.isLiked(effectivePostId) ||
+                          (docId != null && PostInteractionRegistry.isLiked(docId)) ||
+                          (refId != null && PostInteractionRegistry.isLiked(refId)) ||
+                          hf.isPostLiked(effectivePostId) ||
+                          (docId != null && hf.isPostLiked(docId)) ||
+                          (refId != null && hf.isPostLiked(refId)) ||
+                          pp.isPostLiked(effectivePostId) ||
+                          (docId != null && pp.isPostLiked(docId)) ||
+                          (refId != null && pp.isPostLiked(refId)) ||
+                          res.isLiked;
+
+                      final bool isSaved = PostInteractionRegistry.isSaved(effectivePostId) ||
+                          (docId != null && PostInteractionRegistry.isSaved(docId)) ||
+                          (refId != null && PostInteractionRegistry.isSaved(refId)) ||
+                          hf.isPostSaved(effectivePostId) ||
+                          (docId != null && hf.isPostSaved(docId)) ||
+                          (refId != null && hf.isPostSaved(refId)) ||
+                          pp.isPostSaved(effectivePostId) ||
+                          (docId != null && pp.isPostSaved(docId)) ||
+                          (refId != null && pp.isPostSaved(refId)) ||
+                          res.isSaved;
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.md),
                         child: PostFeedCard(
                           post: PostItemModel(
-                            id: (res.refId != null && res.refId!.trim().isNotEmpty)
-                                ? res.refId!.trim()
-                                : (res.id ?? 'search_${res.caption.hashCode}'),
+                            id: effectivePostId,
                             authorId: res.authorId,
                             username: (res.authorUsername != null &&
                                     res.authorUsername!.trim().isNotEmpty)
@@ -643,46 +771,64 @@ class _SearchResultsBody extends StatelessWidget {
                                     res.caption!.trim().isNotEmpty)
                                 ? res.caption!
                                 : 'Shared post',
-                            likesCount: PostInteractionRegistry.getLikeCount(res.id ?? '', fallback: res.likesCount ?? 0),
-                            commentsCount: CommentCountRegistry.getOr(res.id ?? '', res.commentsCount ?? 0),
+                            likesCount: PostInteractionRegistry.getLikeCount(effectivePostId, fallback: res.likesCount ?? 0),
+                            commentsCount: CommentCountRegistry.getOr(effectivePostId, res.commentsCount ?? 0),
                             viewsCount: res.viewsCount,
                             postImageUrl: (!isText && isHttp) ? img : null,
                             postImageAsset: (!isText && isAsset) ? img : null,
                             postType: isText ? 'TEXT' : (res.type ?? 'PHOTO'),
                             communityId: res.communityId,
-                            isLiked: PostInteractionRegistry.isLiked(res.id ?? '', fallback: res.isLiked),
-                            isSaved: PostInteractionRegistry.isSaved(res.id ?? '', fallback: res.isSaved),
+                            isLiked: isLiked,
+                            isSaved: isSaved,
+                            allowComments: res.allowComments,
+                            allowDownloads: res.allowDownloads,
+                            allowCommentsFrom: res.allowCommentsFrom,
+                            isAuthorPrivate: res.isAuthorPrivate,
+                            status: res.status,
                           ),
                           onPostDeleted: () {
-                            if (res.id != null) {
+                            provider.notifyPostDeleted(effectivePostId);
+                            if (res.id != null && res.id != effectivePostId) {
                               provider.notifyPostDeleted(res.id!);
                             }
                           },
                           onLikeToggle: () {
-                            final String pid = res.id ?? '';
+                            final String pid = effectivePostId;
                             if (pid.isNotEmpty) {
-                              final HomeFeedProvider hf = context.read<HomeFeedProvider>();
-                              final ProfileProvider pp = context.read<ProfileProvider>();
-                              final bool currentlyLiked = PostInteractionRegistry.isLiked(pid, fallback: res.isLiked);
+                              final HomeFeedProvider feedProv = context.read<HomeFeedProvider>();
+                              final ProfileProvider profProv = context.read<ProfileProvider>();
+                              final bool currentlyLiked = isLiked;
                               final bool newLiked = !currentlyLiked;
                               final int curCount = PostInteractionRegistry.getLikeCount(pid, fallback: res.likesCount ?? 0);
                               final int nextCount = newLiked ? curCount + 1 : (curCount > 0 ? curCount - 1 : 0);
                               PostInteractionRegistry.setLiked(pid, newLiked, newCount: nextCount);
-                              hf.toggleLikePost(pid, explicitLiked: newLiked);
-                              pp.updateLikedPost(pid, isLiked: newLiked, likesCount: nextCount);
+                              if (docId != null && docId != pid) {
+                                PostInteractionRegistry.setLiked(docId, newLiked, newCount: nextCount);
+                              }
+                              if (refId != null && refId != pid) {
+                                PostInteractionRegistry.setLiked(refId, newLiked, newCount: nextCount);
+                              }
+                              feedProv.toggleLikePost(pid, explicitLiked: newLiked);
+                              profProv.updateLikedPost(pid, isLiked: newLiked, likesCount: nextCount);
                             }
                           },
                           onSaveToggle: () {
-                            final String pid = res.id ?? '';
+                            final String pid = effectivePostId;
                             if (pid.isNotEmpty) {
-                              final HomeFeedProvider hf = context.read<HomeFeedProvider>();
-                              final ProfileProvider pp = context.read<ProfileProvider>();
-                              final bool currentlySaved = PostInteractionRegistry.isSaved(pid, fallback: res.isSaved);
+                              final HomeFeedProvider feedProv = context.read<HomeFeedProvider>();
+                              final ProfileProvider profProv = context.read<ProfileProvider>();
+                              final bool currentlySaved = isSaved;
                               final bool newSaved = !currentlySaved;
                               PostInteractionRegistry.setSaved(pid, newSaved);
-                              hf.toggleSavePost(pid, explicitSaved: newSaved);
+                              if (docId != null && docId != pid) {
+                                PostInteractionRegistry.setSaved(docId, newSaved);
+                              }
+                              if (refId != null && refId != pid) {
+                                PostInteractionRegistry.setSaved(refId, newSaved);
+                              }
+                              feedProv.toggleSavePost(pid, explicitSaved: newSaved);
                               try {
-                                pp.updateSavedPost(pid, isSaved: newSaved);
+                                profProv.updateSavedPost(pid, isSaved: newSaved);
                               } catch (_) {}
                             }
                           },
@@ -692,15 +838,20 @@ class _SearchResultsBody extends StatelessWidget {
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
                               builder: (_) => CommentsBottomSheet(
-                                postId: res.id,
+                                postId: effectivePostId,
                                 postAuthorId: res.authorId,
                                 communityId: res.communityId,
-                                totalComments: CommentCountRegistry.getOr(res.id ?? '', res.commentsCount ?? 0),
+                                totalComments: CommentCountRegistry.getOr(effectivePostId, res.commentsCount ?? 0),
                                 allowComments: res.allowComments,
                                 allowCommentsFrom: res.allowCommentsFrom,
                                 authorUsername: res.authorUsername,
                                 onCommentAdded: () {
-                                  if (res.id != null) {
+                                  CommentCountRegistry.increment(effectivePostId);
+                                  context.read<HomeFeedProvider>().incrementCommentCount(effectivePostId);
+                                  try {
+                                    context.read<ProfileProvider>().incrementCommentCount(effectivePostId);
+                                  } catch (_) {}
+                                  if (res.id != null && res.id != effectivePostId) {
                                     CommentCountRegistry.increment(res.id!);
                                     context.read<HomeFeedProvider>().incrementCommentCount(res.id!);
                                     try {
@@ -709,7 +860,12 @@ class _SearchResultsBody extends StatelessWidget {
                                   }
                                 },
                                 onCommentDeleted: (int deletedCount, int remainingCount) {
-                                  if (res.id != null) {
+                                  CommentCountRegistry.set(effectivePostId, remainingCount);
+                                  context.read<HomeFeedProvider>().setCommentCount(effectivePostId, remainingCount);
+                                  try {
+                                    context.read<ProfileProvider>().updatePostCommentCount(effectivePostId, remainingCount);
+                                  } catch (_) {}
+                                  if (res.id != null && res.id != effectivePostId) {
                                     CommentCountRegistry.set(res.id!, remainingCount);
                                     context.read<HomeFeedProvider>().setCommentCount(res.id!, remainingCount);
                                     try {
@@ -718,7 +874,12 @@ class _SearchResultsBody extends StatelessWidget {
                                   }
                                 },
                                 onCommentCountChanged: (int count) {
-                                  if (res.id != null) {
+                                  CommentCountRegistry.set(effectivePostId, count);
+                                  context.read<HomeFeedProvider>().setCommentCount(effectivePostId, count);
+                                  try {
+                                    context.read<ProfileProvider>().updatePostCommentCount(effectivePostId, count);
+                                  } catch (_) {}
+                                  if (res.id != null && res.id != effectivePostId) {
                                     CommentCountRegistry.set(res.id!, count);
                                     context.read<HomeFeedProvider>().setCommentCount(res.id!, count);
                                     try {
@@ -738,234 +899,263 @@ class _SearchResultsBody extends StatelessWidget {
               // ── Tab 2: Reels (Reels Grid) ──────────────────────────────────
               if (provider.selectedSearchTab == 2) ...<Widget>[
                 if (provider.reelsResults.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 48),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Icon(
-                            Icons.video_library_outlined,
-                            size: 48,
-                            color: context.themeTextMuted,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'No reels found',
-                            style: AppTextStyles.titleMedium.copyWith(
-                              color: context.themeTextPrimary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            "No reels matching '${provider.searchQuery}'.",
-                            textAlign: TextAlign.center,
-                            style: AppTextStyles.caption.copyWith(
+                  if (provider.isLoadingSearch)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.gradientCyan),
+                        ),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.video_library_outlined,
+                              size: 48,
                               color: context.themeTextMuted,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 12),
+                            Text(
+                              'No reels found',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: context.themeTextPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              "No reels matching '${provider.searchQuery}'.",
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.themeTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  )
+                    )
                 else
                   SearchPostsGrid(
                     results: provider.reelsResults,
                   ),
               ],
 
-              if (provider.selectedSearchTab == 3)
-                ...provider.peopleResults.map(
-                  (DiscoverPerson p) {
-                    final ProfileProvider profile = context.watch<ProfileProvider>();
-                    final bool isFollowing = profile.isFollowingUser(userId: p.id, username: p.username) ||
-                        provider.isFollowing(p.username);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      child: SearchPersonTile(
-                        person: p,
-                        isFollowing: isFollowing,
-                        onFollow: () async {
-                          final bool willFollow = !isFollowing;
-                          provider.toggleFollow(p.username);
-                          if (p.id != null && p.id!.isNotEmpty) {
-                            try {
-                              if (willFollow) {
-                                await profile.followUser(p.id!, username: p.username);
-                              } else {
-                                await profile.unfollowUser(p.id!, username: p.username);
-                              }
-                            } catch (_) {}
-                          }
-                        },
+              // ── Tab 3: People ──────────────────────────────────────────────
+              if (provider.selectedSearchTab == 3) ...<Widget>[
+                if (provider.peopleResults.isEmpty)
+                  if (provider.isLoadingSearch)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.gradientCyan),
+                        ),
                       ),
-                    );
-                  },
-                ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.people_outline_rounded,
+                              size: 48,
+                              color: context.themeTextMuted,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No accounts found',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: context.themeTextPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              "No people matching '${provider.searchQuery}'.",
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.themeTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                else
+                  ...provider.peopleResults.map(
+                    (DiscoverPerson p) {
+                      final ProfileProvider profile = context.watch<ProfileProvider>();
+                      final bool isFollowing = profile.isFollowingUser(userId: p.id, username: p.username) ||
+                          provider.isFollowing(p.username);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: SearchPersonTile(
+                          person: p,
+                          isFollowing: isFollowing,
+                          onFollow: () async {
+                            final bool willFollow = !isFollowing;
+                            provider.toggleFollow(p.username);
+                            if (p.id != null && p.id!.isNotEmpty) {
+                              try {
+                                if (willFollow) {
+                                  await profile.followUser(p.id!, username: p.username);
+                                } else {
+                                  await profile.unfollowUser(p.id!, username: p.username);
+                                }
+                              } catch (_) {}
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
+              ],
 
               // ── Tab 4: Tags (Tags List Screen) ─────────────────────────────
               if (provider.selectedSearchTab == 4) ...<Widget>[
-                ...provider.tagResults.map(
-                  (TagSearchResultItem t) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: SearchTagTile(
-                      tag: t,
-                      onTap: () {
-                        Navigator.push<void>(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => HashtagPostsScreen(
-                              hashtag: t.name,
-                              postsCount: '${t.postsCount} posts',
-                              rankColor: AppColors.gradientCyan,
+                if (provider.tagResults.isEmpty)
+                  if (provider.isLoadingSearch)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.gradientCyan),
+                        ),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.tag_rounded,
+                              size: 48,
+                              color: context.themeTextMuted,
                             ),
-                          ),
-                        );
-                      },
+                            const SizedBox(height: 12),
+                            Text(
+                              'No tags found',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: context.themeTextPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              "No tags matching '${provider.searchQuery}'.",
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.themeTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                else
+                  ...provider.tagResults.map(
+                    (TagSearchResultItem t) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: SearchTagTile(
+                        tag: t,
+                        onTap: () {
+                          Navigator.push<void>(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => HashtagPostsScreen(
+                                hashtag: t.name,
+                                postsCount: '${t.postsCount} posts',
+                                rankColor: AppColors.gradientCyan,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
-                ),
               ],
 
               // ── Tab 5: Communities ─────────────────────────────────────────
-              if (provider.selectedSearchTab == 5)
-                ...provider.communityResults.map(
-                  (DiscoverCommunity c) {
-                    final ProfileProvider profile = context.watch<ProfileProvider>();
-                    final bool isJoined = profile.isCommunityJoined(id: c.id, name: c.name);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: DiscoverCommunityTile(
-                        community: c,
-                        isJoined: isJoined,
-                        onJoin: () async {
-                          if (isJoined) {
-                            await profile.leaveCommunity(c.id ?? '', name: c.name);
-                          } else {
-                            await profile.joinCommunity(c.id ?? '', name: c.name);
-                          }
-                        },
+              if (provider.selectedSearchTab == 5) ...<Widget>[
+                if (provider.communityResults.isEmpty)
+                  if (provider.isLoadingSearch)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.gradientCyan),
+                        ),
                       ),
-                    );
-                  },
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// No Results State
-// ─────────────────────────────────────────────────────────────────────────────
-class _NoResultsBody extends StatelessWidget {
-  const _NoResultsBody({super.key, required this.query});
-
-  final String query;
-
-  static const List<String> _tabs = <String>[
-    'All',
-    'Posts',
-    'Reels',
-    'People',
-    'Tags',
-    'Communities',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final DiscoverProvider provider = context.watch<DiscoverProvider>();
-
-    return Column(
-      children: <Widget>[
-        SearchTabBar(
-          tabs: _tabs,
-          selectedIndex: provider.selectedSearchTab,
-          onTabSelected: provider.setSelectedSearchTab,
-        ),
-        Divider(color: context.themeDivider, height: 1),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            children: <Widget>[
-              const SizedBox(height: AppSpacing.xxxl),
-              // Empty icon
-              Center(
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: context.themeCardBackground,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: context.themeBorder,
-                    ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.groups_outlined,
+                              size: 48,
+                              color: context.themeTextMuted,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No communities found',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: context.themeTextPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              "No communities matching '${provider.searchQuery}'.",
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.themeTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                else
+                  ...provider.communityResults.map(
+                    (DiscoverCommunity c) {
+                      final ProfileProvider profile = context.watch<ProfileProvider>();
+                      final bool isJoined = profile.isCommunityJoined(id: c.id, name: c.name);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: DiscoverCommunityTile(
+                          community: c,
+                          isJoined: isJoined,
+                          onJoin: () async {
+                            if (isJoined) {
+                              await profile.leaveCommunity(c.id ?? '', name: c.name);
+                            } else {
+                              await profile.joinCommunity(c.id ?? '', name: c.name);
+                            }
+                          },
+                        ),
+                      );
+                    },
                   ),
-                  child: const Icon(
-                    Icons.search_off_rounded,
-                    color: AppColors.gradientCyan,
-                    size: 36,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Text(
-                'No Results Found',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.headingMedium.copyWith(
-                  color: context.themeTextPrimary,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                "We couldn't find what you're looking for, but\nthere's more to discover.",
-                textAlign: TextAlign.center,
-                style: AppTextStyles.authHeaderSub.copyWith(
-                  color: context.themeTextSecondary,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              // Action buttons
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: AppGradientButton(
-                      text: 'Explore Trending',
-                      fontSize: 13,
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: AppOutlineButton(
-                      text: 'Discover Communities',
-                      fontSize: 13,
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ),
-                ],
-              ),
-              if (provider.youMightLike.isNotEmpty) ...<Widget>[
-                const SizedBox(height: AppSpacing.xl),
-                // YOU MIGHT LIKE
-                const DiscoverSectionLabel(label: 'YOU MIGHT LIKE'),
-                const SizedBox(height: AppSpacing.md),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: provider.youMightLike
-                        .map(
-                          (DiscoverCreator c) => Padding(
-                            padding: const EdgeInsets.only(right: AppSpacing.lg),
-                            child: DiscoverCreatorCircle(creator: c, size: 60),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
               ],
             ],
           ),

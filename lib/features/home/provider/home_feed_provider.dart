@@ -154,6 +154,7 @@ class HomeFeedProvider extends ChangeNotifier {
           _userLikedPostIds.addAll(savedLikes);
           for (final String id in savedLikes) {
             PostInteractionRegistry.seedPersisted(id, isLiked: true);
+            PostInteractionRegistry.setLiked(id, true);
           }
         }
         final List<String>? savedPosts =
@@ -162,6 +163,7 @@ class HomeFeedProvider extends ChangeNotifier {
           _userSavedPostIds.addAll(savedPosts);
           for (final String id in savedPosts) {
             PostInteractionRegistry.seedPersisted(id, isSaved: true);
+            PostInteractionRegistry.setSaved(id, true);
           }
         }
       } catch (e) {
@@ -202,6 +204,7 @@ class HomeFeedProvider extends ChangeNotifier {
           if (p.id.isNotEmpty && _userLikedPostIds.add(p.id)) {
             changed = true;
           }
+          PostInteractionRegistry.setLiked(p.id, true);
           // Seed registry so like state is immediately available across all screens
           PostInteractionRegistry.seedFromServer(
             p.id,
@@ -209,6 +212,7 @@ class HomeFeedProvider extends ChangeNotifier {
             isSaved: _userSavedPostIds.contains(p.id),
             likesCount: p.likesCount,
             commentsCount: p.commentsCount,
+            viewsCount: p.viewsCount,
           );
         }
       }
@@ -218,6 +222,7 @@ class HomeFeedProvider extends ChangeNotifier {
           if (p.id.isNotEmpty && _userSavedPostIds.add(p.id)) {
             changed = true;
           }
+          PostInteractionRegistry.setSaved(p.id, true);
           // Seed registry so save state is immediately available across all screens
           PostInteractionRegistry.seedFromServer(
             p.id,
@@ -225,6 +230,7 @@ class HomeFeedProvider extends ChangeNotifier {
             isSaved: true,
             likesCount: p.likesCount,
             commentsCount: p.commentsCount,
+            viewsCount: p.viewsCount,
           );
         }
       }
@@ -574,6 +580,7 @@ class HomeFeedProvider extends ChangeNotifier {
       isSaved: isSaved,
       likesCount: effectiveLikesCount,
       commentsCount: post.commentsCount,
+      viewsCount: post.viewsCount,
     );
 
     final AuthorInfo? cachedAuthor =
@@ -642,6 +649,7 @@ class HomeFeedProvider extends ChangeNotifier {
       visibility: post.visibility,
       tags: post.tags,
       communityId: post.communityId,
+      status: post.status,
       durationText: (post.duration != null && post.duration!.isNotEmpty)
           ? post.duration!
           : '0:30',
@@ -740,6 +748,7 @@ class HomeFeedProvider extends ChangeNotifier {
       isSaved: isSaved,
       likesCount: effectiveLikesCount,
       commentsCount: post.commentsCount,
+      viewsCount: post.viewsCount,
     );
 
     final AuthorInfo? cachedAuthor =
@@ -820,11 +829,15 @@ class HomeFeedProvider extends ChangeNotifier {
       hasLikeCount: post.hasLikeCount,
       hideLikes: post.hideLikes || (cachedAuthor?.hideMyLikes == true),
       visibility: post.visibility,
+      status: post.status,
     );
   }
 
   // ── Unified Post & Reel Parser (used by Following & Community feeds) ───────
-  _FeedBatch _processPosts(List<PostResponseModel> rawPosts) {
+  _FeedBatch _processPosts(
+    List<PostResponseModel> rawPosts, {
+    bool isCommunityFeed = false,
+  }) {
     final List<ReelItemModel> parsedReels = <ReelItemModel>[];
     final List<PostItemModel> parsedPosts = <PostItemModel>[];
 
@@ -842,6 +855,9 @@ class HomeFeedProvider extends ChangeNotifier {
         username: post.authorName,
       );
 
+      final bool isCommPost = isCommunityFeed ||
+          (post.communityId != null && post.communityId!.trim().isNotEmpty);
+
       if (!PostVisibilityFilter.canViewPost(
         visibility: post.visibility,
         authorId: post.authorId,
@@ -850,6 +866,7 @@ class HomeFeedProvider extends ChangeNotifier {
         isGuest: _isGuest,
         isFollowing: isFollowing,
         isAuthorPrivate: isAuthorPrivate,
+        isCommunityPost: isCommPost,
       )) {
         continue;
       }
@@ -1008,7 +1025,8 @@ class HomeFeedProvider extends ChangeNotifier {
     if (_isLoadingCommunities) return;
 
     if (!force &&
-        (_communityReels.isNotEmpty || _communityPosts.isNotEmpty) &&
+        _communityReels.isNotEmpty &&
+        _communityPosts.isNotEmpty &&
         _selectedCommunityId == null) {
       return;
     }
@@ -1025,16 +1043,16 @@ class HomeFeedProvider extends ChangeNotifier {
           _selectedCommunityId!,
         );
       } else {
-        // "All Communities" -> Always call GET /posts directly
+        // "All Communities" -> Always fetch with community-level metadata and authenticated likedByMe
         debugPrint(
-            '🏘️ [HomeFeed] Fetching All Communities posts (GET ${ApiEndpoints.posts})');
-        rawPosts = await _contentService!.getFeedPosts();
+            '🏘️ [HomeFeed] Fetching All Communities posts with community-level metadata');
+        rawPosts = await _contentService!.getAllCommunityPosts();
       }
 
       // Pre-resolve missing authors before building feed items
       await _resolveAuthorsForPosts(rawPosts);
 
-      final _FeedBatch batch = _processPosts(rawPosts);
+      final _FeedBatch batch = _processPosts(rawPosts, isCommunityFeed: true);
 
       _communityReels
         ..clear()
@@ -1187,7 +1205,7 @@ class HomeFeedProvider extends ChangeNotifier {
         }
         break;
       case TopTab.communities:
-        if (_communityReels.isEmpty && _communityPosts.isEmpty && !_isLoadingCommunities) {
+        if ((_communityReels.isEmpty || _communityPosts.isEmpty) && !_isLoadingCommunities) {
           loadCommunityFeed(force: true);
         } else if (_communityReels.isNotEmpty) {
           ReelVideoPreloader.instance.preloadSurrounding(_communityReels, 0);

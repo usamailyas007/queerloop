@@ -16,7 +16,7 @@ class ConversationsService {
   List<dynamic> _extractList(dynamic res, {List<String> keys = const <String>[]}) {
     if (res == null) return <dynamic>[];
     if (res is List) return res;
-    if (res is Map<String, dynamic>) {
+    if (res is Map) {
       for (final String key in keys) {
         if (res[key] is List) return res[key] as List<dynamic>;
       }
@@ -25,12 +25,14 @@ class ConversationsService {
       if (res['results'] is List) return res['results'] as List<dynamic>;
 
       // Check nested data
-      if (res['data'] is Map<String, dynamic>) {
-        final Map<String, dynamic> data = res['data'] as Map<String, dynamic>;
+      if (res['data'] is Map) {
+        final Map data = res['data'] as Map;
         for (final String key in keys) {
           if (data[key] is List) return data[key] as List<dynamic>;
         }
         if (data['items'] is List) return data['items'] as List<dynamic>;
+        if (data['conversations'] is List) return data['conversations'] as List<dynamic>;
+        if (data['results'] is List) return data['results'] as List<dynamic>;
       }
     }
     return <dynamic>[];
@@ -39,14 +41,14 @@ class ConversationsService {
   // ── Helper: Extract Map from raw or enveloped JSON ─────────────────────────
   Map<String, dynamic>? _extractMap(dynamic res) {
     if (res == null) return null;
-    if (res is Map<String, dynamic>) {
-      if (res['data'] is Map<String, dynamic>) {
-        return res['data'] as Map<String, dynamic>;
+    if (res is Map) {
+      if (res['data'] is Map) {
+        return (res['data'] as Map).cast<String, dynamic>();
       }
-      if (res['conversation'] is Map<String, dynamic>) {
-        return res['conversation'] as Map<String, dynamic>;
+      if (res['conversation'] is Map) {
+        return (res['conversation'] as Map).cast<String, dynamic>();
       }
-      return res;
+      return res.cast<String, dynamic>();
     }
     return null;
   }
@@ -108,9 +110,9 @@ class ConversationsService {
       );
 
       return list
-          .whereType<Map<String, dynamic>>()
-          .map((Map<String, dynamic> item) =>
-              ConversationModel.fromJson(item, currentUserId: currentUserId))
+          .whereType<Map>()
+          .map((Map item) =>
+              ConversationModel.fromJson(item.cast<String, dynamic>(), currentUserId: currentUserId))
           .toList();
     } on ApiException catch (e) {
       debugPrint('❌ [ConversationsService] getConversations error: $e');
@@ -145,9 +147,9 @@ class ConversationsService {
       );
 
       return list
-          .whereType<Map<String, dynamic>>()
-          .map((Map<String, dynamic> item) =>
-              MessageRequestModel.fromJson(item, currentUserId: currentUserId))
+          .whereType<Map>()
+          .map((Map item) =>
+              MessageRequestModel.fromJson(item.cast<String, dynamic>(), currentUserId: currentUserId))
           .toList();
     } on ApiException catch (e) {
       debugPrint('❌ [ConversationsService] getMessageRequests error: $e');
@@ -205,13 +207,13 @@ class ConversationsService {
 
       final List<dynamic> list = _extractList(
         res,
-        keys: const <String>['messages', 'items'],
+        keys: const <String>['messages', 'items', 'data'],
       );
 
       return list
-          .whereType<Map<String, dynamic>>()
-          .map((Map<String, dynamic> item) =>
-              ChatMessageModel.fromJson(item, currentUserId: currentUserId))
+          .whereType<Map>()
+          .map((Map item) =>
+              ChatMessageModel.fromJson(item.cast<String, dynamic>(), currentUserId: currentUserId))
           .toList();
     } on ApiException catch (e) {
       debugPrint('❌ [ConversationsService] getMessages error: $e');
@@ -251,19 +253,12 @@ class ConversationsService {
           : (resolvedUrl != null && resolvedUrl.isNotEmpty ? resolvedUrl : '');
 
       final Map<String, dynamic> payload = <String, dynamic>{
+        'conversationId': conversationId,
         'body': finalBody,
-        'mediaUrl': null,
-        if (sharedPostId != null && sharedPostId.isNotEmpty)
-          'sharedPostId': sharedPostId,
-        if (replyToId != null && replyToId.isNotEmpty) ...<String, dynamic>{
-          'replyToMessageId': replyToId,
-          'replyToId': replyToId,
-          'replyTo': <String, dynamic>{
-            'id': replyToId,
-            'text': ?replyToText,
-            'sender': ?replyToSender,
-          },
-        },
+        if (mediaRef != null && mediaRef.trim().isNotEmpty) 'mediaRef': mediaRef.trim(),
+        if (sharedPostId != null && sharedPostId.isNotEmpty) 'sharedPostId': sharedPostId,
+        if (replyToId != null && replyToId.trim().isNotEmpty)
+          'replyToMessageId': replyToId.trim(),
       };
       final dynamic res = await _client.post(
         ApiEndpoints.conversationMessages(conversationId),
@@ -599,7 +594,7 @@ class ConversationsService {
         res,
         keys: const <String>['restricted', 'restrictedUsers', 'users', 'items', 'accounts'],
       );
-      return list.whereType<Map<String, dynamic>>().toList();
+      return list.whereType<Map>().map((Map m) => m.cast<String, dynamic>()).toList();
     } on ApiException catch (e) {
       debugPrint('❌ [ConversationsService] getRestrictedUsers error: $e');
       return <Map<String, dynamic>>[];
@@ -651,7 +646,7 @@ class ConversationsService {
         res,
         keys: const <String>['muted', 'mutedUsers', 'users', 'items', 'accounts'],
       );
-      return list.whereType<Map<String, dynamic>>().toList();
+      return list.whereType<Map>().map((Map m) => m.cast<String, dynamic>()).toList();
     } on ApiException catch (e) {
       debugPrint('❌ [ConversationsService] getMutedUsers error: $e');
       return <Map<String, dynamic>>[];

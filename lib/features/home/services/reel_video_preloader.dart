@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -9,8 +8,7 @@ import '../models/reel_item_model.dart';
 import '../../../core/utils/video_size_logger.dart';
 import 'video_cache_service.dart';
 
-/// Custom cache manager for reel videos.
-/// Stores up to 200 video files on disk for up to 7 days.
+
 class ReelVideoCacheManager extends CacheManager with ImageCacheManager {
   static const String key = 'reelVideoCache';
 
@@ -136,6 +134,9 @@ class ReelVideoPreloader {
           if (!_isFeedVisible || !_activeReelIds.contains(reel.id)) {
             existing.pause();
             existing.setVolume(0);
+          } else {
+            existing.setVolume(1.0);
+            existing.play();
           }
           VideoSizeLogger.logFeedVideoSize(
             id: reel.id,
@@ -225,6 +226,7 @@ class ReelVideoPreloader {
         controller.setLooping(true);
         if (_isFeedVisible && _activeReelIds.contains(reel.id)) {
           controller.setVolume(1.0);
+          controller.play();
         } else {
           controller.pause();
           controller.setVolume(0);

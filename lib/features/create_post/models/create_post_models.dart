@@ -319,6 +319,7 @@ class PostResponseModel {
       deletedAt != null ||
       status?.toLowerCase() == 'deleted' ||
       status?.toLowerCase() == 'removed';
+  bool get isPublished => (status ?? '').toLowerCase().trim() == 'published';
 
   PostResponseModel copyWith({
     String? id,

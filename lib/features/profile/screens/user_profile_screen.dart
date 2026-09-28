@@ -134,6 +134,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (mounted) {
         context.read<MessagesProvider>().loadBlockedUsers();
         context.read<ProfileProvider>().loadBlockedAccounts();
+        final String? curUserId = context.read<AuthProvider>().userId;
+        final String? myName = context.read<AuthProvider>().user?.displayName;
+        final bool isOwn = (curUserId != null &&
+                curUserId.isNotEmpty &&
+                (_effectiveUserId == curUserId || widget.userId == curUserId)) ||
+            (myName != null &&
+                myName.isNotEmpty &&
+                widget.username.replaceAll('@', '').toLowerCase() ==
+                    myName.replaceAll('@', '').toLowerCase());
+        if (isOwn) {
+          context.read<ProfileProvider>().fetchSavedPosts();
+          context.read<ProfileProvider>().fetchLikedPosts();
+        }
       }
     });
 
@@ -1246,9 +1259,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       onTabSelected: (int index) {
                         setState(() => _selectedTabIndex = index);
                         if (index == 2) {
-                          context.read<ProfileProvider>().fetchSavedPosts();
+                          context.read<ProfileProvider>().fetchSavedPosts(force: true);
                         } else if (index == 3) {
-                          context.read<ProfileProvider>().fetchLikedPosts();
+                          context.read<ProfileProvider>().fetchLikedPosts(force: true);
                         }
                       },
                     ),
@@ -1470,25 +1483,341 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         emptySubtitle: 'This user has not shared any reels yet.',
                       ),
 
-                    // Tab 2: Saved Grid (Only on own profile)
-                    if (_selectedTabIndex == 2 && isOwnProfile)
-                      ProfileMediaGridWidget(
-                        showPlayCounts: true,
-                        customReels: profile.savedReels,
-                        emptyTitle: 'No saved reels yet',
-                        emptySubtitle: 'Reels you save will appear here.',
-                        emptyIcon: Icons.bookmark_border_rounded,
-                      ),
+                    // Tab 2: Saved Grid & Posts (Only on own profile)
+                    if (_selectedTabIndex == 2 && isOwnProfile) ...<Widget>[
+                      if ((!profile.hasFetchedSaved || profile.isLoadingSaved) &&
+                          profile.savedReels.isEmpty &&
+                          profile.savedPosts.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 40),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.gradientPink,
+                            ),
+                          ),
+                        )
+                      else if (profile.savedReels.isEmpty && profile.savedPosts.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 40,
+                            horizontal: 24,
+                          ),
+                          alignment: Alignment.center,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Icon(
+                                Icons.bookmark_border_rounded,
+                                size: 44,
+                                color: context.isDarkMode ? Colors.white30 : Colors.black26,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No saved posts yet',
+                                style: AppTextStyles.titleMedium.copyWith(
+                                  color: context.themeTextPrimary,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Posts and reels you save will appear here.',
+                                textAlign: TextAlign.center,
+                                style: AppTextStyles.caption.copyWith(
+                                  color: context.themeTextMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else ...<Widget>[
+                        if (profile.savedReels.isNotEmpty)
+                          ProfileMediaGridWidget(
+                            customReels: profile.savedReels,
+                            showPlayCounts: true,
+                            emptyTitle: 'No saved reels yet',
+                            emptySubtitle: 'Reels you save will appear here.',
+                            emptyIcon: Icons.bookmark_border_rounded,
+                          ),
+                        if (profile.savedPosts.isNotEmpty) ...<Widget>[
+                          const SizedBox(height: AppSpacing.md),
+                          for (final PostItemModel post in profile.savedPosts)
+                            Builder(
+                              builder: (BuildContext ctx) {
+                                final bool isLiked = PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked);
+                                final bool isSaved = PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved);
+                                final int effectiveLikes = PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
+                                final int effectiveComments =
+                                    CommentCountRegistry.getOr(post.id, post.commentsCount);
+                                final PostItemModel resolvedPost = post.copyWith(
+                                  isLiked: isLiked,
+                                  isSaved: isSaved,
+                                  likesCount: effectiveLikes,
+                                  commentsCount: effectiveComments,
+                                );
 
-                    // Tab 3: Liked Grid (Only on own profile)
-                    if (_selectedTabIndex == 3 && isOwnProfile)
-                      ProfileMediaGridWidget(
-                        showPlayCounts: true,
-                        customReels: profile.likedReels,
-                        emptyTitle: 'No liked reels yet',
-                        emptySubtitle: 'Reels you like will appear here.',
-                        emptyIcon: Icons.favorite_border_rounded,
-                      ),
+                                return PostFeedCard(
+                                  post: resolvedPost,
+                                  isProfileScreen: true,
+                                  onCardTap: () {
+                                    PostFeedCard.openFullscreen(context, resolvedPost, isProfileScreen: true);
+                                  },
+                                  onLikeToggle: () {
+                                    final bool currentLiked =
+                                        PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked);
+                                    final bool newLiked = !currentLiked;
+                                    final int currentCount = PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
+                                    final int newCount = post.hasLikeCount
+                                        ? (newLiked
+                                            ? currentCount + 1
+                                            : (currentCount > 0 ? currentCount - 1 : 0))
+                                        : currentCount;
+                                    PostInteractionRegistry.setLiked(post.id, newLiked, newCount: newCount);
+                                    context.read<ProfileProvider>().updateLikedPost(
+                                      post.id,
+                                      isLiked: newLiked,
+                                      likesCount: newCount,
+                                      fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                                    );
+                                    context.read<HomeFeedProvider>().toggleLikePost(
+                                      post.id,
+                                      fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                                      explicitLiked: newLiked,
+                                    );
+                                  },
+                                  onSaveToggle: () {
+                                    final bool currentSaved =
+                                        PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved);
+                                    final bool newSaved = !currentSaved;
+                                    PostInteractionRegistry.setSaved(post.id, newSaved);
+                                    context.read<ProfileProvider>().updateSavedPost(
+                                      post.id,
+                                      isSaved: newSaved,
+                                      fallbackPost: post.copyWith(isSaved: newSaved),
+                                    );
+                                    context.read<HomeFeedProvider>().toggleSavePost(
+                                      post.id,
+                                      fallbackPost: post.copyWith(isSaved: newSaved),
+                                      explicitSaved: newSaved,
+                                    );
+                                  },
+                                  onOpenComments: () {
+                                    showModalBottomSheet<void>(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (_) => CommentsBottomSheet(
+                                        totalComments: effectiveComments,
+                                        postId: post.id,
+                                        postAuthorId: post.authorId ??
+                                            context.read<AuthProvider>().userId ??
+                                            profile.profile?.id,
+                                        communityId: post.communityId,
+                                        allowComments: post.allowComments,
+                                        allowCommentsFrom: post.allowCommentsFrom,
+                                        authorUsername: post.username,
+                                        onCommentAdded: () {
+                                          CommentCountRegistry.increment(post.id);
+                                          context.read<HomeFeedProvider>().incrementCommentCount(post.id);
+                                          context.read<ProfileProvider>().updatePostCommentCount(
+                                            post.id,
+                                            CommentCountRegistry.getOr(post.id, effectiveComments + 1),
+                                          );
+                                        },
+                                        onCommentDeleted: (int deletedCount, int remainingCount) {
+                                          CommentCountRegistry.set(post.id, remainingCount);
+                                          context.read<HomeFeedProvider>().setCommentCount(post.id, remainingCount);
+                                          context.read<ProfileProvider>().updatePostCommentCount(
+                                            post.id,
+                                            remainingCount,
+                                          );
+                                        },
+                                        onCommentCountChanged: (int count) {
+                                          CommentCountRegistry.set(post.id, count);
+                                          context.read<HomeFeedProvider>().setCommentCount(post.id, count);
+                                          context.read<ProfileProvider>().updatePostCommentCount(
+                                            post.id,
+                                            count,
+                                          );
+                                        },
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                        ],
+                      ],
+                    ],
+
+                    // Tab 3: Liked Grid & Posts (Only on own profile)
+                    if (_selectedTabIndex == 3 && isOwnProfile) ...<Widget>[
+                      if ((!profile.hasFetchedLiked || profile.isLoadingLiked) &&
+                          profile.likedReels.isEmpty &&
+                          profile.likedPosts.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 40),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.gradientPink,
+                            ),
+                          ),
+                        )
+                      else if (profile.likedReels.isEmpty && profile.likedPosts.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 40,
+                            horizontal: 24,
+                          ),
+                          alignment: Alignment.center,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Icon(
+                                Icons.favorite_border_rounded,
+                                size: 44,
+                                color: context.isDarkMode ? Colors.white30 : Colors.black26,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No liked posts yet',
+                                style: AppTextStyles.titleMedium.copyWith(
+                                  color: context.themeTextPrimary,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Posts and reels you like will appear here.',
+                                textAlign: TextAlign.center,
+                                style: AppTextStyles.caption.copyWith(
+                                  color: context.themeTextMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else ...<Widget>[
+                        if (profile.likedReels.isNotEmpty)
+                          ProfileMediaGridWidget(
+                            customReels: profile.likedReels,
+                            showPlayCounts: true,
+                            emptyTitle: 'No liked reels yet',
+                            emptySubtitle: 'Reels you like will appear here.',
+                            emptyIcon: Icons.favorite_border_rounded,
+                          ),
+                        if (profile.likedPosts.isNotEmpty) ...<Widget>[
+                          const SizedBox(height: AppSpacing.md),
+                          for (final PostItemModel post in profile.likedPosts)
+                            Builder(
+                              builder: (BuildContext ctx) {
+                                final bool isLiked = PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked);
+                                final bool isSaved = PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved);
+                                final int effectiveLikes = PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
+                                final int effectiveComments =
+                                    CommentCountRegistry.getOr(post.id, post.commentsCount);
+                                final PostItemModel resolvedPost = post.copyWith(
+                                  isLiked: isLiked,
+                                  isSaved: isSaved,
+                                  likesCount: effectiveLikes,
+                                  commentsCount: effectiveComments,
+                                );
+
+                                return PostFeedCard(
+                                  post: resolvedPost,
+                                  isProfileScreen: true,
+                                  onCardTap: () {
+                                    PostFeedCard.openFullscreen(context, resolvedPost, isProfileScreen: true);
+                                  },
+                                  onLikeToggle: () {
+                                    final bool currentLiked =
+                                        PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked);
+                                    final bool newLiked = !currentLiked;
+                                    final int currentCount = PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
+                                    final int newCount = post.hasLikeCount
+                                        ? (newLiked
+                                            ? currentCount + 1
+                                            : (currentCount > 0 ? currentCount - 1 : 0))
+                                        : currentCount;
+                                    PostInteractionRegistry.setLiked(post.id, newLiked, newCount: newCount);
+                                    context.read<ProfileProvider>().updateLikedPost(
+                                      post.id,
+                                      isLiked: newLiked,
+                                      likesCount: newCount,
+                                      fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                                    );
+                                    context.read<HomeFeedProvider>().toggleLikePost(
+                                      post.id,
+                                      fallbackPost: post.copyWith(isLiked: newLiked, likesCount: newCount),
+                                      explicitLiked: newLiked,
+                                    );
+                                  },
+                                  onSaveToggle: () {
+                                    final bool currentSaved =
+                                        PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved);
+                                    final bool newSaved = !currentSaved;
+                                    PostInteractionRegistry.setSaved(post.id, newSaved);
+                                    context.read<ProfileProvider>().updateSavedPost(
+                                      post.id,
+                                      isSaved: newSaved,
+                                      fallbackPost: post.copyWith(isSaved: newSaved),
+                                    );
+                                    context.read<HomeFeedProvider>().toggleSavePost(
+                                      post.id,
+                                      fallbackPost: post.copyWith(isSaved: newSaved),
+                                      explicitSaved: newSaved,
+                                    );
+                                  },
+                                  onOpenComments: () {
+                                    showModalBottomSheet<void>(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (_) => CommentsBottomSheet(
+                                        totalComments: effectiveComments,
+                                        postId: post.id,
+                                        postAuthorId: post.authorId ??
+                                            context.read<AuthProvider>().userId ??
+                                            profile.profile?.id,
+                                        communityId: post.communityId,
+                                        allowComments: post.allowComments,
+                                        allowCommentsFrom: post.allowCommentsFrom,
+                                        authorUsername: post.username,
+                                        onCommentAdded: () {
+                                          CommentCountRegistry.increment(post.id);
+                                          context.read<HomeFeedProvider>().incrementCommentCount(post.id);
+                                          context.read<ProfileProvider>().updatePostCommentCount(
+                                            post.id,
+                                            CommentCountRegistry.getOr(post.id, effectiveComments + 1),
+                                          );
+                                        },
+                                        onCommentDeleted: (int deletedCount, int remainingCount) {
+                                          CommentCountRegistry.set(post.id, remainingCount);
+                                          context.read<HomeFeedProvider>().setCommentCount(post.id, remainingCount);
+                                          context.read<ProfileProvider>().updatePostCommentCount(
+                                            post.id,
+                                            remainingCount,
+                                          );
+                                        },
+                                        onCommentCountChanged: (int count) {
+                                          CommentCountRegistry.set(post.id, count);
+                                          context.read<HomeFeedProvider>().setCommentCount(post.id, count);
+                                          context.read<ProfileProvider>().updatePostCommentCount(
+                                            post.id,
+                                            count,
+                                          );
+                                        },
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                        ],
+                      ],
+                    ],
                   ],
 
                   const SizedBox(height: AppSpacing.xxl),

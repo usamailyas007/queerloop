@@ -27,9 +27,11 @@ class ReelItemModel {
     this.hideLikes = false,
     this.viewsCount = 0,
     this.visibility,
+    this.status = 'published',
   });
 
   final String id;
+  final String? status;
   final String? authorId;
   final String? authorDisplayName;
   final String username;
@@ -57,6 +59,8 @@ class ReelItemModel {
   final int viewsCount;
   final String? visibility;
 
+  bool get isPublished => (status ?? '').toLowerCase().trim() == 'published';
+
   ReelItemModel copyWith({
     String? authorId,
     String? authorDisplayName,
@@ -82,9 +86,11 @@ class ReelItemModel {
     String? durationText,
     String? communityId,
     String? visibility,
+    String? status,
   }) {
     return ReelItemModel(
       id: id,
+      status: status ?? this.status,
       authorId: authorId ?? this.authorId,
       authorDisplayName: authorDisplayName ?? this.authorDisplayName,
       username: username ?? this.username,

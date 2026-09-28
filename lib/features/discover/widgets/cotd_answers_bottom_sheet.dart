@@ -15,6 +15,11 @@ class CotdAnswersBottomSheet extends StatefulWidget {
   const CotdAnswersBottomSheet({super.key});
 
   static Future<void> show(BuildContext context) {
+    final AuthProvider auth = context.read<AuthProvider>();
+    context.read<CotdProvider>().updateUserInfo(
+          userId: auth.userId,
+          username: auth.user?.displayName,
+        );
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -40,7 +45,10 @@ class _CotdAnswersBottomSheetState extends State<CotdAnswersBottomSheet> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final AuthProvider auth = context.read<AuthProvider>();
-        context.read<CotdProvider>().updateUserId(auth.userId);
+        context.read<CotdProvider>().updateUserInfo(
+              userId: auth.userId,
+              username: auth.user?.displayName,
+            );
         context.read<CotdProvider>().fetchAnswers();
       }
     });

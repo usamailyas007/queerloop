@@ -72,13 +72,18 @@ class CotdAnswer {
       id: json['id'] as String? ?? '',
       body: json['body'] as String? ?? '',
       authorId: json['authorId'] as String? ??
+          json['userId'] as String? ??
           author?['userId'] as String? ??
+          author?['id'] as String? ??
           '',
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.now(),
-      authorUsername: author?['username'] as String?,
-      authorDisplayName: author?['displayName'] as String?,
-      authorAvatarUrl: author?['avatarUrl'] as String?,
+      authorUsername:
+          author?['username'] as String? ?? json['username'] as String?,
+      authorDisplayName:
+          author?['displayName'] as String? ?? json['displayName'] as String?,
+      authorAvatarUrl:
+          author?['avatarUrl'] as String? ?? json['avatarUrl'] as String?,
     );
   }
 
