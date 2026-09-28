@@ -69,7 +69,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   int _selectedTabIndex = 0; // Default: Posts
   bool _isRequested = false; // Default: Not requested (shows Follow initially)
   bool _isFollowing = false; // Default: Not following (shows Follow initially)
-  bool _isLoading = false;
+  bool _isLoading = true;
   bool _isFetchingProfile = false;
   bool _isStartingChat = false;
   bool _isFollowActionBusy = false;
@@ -99,33 +99,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialReel != null) {
-      _authorReels = <ReelItemModel>[widget.initialReel!];
-    }
-    if (widget.initialPost != null) {
-      final PostItemModel initP = widget.initialPost!;
-      final PostResponseModel initModel = PostResponseModel(
-        id: initP.id,
-        authorId: initP.authorId,
-        authorName: initP.username.replaceAll('@', ''),
-        authorDisplayName: initP.authorDisplayName,
-        authorAvatar: initP.avatarAsset,
-        caption: initP.content,
-        type: initP.postType.isNotEmpty ? initP.postType : 'PHOTO',
-        postImageUrl: initP.postImageUrl,
-        likesCount: initP.likesCount,
-        commentsCount: initP.commentsCount,
-        isLiked: initP.isLiked,
-        isSaved: initP.isSaved,
-        allowComments: initP.allowComments,
-        allowDownloads: initP.allowDownloads,
-      );
-      _authorPosts = <PostResponseModel>[initModel];
-      _authorTextPosts = <PostResponseModel>[initModel];
-      if (initP.postImageUrl != null && initP.postImageUrl!.isNotEmpty) {
-        _postImageUrls[initP.id] = initP.postImageUrl!;
-      }
-    }
+    // Do not pre-populate posts or reels so that full profile loads cleanly
+    // with shimmer loading first, matching reel author profile navigation.
     ReelVideoPreloader.instance.setFeedVisible(false);
     ReelVideoPreloader.instance.pauseAll();
     ReelVideoPreloader.instance.muteAll();

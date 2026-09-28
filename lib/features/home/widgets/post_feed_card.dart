@@ -258,7 +258,6 @@ class PostFeedCard extends StatelessWidget {
                           ? post.authorDisplayName!.trim()
                           : post.username.replaceAll('@', '').split('.').first,
                       avatarAsset: post.avatarAsset,
-                      initialPost: post,
                     ),
                   ),
                 );

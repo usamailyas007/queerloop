@@ -398,7 +398,6 @@ class _PostFullscreenImageViewerScreenState
             username: _post.username.replaceAll('@', ''),
             name: _post.username.replaceAll('@', '').split('.').first,
             avatarAsset: _post.avatarAsset,
-            initialPost: _post,
           ),
         ),
       );
