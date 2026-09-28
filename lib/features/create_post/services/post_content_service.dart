@@ -703,15 +703,35 @@ class PostContentService {
   // GET /posts/:id/comments (Content Service)
   Future<List<dynamic>> getComments(String postId) async {
     if (AppConfig.useMockApi) return const <dynamic>[];
-    final dynamic response =
-        await _client.get(ApiEndpoints.postComments(postId), useCache: false);
+    dynamic response;
+    try {
+      response =
+          await _client.get(ApiEndpoints.postComments(postId), useCache: false);
+    } catch (e) {
+      debugPrint(
+          '⚠️ [PostContentService] getComments with auth failed: $e. Falling back to getNoAuth...');
+      try {
+        response = await _client.getNoAuth(
+          ApiEndpoints.postComments(postId),
+        );
+      } catch (fallbackError) {
+        debugPrint(
+            '⚠️ [PostContentService] getComments getNoAuth failed: $fallbackError');
+        return const <dynamic>[];
+      }
+    }
+
     debugPrint('=== [COMMENTS API RESPONSE] postId: $postId ===\n$response');
     if (response is List) return response;
-    if (response is Map<String, dynamic>) {
+    if (response is Map) {
       if (response['data'] is List) return response['data'] as List<dynamic>;
       if (response['comments'] is List) {
         return response['comments'] as List<dynamic>;
       }
+      if (response['data'] is Map && response['data']['comments'] is List) {
+        return response['data']['comments'] as List<dynamic>;
+      }
+      if (response['items'] is List) return response['items'] as List<dynamic>;
     }
     return const <dynamic>[];
   }

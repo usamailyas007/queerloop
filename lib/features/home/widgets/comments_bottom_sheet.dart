@@ -170,6 +170,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
 
   bool _isLoadingComments = false;
   bool _isSubmittingComment = false;
+  bool _hasLoadedSuccessfully = false;
   List<CommentItemModel> _comments = <CommentItemModel>[];
   final List<CommentItemModel> _hiddenComments = <CommentItemModel>[];
   CommentItemModel? _replyingToComment;
@@ -337,7 +338,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
       final List<CommentItemModel> pendingReplies = <CommentItemModel>[];
 
       for (final dynamic item in raw) {
-        if (item is Map<String, dynamic>) {
+        if (item is Map) {
           final dynamic author = item['author'] ?? item['user'];
           final String? authorId = (item['authorId'] ??
                   item['author_id'] ??
@@ -355,16 +356,26 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                           : null)))
               ?.toString();
           final String username = author is Map
-              ? (author['username'] ?? author['name'] ?? '@user').toString()
+              ? (author['username'] ?? author['name'] ?? author['displayName'] ?? '@user').toString()
               : (item['username'] ?? '@user').toString();
           final String avatar = author is Map
               ? (author['avatarUrl'] ?? author['avatar'] ?? AppImages.user4).toString()
               : (item['avatarUrl'] ?? item['avatar'] ?? AppImages.user4).toString();
           final String text =
               (item['body'] ?? item['content'] ?? item['text'] ?? '').toString();
-          final String? parentId = item['parentId']?.toString();
+          final String? rawParentId = item['parentId']?.toString();
+          final String? parentId = (rawParentId == null ||
+                  rawParentId == 'null' ||
+                  rawParentId == 'undefined' ||
+                  rawParentId.trim().isEmpty)
+              ? null
+              : rawParentId.trim();
           final String timeAgo = _formatCommentTime(item['createdAt']?.toString());
-          final int likesCount = (item['likeCount'] ?? item['likesCount'] ?? item['likes'] ?? 0) as int? ?? 0;
+          final dynamic rawLikesCount =
+              item['likeCount'] ?? item['likesCount'] ?? item['likes'] ?? 0;
+          final int likesCount = rawLikesCount is num
+              ? rawLikesCount.toInt()
+              : (int.tryParse(rawLikesCount?.toString() ?? '') ?? 0);
           final String commentId = (item['id'] ?? item['_id'] ?? '').toString();
 
           final dynamic rawIsLiked = item['likedByMe'] ??
@@ -456,12 +467,13 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
         setState(() {
           _comments = topLevel;
           _isLoadingComments = false;
+          _hasLoadedSuccessfully = true;
         });
         widget.onCommentCountChanged?.call(_totalCommentsCount);
         _syncGlobalCommentCount(_totalCommentsCount);
       }
-    } catch (e) {
-      debugPrint('Error fetching comments for ${widget.postId}: $e');
+    } catch (e, stack) {
+      debugPrint('Error fetching comments for ${widget.postId}: $e\n$stack');
       if (mounted) {
         setState(() => _isLoadingComments = false);
       }
@@ -1491,9 +1503,10 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
-    final int displayCount = _isLoadingComments
-        ? (CommentCountRegistry.get(widget.postId) ?? widget.totalComments)
-        : _totalCommentsCount;
+    final int displayCount =
+        (_isLoadingComments || (!_hasLoadedSuccessfully && _comments.isEmpty))
+            ? (CommentCountRegistry.get(widget.postId) ?? widget.totalComments)
+            : _totalCommentsCount;
     final String titleText = widget.isAnswers
         ? '$displayCount ${displayCount == 1 ? 'answer' : 'answers'}'
         : '$displayCount ${displayCount == 1 ? 'comment' : l10n.commentsTitle.toLowerCase()}';
