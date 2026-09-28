@@ -1296,8 +1296,11 @@ class HomeFeedProvider extends ChangeNotifier {
       fallback: target?.likesCount ?? (currentlyLiked ? 1 : 0),
     );
 
+    final bool hasCount = (target?.hasLikeCount ?? true) && !(target?.hideLikes ?? false);
     int newCount;
-    if (newLiked) {
+    if (!hasCount) {
+      newCount = target?.likesCount ?? 0;
+    } else if (newLiked) {
       newCount = currentlyLiked ? currentCount : currentCount + 1;
       if (newCount < 1) newCount = 1;
     } else {
@@ -1493,8 +1496,11 @@ class HomeFeedProvider extends ChangeNotifier {
       fallback: target?.likesCount ?? (currentlyLiked ? 1 : 0),
     );
 
+    final bool hasCount = (target?.hasLikeCount ?? true) && !(target?.hideLikes ?? false);
     int newCount;
-    if (newLiked) {
+    if (!hasCount) {
+      newCount = target?.likesCount ?? 0;
+    } else if (newLiked) {
       newCount = currentlyLiked ? currentCount : currentCount + 1;
       if (newCount < 1) newCount = 1;
     } else {

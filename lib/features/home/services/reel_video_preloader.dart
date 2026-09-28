@@ -328,20 +328,44 @@ class ReelVideoPreloader {
 
   /// Pause all active video controllers immediately and mute them.
   void pauseAll() {
-    for (final VideoPlayerController c in _controllers.values) {
-      try {
-        c.pause();
-        c.setVolume(0);
-      } catch (_) {}
+    void execute() {
+      for (final VideoPlayerController c in _controllers.values) {
+        try {
+          if (c.value.isInitialized && c.value.isPlaying) {
+            c.pause();
+          }
+          if (c.value.isInitialized && c.value.volume != 0) {
+            c.setVolume(0);
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (WidgetsBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => execute());
+    } else {
+      execute();
     }
   }
 
   /// Mute all controllers (set volume to 0) without pausing.
   void muteAll() {
-    for (final VideoPlayerController c in _controllers.values) {
-      try {
-        c.setVolume(0);
-      } catch (_) {}
+    void execute() {
+      for (final VideoPlayerController c in _controllers.values) {
+        try {
+          if (c.value.isInitialized && c.value.volume != 0) {
+            c.setVolume(0);
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (WidgetsBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => execute());
+    } else {
+      execute();
     }
   }
 

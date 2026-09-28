@@ -858,7 +858,8 @@ class PostResponseModel {
                 : null);
         return raw == true || raw == 1 || raw == 'true';
       }(),
-      hideLikes: (map['hideLikes'] ??
+      hideLikes: rawLikes == null ||
+          (map['hideLikes'] ??
               map['hideMyLikes'] ??
               (map['author'] is Map
                   ? (map['author']['hideMyLikes'] ?? map['author']['hideLikes'])

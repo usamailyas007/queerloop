@@ -160,6 +160,8 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
             allowDownloads: raw.allowDownloads,
             allowCommentsFrom: raw.allowCommentsFrom,
             isAuthorPrivate: raw.isAuthorPrivate,
+            hasLikeCount: raw.hasLikeCount,
+            hideLikes: raw.hideLikes,
           );
           _isLoading = false;
         });
@@ -185,6 +187,8 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
               postType: m.postType == 'reel' ? 'VIDEO' : 'IMAGE',
               isLiked: PostInteractionRegistry.isLiked(widget.postId, fallback: false),
               isSaved: PostInteractionRegistry.isSaved(widget.postId, fallback: false),
+              hasLikeCount: m.postLikes != null,
+              hideLikes: m.postLikes == null,
               // Permissions are unknown without a successful API fetch — use safe defaults
               allowComments: true,
               allowDownloads: true,

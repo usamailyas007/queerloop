@@ -350,6 +350,8 @@ class ChatBubble extends StatelessWidget {
       bool reelAllowDownloads = true;
       String reelAllowCommentsFrom = 'everyone';
       bool reelIsAuthorPrivate = false;
+      bool reelHasLikeCount = message.postLikes != null;
+      bool reelHideLikes = message.postLikes == null;
 
       // If videoUrl is not resolved yet, fetch the post from backend
       if (resolvedVideo == null || resolvedVideo.isEmpty) {
@@ -371,6 +373,8 @@ class ChatBubble extends StatelessWidget {
           reelAllowDownloads = raw.allowDownloads;
           reelAllowCommentsFrom = raw.allowCommentsFrom;
           reelIsAuthorPrivate = raw.isAuthorPrivate;
+          reelHasLikeCount = raw.hasLikeCount;
+          reelHideLikes = raw.hideLikes;
 
           if (raw.mediaRefs.isNotEmpty) {
             final String firstRef = raw.mediaRefs.first.trim();
@@ -416,6 +420,8 @@ class ChatBubble extends StatelessWidget {
         allowDownloads: reelAllowDownloads,
         allowCommentsFrom: reelAllowCommentsFrom,
         isAuthorPrivate: reelIsAuthorPrivate,
+        hasLikeCount: reelHasLikeCount,
+        hideLikes: reelHideLikes,
       );
 
       Navigator.push<void>(

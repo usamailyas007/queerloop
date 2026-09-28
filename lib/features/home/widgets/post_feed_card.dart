@@ -207,10 +207,13 @@ class PostFeedCard extends StatelessWidget {
 
     final AuthorInfo? cachedAuthor =
         (authorId != null && authorId.isNotEmpty) ? AuthorProfileCache.get(authorId) : null;
-    final bool authorHidesLikes = post.hideLikes || (cachedAuthor?.hideMyLikes == true);
+    final bool authorHidesLikes = post.hideLikes || !post.hasLikeCount || (cachedAuthor?.hideMyLikes == true);
     final bool myProfileHidesLikes = profileProvider.hideMyLikes;
-    final bool shouldHideLikes = !isCurrentUser &&
-        (authorHidesLikes ||
+    final bool shouldHideLikes = !post.hasLikeCount ||
+        post.hideLikes ||
+        authorHidesLikes ||
+        PostInteractionRegistry.isLikeCountHidden(post.id) ||
+        (!isCurrentUser &&
             (authorId != null &&
                 currentUserId != null &&
                 authorId.trim().toLowerCase() == currentUserId.trim().toLowerCase() &&
@@ -499,7 +502,7 @@ class PostFeedCard extends StatelessWidget {
                       width: 22,
                       height: 22,
                     ),
-                    if (!shouldHideLikes && effectiveLikesCount > 0) ...<Widget>[
+                    if (!shouldHideLikes && post.hasLikeCount && !post.hideLikes && effectiveLikesCount > 0) ...<Widget>[
                       const SizedBox(width: 6),
                       Text(
                         '${effectiveLikesCount > 1000 ? '${(effectiveLikesCount / 1000).toStringAsFixed(1)}K' : effectiveLikesCount}',

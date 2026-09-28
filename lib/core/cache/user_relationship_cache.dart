@@ -335,7 +335,28 @@ class PostInteractionRegistry {
   static final Map<String, bool> _savedOverrides = <String, bool>{};
   static final Map<String, int> _likesCountOverrides = <String, int>{};
   static final Map<String, int> _viewsCountOverrides = <String, int>{};
+  static final Set<String> _hiddenLikeCountIds = <String>{};
   static final RegistryNotifier notifier = RegistryNotifier();
+
+  /// Returns whether like count is explicitly hidden (null or hidden by author).
+  static bool isLikeCountHidden(String? postId) {
+    if (postId == null) return false;
+    final String clean = postId.trim();
+    if (clean.isEmpty) return false;
+    return _hiddenLikeCountIds.contains(clean);
+  }
+
+  /// Sets whether like count should be hidden for a post/reel.
+  static void setLikeCountHidden(String? postId, bool hidden) {
+    if (postId == null) return;
+    final String clean = postId.trim();
+    if (clean.isEmpty) return;
+    if (hidden) {
+      _hiddenLikeCountIds.add(clean);
+    } else {
+      _hiddenLikeCountIds.remove(clean);
+    }
+  }
 
   /// Returns views count if recorded, otherwise [fallback].
   static int getViewsCount(String? postId, {int fallback = 0}) {
@@ -467,9 +488,6 @@ class PostInteractionRegistry {
     if (isLiked != null) {
       if (isLiked) {
         _likedOverrides[clean] = true;
-        if (!_likesCountOverrides.containsKey(clean) || _likesCountOverrides[clean] == 0) {
-          _likesCountOverrides[clean] = 1;
-        }
       }
     }
     if (isSaved != null) {

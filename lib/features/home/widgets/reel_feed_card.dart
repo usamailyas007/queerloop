@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/routes.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/widgets/app_follow_button.dart';
@@ -285,21 +286,27 @@ class _ReelFeedCardState extends State<ReelFeedCard>
       ReelVideoPreloader.instance.setFeedVisible(true);
       ReelVideoPreloader.instance.markActive(widget.reel.id);
       ReelVideoPreloader.instance.markInactive(oldWidget.reel.id);
-      if (_videoInitialized && _videoController != null) {
-        if (!_isCoveredByRoute) {
-          ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
-          _videoController?.play();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isDisposed) return;
+        if (_videoInitialized && _videoController != null) {
+          if (!_isCoveredByRoute) {
+            ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
+            _videoController?.play();
+          } else {
+            _videoController?.pause();
+            _videoController?.setVolume(0);
+          }
         } else {
-          _videoController?.pause();
-          _videoController?.setVolume(0);
+          _initVideo();
         }
-      } else {
-        _initVideo();
-      }
+      });
     } else if (!widget.isActive && oldWidget.isActive) {
       ReelVideoPreloader.instance.markInactive(widget.reel.id);
-      _videoController?.pause();
-      _videoController?.setVolume(0);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isDisposed) return;
+        _videoController?.pause();
+        _videoController?.setVolume(0);
+      });
     }
   }
 
@@ -547,11 +554,13 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         ? AuthorProfileCache.get(reelAuthorId)
         : null;
     final bool authorHidesLikes =
-        item.hideLikes || (cachedAuthor?.hideMyLikes == true);
+        item.hideLikes || !item.hasLikeCount || (cachedAuthor?.hideMyLikes == true);
     final bool myProfileHidesLikes = profileProvider.hideMyLikes;
-    final bool shouldHideLikes =
-        !isOwnReel &&
-        (authorHidesLikes ||
+    final bool shouldHideLikes = !item.hasLikeCount ||
+        item.hideLikes ||
+        authorHidesLikes ||
+        PostInteractionRegistry.isLikeCountHidden(item.id) ||
+        (!isOwnReel &&
             (reelAuthorId.isNotEmpty &&
                 currentUserId != null &&
                 reelAuthorId == currentUserId.trim().toLowerCase() &&
@@ -689,7 +698,9 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                 // Like
                 _RightActionButton(
                   onTap: widget.onLikeToggle,
-                  label: shouldHideLikes ? '' : '${item.likesCount}',
+                  label: (shouldHideLikes || !item.hasLikeCount || item.hideLikes)
+                      ? ''
+                      : '${item.likesCount}',
                   child: Image.asset(
                     item.isLiked ? AppIcons.likedLogo : AppIcons.unlikeLogo,
                     width: 28,

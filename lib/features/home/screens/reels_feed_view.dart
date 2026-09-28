@@ -468,9 +468,11 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                     PostInteractionRegistry.isLiked(item.id, fallback: item.isLiked);
                 final bool newLiked = !currentlyLiked;
                 final int currentCount = PostInteractionRegistry.getLikeCount(item.id, fallback: item.likesCount);
-                final int newCount = newLiked
-                    ? currentCount + 1
-                    : (currentCount > 0 ? currentCount - 1 : 0);
+                final int newCount = item.hasLikeCount
+                    ? (newLiked
+                        ? currentCount + 1
+                        : (currentCount > 0 ? currentCount - 1 : 0))
+                    : currentCount;
                 PostInteractionRegistry.setLiked(item.id, newLiked, newCount: newCount);
 
                 if (widget.customReels != null) {
