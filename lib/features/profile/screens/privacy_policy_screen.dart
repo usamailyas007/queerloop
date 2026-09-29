@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -7,11 +8,109 @@ import '../../../core/theme/app_text_styles.dart';
 class PrivacyPolicyScreen extends StatelessWidget {
   const PrivacyPolicyScreen({super.key});
 
+  Widget _buildEmailCard({
+    required BuildContext context,
+    required String email,
+    String label = 'Community Support',
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: email));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Copied $email to clipboard'),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm + 4,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.gradientCyan.withValues(
+              alpha: context.isDarkMode ? 0.12 : 0.08,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.gradientCyan.withValues(alpha: 0.5),
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: AppColors.gradientCyan.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.mail_rounded,
+                  color: AppColors.gradientCyan,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      label.toUpperCase(),
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.gradientCyan,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10.5,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      email,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: context.themeTextPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Tooltip(
+                message: 'Copy Email',
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.gradientCyan.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.copy_rounded,
+                    color: AppColors.gradientCyan,
+                    size: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSection({
     required BuildContext context,
     required String numberAndTitle,
     required String bodyText,
     bool isHighlight = false,
+    Widget? customContent,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.lg),
@@ -46,6 +145,10 @@ class PrivacyPolicyScreen extends StatelessWidget {
               height: 1.5,
             ),
           ),
+          if (customContent != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.sm + 2),
+            customContent,
+          ],
         ],
       ),
     );
@@ -156,7 +259,6 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     bodyText:
                         'We collect the following categories of information to provide and safeguard our services:\n'
                         '• Account Information: Email address, username, display name, cryptographically hashed passwords, and profile details you choose to share (pronouns, bio, profile photo, banner image, and community affiliations).\n'
-                        '• Age Verification Data: Your date of birth is collected strictly to verify that you are at least 18 years of age. Your date of birth is stored securely and is NEVER displayed publicly on your profile.\n'
                         '• User-Generated Content (UGC): Posts, photo uploads, video reels, captions, tags, comments, bookmarks, and direct messages that you post or send.\n'
                         '• Device & Technical Data: IP address, device hardware model, operating system version, push notification tokens (Firebase Cloud Messaging / APNs), language preferences, and anonymized diagnostic crash logs.\n'
                         '• Guest Browsing: When using the App as a guest, you can view public content without creating an account. We do not track personal identities or link browsing history to guest sessions.',
@@ -171,7 +273,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                         '• To authenticate your account, maintain your session, and secure access.\n'
                         '• To publish, transcode, and deliver your posts, photos, and video reels according to your selected audience settings.\n'
                         '• To facilitate community connections, direct messaging, and interactive features.\n'
-                        '• To enforce our Community Guidelines and Terms of Service, investigate reports, remove objectionable content, and ban abusive accounts.\n'
+                        '• To enforce our Community Guidelines and Terms of Service, investigate reports, remove objectionable content, and ban abusive accounts. When a post, comment, or direct message conversation is reported for safety violations, our moderation team reviews the reported material—including the last 30 days of messages from a reported chat—strictly to investigate the report and safeguard user safety.\n'
                         '• To deliver important service updates, security notifications, and optional push notifications (which you can disable at any time in Settings).',
                   ),
 
@@ -207,14 +309,14 @@ class PrivacyPolicyScreen extends StatelessWidget {
                         '• Blocking & Muting: You can block or mute any user instantly. Blocked users cannot see your profile, view your posts, or send you messages.',
                   ),
 
-                  // 7. Account & Data Deletion (Apple Guideline 5.1.1(v) & Google Play Data Safety Mandate)
+                  // 7. Account & Data Deletion
                   _buildSection(
                     context: context,
                     isHighlight: true,
                     numberAndTitle: '7. Account & Data Deletion Rights',
                     bodyText:
-                        'In compliance with Apple App Store Guideline 5.1.1(v) and Google Play Store User Data policies, QueerLoop+ empowers users to permanently delete their account and associated data directly within the App:\n'
-                        '• How to Delete: Navigate to Profile → Settings → Account → Delete Account.\n'
+                        'QueerLoop+ empowers users to permanently delete their account and associated personal data directly within the App at any time:\n'
+                        '• How to Delete: Navigate to Settings → Delete account.\n'
                         '• What is Erased: Deleting your account initiates the permanent purge of your profile, email, authentication credentials, uploaded photos, videos, reels, captions, comments, and direct messages from our active servers.\n'
                         '• Grace Period: If you initiate deletion, a temporary account restoration window may be provided, after which your data is irrevocably and permanently deleted.',
                   ),
@@ -235,7 +337,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     context: context,
                     numberAndTitle: '9. Children\'s Online Privacy Protection (18+ Only)',
                     bodyText:
-                        'QueerLoop+ is strictly intended for individuals who are 18 years of age or older. We do not knowingly solicit or collect personal information from children or minors under 18 (in compliance with COPPA, GDPR Article 8, and App Store safety standards). If we learn that personal data of a user under 18 has been collected, we will immediately deactivate the account and delete all associated information.',
+                        'QueerLoop+ is strictly intended for adults who are 18 years of age or older. We do not knowingly solicit or collect personal information from children or minors under 18. If we learn that personal data of a user under 18 has been collected or that an account belongs to a minor, we will immediately deactivate the account and delete all associated information.',
                   ),
 
                   // 10. Your Rights (GDPR, CCPA / CPRA & Global Rights)
@@ -263,10 +365,12 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     context: context,
                     numberAndTitle: '12. Contact Information & Data Inquiries',
                     bodyText:
-                        'If you have any questions, concerns, or requests regarding this Privacy Policy or how your personal information is handled, please reach out to our dedicated privacy team:\n'
-                        '• Privacy Email: privacy@queerloop.com\n'
-                        '• Support Email: support@queerloop.com\n'
-                        '• In-App Support: Settings → Help & Support → Contact Support',
+                        'If you have any questions, concerns, or requests regarding this Privacy Policy or how your personal information is handled, please reach out to our team directly:',
+                    customContent: _buildEmailCard(
+                      context: context,
+                      email: 'hello@queerloopplus.com',
+                      label: 'Community Support & Privacy',
+                    ),
                   ),
 
                   const SizedBox(height: AppSpacing.xl),

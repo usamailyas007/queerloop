@@ -356,7 +356,7 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                       onTap: () {
                         final String postUrl = resolvedMedia != null && resolvedMedia.isNotEmpty
                             ? resolvedMedia
-                            : 'https://queerloop.com/post/$shareTargetId';
+                            : 'https://queerloop.app/post/$shareTargetId';
                         Clipboard.setData(ClipboardData(text: postUrl));
                         AppSnackBar.showSuccess(
                           context,

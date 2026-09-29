@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -7,11 +8,109 @@ import '../../../core/theme/app_text_styles.dart';
 class TermsOfServiceScreen extends StatelessWidget {
   const TermsOfServiceScreen({super.key});
 
+  Widget _buildEmailCard({
+    required BuildContext context,
+    required String email,
+    String label = 'Community Support',
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: email));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Copied $email to clipboard'),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm + 4,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.gradientCyan.withValues(
+              alpha: context.isDarkMode ? 0.12 : 0.08,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.gradientCyan.withValues(alpha: 0.5),
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: AppColors.gradientCyan.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.mail_rounded,
+                  color: AppColors.gradientCyan,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      label.toUpperCase(),
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.gradientCyan,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10.5,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      email,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: context.themeTextPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Tooltip(
+                message: 'Copy Email',
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.gradientCyan.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.copy_rounded,
+                    color: AppColors.gradientCyan,
+                    size: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSection({
     required BuildContext context,
     required String numberAndTitle,
     required String bodyText,
     bool isHighlight = false,
+    Widget? customContent,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.lg),
@@ -46,6 +145,10 @@ class TermsOfServiceScreen extends StatelessWidget {
               height: 1.5,
             ),
           ),
+          if (customContent != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.sm + 2),
+            customContent,
+          ],
         ],
       ),
     );
@@ -149,15 +252,15 @@ class TermsOfServiceScreen extends StatelessWidget {
                         'These Terms of Service, incorporating this End User License Agreement ("EULA"), constitute a legally binding agreement between you and QueerLoop+ ("we", "us", or "our"). By downloading, installing, accessing, creating an account, or using the QueerLoop+ application (the "App"), you confirm that you have read, understood, and agreed to be bound by these terms. If you do not agree, you must not access or use the App.',
                   ),
 
-                  // 2. Eligibility & Age Requirements (18+)
+                  // 2. Eligibility & Age Restriction (18+)
                   _buildSection(
                     context: context,
                     numberAndTitle: '2. Eligibility & Age Restriction (18+)',
                     bodyText:
-                        'QueerLoop+ is designed exclusively as a safe space for adults. You must be at least 18 years of age (or the age of majority in your jurisdiction) to create an account and use the App. By registering, you warrant that you are 18 or older and that all information you provide, including age verification data, is accurate and truthful. Providing false age information is a direct violation of these Terms.',
+                        'QueerLoop+ is designed exclusively as a safe space for adults. You must be at least 18 years of age (or the age of majority in your jurisdiction) to create an account and use the App. By registering, you warrant that you are 18 or older and that all information you provide during registration is accurate and truthful. Falsifying eligibility is a direct violation of these Terms.',
                   ),
 
-                  // 3. Zero Tolerance for Objectionable Content & Abuse (Apple Guideline 1.2 & Google Play UGC Mandate)
+                  // 3. Zero Tolerance for Objectionable Content & Abuse
                   _buildSection(
                     context: context,
                     isHighlight: true,
@@ -181,15 +284,15 @@ class TermsOfServiceScreen extends StatelessWidget {
                         '• Promotes illegal acts, fraudulent schemes, unauthorized commercial advertising, spam, or malicious software.',
                   ),
 
-                  // 5. In-App Reporting & User Blocking (Apple App Store Guideline 1.2)
+                  // 5. In-App Reporting & User Blocking Mechanisms
                   _buildSection(
                     context: context,
                     isHighlight: true,
                     numberAndTitle: '5. In-App Reporting & User Blocking Mechanisms',
                     bodyText:
                         'To safeguard our community, QueerLoop+ provides intuitive in-app moderation features:\n'
-                        '• Reporting Content: You can report any post, reel, comment, or chat message directly via the in-app options menu (Report button).\n'
-                        '• Blocking Abusive Users: You can block any abusive user at any time from their profile or post menu. Blocked users cannot message you, view your profile, or interact with your content.\n'
+                        '• Reporting Content: You can report any post or reel via the Safety button, comments via the Report option on the comment, and direct message conversations via Chat Options (Report Conversation).\n'
+                        '• Blocking Abusive Users: You can block any abusive user at any time from their profile or post options menu. Blocked users cannot message you, view your profile, or interact with your content.\n'
                         '• 24-Hour Moderation Commitment: Our moderation team investigates all reports promptly. Any content confirmed to be objectionable or in violation of these Terms will be removed within 24 hours of being reported, and the offending account will be penalized or permanently banned.',
                   ),
 
@@ -209,12 +312,12 @@ class TermsOfServiceScreen extends StatelessWidget {
                         'You are responsible for maintaining the confidentiality of your login credentials and for all activities that occur under your account. You agree to notify us immediately of any unauthorized use. QueerLoop+ reserves the absolute right to suspend, restrict, or terminate your account and access to the App at any time, with or without notice, if you violate these Terms, our Community Guidelines, or pose a safety or legal risk to the community.',
                   ),
 
-                  // 8. Account Deletion Rights (Apple 5.1.1(v) & Google Play Data Safety)
+                  // 8. Account Deletion Rights
                   _buildSection(
                     context: context,
                     numberAndTitle: '8. Account Deletion Rights',
                     bodyText:
-                        'You have the unconditional right to delete your QueerLoop+ account and all associated personal data at any time directly within the App via Settings → Account → Delete Account. Deleting your account initiates the permanent removal of your profile, posts, reels, comments, and messages from our active servers.',
+                        'You have the unconditional right to delete your QueerLoop+ account and all associated personal data at any time directly within the App via Settings → Delete account. Deleting your account initiates the permanent removal of your profile, posts, reels, comments, and messages from our active servers.',
                   ),
 
                   // 9. Intellectual Property
@@ -246,7 +349,12 @@ class TermsOfServiceScreen extends StatelessWidget {
                     context: context,
                     numberAndTitle: '12. Copyright & Intellectual Property Claims',
                     bodyText:
-                        'If you believe that your copyrighted work has been copied in a way that constitutes copyright infringement, please provide our designated copyright agent with written notice containing: a description of the copyrighted work, the location of the infringing material on QueerLoop+, and your contact information at legal@queerloop.com.',
+                        'If you believe that your copyrighted work has been copied in a way that constitutes copyright infringement, please provide our designated copyright agent with written notice containing: a description of the copyrighted work, the location of the infringing material on QueerLoop+, and your contact information.',
+                    customContent: _buildEmailCard(
+                      context: context,
+                      email: 'hello@queerloopplus.com',
+                      label: 'DMCA / Copyright Inquiries',
+                    ),
                   ),
 
                   // 13. Modifications to Terms
@@ -262,10 +370,12 @@ class TermsOfServiceScreen extends StatelessWidget {
                     context: context,
                     numberAndTitle: '14. Contact & Support',
                     bodyText:
-                        'If you have questions, feedback, or need to report violations regarding these Terms of Service or EULA, please contact us:\n'
-                        '• Legal & Compliance: legal@queerloop.com\n'
-                        '• Community Support: support@queerloop.com\n'
-                        '• In-App Support: Settings → Help & Support → Contact Support',
+                        'If you have questions, feedback, or need to report violations regarding these Terms of Service or EULA, please reach out to our team directly:',
+                    customContent: _buildEmailCard(
+                      context: context,
+                      email: 'hello@queerloopplus.com',
+                      label: 'Community Support',
+                    ),
                   ),
 
                   const SizedBox(height: AppSpacing.xl),
