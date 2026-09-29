@@ -331,9 +331,9 @@ class _NotificationsSettingsScreenState
 
                   const SizedBox(height: AppSpacing.xl),
 
-                  // ── FROM QUEERLOOP SECTION ─────────────────────────────────
+                  // ── FROM QUEERLOOP+ SECTION ────────────────────────────────
                   Text(
-                    'FROM QUEERLOOP',
+                    'FROM QUEERLOOP+',
                     style: AppTextStyles.labelSmall.copyWith(
                       color: context.themeTextMuted,
                       letterSpacing: 1.2,

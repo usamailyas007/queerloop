@@ -419,7 +419,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                 GuestActionModalDialog.show(
                   // ignore: use_build_context_synchronously
                   context,
-                  title: 'Join QueerLoop',
+                  title: 'Join QueerLoop+',
                   subtitle:
                       'Create a free account to get your personalized For You feed, like, comment and connect with the community.',
                   iconData: Icons.favorite_border_rounded,

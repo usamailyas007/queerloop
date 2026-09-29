@@ -25,7 +25,7 @@ class MediaUploadService {
 
   final ApiClient _apiClient;
 
-  /// Dedicated Dio instance for direct Amazon S3 PUT requests without QueerLoop authorization headers.
+  /// Dedicated Dio instance for direct Amazon S3 PUT requests without QueerLoop+ authorization headers.
   final Dio _s3Dio;
 
   // ── Step 1: Get Upload URL ────────────────────────────────────────────────
@@ -74,7 +74,7 @@ class MediaUploadService {
   }
 
   // ── Step 2: Upload Bytes to Amazon S3 (Direct Upload) ─────────────────────
-  // PUT <uploadUrl> (No QueerLoop service, no Bearer auth)
+  // PUT <uploadUrl> (No QueerLoop+ service, no Bearer auth)
   Future<void> uploadFileToS3({
     required String uploadUrl,
     required File file,

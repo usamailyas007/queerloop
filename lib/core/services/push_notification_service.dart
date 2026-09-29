@@ -36,9 +36,9 @@ abstract final class PushNotificationService {
       FlutterLocalNotificationsPlugin();
 
   static const String channelId = 'queerloop_notifications';
-  static const String channelName = 'QueerLoop Notifications';
+  static const String channelName = 'QueerLoop+ Notifications';
   static const String channelDescription =
-      'Notifications for messages, reactions, mentions, and activity on QueerLoop.';
+      'Notifications for messages, reactions, mentions, and activity on QueerLoop+.';
 
   static bool _initialized = false;
   static String? _cachedDeviceToken;
@@ -253,7 +253,7 @@ abstract final class PushNotificationService {
     }
 
     final String title = notification?.title ??
-        (data['title']?.toString() ?? 'QueerLoop');
+        (data['title']?.toString() ?? 'QueerLoop+');
     final String body = notification?.body ??
         (data['body']?.toString() ??
             data['message']?.toString() ??
