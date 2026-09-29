@@ -77,6 +77,10 @@ class AuthProvider extends ChangeNotifier {
 
   // ── Public getters ────────────────────────────────────────────────────────
 
+  String? _pendingSocialName;
+  String? _pendingSocialEmail;
+  String? _pendingSocialAvatar;
+
   AuthStatus get status => _status;
   User? get user => _user;
   String? get userId => _user?.id;
@@ -86,6 +90,9 @@ class AuthProvider extends ChangeNotifier {
   dynamic get errorData => _errorData;
   String? get pendingDeletionRestorationToken => _pendingDeletionRestorationToken;
   String? get deletionScheduledAt => _deletionScheduledAt;
+  String? get pendingSocialName => _pendingSocialName;
+  String? get pendingSocialEmail => _pendingSocialEmail;
+  String? get pendingSocialAvatar => _pendingSocialAvatar;
   int? get retryAfterSeconds => _retryAfterSeconds;
   bool get isBusy => _isBusy;
   bool get isSignedIn => _status == AuthStatus.signedIn;
@@ -328,6 +335,15 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return result;
       }
+      if (result.displayName != null && result.displayName!.trim().isNotEmpty) {
+        _pendingSocialName = result.displayName!.trim();
+      }
+      if (result.email != null && result.email!.trim().isNotEmpty) {
+        _pendingSocialEmail = result.email!.trim();
+      }
+      if (result.photoUrl != null && result.photoUrl!.trim().isNotEmpty) {
+        _pendingSocialAvatar = result.photoUrl!.trim();
+      }
       if (result.session != null) {
         _applySession(result.session!);
       }
@@ -365,6 +381,15 @@ class AuthProvider extends ChangeNotifier {
         _retryAfterSeconds = null;
         notifyListeners();
         return result;
+      }
+      if (result.displayName != null && result.displayName!.trim().isNotEmpty) {
+        _pendingSocialName = result.displayName!.trim();
+      }
+      if (result.email != null && result.email!.trim().isNotEmpty) {
+        _pendingSocialEmail = result.email!.trim();
+      }
+      if (result.photoUrl != null && result.photoUrl!.trim().isNotEmpty) {
+        _pendingSocialAvatar = result.photoUrl!.trim();
       }
       if (result.session != null) {
         _applySession(result.session!);

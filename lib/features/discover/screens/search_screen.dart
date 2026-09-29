@@ -390,33 +390,29 @@ class _SearchResultsBody extends StatelessWidget {
                           (img.isEmpty && res.mediaRefs.isEmpty);
                       final String? docId = res.id?.trim();
                       final String? refId = res.refId?.trim();
-                      final String effectivePostId = (refId != null && refId.isNotEmpty)
-                          ? refId
-                          : (docId ?? 'search_${res.caption.hashCode}');
+                      final String effectivePostId = (docId != null && docId.isNotEmpty)
+                          ? docId
+                          : (refId ?? 'search_${res.caption.hashCode}');
                       final HomeFeedProvider hf = context.watch<HomeFeedProvider>();
                       final ProfileProvider pp = context.watch<ProfileProvider>();
 
-                      final bool isLiked = PostInteractionRegistry.isLiked(effectivePostId) ||
-                          (docId != null && PostInteractionRegistry.isLiked(docId)) ||
-                          (refId != null && PostInteractionRegistry.isLiked(refId)) ||
-                          hf.isPostLiked(effectivePostId) ||
-                          (docId != null && hf.isPostLiked(docId)) ||
-                          (refId != null && hf.isPostLiked(refId)) ||
-                          pp.isPostLiked(effectivePostId) ||
-                          (docId != null && pp.isPostLiked(docId)) ||
-                          (refId != null && pp.isPostLiked(refId)) ||
-                          res.isLiked;
+                      final bool isLiked = PostInteractionRegistry.isLiked(
+                        effectivePostId,
+                        fallback: (docId != null && docId != effectivePostId && PostInteractionRegistry.isLiked(docId)) ||
+                            (refId != null && refId != effectivePostId && PostInteractionRegistry.isLiked(refId)) ||
+                            res.isLiked ||
+                            hf.isPostLiked(effectivePostId) ||
+                            pp.isPostLiked(effectivePostId),
+                      );
 
-                      final bool isSaved = PostInteractionRegistry.isSaved(effectivePostId) ||
-                          (docId != null && PostInteractionRegistry.isSaved(docId)) ||
-                          (refId != null && PostInteractionRegistry.isSaved(refId)) ||
-                          hf.isPostSaved(effectivePostId) ||
-                          (docId != null && hf.isPostSaved(docId)) ||
-                          (refId != null && hf.isPostSaved(refId)) ||
-                          pp.isPostSaved(effectivePostId) ||
-                          (docId != null && pp.isPostSaved(docId)) ||
-                          (refId != null && pp.isPostSaved(refId)) ||
-                          res.isSaved;
+                      final bool isSaved = PostInteractionRegistry.isSaved(
+                        effectivePostId,
+                        fallback: (docId != null && docId != effectivePostId && PostInteractionRegistry.isSaved(docId)) ||
+                            (refId != null && refId != effectivePostId && PostInteractionRegistry.isSaved(refId)) ||
+                            res.isSaved ||
+                            hf.isPostSaved(effectivePostId) ||
+                            pp.isPostSaved(effectivePostId),
+                      );
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -463,19 +459,24 @@ class _SearchResultsBody extends StatelessWidget {
                             if (pid.isNotEmpty) {
                               final HomeFeedProvider feedProv = context.read<HomeFeedProvider>();
                               final ProfileProvider profProv = context.read<ProfileProvider>();
-                              final bool currentlyLiked = isLiked;
+                              final bool currentlyLiked = PostInteractionRegistry.isLiked(
+                                pid,
+                                fallback: res.isLiked || feedProv.isPostLiked(pid) || profProv.isPostLiked(pid),
+                              );
                               final bool newLiked = !currentlyLiked;
                               final int curCount = PostInteractionRegistry.getLikeCount(pid, fallback: res.likesCount ?? 0);
                               final int nextCount = newLiked ? curCount + 1 : (curCount > 0 ? curCount - 1 : 0);
                               PostInteractionRegistry.setLiked(pid, newLiked, newCount: nextCount);
-                              if (docId != null && docId != pid) {
+                              if (docId != null && docId.isNotEmpty && docId.toLowerCase() != pid.toLowerCase()) {
                                 PostInteractionRegistry.setLiked(docId, newLiked, newCount: nextCount);
                               }
-                              if (refId != null && refId != pid) {
+                              if (refId != null && refId.isNotEmpty && refId.toLowerCase() != pid.toLowerCase()) {
                                 PostInteractionRegistry.setLiked(refId, newLiked, newCount: nextCount);
                               }
                               feedProv.toggleLikePost(pid, explicitLiked: newLiked);
-                              profProv.updateLikedPost(pid, isLiked: newLiked, likesCount: nextCount);
+                              try {
+                                profProv.updateLikedPost(pid, isLiked: newLiked, likesCount: nextCount);
+                              } catch (_) {}
                             }
                           },
                           onSaveToggle: () {
@@ -483,13 +484,16 @@ class _SearchResultsBody extends StatelessWidget {
                             if (pid.isNotEmpty) {
                               final HomeFeedProvider feedProv = context.read<HomeFeedProvider>();
                               final ProfileProvider profProv = context.read<ProfileProvider>();
-                              final bool currentlySaved = isSaved;
+                              final bool currentlySaved = PostInteractionRegistry.isSaved(
+                                pid,
+                                fallback: res.isSaved || feedProv.isPostSaved(pid) || profProv.isPostSaved(pid),
+                              );
                               final bool newSaved = !currentlySaved;
                               PostInteractionRegistry.setSaved(pid, newSaved);
-                              if (docId != null && docId != pid) {
+                              if (docId != null && docId.isNotEmpty && docId.toLowerCase() != pid.toLowerCase()) {
                                 PostInteractionRegistry.setSaved(docId, newSaved);
                               }
-                              if (refId != null && refId != pid) {
+                              if (refId != null && refId.isNotEmpty && refId.toLowerCase() != pid.toLowerCase()) {
                                 PostInteractionRegistry.setSaved(refId, newSaved);
                               }
                               feedProv.toggleSavePost(pid, explicitSaved: newSaved);

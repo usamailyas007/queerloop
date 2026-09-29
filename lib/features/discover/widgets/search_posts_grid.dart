@@ -82,9 +82,11 @@ class SearchPostsGrid extends StatelessWidget {
               ? resolvedVideo.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg')
               : (isVideoUrl ? null : (img.startsWith('http') ? img : null)));
 
-      final String effectiveId = (res.refId != null && res.refId!.trim().isNotEmpty)
-          ? res.refId!.trim()
-          : (res.id ?? 'search_reel_$i');
+      final String effectiveId = (res.id != null && res.id!.trim().isNotEmpty)
+          ? res.id!.trim()
+          : ((res.refId != null && res.refId!.trim().isNotEmpty)
+              ? res.refId!.trim()
+              : 'search_reel_$i');
 
       return ReelItemModel(
         id: effectiveId,
@@ -127,27 +129,23 @@ class SearchPostsGrid extends StatelessWidget {
       final String? docId = res?.id?.trim();
       final String? refId = res?.refId?.trim();
 
-      final bool liked = PostInteractionRegistry.isLiked(r.id) ||
-          (docId != null && PostInteractionRegistry.isLiked(docId)) ||
-          (refId != null && PostInteractionRegistry.isLiked(refId)) ||
-          homeFeed.isPostLiked(r.id) ||
-          (docId != null && homeFeed.isPostLiked(docId)) ||
-          (refId != null && homeFeed.isPostLiked(refId)) ||
-          profile.isPostLiked(r.id) ||
-          (docId != null && profile.isPostLiked(docId)) ||
-          (refId != null && profile.isPostLiked(refId)) ||
-          r.isLiked;
+      final bool liked = PostInteractionRegistry.isLiked(
+        r.id,
+        fallback: (docId != null && docId != r.id && PostInteractionRegistry.isLiked(docId)) ||
+            (refId != null && refId != r.id && PostInteractionRegistry.isLiked(refId)) ||
+            homeFeed.isPostLiked(r.id) ||
+            profile.isPostLiked(r.id) ||
+            r.isLiked,
+      );
 
-      final bool saved = PostInteractionRegistry.isSaved(r.id) ||
-          (docId != null && PostInteractionRegistry.isSaved(docId)) ||
-          (refId != null && PostInteractionRegistry.isSaved(refId)) ||
-          homeFeed.isPostSaved(r.id) ||
-          (docId != null && homeFeed.isPostSaved(docId)) ||
-          (refId != null && homeFeed.isPostSaved(refId)) ||
-          profile.isPostSaved(r.id) ||
-          (docId != null && profile.isPostSaved(docId)) ||
-          (refId != null && profile.isPostSaved(refId)) ||
-          r.isSaved;
+      final bool saved = PostInteractionRegistry.isSaved(
+        r.id,
+        fallback: (docId != null && docId != r.id && PostInteractionRegistry.isSaved(docId)) ||
+            (refId != null && refId != r.id && PostInteractionRegistry.isSaved(refId)) ||
+            homeFeed.isPostSaved(r.id) ||
+            profile.isPostSaved(r.id) ||
+            r.isSaved,
+      );
 
       final int likes = PostInteractionRegistry.getLikeCount(r.id, fallback: r.likesCount);
       final int comments = CommentCountRegistry.getOr(r.id, r.commentsCount);
@@ -214,31 +212,27 @@ class SearchPostsGrid extends StatelessWidget {
     final bool isText = item.type == 'TEXT' || (img.isEmpty && item.mediaRefs.isEmpty);
     final String? docId = item.id?.trim();
     final String? refId = item.refId?.trim();
-    final String postId = (refId != null && refId.isNotEmpty)
-        ? refId
-        : (docId ?? 'search_${item.caption.hashCode}');
+    final String postId = (docId != null && docId.isNotEmpty)
+        ? docId
+        : (refId ?? 'search_${item.caption.hashCode}');
 
-    final bool isLiked = PostInteractionRegistry.isLiked(postId) ||
-        (docId != null && PostInteractionRegistry.isLiked(docId)) ||
-        (refId != null && PostInteractionRegistry.isLiked(refId)) ||
-        homeFeed.isPostLiked(postId) ||
-        (docId != null && homeFeed.isPostLiked(docId)) ||
-        (refId != null && homeFeed.isPostLiked(refId)) ||
-        profile.isPostLiked(postId) ||
-        (docId != null && profile.isPostLiked(docId)) ||
-        (refId != null && profile.isPostLiked(refId)) ||
-        item.isLiked;
+    final bool isLiked = PostInteractionRegistry.isLiked(
+      postId,
+      fallback: (docId != null && docId != postId && PostInteractionRegistry.isLiked(docId)) ||
+          (refId != null && refId != postId && PostInteractionRegistry.isLiked(refId)) ||
+          item.isLiked ||
+          homeFeed.isPostLiked(postId) ||
+          profile.isPostLiked(postId),
+    );
 
-    final bool isSaved = PostInteractionRegistry.isSaved(postId) ||
-        (docId != null && PostInteractionRegistry.isSaved(docId)) ||
-        (refId != null && PostInteractionRegistry.isSaved(refId)) ||
-        homeFeed.isPostSaved(postId) ||
-        (docId != null && homeFeed.isPostSaved(docId)) ||
-        (refId != null && homeFeed.isPostSaved(refId)) ||
-        profile.isPostSaved(postId) ||
-        (docId != null && profile.isPostSaved(docId)) ||
-        (refId != null && profile.isPostSaved(refId)) ||
-        item.isSaved;
+    final bool isSaved = PostInteractionRegistry.isSaved(
+      postId,
+      fallback: (docId != null && docId != postId && PostInteractionRegistry.isSaved(docId)) ||
+          (refId != null && refId != postId && PostInteractionRegistry.isSaved(refId)) ||
+          item.isSaved ||
+          homeFeed.isPostSaved(postId) ||
+          profile.isPostSaved(postId),
+    );
 
     final int likesCount = PostInteractionRegistry.getLikeCount(postId, fallback: item.likesCount ?? 0);
     final int commentsCount = CommentCountRegistry.getOr(postId, item.commentsCount ?? 0);

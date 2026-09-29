@@ -143,191 +143,195 @@ class _DiscoverScreenBody extends StatelessWidget {
                 ),
               ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+            if (provider.trendingItems.isNotEmpty) ...<Widget>[
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
 
-            // ── TRENDING NOW header ────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: <Widget>[
-                    Text(
-                      l10n.guestTrendingNow,
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: context.themeTextMuted,
-                        letterSpacing: 1.2,
+              // ── TRENDING NOW header ────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: <Widget>[
+                      Text(
+                        l10n.guestTrendingNow,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: context.themeTextMuted,
+                          letterSpacing: 1.2,
+                        ),
                       ),
-                    ),
-                    Text(
-                      l10n.guestWorldwide,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.themeTextMuted,
+                      Text(
+                        l10n.guestWorldwide,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: context.themeTextMuted,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-
-            // ── Trending List ──────────────────────────────────────────────
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (BuildContext context, int index) => Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    0,
-                    AppSpacing.lg,
-                    AppSpacing.md,
-                  ),
-                  child: DiscoverTrendingCard(
-                    item: provider.trendingItems[index],
-                    rankColor: _rankColors[index % _rankColors.length],
+                    ],
                   ),
                 ),
-                childCount: provider.trendingItems.length,
               ),
-            ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+
+              // ── Trending List ──────────────────────────────────────────────
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (BuildContext context, int index) => Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      0,
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                    ),
+                    child: DiscoverTrendingCard(
+                      item: provider.trendingItems[index],
+                      rankColor: _rankColors[index % _rankColors.length],
+                    ),
+                  ),
+                  childCount: provider.trendingItems.length,
+                ),
+              ),
+            ],
 
             // ── Conversation of the Day ────────────────────────────────────
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: DiscoverSectionLabel(label: 'CONVERSATION OF THE DAY'),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: DiscoverConversationCard(),
-              ),
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
-
-            // ── COMMUNITIES TO EXPLORE header ──────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: const DiscoverSectionLabel(
-                  label: 'COMMUNITIES TO EXPLORE',
+            if (context.watch<CotdProvider>().currentQuestion != null) ...<Widget>[
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: DiscoverSectionLabel(label: 'CONVERSATION OF THE DAY'),
                 ),
               ),
-            ),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: DiscoverConversationCard(),
+                ),
+              ),
+            ],
 
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-
-            // ── Communities List (Top 4) ───────────────────────────────────
-            SliverList(
-              delegate: SliverChildBuilderDelegate((
-                BuildContext context,
-                int index,
-              ) {
-                final List<DiscoverCommunity> topCommunities =
-                    provider.communities.take(4).toList();
-                final DiscoverCommunity c = topCommunities[index];
-                final bool isJoined = profile.isCommunityJoined(id: c.id, name: c.name);
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    0,
-                    AppSpacing.lg,
-                    AppSpacing.sm,
+            // ── COMMUNITIES TO EXPLORE ──────────────────────────────────────
+            if (provider.communities.isNotEmpty) ...<Widget>[
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: DiscoverSectionLabel(
+                    label: 'COMMUNITIES TO EXPLORE',
                   ),
-                  child: DiscoverCommunityTile(
-                    community: c,
-                    isJoined: isJoined,
-                    onJoin: () async {
-                      if (isJoined) {
-                        await profile.leaveCommunity(c.id ?? '', name: c.name);
-                      } else {
-                        await profile.joinCommunity(c.id ?? '', name: c.name);
-                      }
-                    },
-                  ),
-                );
-              }, childCount: provider.communities.take(4).length),
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+              SliverList(
+                delegate: SliverChildBuilderDelegate((
+                  BuildContext context,
+                  int index,
+                ) {
+                  final List<DiscoverCommunity> topCommunities =
+                      provider.communities.take(4).toList();
+                  final DiscoverCommunity c = topCommunities[index];
+                  final bool isJoined = profile.isCommunityJoined(id: c.id, name: c.name);
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      0,
+                      AppSpacing.lg,
+                      AppSpacing.sm,
+                    ),
+                    child: DiscoverCommunityTile(
+                      community: c,
+                      isJoined: isJoined,
+                      onJoin: () async {
+                        if (isJoined) {
+                          await profile.leaveCommunity(c.id ?? '', name: c.name);
+                        } else {
+                          await profile.joinCommunity(c.id ?? '', name: c.name);
+                        }
+                      },
+                    ),
+                  );
+                }, childCount: provider.communities.take(4).length),
+              ),
+            ],
 
             // ── CREATORS TO WATCH ──────────────────────────────────────────
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: DiscoverSectionLabel(label: 'CREATORS TO WATCH'),
+            if (provider.creatorsToWatch.isNotEmpty) ...<Widget>[
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: DiscoverSectionLabel(label: 'CREATORS TO WATCH'),
+                ),
               ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 90,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                  ),
-                  itemCount: provider.creatorsToWatch.length,
-                  itemBuilder: (BuildContext context, int index) => Padding(
-                    padding: const EdgeInsets.only(right: AppSpacing.lg),
-                    child: DiscoverCreatorCircle(
-                      creator: provider.creatorsToWatch[index],
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 90,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                    ),
+                    itemCount: provider.creatorsToWatch.length,
+                    itemBuilder: (BuildContext context, int index) => Padding(
+                      padding: const EdgeInsets.only(right: AppSpacing.lg),
+                      child: DiscoverCreatorCircle(
+                        creator: provider.creatorsToWatch[index],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+            ],
 
             // ── NEW CREATORS ───────────────────────────────────────────────
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: DiscoverSectionLabel(label: 'NEW CREATORS'),
+            if (provider.newCreators.isNotEmpty) ...<Widget>[
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: DiscoverSectionLabel(label: 'NEW CREATORS'),
+                ),
               ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 90,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                  ),
-                  itemCount: provider.newCreators.length,
-                  itemBuilder: (BuildContext context, int index) => Padding(
-                    padding: const EdgeInsets.only(right: AppSpacing.lg),
-                    child: DiscoverCreatorCircle(
-                      creator: provider.newCreators[index],
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 90,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                    ),
+                    itemCount: provider.newCreators.length,
+                    itemBuilder: (BuildContext context, int index) => Padding(
+                      padding: const EdgeInsets.only(right: AppSpacing.lg),
+                      child: DiscoverCreatorCircle(
+                        creator: provider.newCreators[index],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+            ],
 
             // ── COMMUNITY SPOTLIGHT ────────────────────────────────────────
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: DiscoverSectionLabel(label: 'COMMUNITY SPOTLIGHT'),
+            if (context.watch<SpotlightsProvider>().liveSpotlight != null) ...<Widget>[
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: DiscoverSectionLabel(label: 'COMMUNITY SPOTLIGHT'),
+                ),
               ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: DiscoverSpotlightCard(),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: DiscoverSpotlightCard(),
+                ),
               ),
-            ),
+            ],
 
             const SliverToBoxAdapter(
               child: SizedBox(height: AppSpacing.xxxxxl),

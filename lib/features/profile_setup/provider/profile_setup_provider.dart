@@ -189,12 +189,24 @@ class ProfileSetupProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  void prefillSocialData({String? displayName, String? avatarUrl}) {
+  void prefillSocialData({String? displayName, String? email, String? avatarUrl}) {
     if (displayName != null && displayName.trim().isNotEmpty) {
       _displayName = displayName.trim();
     }
     if (avatarUrl != null && avatarUrl.trim().isNotEmpty) {
       _avatarUrl = avatarUrl.trim();
+    }
+    if (_username.isEmpty) {
+      String candidate = '';
+      if (email != null && email.contains('@')) {
+        candidate = email.split('@').first.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '');
+      } else if (displayName != null && displayName.trim().isNotEmpty) {
+        candidate = displayName.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_').replaceAll(RegExp(r'[^a-z0-9_]'), '');
+      }
+      if (candidate.length >= 3) {
+        _username = candidate;
+        checkUsername(candidate);
+      }
     }
     notifyListeners();
   }

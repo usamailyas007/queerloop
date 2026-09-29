@@ -27,20 +27,16 @@ class DiscoverConversationCard extends StatelessWidget {
         final CotdQuestion? question = provider.currentQuestion;
 
         // ── Loading skeleton ───────────────────────────────────────────────
-        if (provider.isLoading && question == null) {
-          return _buildSkeleton(isDark);
+        if (question == null) {
+          if (provider.isLoading) {
+            return _buildSkeleton(isDark);
+          }
+          return const SizedBox.shrink();
         }
 
-        // ── Fallback static card (no data / error) ─────────────────────────
-        final String questionText = question?.body.isNotEmpty == true
-            ? question!.body
-            : 'What does chosen family mean to you?';
-
-        final String subtitle = question?.subtitle ??
-            '2,140 people have answered — add your voice, or just read what others said.';
-
-        final String answerCount =
-            question?.formattedAnswerCount ?? '2.1K answered';
+        final String questionText = question.body;
+        final String subtitle = question.subtitle;
+        final String answerCount = question.formattedAnswerCount;
 
         return Container(
           padding: const EdgeInsets.all(AppSpacing.lg),

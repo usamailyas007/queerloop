@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../auth/auth_provider.dart';
 import '../provider/profile_setup_provider.dart';
 import 'step1_name_username_screen.dart';
 import 'step2_add_photo_screen.dart';
@@ -23,7 +24,20 @@ class _ProfileSetupFlowScreenState extends State<ProfileSetupFlowScreen> {
   @override
   void initState() {
     super.initState();
-    final int initialStep = context.read<ProfileSetupProvider>().currentStep;
+    final ProfileSetupProvider provider = context.read<ProfileSetupProvider>();
+    final AuthProvider auth = context.read<AuthProvider>();
+    if (provider.displayName.isEmpty &&
+        (auth.pendingSocialName != null ||
+            auth.user?.displayName != null ||
+            auth.pendingSocialEmail != null ||
+            auth.user?.email != null)) {
+      provider.prefillSocialData(
+        displayName: auth.pendingSocialName ?? auth.user?.displayName,
+        email: auth.pendingSocialEmail ?? auth.user?.email,
+        avatarUrl: auth.pendingSocialAvatar,
+      );
+    }
+    final int initialStep = provider.currentStep;
     _pageController = PageController(initialPage: initialStep);
   }
 

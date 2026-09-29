@@ -63,7 +63,8 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
     final ProfileSetupProvider provider =
         context.watch<ProfileSetupProvider>();
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final bool hasPhoto = provider.profilePhotoPath != null;
+    final bool hasPhoto = provider.profilePhotoPath != null ||
+        (provider.avatarUrl != null && provider.avatarUrl!.isNotEmpty);
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -142,9 +143,11 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
                                     color: context.themeBackground,
                                     image: hasPhoto
                                         ? DecorationImage(
-                                            image: FileImage(
-                                              File(provider.profilePhotoPath!),
-                                            ),
+                                            image: provider.profilePhotoPath != null
+                                                ? FileImage(
+                                                    File(provider.profilePhotoPath!),
+                                                  ) as ImageProvider
+                                                : NetworkImage(provider.avatarUrl!),
                                             fit: BoxFit.cover,
                                           )
                                         : null,

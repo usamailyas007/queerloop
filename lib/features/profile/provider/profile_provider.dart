@@ -160,12 +160,13 @@ class ProfileProvider extends ChangeNotifier {
       PostInteractionRegistry.isLiked(id, fallback: _isPostLikedInternal(id));
 
   bool _isPostLikedInternal(String id) {
-    if (_likedPosts.any((PostItemModel p) => p.id == id && p.isLiked)) return true;
-    if (_likedReels.any((ReelItemModel r) => r.id == id && r.isLiked)) return true;
-    if (_userPosts.any((PostItemModel p) => p.id == id && p.isLiked)) return true;
-    if (_userReels.any((ReelItemModel r) => r.id == id && r.isLiked)) return true;
-    if (_savedPosts.any((PostItemModel p) => p.id == id && p.isLiked)) return true;
-    if (_savedReels.any((ReelItemModel r) => r.id == id && r.isLiked)) return true;
+    final String clean = id.trim().toLowerCase();
+    if (_likedPosts.any((PostItemModel p) => p.id.trim().toLowerCase() == clean && p.isLiked)) return true;
+    if (_likedReels.any((ReelItemModel r) => r.id.trim().toLowerCase() == clean && r.isLiked)) return true;
+    if (_userPosts.any((PostItemModel p) => p.id.trim().toLowerCase() == clean && p.isLiked)) return true;
+    if (_userReels.any((ReelItemModel r) => r.id.trim().toLowerCase() == clean && r.isLiked)) return true;
+    if (_savedPosts.any((PostItemModel p) => p.id.trim().toLowerCase() == clean && p.isLiked)) return true;
+    if (_savedReels.any((ReelItemModel r) => r.id.trim().toLowerCase() == clean && r.isLiked)) return true;
     return false;
   }
 
@@ -173,12 +174,13 @@ class ProfileProvider extends ChangeNotifier {
       PostInteractionRegistry.isSaved(id, fallback: _isPostSavedInternal(id));
 
   bool _isPostSavedInternal(String id) {
-    if (_savedPosts.any((PostItemModel p) => p.id == id && p.isSaved)) return true;
-    if (_savedReels.any((ReelItemModel r) => r.id == id && r.isSaved)) return true;
-    if (_userPosts.any((PostItemModel p) => p.id == id && p.isSaved)) return true;
-    if (_userReels.any((ReelItemModel r) => r.id == id && r.isSaved)) return true;
-    if (_likedPosts.any((PostItemModel p) => p.id == id && p.isSaved)) return true;
-    if (_likedReels.any((ReelItemModel r) => r.id == id && r.isSaved)) return true;
+    final String clean = id.trim().toLowerCase();
+    if (_savedPosts.any((PostItemModel p) => p.id.trim().toLowerCase() == clean && p.isSaved)) return true;
+    if (_savedReels.any((ReelItemModel r) => r.id.trim().toLowerCase() == clean && r.isSaved)) return true;
+    if (_userPosts.any((PostItemModel p) => p.id.trim().toLowerCase() == clean && p.isSaved)) return true;
+    if (_userReels.any((ReelItemModel r) => r.id.trim().toLowerCase() == clean && r.isSaved)) return true;
+    if (_likedPosts.any((PostItemModel p) => p.id.trim().toLowerCase() == clean && p.isSaved)) return true;
+    if (_likedReels.any((ReelItemModel r) => r.id.trim().toLowerCase() == clean && r.isSaved)) return true;
     return false;
   }
 
@@ -200,11 +202,9 @@ class ProfileProvider extends ChangeNotifier {
 
   UserRelationshipService get relationshipService => _relationshipService;
 
-  String get displayName => _profile?.displayName ?? 'Ash Mercado';
-  String get username => _profile?.username ?? 'ashinorbit';
-  String get bio =>
-      _profile?.bio ??
-      'Film nerd, softball catcher, chronically making playlists.';
+  String get displayName => _profile?.displayName ?? '';
+  String get username => _profile?.username ?? '';
+  String get bio => _profile?.bio ?? '';
   String get avatarUrl => _profile?.avatarUrl ?? '';
   String get pronounsFormatted => _profile?.formattedPronouns ?? 'she / they';
   List<String> get pronouns =>
@@ -962,18 +962,19 @@ class ProfileProvider extends ChangeNotifier {
   }
 
   void updateLikedReel(String id, {required bool isLiked, required int likesCount, ReelItemModel? fallbackReel}) {
+    final String cleanId = id.trim().toLowerCase();
     // 1. Update _userReels
-    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id == id);
+    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id.trim().toLowerCase() == cleanId);
     if (urIndex != -1) {
       _userReels[urIndex] = _userReels[urIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
     }
     // 2. Update _userPosts
-    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
+    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id.trim().toLowerCase() == cleanId);
     if (upIndex != -1) {
       _userPosts[upIndex] = _userPosts[upIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
     }
     // 3. Update _likedReels
-    final int rIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
+    final int rIndex = _likedReels.indexWhere((ReelItemModel r) => r.id.trim().toLowerCase() == cleanId);
     if (rIndex != -1) {
       if (!isLiked) {
         _likedReels.removeAt(rIndex);
@@ -988,7 +989,7 @@ class ProfileProvider extends ChangeNotifier {
       }
     }
     // 4. Update _likedPosts
-    final int pIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
+    final int pIndex = _likedPosts.indexWhere((PostItemModel p) => p.id.trim().toLowerCase() == cleanId);
     if (pIndex != -1) {
       if (!isLiked) {
         _likedPosts.removeAt(pIndex);
@@ -997,11 +998,11 @@ class ProfileProvider extends ChangeNotifier {
       }
     }
     // 5. Update _savedPosts & _savedReels if present
-    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id == id);
+    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id.trim().toLowerCase() == cleanId);
     if (spIndex != -1) {
       _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
     }
-    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id == id);
+    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id.trim().toLowerCase() == cleanId);
     if (srIndex != -1) {
       _savedReels[srIndex] = _savedReels[srIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
     }
@@ -1010,18 +1011,19 @@ class ProfileProvider extends ChangeNotifier {
   }
 
   void updateLikedPost(String id, {required bool isLiked, required int likesCount, PostItemModel? fallbackPost}) {
+    final String cleanId = id.trim().toLowerCase();
     // 1. Update _userPosts
-    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
+    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id.trim().toLowerCase() == cleanId);
     if (upIndex != -1) {
       _userPosts[upIndex] = _userPosts[upIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
     }
     // 2. Update _userReels
-    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id == id);
+    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id.trim().toLowerCase() == cleanId);
     if (urIndex != -1) {
       _userReels[urIndex] = _userReels[urIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
     }
     // 3. Update _likedPosts
-    final int pIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
+    final int pIndex = _likedPosts.indexWhere((PostItemModel p) => p.id.trim().toLowerCase() == cleanId);
     if (pIndex != -1) {
       if (!isLiked) {
         _likedPosts.removeAt(pIndex);
@@ -1036,7 +1038,7 @@ class ProfileProvider extends ChangeNotifier {
       }
     }
     // 4. Update _likedReels
-    final int rIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
+    final int rIndex = _likedReels.indexWhere((ReelItemModel r) => r.id.trim().toLowerCase() == cleanId);
     if (rIndex != -1) {
       if (!isLiked) {
         _likedReels.removeAt(rIndex);
@@ -1045,11 +1047,11 @@ class ProfileProvider extends ChangeNotifier {
       }
     }
     // 5. Update _savedPosts & _savedReels if present
-    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id == id);
+    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id.trim().toLowerCase() == cleanId);
     if (spIndex != -1) {
       _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
     }
-    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id == id);
+    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id.trim().toLowerCase() == cleanId);
     if (srIndex != -1) {
       _savedReels[srIndex] = _savedReels[srIndex].copyWith(isLiked: isLiked, likesCount: likesCount);
     }

@@ -345,14 +345,53 @@ class PostsFeedView extends StatelessWidget {
               if (provider.isGuest) {
                 onGuestActionTriggered?.call();
               } else {
-                provider.toggleLikePost(item.id);
+                final bool currentlyLiked =
+                    PostInteractionRegistry.isLiked(item.id, fallback: item.isLiked);
+                final bool newLiked = !currentlyLiked;
+                final int currentCount = PostInteractionRegistry.getLikeCount(item.id, fallback: item.likesCount);
+                final int newCount = item.hasLikeCount
+                    ? (newLiked
+                        ? currentCount + 1
+                        : (currentCount > 0 ? currentCount - 1 : 0))
+                    : currentCount;
+                PostInteractionRegistry.setLiked(item.id, newLiked, newCount: newCount);
+
+                try {
+                  profileProvider.updateLikedPost(
+                    item.id,
+                    isLiked: newLiked,
+                    likesCount: newCount,
+                    fallbackPost: item.copyWith(isLiked: newLiked, likesCount: newCount),
+                  );
+                } catch (_) {}
+                provider.toggleLikePost(
+                  item.id,
+                  fallbackPost: item,
+                  explicitLiked: newLiked,
+                );
               }
             },
             onSaveToggle: () {
               if (provider.isGuest) {
                 onGuestActionTriggered?.call();
               } else {
-                provider.toggleSavePost(item.id);
+                final bool currentlySaved =
+                    PostInteractionRegistry.isSaved(item.id, fallback: item.isSaved);
+                final bool newSaved = !currentlySaved;
+                PostInteractionRegistry.setSaved(item.id, newSaved);
+
+                try {
+                  profileProvider.updateSavedPost(
+                    item.id,
+                    isSaved: newSaved,
+                    fallbackPost: item.copyWith(isSaved: newSaved),
+                  );
+                } catch (_) {}
+                provider.toggleSavePost(
+                  item.id,
+                  fallbackPost: item,
+                  explicitSaved: newSaved,
+                );
               }
             },
             onOpenComments: () {
