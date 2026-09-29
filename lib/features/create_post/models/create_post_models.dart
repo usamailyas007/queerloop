@@ -30,14 +30,16 @@ class AuthorProfileCache {
   static final Map<String, AuthorInfo> _cache = <String, AuthorInfo>{};
 
   static AuthorInfo? get(String userId) {
-    final String clean = userId.trim();
+    final String clean = userId.trim().toLowerCase();
     if (clean.isEmpty) return null;
-    return _cache[clean];
+    return _cache[clean] ?? getByName(clean);
   }
 
   static AuthorInfo? getByName(String username) {
     final String clean = username.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return null;
+    final AuthorInfo? direct = _cache[clean];
+    if (direct != null) return direct;
     for (final AuthorInfo info in _cache.values) {
       if (info.username.replaceAll('@', '').trim().toLowerCase() == clean) {
         return info;
@@ -47,12 +49,25 @@ class AuthorProfileCache {
   }
 
   static void set(String userId, AuthorInfo info) {
-    final String clean = userId.trim();
-    if (clean.isEmpty) return;
-    _cache[clean] = info;
+    final String clean = userId.trim().toLowerCase();
+    if (clean.isNotEmpty) {
+      _cache[clean] = info;
+    }
+    if (info.username.isNotEmpty) {
+      final String uClean = info.username.replaceAll('@', '').trim().toLowerCase();
+      _cache[uClean] = info;
+    }
+    if (info.id.isNotEmpty && info.id.toLowerCase() != clean) {
+      _cache[info.id.trim().toLowerCase()] = info;
+    }
   }
 
-  static bool contains(String userId) => _cache.containsKey(userId.trim());
+  static bool contains(String userId) {
+    final String clean = userId.trim().toLowerCase();
+    return _cache.containsKey(clean) || getByName(clean) != null;
+  }
+
+  static void clear() => _cache.clear();
 }
 
 enum MediaType { video, photo, text }
@@ -734,6 +749,11 @@ class PostResponseModel {
         cachedAuthor?.isPrivate == true;
 
     if (finalAuthorId != null && finalAuthorId.isNotEmpty) {
+      UserRelationshipCache.markPrivate(
+        finalAuthorId,
+        username: finalAuthorName,
+        isPrivate: resolvedIsAuthorPrivate,
+      );
       if (cachedAuthor == null && (finalAuthorName != null || finalAuthorDisplayName != null)) {
         AuthorProfileCache.set(
           finalAuthorId,

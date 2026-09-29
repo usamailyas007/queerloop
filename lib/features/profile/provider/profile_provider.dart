@@ -1281,6 +1281,10 @@ class ProfileProvider extends ChangeNotifier {
         }
       }
 
+      if (post.isDeleted || DeletedPostsRegistry.isDeleted(post.id)) {
+        continue;
+      }
+
       final bool isOwnPost = (post.authorId != null &&
               _cachedUserId != null &&
               post.authorId == _cachedUserId) ||
@@ -1291,6 +1295,24 @@ class ProfileProvider extends ChangeNotifier {
       final AuthorInfo? cachedAuthor = (post.authorId != null && post.authorId!.isNotEmpty)
           ? AuthorProfileCache.get(post.authorId!)
           : null;
+
+      final bool resolvedIsAuthorPrivate = post.isAuthorPrivate ||
+          (cachedAuthor?.isPrivate == true) ||
+          UserRelationshipCache.isUserPrivate(
+            userId: post.authorId,
+            username: post.authorName,
+          );
+
+      final bool isFollowingAuthor = UserRelationshipCache.isFollowing(
+        userId: post.authorId,
+        username: post.authorName,
+      );
+
+      // If user is not the author, and author account is private and not followed:
+      // Hide post from saved and liked feeds.
+      if (!isOwnPost && resolvedIsAuthorPrivate && !isFollowingAuthor) {
+        continue;
+      }
 
       final String authorUsername = post.authorName ??
           (isOwnPost
@@ -1324,6 +1346,13 @@ class ProfileProvider extends ChangeNotifier {
       final int effectiveLikesCount =
           PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
 
+      final String resolvedAllowCommentsFrom =
+          (cachedAuthor?.allowCommentsFrom != null &&
+                  cachedAuthor!.allowCommentsFrom.isNotEmpty &&
+                  cachedAuthor.allowCommentsFrom != 'everyone')
+              ? cachedAuthor.allowCommentsFrom
+              : (post.allowCommentsFrom.isNotEmpty ? post.allowCommentsFrom : 'everyone');
+
       if (isVideo) {
         userReelsList.add(
           ReelItemModel(
@@ -1347,6 +1376,8 @@ class ProfileProvider extends ChangeNotifier {
             isSaved: isSaved,
             allowComments: post.allowComments,
             allowDownloads: post.allowDownloads,
+            isAuthorPrivate: resolvedIsAuthorPrivate,
+            allowCommentsFrom: resolvedAllowCommentsFrom,
             hideLikes: post.hideLikes,
             tags: post.tags,
             communityId: post.communityId,
@@ -1377,6 +1408,8 @@ class ProfileProvider extends ChangeNotifier {
             isSaved: isSaved,
             allowComments: post.allowComments,
             allowDownloads: post.allowDownloads,
+            isAuthorPrivate: resolvedIsAuthorPrivate,
+            allowCommentsFrom: resolvedAllowCommentsFrom,
             hideLikes: post.hideLikes,
             postImageUrl: mediaUrl,
             postType: type,

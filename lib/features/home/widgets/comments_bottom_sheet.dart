@@ -15,6 +15,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../core/cache/cache_manager.dart';
 import '../../../core/cache/user_relationship_cache.dart';
 import '../../auth/auth_provider.dart';
+import '../../create_post/models/create_post_models.dart';
 import '../../create_post/services/post_content_service.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../../profile/screens/user_profile_screen.dart';
@@ -92,6 +93,13 @@ class CommentLikesTracker {
       _likedCommentIds.remove(id);
     }
     _persist();
+  }
+
+  static void clear() {
+    _likedCommentIds.clear();
+    _unlikedCommentIds.clear();
+    _initialized = false;
+    _loadedUserId = null;
   }
 }
 
@@ -1349,10 +1357,29 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
       return false;
     }
 
-    final String mode = widget.allowCommentsFrom.toLowerCase().trim();
+    final AuthorInfo? cachedAuthor = (widget.postAuthorId != null && widget.postAuthorId!.isNotEmpty)
+        ? AuthorProfileCache.get(widget.postAuthorId!)
+        : (widget.authorUsername != null && widget.authorUsername!.isNotEmpty
+            ? AuthorProfileCache.getByName(widget.authorUsername!)
+            : null);
+
+    final String authorRule = (cachedAuthor?.allowCommentsFrom != null &&
+            cachedAuthor!.allowCommentsFrom.isNotEmpty &&
+            cachedAuthor.allowCommentsFrom != 'everyone')
+        ? cachedAuthor.allowCommentsFrom
+        : '';
+    final String widgetRule = (widget.allowCommentsFrom.isNotEmpty &&
+            widget.allowCommentsFrom != 'everyone')
+        ? widget.allowCommentsFrom
+        : '';
+    final String rawMode = authorRule.isNotEmpty
+        ? authorRule
+        : (widgetRule.isNotEmpty ? widgetRule : 'everyone');
+
+    final String mode = rawMode.toLowerCase().trim();
 
     // 3. Mode: "nobody" -> only author can comment
-    if (mode == 'nobody') {
+    if (mode == 'nobody' || mode.contains('nobody')) {
       return false;
     }
 
@@ -1371,17 +1398,22 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
         UserRelationshipCache.isFollowedBy(
             userId: widget.postAuthorId, username: widget.authorUsername);
 
-    // 5. Mode: "following" -> users followed by author can comment
-    if (mode == 'following') {
-      return isAuthorFollowingViewer;
-    }
-
-    // 6. Mode: "mutual" -> mutual followers can comment
-    if (mode == 'mutual') {
+    // 5. Mode: "mutual" -> mutual followers can comment
+    if (mode.contains('mutual')) {
       return isAuthorFollowingViewer && isViewerFollowingAuthor;
     }
 
-    return true;
+    // 6. Mode: "following" or "people you follow" (author follows viewer)
+    if (mode == 'following' || mode.contains('people you follow') || mode.contains('you follow')) {
+      return isAuthorFollowingViewer;
+    }
+
+    // 7. Mode: "followers" -> viewer follows author
+    if (mode.contains('follower')) {
+      return isViewerFollowingAuthor;
+    }
+
+    return false;
   }
 
   String _getCommentsRestrictionMessage() {
@@ -1392,15 +1424,37 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     if (!widget.allowComments) {
       return 'Comments are disabled for this post.';
     }
-    final String mode = widget.allowCommentsFrom.toLowerCase().trim();
-    if (mode == 'nobody') {
-      return 'Comments are turned off for this post.';
+    final AuthorInfo? cachedAuthor = (widget.postAuthorId != null && widget.postAuthorId!.isNotEmpty)
+        ? AuthorProfileCache.get(widget.postAuthorId!)
+        : (widget.authorUsername != null && widget.authorUsername!.isNotEmpty
+            ? AuthorProfileCache.getByName(widget.authorUsername!)
+            : null);
+
+    final String authorRule = (cachedAuthor?.allowCommentsFrom != null &&
+            cachedAuthor!.allowCommentsFrom.isNotEmpty &&
+            cachedAuthor.allowCommentsFrom != 'everyone')
+        ? cachedAuthor.allowCommentsFrom
+        : '';
+    final String widgetRule = (widget.allowCommentsFrom.isNotEmpty &&
+            widget.allowCommentsFrom != 'everyone')
+        ? widget.allowCommentsFrom
+        : '';
+    final String rawMode = authorRule.isNotEmpty
+        ? authorRule
+        : (widgetRule.isNotEmpty ? widgetRule : 'everyone');
+
+    final String mode = rawMode.toLowerCase().trim();
+    if (mode == 'nobody' || mode.contains('nobody')) {
+      return 'Comments are turned off by the author.';
     }
-    if (mode == 'following') {
-      return 'Only users followed by the author can comment.';
-    }
-    if (mode == 'mutual') {
+    if (mode.contains('mutual')) {
       return 'Only mutual followers can comment on this post.';
+    }
+    if (mode == 'following' || mode.contains('people you follow') || mode.contains('you follow')) {
+      return 'Only people the author follows can comment.';
+    }
+    if (mode.contains('follower')) {
+      return 'Comments are restricted to followers of the author.';
     }
     return 'Comments are restricted for this post.';
   }

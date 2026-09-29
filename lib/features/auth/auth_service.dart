@@ -766,6 +766,20 @@ class AuthService {
     } catch (e) {
       debugPrint('⚠️ [AuthService] Error clearing CacheManager: $e');
     }
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? theme = prefs.getString('app_theme_mode');
+      final bool? onboarding = prefs.getBool('onboarding_seen');
+      await prefs.clear();
+      if (theme != null) {
+        await prefs.setString('app_theme_mode', theme);
+      }
+      if (onboarding != null) {
+        await prefs.setBool('onboarding_seen', onboarding);
+      }
+    } catch (e) {
+      debugPrint('⚠️ [AuthService] Error clearing SharedPreferences: $e');
+    }
   }
 
   // ── Sign out ──────────────────────────────────────────────────────────────

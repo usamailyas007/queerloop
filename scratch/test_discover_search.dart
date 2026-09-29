@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 
 void main() async {
@@ -9,51 +10,51 @@ void main() async {
     );
     final HttpClientResponse res = await req.close();
     final String body = await res.transform(utf8.decoder).join();
-    print('STATUS: ${res.statusCode}');
+    log('STATUS: ${res.statusCode}');
     final dynamic data = jsonDecode(body);
     if (data is Map) {
-      print('KEYS: ${data.keys.toList()}');
+      log('KEYS: ${data.keys.toList()}');
       if (data['posts'] is List) {
         final List posts = data['posts'];
-        print('POSTS COUNT: ${posts.length}');
+        log('POSTS COUNT: ${posts.length}');
         if (posts.isNotEmpty) {
-          print('SAMPLE POST: ${jsonEncode(posts.first)}');
+          log('SAMPLE POST: ${jsonEncode(posts.first)}');
         }
       }
       if (data['reels'] is List) {
         final List reels = data['reels'];
-        print('REELS COUNT: ${reels.length}');
+        log('REELS COUNT: ${reels.length}');
         if (reels.isNotEmpty) {
-          print('SAMPLE REEL: ${jsonEncode(reels.first)}');
+          log('SAMPLE REEL: ${jsonEncode(reels.first)}');
         }
       }
       if (data['data'] is Map) {
         final Map d = data['data'];
-        print('DATA KEYS: ${d.keys.toList()}');
+        log('DATA KEYS: ${d.keys.toList()}');
         if (d['posts'] is List) {
           final List posts = d['posts'];
-          print('DATA POSTS COUNT: ${posts.length}');
+          log('DATA POSTS COUNT: ${posts.length}');
           for (var p in posts.take(5)) {
             if (p is Map) {
-              print('  DATA POST id=${p['id']} type=${p['type']} postType=${p['postType']} caption=${p['caption'] ?? p['content']}');
+              log('  DATA POST id=${p['id']} type=${p['type']} postType=${p['postType']} caption=${p['caption'] ?? p['content']}');
             }
           }
         }
         if (d['reels'] is List) {
           final List reels = d['reels'];
-          print('DATA REELS COUNT: ${reels.length}');
+          log('DATA REELS COUNT: ${reels.length}');
           for (var r in reels.take(5)) {
             if (r is Map) {
-              print('  DATA REEL id=${r['id']} type=${r['type']} postType=${r['postType']} caption=${r['caption'] ?? r['content']}');
+              log('  DATA REEL id=${r['id']} type=${r['type']} postType=${r['postType']} caption=${r['caption'] ?? r['content']}');
             }
           }
         }
       }
     } else if (data is List) {
-      print('LIST COUNT: ${data.length}');
+      log('LIST COUNT: ${data.length}');
     }
   } catch (e) {
-    print('ERROR: $e');
+    log('ERROR: $e');
   } finally {
     client.close();
   }

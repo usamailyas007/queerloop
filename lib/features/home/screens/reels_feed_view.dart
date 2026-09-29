@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../profile/provider/profile_provider.dart';
 import '../../profile_setup/models/community_model.dart';
 import '../../profile_setup/provider/profile_setup_provider.dart';
@@ -534,6 +535,20 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                   fallbackReel: item,
                   explicitSaved: newSaved,
                 );
+                if (newSaved) {
+                  AppSnackBar.showSuccess(
+                    context,
+                    title: 'Saved to your profile!',
+                    duration: const Duration(seconds: 2),
+                  );
+                } else {
+                  AppSnackBar.show(
+                    context,
+                    title: 'Removed from your saved items.',
+                    type: SnackBarType.info,
+                    duration: const Duration(seconds: 2),
+                  );
+                }
               }
             },
             onFollowToggle: () async {
