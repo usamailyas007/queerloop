@@ -233,9 +233,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     // Pre-fill profile setup provider if social metadata exists
-    if (result.displayName != null || result.photoUrl != null) {
+    if (result.displayName != null || result.photoUrl != null || result.email != null) {
       context.read<ProfileSetupProvider>().prefillSocialData(
         displayName: result.displayName,
+        email: result.email,
         avatarUrl: result.photoUrl,
       );
     }

@@ -341,7 +341,7 @@ class PostInteractionRegistry {
   /// Returns whether like count is explicitly hidden (null or hidden by author).
   static bool isLikeCountHidden(String? postId) {
     if (postId == null) return false;
-    final String clean = postId.trim();
+    final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return false;
     return _hiddenLikeCountIds.contains(clean);
   }
@@ -349,7 +349,7 @@ class PostInteractionRegistry {
   /// Sets whether like count should be hidden for a post/reel.
   static void setLikeCountHidden(String? postId, bool hidden) {
     if (postId == null) return;
-    final String clean = postId.trim();
+    final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return;
     if (hidden) {
       _hiddenLikeCountIds.add(clean);
@@ -361,7 +361,7 @@ class PostInteractionRegistry {
   /// Returns views count if recorded, otherwise [fallback].
   static int getViewsCount(String? postId, {int fallback = 0}) {
     if (postId == null) return fallback;
-    final String clean = postId.trim();
+    final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return fallback;
     if (_viewsCountOverrides.containsKey(clean)) {
       final int cached = _viewsCountOverrides[clean]!;
@@ -373,7 +373,7 @@ class PostInteractionRegistry {
   /// Sets or updates views count for a post/reel.
   static void setViewsCount(String? postId, int views) {
     if (postId == null || views <= 0) return;
-    final String clean = postId.trim();
+    final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return;
     final int existing = _viewsCountOverrides[clean] ?? 0;
     if (views > existing) {
@@ -386,7 +386,7 @@ class PostInteractionRegistry {
   /// otherwise uses [fallback] from the model or backend response.
   static bool isLiked(String? postId, {bool fallback = false}) {
     if (postId == null) return fallback;
-    final String clean = postId.trim();
+    final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return fallback;
     if (_likedOverrides.containsKey(clean)) {
       return _likedOverrides[clean]!;
@@ -398,7 +398,7 @@ class PostInteractionRegistry {
   /// otherwise uses [fallback] from the model or backend response.
   static bool isSaved(String? postId, {bool fallback = false}) {
     if (postId == null) return fallback;
-    final String clean = postId.trim();
+    final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return fallback;
     if (_savedOverrides.containsKey(clean)) {
       return _savedOverrides[clean]!;
@@ -409,7 +409,7 @@ class PostInteractionRegistry {
   /// Returns adjusted like count if modified in session, otherwise [fallback].
   static int getLikeCount(String? postId, {int fallback = 0}) {
     if (postId == null) return fallback;
-    final String clean = postId.trim();
+    final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return fallback;
     if (_likesCountOverrides.containsKey(clean)) {
       return _likesCountOverrides[clean]!;
@@ -420,7 +420,7 @@ class PostInteractionRegistry {
   /// Explicitly sets the liked state and adjusts likes count.
   static void setLiked(String? postId, bool liked, {int? newCount, int? count}) {
     if (postId == null) return;
-    final String clean = postId.trim();
+    final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return;
     _likedOverrides[clean] = liked;
     final int? targetCount = newCount ?? count;
@@ -436,7 +436,7 @@ class PostInteractionRegistry {
   /// Explicitly sets the saved state.
   static void setSaved(String? postId, bool saved) {
     if (postId == null) return;
-    final String clean = postId.trim();
+    final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return;
     _savedOverrides[clean] = saved;
     notifier.notify();
@@ -453,14 +453,10 @@ class PostInteractionRegistry {
     int? viewsCount,
   }) {
     if (postId == null) return;
-    final String clean = postId.trim();
+    final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return;
-    if (isLiked) {
-      _likedOverrides[clean] = true;
-    }
-    if (isSaved) {
-      _savedOverrides[clean] = true;
-    }
+    _likedOverrides[clean] = isLiked;
+    _savedOverrides[clean] = isSaved;
     if (likesCount != null) {
       _likesCountOverrides[clean] = likesCount.clamp(0, 9999999);
     }
@@ -481,14 +477,14 @@ class PostInteractionRegistry {
     int? likesCount,
   }) {
     if (postId == null) return;
-    final String clean = postId.trim();
+    final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return;
-    if (isLiked != null) {
+    if (isLiked != null && !_likedOverrides.containsKey(clean)) {
       if (isLiked) {
         _likedOverrides[clean] = true;
       }
     }
-    if (isSaved != null) {
+    if (isSaved != null && !_savedOverrides.containsKey(clean)) {
       if (isSaved) {
         _savedOverrides[clean] = true;
       }
@@ -509,13 +505,13 @@ class PostInteractionRegistry {
     int? viewsCount,
   }) {
     if (postId == null) return;
-    final String clean = postId.trim();
+    final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return;
-    // Server confirms liked: always update to true
-    if (isLiked) {
+    // Server confirms liked: only seed if user has not interacted with it in this session
+    if (isLiked && !_likedOverrides.containsKey(clean)) {
       _likedOverrides[clean] = true;
     }
-    if (isSaved) {
+    if (isSaved && !_savedOverrides.containsKey(clean)) {
       _savedOverrides[clean] = true;
     }
     if (likesCount != null) {

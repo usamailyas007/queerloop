@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/cache/user_relationship_cache.dart';
-import '../../../core/theme/app_images.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
 import '../models/discover_models.dart';
@@ -544,32 +543,7 @@ class DiscoverProvider extends ChangeNotifier {
   }
 
   // ── Trending Hashtags ────────────────────────────────────────────────────────
-  List<TrendingItem> _trendingItems = const <TrendingItem>[
-    TrendingItem(
-      rank: '01',
-      hashtag: '#chosenfamily',
-      postsCount: '28.4K posts today',
-      thumbnailAsset: '',
-    ),
-    TrendingItem(
-      rank: '02',
-      hashtag: '#prideprep2026',
-      postsCount: '19.7K posts today',
-      thumbnailAsset: '',
-    ),
-    TrendingItem(
-      rank: '03',
-      hashtag: '#binderfitcheck',
-      postsCount: '11.2K posts today',
-      thumbnailAsset: '',
-    ),
-    TrendingItem(
-      rank: '04',
-      hashtag: '#queerbooktok',
-      postsCount: '8.9K posts today',
-      thumbnailAsset: '',
-    ),
-  ];
+  List<TrendingItem> _trendingItems = const <TrendingItem>[];
 
   List<TrendingItem> get trendingItems => _trendingItems.take(4).toList();
 
@@ -581,10 +555,9 @@ class DiscoverProvider extends ChangeNotifier {
     try {
       final List<TrendingItem> items =
           await _discoverService.getTrendingHashtags();
-      if (items.isNotEmpty) {
-        _trendingItems = items.take(4).toList();
-      }
+      _trendingItems = items.take(4).toList();
       _updateTrendingCountsWithLiveFeed();
+    } catch (_) {
     } finally {
       _isLoadingTrending = false;
       notifyListeners();
@@ -669,12 +642,7 @@ class DiscoverProvider extends ChangeNotifier {
   }
 
   // ── Creators ─────────────────────────────────────────────────────────────────
-  List<DiscoverCreator> _creatorsToWatch = const <DiscoverCreator>[
-    DiscoverCreator(avatarAsset: AppImages.user1, username: 'jahvi'),
-    DiscoverCreator(avatarAsset: AppImages.user2, username: 'molly'),
-    DiscoverCreator(avatarAsset: AppImages.user3, username: 'theo'),
-    DiscoverCreator(avatarAsset: AppImages.user4, username: 'kt'),
-  ];
+  List<DiscoverCreator> _creatorsToWatch = const <DiscoverCreator>[];
 
   List<DiscoverCreator> get creatorsToWatch {
     if (_currentUsername == null || _currentUsername!.isEmpty) {
@@ -694,21 +662,15 @@ class DiscoverProvider extends ChangeNotifier {
     try {
       final List<DiscoverCreator> creators =
           await _discoverService.getCreators(type: 'to_watch');
-      if (creators.isNotEmpty) {
-        _creatorsToWatch = creators;
-      }
+      _creatorsToWatch = creators;
+    } catch (_) {
     } finally {
       _isLoadingCreatorsToWatch = false;
       notifyListeners();
     }
   }
 
-  List<DiscoverCreator> _newCreators = const <DiscoverCreator>[
-    DiscoverCreator(avatarAsset: AppImages.user2, username: 'jamal'),
-    DiscoverCreator(avatarAsset: AppImages.user3, username: 'molly'),
-    DiscoverCreator(avatarAsset: AppImages.user1, username: 'theo'),
-    DiscoverCreator(avatarAsset: AppImages.user4, username: 'kt'),
-  ];
+  List<DiscoverCreator> _newCreators = const <DiscoverCreator>[];
 
   List<DiscoverCreator> get newCreators {
     if (_currentUsername == null || _currentUsername!.isEmpty) {
@@ -728,9 +690,8 @@ class DiscoverProvider extends ChangeNotifier {
     try {
       final List<DiscoverCreator> creators =
           await _discoverService.getCreators(type: 'new');
-      if (creators.isNotEmpty) {
-        _newCreators = creators;
-      }
+      _newCreators = creators;
+    } catch (_) {
     } finally {
       _isLoadingNewCreators = false;
       notifyListeners();
@@ -794,9 +755,7 @@ class DiscoverProvider extends ChangeNotifier {
         sort: sort,
         limit: 10,
       );
-      if (fetched.isNotEmpty) {
-        _communities = fetched;
-      }
+      _communities = fetched;
     } catch (e) {
       debugPrint('⚠️ [DiscoverProvider] fetchCommunities error: $e');
     } finally {
@@ -805,56 +764,7 @@ class DiscoverProvider extends ChangeNotifier {
     }
   }
 
-  List<DiscoverCommunity> _communities = const <DiscoverCommunity>[
-    DiscoverCommunity(
-      imageAsset: AppImages.queer,
-      name: 'Queer',
-      description: 'Embracing every shade of identity',
-      isJoined: false,
-    ),
-    DiscoverCommunity(
-      imageAsset: AppImages.transgender,
-      name: 'Transgender',
-      description: 'Strength in authentic self-expression',
-      isJoined: false,
-    ),
-    DiscoverCommunity(
-      imageAsset: AppImages.lesbian,
-      name: 'Lesbian',
-      description: 'Sisterhood, pride, and connection',
-      isJoined: true,
-    ),
-    DiscoverCommunity(
-      imageAsset: AppImages.gay,
-      name: 'Gay',
-      description: 'Bold voices, proud community vibes',
-      isJoined: false,
-    ),
-    DiscoverCommunity(
-      imageAsset: AppImages.bisexual,
-      name: 'Bisexual',
-      description: 'Embracing love beyond gender',
-      isJoined: false,
-    ),
-    DiscoverCommunity(
-      imageAsset: AppImages.nonBinary,
-      name: 'Non-binary',
-      description: 'Beyond the binary, fully valid',
-      isJoined: false,
-    ),
-    DiscoverCommunity(
-      imageAsset: AppImages.pansexual,
-      name: 'Pansexual',
-      description: 'Hearts open to all genders',
-      isJoined: false,
-    ),
-    DiscoverCommunity(
-      imageAsset: AppImages.asexual,
-      name: 'Asexual / Ace',
-      description: 'Beyond labels, your own expression',
-      isJoined: false,
-    ),
-  ];
+  List<DiscoverCommunity> _communities = const <DiscoverCommunity>[];
 
   List<DiscoverCommunity> get communities => _communities;
 

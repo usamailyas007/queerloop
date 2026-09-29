@@ -39,10 +39,21 @@ class HomeFeedProvider extends ChangeNotifier {
   final Set<String> _userLikedPostIds = <String>{};
   final Set<String> _userSavedPostIds = <String>{};
 
-  bool isPostSaved(String id) =>
-      PostInteractionRegistry.isSaved(id, fallback: _userSavedPostIds.contains(id));
-  bool isPostLiked(String id) =>
-      PostInteractionRegistry.isLiked(id, fallback: _userLikedPostIds.contains(id));
+  bool isPostSaved(String id) {
+    final String clean = id.trim().toLowerCase();
+    return PostInteractionRegistry.isSaved(
+      id,
+      fallback: _userSavedPostIds.any((s) => s.trim().toLowerCase() == clean),
+    );
+  }
+
+  bool isPostLiked(String id) {
+    final String clean = id.trim().toLowerCase();
+    return PostInteractionRegistry.isLiked(
+      id,
+      fallback: _userLikedPostIds.any((s) => s.trim().toLowerCase() == clean),
+    );
+  }
 
   int? getCommentCount(String id) => CommentCountRegistry.get(id);
 
@@ -1118,8 +1129,9 @@ class HomeFeedProvider extends ChangeNotifier {
 
   // Helpers to synchronize item mutations across all tabs
   void _updateReelInAllLists(String id, ReelItemModel Function(ReelItemModel) updater) {
+    final String clean = id.trim().toLowerCase();
     void updateInList(List<ReelItemModel> list) {
-      final int idx = list.indexWhere((r) => r.id == id);
+      final int idx = list.indexWhere((r) => r.id.trim().toLowerCase() == clean);
       if (idx != -1) list[idx] = updater(list[idx]);
     }
 
@@ -1129,8 +1141,9 @@ class HomeFeedProvider extends ChangeNotifier {
   }
 
   void _updatePostInAllLists(String id, PostItemModel Function(PostItemModel) updater) {
+    final String clean = id.trim().toLowerCase();
     void updateInList(List<PostItemModel> list) {
-      final int idx = list.indexWhere((p) => p.id == id);
+      final int idx = list.indexWhere((p) => p.id.trim().toLowerCase() == clean);
       if (idx != -1) list[idx] = updater(list[idx]);
     }
 
@@ -1312,10 +1325,13 @@ class HomeFeedProvider extends ChangeNotifier {
 
     PostInteractionRegistry.setLiked(id, newLiked, newCount: newCount);
 
+    final String cleanReelId = id.trim().toLowerCase();
     if (newLiked) {
-      _userLikedPostIds.add(id);
+      if (!_userLikedPostIds.any((s) => s.trim().toLowerCase() == cleanReelId)) {
+        _userLikedPostIds.add(id);
+      }
     } else {
-      _userLikedPostIds.remove(id);
+      _userLikedPostIds.removeWhere((s) => s.trim().toLowerCase() == cleanReelId);
     }
     if (_currentUserId != null) {
       _persistUserLikes();
@@ -1333,9 +1349,11 @@ class HomeFeedProvider extends ChangeNotifier {
         }
       } catch (err) {
         debugPrint('Error syncing like for reel $id: $err');
-        // Rollback optimistic update
-        final bool rollbackLiked = currentlyLiked;
-        final int rollbackCount = currentCount;
+        // Rollback optimistic update to previous state
+        final bool rollbackLiked = !newLiked;
+        final int rollbackCount = rollbackLiked
+            ? (currentCount + 1)
+            : (currentCount > 0 ? currentCount - 1 : 0);
         _updateReelInAllLists(
           id,
           (r) => r.copyWith(isLiked: rollbackLiked, likesCount: rollbackCount),
@@ -1347,9 +1365,11 @@ class HomeFeedProvider extends ChangeNotifier {
         PostInteractionRegistry.setLiked(id, rollbackLiked, newCount: rollbackCount);
         if (_currentUserId != null) {
           if (rollbackLiked) {
-            _userLikedPostIds.add(id);
+            if (!_userLikedPostIds.any((s) => s.trim().toLowerCase() == cleanReelId)) {
+              _userLikedPostIds.add(id);
+            }
           } else {
-            _userLikedPostIds.remove(id);
+            _userLikedPostIds.removeWhere((s) => s.trim().toLowerCase() == cleanReelId);
           }
           _persistUserLikes();
         }
@@ -1360,12 +1380,13 @@ class HomeFeedProvider extends ChangeNotifier {
 
   void toggleSaveReel(String id, {ReelItemModel? fallbackReel, bool? explicitSaved}) {
     ReelItemModel? target;
+    final String cleanId = id.trim().toLowerCase();
     for (final List<ReelItemModel> list in <List<ReelItemModel>>[
       _forYouReels,
       _followingReels,
       _communityReels,
     ]) {
-      final int i = list.indexWhere((ReelItemModel r) => r.id == id);
+      final int i = list.indexWhere((ReelItemModel r) => r.id.trim().toLowerCase() == cleanId);
       if (i != -1) {
         target = list[i];
         break;
@@ -1385,12 +1406,14 @@ class HomeFeedProvider extends ChangeNotifier {
 
     PostInteractionRegistry.setSaved(id, newSaved);
 
-    if (_currentUserId != null) {
-      if (newSaved) {
+    if (newSaved) {
+      if (!_userSavedPostIds.any((s) => s.trim().toLowerCase() == cleanId)) {
         _userSavedPostIds.add(id);
-      } else {
-        _userSavedPostIds.remove(id);
       }
+    } else {
+      _userSavedPostIds.removeWhere((s) => s.trim().toLowerCase() == cleanId);
+    }
+    if (_currentUserId != null) {
       _persistUserSaved();
     }
 
@@ -1471,12 +1494,13 @@ class HomeFeedProvider extends ChangeNotifier {
 
   Future<void> toggleLikePost(String id, {PostItemModel? fallbackPost, bool? explicitLiked}) async {
     PostItemModel? target;
+    final String cleanPostId = id.trim().toLowerCase();
     for (final List<PostItemModel> list in <List<PostItemModel>>[
       _forYouPosts,
       _followingPosts,
       _communityPosts,
     ]) {
-      final int idx = list.indexWhere((p) => p.id == id);
+      final int idx = list.indexWhere((p) => p.id.trim().toLowerCase() == cleanPostId);
       if (idx != -1) {
         target = list[idx];
         break;
@@ -1513,9 +1537,11 @@ class HomeFeedProvider extends ChangeNotifier {
     PostInteractionRegistry.setLiked(id, newLiked, newCount: newCount);
 
     if (newLiked) {
-      _userLikedPostIds.add(id);
+      if (!_userLikedPostIds.any((s) => s.trim().toLowerCase() == cleanPostId)) {
+        _userLikedPostIds.add(id);
+      }
     } else {
-      _userLikedPostIds.remove(id);
+      _userLikedPostIds.removeWhere((s) => s.trim().toLowerCase() == cleanPostId);
     }
     if (_currentUserId != null) {
       _persistUserLikes();
@@ -1535,9 +1561,11 @@ class HomeFeedProvider extends ChangeNotifier {
         }
       } catch (err) {
         debugPrint('Error syncing like for post $id: $err');
-        // Rollback optimistic update
-        final bool rollbackLiked = currentlyLiked;
-        final int rollbackCount = currentCount;
+        // Rollback optimistic update to previous state
+        final bool rollbackLiked = !newLiked;
+        final int rollbackCount = rollbackLiked
+            ? (currentCount + 1)
+            : (currentCount > 0 ? currentCount - 1 : 0);
         _updatePostInAllLists(
           id,
           (p) => p.copyWith(isLiked: rollbackLiked, likesCount: rollbackCount),
@@ -1548,9 +1576,11 @@ class HomeFeedProvider extends ChangeNotifier {
         );
         PostInteractionRegistry.setLiked(id, rollbackLiked, newCount: rollbackCount);
         if (rollbackLiked) {
-          _userLikedPostIds.add(id);
+          if (!_userLikedPostIds.any((s) => s.trim().toLowerCase() == cleanPostId)) {
+            _userLikedPostIds.add(id);
+          }
         } else {
-          _userLikedPostIds.remove(id);
+          _userLikedPostIds.removeWhere((s) => s.trim().toLowerCase() == cleanPostId);
         }
         if (_currentUserId != null) {
           _persistUserLikes();
@@ -1562,12 +1592,13 @@ class HomeFeedProvider extends ChangeNotifier {
 
   void toggleSavePost(String id, {PostItemModel? fallbackPost, bool? explicitSaved}) {
     PostItemModel? target;
+    final String cleanPostId = id.trim().toLowerCase();
     for (final List<PostItemModel> list in <List<PostItemModel>>[
       _forYouPosts,
       _followingPosts,
       _communityPosts,
     ]) {
-      final int i = list.indexWhere((PostItemModel p) => p.id == id);
+      final int i = list.indexWhere((PostItemModel p) => p.id.trim().toLowerCase() == cleanPostId);
       if (i != -1) {
         target = list[i];
         break;
@@ -1578,7 +1609,7 @@ class HomeFeedProvider extends ChangeNotifier {
     }
     final bool currentSaved = PostInteractionRegistry.isSaved(
       id,
-      fallback: _userSavedPostIds.contains(id) || (target != null && target.isSaved),
+      fallback: _userSavedPostIds.any((s) => s.trim().toLowerCase() == cleanPostId) || (target != null && target.isSaved),
     );
     final bool newSaved = explicitSaved ?? !currentSaved;
 
@@ -1588,9 +1619,11 @@ class HomeFeedProvider extends ChangeNotifier {
     PostInteractionRegistry.setSaved(id, newSaved);
 
     if (newSaved) {
-      _userSavedPostIds.add(id);
+      if (!_userSavedPostIds.any((s) => s.trim().toLowerCase() == cleanPostId)) {
+        _userSavedPostIds.add(id);
+      }
     } else {
-      _userSavedPostIds.remove(id);
+      _userSavedPostIds.removeWhere((s) => s.trim().toLowerCase() == cleanPostId);
     }
     if (_currentUserId != null) {
       _persistUserSaved();

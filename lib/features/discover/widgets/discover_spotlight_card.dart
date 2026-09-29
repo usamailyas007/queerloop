@@ -135,19 +135,16 @@ class DiscoverSpotlightCard extends StatelessWidget {
       }
     }
 
-    if (activeSpotlight == null && isSpotlightLoading) {
-      return _buildSkeleton(context);
+    if (activeSpotlight == null) {
+      if (isSpotlightLoading) {
+        return _buildSkeleton(context);
+      }
+      return const SizedBox.shrink();
     }
 
-    final String title = (activeSpotlight?.title.isNotEmpty == true)
-        ? activeSpotlight!.title
-        : 'Drag & Nightlife';
-
-    final String body = (activeSpotlight?.body.isNotEmpty == true)
-        ? activeSpotlight!.body
-        : 'Admin-curated every week. Chosen this week for its Pride showcase thread and genuinely welcoming new-performer nights.';
-
-    final String? imageUrl = activeSpotlight?.imageUrl;
+    final String title = activeSpotlight.title;
+    final String body = activeSpotlight.body;
+    final String? imageUrl = activeSpotlight.imageUrl;
 
     return Container(
       foregroundDecoration: BoxDecoration(

@@ -31,9 +31,44 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
   void initState() {
     super.initState();
     final ProfileSetupProvider provider = context.read<ProfileSetupProvider>();
-    _displayNameController = TextEditingController(text: provider.displayName);
-    _usernameController = TextEditingController(text: provider.username);
+    final AuthProvider auth = context.read<AuthProvider>();
+
+    // Resolve real display name from provider or auth
+    String initialDisplayName = provider.displayName.trim();
+    if (initialDisplayName.isEmpty) {
+      initialDisplayName = (auth.pendingSocialName ?? auth.user?.displayName ?? '').trim();
+      if (initialDisplayName.isNotEmpty) {
+        provider.setDisplayName(initialDisplayName);
+      }
+    }
+
+    // Resolve real or auto-generated username from email or name
+    String initialUsername = provider.username.trim();
+    if (initialUsername.isEmpty) {
+      final String? email = auth.pendingSocialEmail ?? auth.user?.email;
+      if (email != null && email.contains('@')) {
+        initialUsername = email.split('@').first.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '');
+      } else if (initialDisplayName.isNotEmpty) {
+        initialUsername = initialDisplayName.toLowerCase().replaceAll(RegExp(r'\s+'), '_').replaceAll(RegExp(r'[^a-z0-9_]'), '');
+      }
+      if (initialUsername.length >= 3) {
+        provider.setUsername(initialUsername);
+      } else {
+        initialUsername = '';
+      }
+    }
+
+    _displayNameController = TextEditingController(text: initialDisplayName);
+    _usernameController = TextEditingController(text: initialUsername);
     _bioController = TextEditingController(text: provider.bio);
+
+    if (initialUsername.length >= 3) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          provider.checkUsername(initialUsername);
+        }
+      });
+    }
   }
 
   @override
@@ -178,7 +213,7 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
                       const SizedBox(height: AppSpacing.xs),
                       AppTextField(
                         controller: _displayNameController,
-                        hintText: l10n.profileDisplayNameHint,
+                        hintText: 'Enter your name',
                         onChanged: (String val) {
                           context.read<ProfileSetupProvider>().setDisplayName(val);
                         },
@@ -231,7 +266,7 @@ class _Step1NameUsernameScreenState extends State<Step1NameUsernameScreen> {
                             children: <Widget>[
                               AppTextField(
                                 controller: _usernameController,
-                                hintText: l10n.profileUsernameHint,
+                                hintText: 'username',
                                 prefixText: '@ ',
                                 suffixIcon: suffixIcon,
                                 onChanged: (String val) {
