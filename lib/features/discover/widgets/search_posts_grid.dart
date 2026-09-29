@@ -102,6 +102,25 @@ class SearchPostsGrid extends StatelessWidget {
               ? res.refId!.trim()
               : 'search_reel_$i');
 
+      PostInteractionRegistry.linkIds(<String?>[effectiveId, res.id, res.refId, ...res.mediaRefs]);
+
+      final bool effectiveLiked = PostInteractionRegistry.isLiked(
+        effectiveId,
+        fallback: (res.refId != null && res.refId != effectiveId && PostInteractionRegistry.isLiked(res.refId)) ||
+            res.isLiked,
+      );
+      final bool effectiveSaved = PostInteractionRegistry.isSaved(
+        effectiveId,
+        fallback: (res.refId != null && res.refId != effectiveId && PostInteractionRegistry.isSaved(res.refId)) ||
+            res.isSaved,
+      );
+      final int effectiveLikes = PostInteractionRegistry.getLikeCount(
+        effectiveId,
+        fallback: (res.refId != null && res.refId != effectiveId)
+            ? PostInteractionRegistry.getLikeCount(res.refId, fallback: res.likesCount ?? 0)
+            : (res.likesCount ?? 0),
+      );
+
       return ReelItemModel(
         id: effectiveId,
         authorId: res.authorId,
@@ -116,11 +135,11 @@ class SearchPostsGrid extends StatelessWidget {
         videoUrl: resolvedVideo ?? (isVideoUrl ? img : (img.startsWith('http') ? img : null)),
         thumbnailUrl: thumb,
         caption: res.caption ?? '',
-        likesCount: res.likesCount ?? 0,
+        likesCount: effectiveLikes,
         commentsCount: res.commentsCount ?? 0,
         viewsCount: res.viewsCount,
-        isLiked: res.isLiked,
-        isSaved: res.isSaved,
+        isLiked: effectiveLiked,
+        isSaved: effectiveSaved,
         allowComments: res.allowComments,
         allowDownloads: res.allowDownloads,
         allowCommentsFrom: res.allowCommentsFrom,
@@ -142,6 +161,7 @@ class SearchPostsGrid extends StatelessWidget {
       final DiscoverSearchResult? res = i < validResults.length ? validResults[i] : null;
       final String? docId = res?.id?.trim();
       final String? refId = res?.refId?.trim();
+      PostInteractionRegistry.linkIds(<String?>[r.id, docId, refId, ...?res?.mediaRefs]);
 
       final bool liked = PostInteractionRegistry.isLiked(
         r.id,
@@ -229,6 +249,8 @@ class SearchPostsGrid extends StatelessWidget {
     final String postId = (docId != null && docId.isNotEmpty)
         ? docId
         : (refId ?? 'search_${item.caption.hashCode}');
+
+    PostInteractionRegistry.linkIds(<String?>[postId, docId, refId, ...item.mediaRefs]);
 
     final bool isLiked = PostInteractionRegistry.isLiked(
       postId,

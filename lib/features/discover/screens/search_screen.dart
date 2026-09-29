@@ -118,6 +118,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           _controller.selection = TextSelection.fromPosition(
                             TextPosition(offset: q.length),
                           );
+                          provider.setSelectedSearchTab(0);
                           provider.setSearchQuery(q);
                         },
                       ),
@@ -393,6 +394,7 @@ class _SearchResultsBody extends StatelessWidget {
                       final String effectivePostId = (docId != null && docId.isNotEmpty)
                           ? docId
                           : (refId ?? 'search_${res.caption.hashCode}');
+                      PostInteractionRegistry.linkIds(<String?>[effectivePostId, docId, refId, ...res.mediaRefs]);
                       final HomeFeedProvider hf = context.watch<HomeFeedProvider>();
                       final ProfileProvider pp = context.watch<ProfileProvider>();
 
@@ -731,6 +733,7 @@ class _SearchResultsBody extends StatelessWidget {
                       final String effectivePostId = (refId != null && refId.isNotEmpty)
                           ? refId
                           : (docId ?? 'search_${res.caption.hashCode}');
+                      PostInteractionRegistry.linkIds(<String?>[effectivePostId, docId, refId, ...res.mediaRefs]);
                       final HomeFeedProvider hf = context.watch<HomeFeedProvider>();
                       final ProfileProvider pp = context.watch<ProfileProvider>();
 

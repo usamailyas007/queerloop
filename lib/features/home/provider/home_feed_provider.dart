@@ -584,6 +584,8 @@ class HomeFeedProvider extends ChangeNotifier {
     final int effectiveCommentsCount =
         CommentCountRegistry.getOr(post.id, post.commentsCount);
 
+    PostInteractionRegistry.linkIds(<String?>[post.id, ...post.mediaRefs]);
+
     // Seed registry so counts/states are available across all screens
     PostInteractionRegistry.seedFromServer(
       post.id,
@@ -751,6 +753,8 @@ class HomeFeedProvider extends ChangeNotifier {
     );
     final int effectiveCommentsCount =
         CommentCountRegistry.getOr(post.id, post.commentsCount);
+
+    PostInteractionRegistry.linkIds(<String?>[post.id, ...post.mediaRefs]);
 
     // Seed registry so counts/states are available across all screens
     PostInteractionRegistry.seedFromServer(

@@ -379,7 +379,66 @@ class PostInteractionRegistry {
   static final Map<String, int> _likesCountOverrides = <String, int>{};
   static final Map<String, int> _viewsCountOverrides = <String, int>{};
   static final Set<String> _hiddenLikeCountIds = <String>{};
+  static final Map<String, Set<String>> _idEquivalents = <String, Set<String>>{};
   static final RegistryNotifier notifier = RegistryNotifier();
+
+  /// Links multiple IDs together so that any like/save/count on one immediately reflects on all.
+  static void linkIds(Iterable<String?> ids) {
+    final Set<String> cleanSet = <String>{};
+    for (final String? id in ids) {
+      if (id == null) continue;
+      final String clean = id.trim().toLowerCase();
+      if (clean.isNotEmpty) {
+        cleanSet.add(clean);
+        final String withoutMedia = clean.replaceAll(RegExp(r'^/+|^media/'), '');
+        if (withoutMedia.isNotEmpty) cleanSet.add(withoutMedia);
+        if (_idEquivalents.containsKey(clean)) {
+          cleanSet.addAll(_idEquivalents[clean]!);
+        }
+        if (_idEquivalents.containsKey(withoutMedia)) {
+          cleanSet.addAll(_idEquivalents[withoutMedia]!);
+        }
+      }
+    }
+    if (cleanSet.length < 2) return;
+    for (final String id in cleanSet) {
+      _idEquivalents[id] = cleanSet;
+    }
+
+    // Sync any existing state across all linked IDs
+    bool? existingLiked;
+    bool? existingSaved;
+    int? existingLikesCount;
+    int? existingViewsCount;
+
+    for (final String id in cleanSet) {
+      if (_likedOverrides[id] == true) {
+        existingLiked = true;
+      }
+      if (_savedOverrides[id] == true) {
+        existingSaved = true;
+      }
+      if (existingLikesCount == null && _likesCountOverrides.containsKey(id)) {
+        existingLikesCount = _likesCountOverrides[id];
+      } else if (existingLikesCount != null && _likesCountOverrides.containsKey(id)) {
+        final int c = _likesCountOverrides[id]!;
+        if (c > existingLikesCount) existingLikesCount = c;
+      }
+      if (existingViewsCount == null && _viewsCountOverrides.containsKey(id)) {
+        existingViewsCount = _viewsCountOverrides[id];
+      } else if (existingViewsCount != null && _viewsCountOverrides.containsKey(id)) {
+        final int v = _viewsCountOverrides[id]!;
+        if (v > existingViewsCount) existingViewsCount = v;
+      }
+    }
+
+    for (final String id in cleanSet) {
+      if (existingLiked != null) _likedOverrides[id] = existingLiked;
+      if (existingSaved != null) _savedOverrides[id] = existingSaved;
+      if (existingLikesCount != null) _likesCountOverrides[id] = existingLikesCount;
+      if (existingViewsCount != null) _viewsCountOverrides[id] = existingViewsCount;
+    }
+  }
 
   /// Returns whether like count is explicitly hidden (null or hidden by author).
   static bool isLikeCountHidden(String? postId) {
@@ -410,6 +469,21 @@ class PostInteractionRegistry {
       final int cached = _viewsCountOverrides[clean]!;
       return cached > fallback ? cached : fallback;
     }
+    final String withoutMedia = clean.replaceAll(RegExp(r'^/+|^media/'), '');
+    if (_viewsCountOverrides.containsKey(withoutMedia)) {
+      final int cached = _viewsCountOverrides[withoutMedia]!;
+      return cached > fallback ? cached : fallback;
+    }
+    final Set<String>? equivs = _idEquivalents[clean] ?? _idEquivalents[withoutMedia];
+    if (equivs != null) {
+      for (final String eq in equivs) {
+        if (_viewsCountOverrides.containsKey(eq)) {
+          final int cached = _viewsCountOverrides[eq]!;
+          _viewsCountOverrides[clean] = cached;
+          return cached > fallback ? cached : fallback;
+        }
+      }
+    }
     return fallback;
   }
 
@@ -418,9 +492,22 @@ class PostInteractionRegistry {
     if (postId == null || views <= 0) return;
     final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return;
-    final int existing = _viewsCountOverrides[clean] ?? 0;
-    if (views > existing) {
-      _viewsCountOverrides[clean] = views;
+    final String withoutMedia = clean.replaceAll(RegExp(r'^/+|^media/'), '');
+    final Set<String> targetIds = <String>{
+      clean,
+      if (withoutMedia.isNotEmpty) withoutMedia,
+      ...?_idEquivalents[clean],
+      if (withoutMedia.isNotEmpty) ...?_idEquivalents[withoutMedia],
+    };
+    bool updated = false;
+    for (final String id in targetIds) {
+      final int existing = _viewsCountOverrides[id] ?? 0;
+      if (views > existing) {
+        _viewsCountOverrides[id] = views;
+        updated = true;
+      }
+    }
+    if (updated) {
       notifier.notify();
     }
   }
@@ -434,6 +521,20 @@ class PostInteractionRegistry {
     if (_likedOverrides.containsKey(clean)) {
       return _likedOverrides[clean]!;
     }
+    final String withoutMedia = clean.replaceAll(RegExp(r'^/+|^media/'), '');
+    if (_likedOverrides.containsKey(withoutMedia)) {
+      return _likedOverrides[withoutMedia]!;
+    }
+    final Set<String>? equivs = _idEquivalents[clean] ?? _idEquivalents[withoutMedia];
+    if (equivs != null) {
+      for (final String eq in equivs) {
+        if (_likedOverrides.containsKey(eq)) {
+          final bool val = _likedOverrides[eq]!;
+          _likedOverrides[clean] = val;
+          return val;
+        }
+      }
+    }
     return fallback;
   }
 
@@ -446,6 +547,20 @@ class PostInteractionRegistry {
     if (_savedOverrides.containsKey(clean)) {
       return _savedOverrides[clean]!;
     }
+    final String withoutMedia = clean.replaceAll(RegExp(r'^/+|^media/'), '');
+    if (_savedOverrides.containsKey(withoutMedia)) {
+      return _savedOverrides[withoutMedia]!;
+    }
+    final Set<String>? equivs = _idEquivalents[clean] ?? _idEquivalents[withoutMedia];
+    if (equivs != null) {
+      for (final String eq in equivs) {
+        if (_savedOverrides.containsKey(eq)) {
+          final bool val = _savedOverrides[eq]!;
+          _savedOverrides[clean] = val;
+          return val;
+        }
+      }
+    }
     return fallback;
   }
 
@@ -457,6 +572,20 @@ class PostInteractionRegistry {
     if (_likesCountOverrides.containsKey(clean)) {
       return _likesCountOverrides[clean]!;
     }
+    final String withoutMedia = clean.replaceAll(RegExp(r'^/+|^media/'), '');
+    if (_likesCountOverrides.containsKey(withoutMedia)) {
+      return _likesCountOverrides[withoutMedia]!;
+    }
+    final Set<String>? equivs = _idEquivalents[clean] ?? _idEquivalents[withoutMedia];
+    if (equivs != null) {
+      for (final String eq in equivs) {
+        if (_likesCountOverrides.containsKey(eq)) {
+          final int val = _likesCountOverrides[eq]!;
+          _likesCountOverrides[clean] = val;
+          return val;
+        }
+      }
+    }
     return fallback;
   }
 
@@ -465,13 +594,22 @@ class PostInteractionRegistry {
     if (postId == null) return;
     final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return;
-    _likedOverrides[clean] = liked;
+    final String withoutMedia = clean.replaceAll(RegExp(r'^/+|^media/'), '');
+    final Set<String> targetIds = <String>{
+      clean,
+      if (withoutMedia.isNotEmpty) withoutMedia,
+      ...?_idEquivalents[clean],
+      if (withoutMedia.isNotEmpty) ...?_idEquivalents[withoutMedia],
+    };
     final int? targetCount = newCount ?? count;
-    if (targetCount != null) {
-      _likesCountOverrides[clean] = targetCount.clamp(0, 9999999);
-    } else {
-      final int cur = _likesCountOverrides[clean] ?? 0;
-      _likesCountOverrides[clean] = (liked ? cur + 1 : (cur > 0 ? cur - 1 : 0)).clamp(0, 9999999);
+    for (final String id in targetIds) {
+      _likedOverrides[id] = liked;
+      if (targetCount != null) {
+        _likesCountOverrides[id] = targetCount.clamp(0, 9999999);
+      } else {
+        final int cur = _likesCountOverrides[id] ?? 0;
+        _likesCountOverrides[id] = (liked ? cur + 1 : (cur > 0 ? cur - 1 : 0)).clamp(0, 9999999);
+      }
     }
     notifier.notify();
   }
@@ -481,7 +619,16 @@ class PostInteractionRegistry {
     if (postId == null) return;
     final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return;
-    _savedOverrides[clean] = saved;
+    final String withoutMedia = clean.replaceAll(RegExp(r'^/+|^media/'), '');
+    final Set<String> targetIds = <String>{
+      clean,
+      if (withoutMedia.isNotEmpty) withoutMedia,
+      ...?_idEquivalents[clean],
+      if (withoutMedia.isNotEmpty) ...?_idEquivalents[withoutMedia],
+    };
+    for (final String id in targetIds) {
+      _savedOverrides[id] = saved;
+    }
     notifier.notify();
   }
 
@@ -498,16 +645,25 @@ class PostInteractionRegistry {
     if (postId == null) return;
     final String clean = postId.trim().toLowerCase();
     if (clean.isEmpty) return;
-    _likedOverrides[clean] = isLiked;
-    _savedOverrides[clean] = isSaved;
-    if (likesCount != null) {
-      _likesCountOverrides[clean] = likesCount.clamp(0, 9999999);
-    }
-    if (commentsCount != null) {
-      CommentCountRegistry.set(clean, commentsCount);
-    }
-    if (viewsCount != null && viewsCount > 0) {
-      setViewsCount(clean, viewsCount);
+    final String withoutMedia = clean.replaceAll(RegExp(r'^/+|^media/'), '');
+    final Set<String> targetIds = <String>{
+      clean,
+      if (withoutMedia.isNotEmpty) withoutMedia,
+      ...?_idEquivalents[clean],
+      if (withoutMedia.isNotEmpty) ...?_idEquivalents[withoutMedia],
+    };
+    for (final String id in targetIds) {
+      _likedOverrides[id] = isLiked;
+      _savedOverrides[id] = isSaved;
+      if (likesCount != null) {
+        _likesCountOverrides[id] = likesCount.clamp(0, 9999999);
+      }
+      if (commentsCount != null) {
+        CommentCountRegistry.set(id, commentsCount);
+      }
+      if (viewsCount != null && viewsCount > 0) {
+        setViewsCount(id, viewsCount);
+      }
     }
     notifier.notify();
   }

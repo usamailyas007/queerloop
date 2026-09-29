@@ -12,7 +12,13 @@ import '../widgets/search_tag_tile.dart';
 class DiscoverProvider extends ChangeNotifier {
   DiscoverProvider({DiscoverService? discoverService})
       : _discoverService = discoverService {
+    PostInteractionRegistry.notifier.addListener(_onRegistryChanged);
     fetchDiscoverData();
+  }
+
+  void _onRegistryChanged() {
+    _searchCache.clear();
+    notifyListeners();
   }
 
   final DiscoverService? _discoverService;
@@ -146,11 +152,13 @@ class DiscoverProvider extends ChangeNotifier {
     final Set<String> seen = <String>{};
 
     for (final DiscoverSearchResult item in list) {
+      PostInteractionRegistry.linkIds(<String?>[item.id, item.refId, ...item.mediaRefs]);
       final String id = (item.id ?? '').trim().toLowerCase();
       final String refId = (item.refId ?? '')
           .trim()
           .toLowerCase()
           .replaceAll(RegExp(r'^/+|^media/'), '');
+      final String effectiveId = id.isNotEmpty ? id : refId;
 
       String mediaKey = '';
       if (item.videoUrl != null && item.videoUrl!.trim().isNotEmpty) {
@@ -174,17 +182,27 @@ class DiscoverProvider extends ChangeNotifier {
             (refId.isNotEmpty && (r.id?.toLowerCase() == refId || r.refId?.toLowerCase() == refId)));
         if (existingIdx != -1) {
           final DiscoverSearchResult existing = result[existingIdx];
-          final bool mergedLiked = existing.isLiked ||
-              item.isLiked ||
-              (id.isNotEmpty && PostInteractionRegistry.isLiked(id)) ||
-              (refId.isNotEmpty && PostInteractionRegistry.isLiked(refId));
-          final bool mergedSaved = existing.isSaved ||
-              item.isSaved ||
-              (id.isNotEmpty && PostInteractionRegistry.isSaved(id)) ||
-              (refId.isNotEmpty && PostInteractionRegistry.isSaved(refId));
-          final int curLikes = (existing.likesCount ?? 0) > (item.likesCount ?? 0)
+          final bool mergedLiked = PostInteractionRegistry.isLiked(
+            effectiveId,
+            fallback: existing.isLiked ||
+                item.isLiked ||
+                (id.isNotEmpty && PostInteractionRegistry.isLiked(id)) ||
+                (refId.isNotEmpty && PostInteractionRegistry.isLiked(refId)),
+          );
+          final bool mergedSaved = PostInteractionRegistry.isSaved(
+            effectiveId,
+            fallback: existing.isSaved ||
+                item.isSaved ||
+                (id.isNotEmpty && PostInteractionRegistry.isSaved(id)) ||
+                (refId.isNotEmpty && PostInteractionRegistry.isSaved(refId)),
+          );
+          final int fallbackLikes = (existing.likesCount ?? 0) > (item.likesCount ?? 0)
               ? (existing.likesCount ?? 0)
               : (item.likesCount ?? 0);
+          final int curLikes = PostInteractionRegistry.getLikeCount(
+            effectiveId,
+            fallback: fallbackLikes,
+          );
           result[existingIdx] = existing.copyWith(
             isLiked: mergedLiked,
             isSaved: mergedSaved,
@@ -204,16 +222,27 @@ class DiscoverProvider extends ChangeNotifier {
       }
       if (mediaKey.isNotEmpty) seen.add(mediaKey);
 
-      final bool effectiveLiked = item.isLiked ||
-          (id.isNotEmpty && PostInteractionRegistry.isLiked(id)) ||
-          (refId.isNotEmpty && PostInteractionRegistry.isLiked(refId));
-      final bool effectiveSaved = item.isSaved ||
-          (id.isNotEmpty && PostInteractionRegistry.isSaved(id)) ||
-          (refId.isNotEmpty && PostInteractionRegistry.isSaved(refId));
+      final bool effectiveLiked = PostInteractionRegistry.isLiked(
+        effectiveId,
+        fallback: item.isLiked ||
+            (id.isNotEmpty && PostInteractionRegistry.isLiked(id)) ||
+            (refId.isNotEmpty && PostInteractionRegistry.isLiked(refId)),
+      );
+      final bool effectiveSaved = PostInteractionRegistry.isSaved(
+        effectiveId,
+        fallback: item.isSaved ||
+            (id.isNotEmpty && PostInteractionRegistry.isSaved(id)) ||
+            (refId.isNotEmpty && PostInteractionRegistry.isSaved(refId)),
+      );
+      final int effectiveLikes = PostInteractionRegistry.getLikeCount(
+        effectiveId,
+        fallback: item.likesCount ?? 0,
+      );
 
       result.add(item.copyWith(
         isLiked: effectiveLiked,
         isSaved: effectiveSaved,
+        likesCount: effectiveLikes > 0 ? effectiveLikes : item.likesCount,
       ));
     }
 
@@ -290,6 +319,7 @@ class DiscoverProvider extends ChangeNotifier {
 
   void setSearchQuery(String query) {
     if (_searchQuery == query) return;
+    final bool isNewSearch = _searchQuery.trim().isEmpty;
     _searchQuery = query;
 
     _debounceTimer?.cancel();
@@ -297,9 +327,14 @@ class DiscoverProvider extends ChangeNotifier {
 
     if (trimmed.isEmpty) {
       _isLoadingSearch = false;
+      _selectedSearchTab = 0;
       _searchResults = const MultiTabSearchResults();
       notifyListeners();
       return;
+    }
+
+    if (isNewSearch) {
+      _selectedSearchTab = 0;
     }
 
     _isLoadingSearch = true;
@@ -345,6 +380,7 @@ class DiscoverProvider extends ChangeNotifier {
   void clearSearchQuery() {
     _debounceTimer?.cancel();
     _searchQuery = '';
+    _selectedSearchTab = 0;
     _isSearchFocused = false;
     _isLoadingSearch = false;
     _searchResults = const MultiTabSearchResults();
@@ -808,6 +844,7 @@ class DiscoverProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    PostInteractionRegistry.notifier.removeListener(_onRegistryChanged);
     _debounceTimer?.cancel();
     super.dispose();
   }

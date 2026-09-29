@@ -235,6 +235,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       final bool resolvedIsAuthorPrivate =
           post.isAuthorPrivate || (_profile?.isPrivate ?? false) || widget.isPrivate;
 
+      PostInteractionRegistry.linkIds(<String?>[post.id, ...post.mediaRefs]);
+
       reels.add(
         ReelItemModel(
           id: post.id,
@@ -562,6 +564,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         }
       }
     } catch (_) {}
+    }
+
+    for (final PostResponseModel p in allPosts) {
+      PostInteractionRegistry.linkIds(<String?>[p.id, ...p.mediaRefs]);
     }
 
     // Separate posts into text/photo posts vs video reels

@@ -10,6 +10,7 @@ import '../core/theme/app_theme.dart';
 import '../core/theme/theme_provider.dart';
 import '../core/widgets/offline_banner.dart';
 import '../features/auth/auth_provider.dart';
+import '../features/auth/auth_service.dart';
 import '../features/create_post/provider/create_post_provider.dart';
 import '../features/create_post/services/media_upload_service.dart';
 import '../features/create_post/services/post_content_service.dart';
@@ -48,7 +49,16 @@ class App extends StatelessWidget {
           create: (_) => ThemeProvider(initialMode: initialThemeMode),
         ),
         ChangeNotifierProvider<NetworkInfo>(create: (_) => NetworkInfo()),
-        Provider<ApiClient>(create: (_) => ApiClient()),
+        Provider<ApiClient>(
+          create: (_) {
+            final ApiClient client = ApiClient();
+            client.tokenProvider = () async {
+              final AuthService authService = AuthService(client);
+              return authService.getAccessToken();
+            };
+            return client;
+          },
+        ),
         ChangeNotifierProvider<AuthProvider>(
           create: (BuildContext ctx) =>
               AuthProvider(client: ctx.read<ApiClient>()),

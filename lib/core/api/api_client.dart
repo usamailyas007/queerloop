@@ -39,13 +39,23 @@ class ApiClient {
 
     _dio.interceptors.add(
       InterceptorsWrapper(
-        onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+        onRequest: (RequestOptions options, RequestInterceptorHandler handler) async {
           if (isPublicEndpoint(options.path)) {
             options.headers.remove('Authorization');
           } else {
-            final String? token = authToken;
-            if (token != null && token.isNotEmpty) {
-              options.headers['Authorization'] = 'Bearer $token';
+            String? token = authToken;
+            if ((token == null || token.trim().isEmpty) && tokenProvider != null) {
+              try {
+                token = await tokenProvider!();
+                if (token != null && token.trim().isNotEmpty) {
+                  authToken = token;
+                }
+              } catch (_) {}
+            }
+            if (token != null && token.trim().isNotEmpty) {
+              options.headers['Authorization'] = 'Bearer ${token.trim()}';
+            } else {
+              options.headers.remove('Authorization');
             }
           }
           handler.next(options);
@@ -164,6 +174,8 @@ class ApiClient {
   late final Dio _bareDio;
 
   String? authToken;
+  Future<String?> Function()? tokenProvider;
+  bool get isAuthenticated => (authToken != null && authToken!.trim().isNotEmpty);
 
   void Function()? onUnauthorized;
   Future<String?> Function()? onTokenRefresh;

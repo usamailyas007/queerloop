@@ -128,9 +128,30 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
           if (cleanM.isNotEmpty) seenIds.add(cleanM);
         }
 
-        final bool isPostLiked = p.isLiked || homeFeed.isPostLiked(effectiveId) || profile.isPostLiked(effectiveId);
-        final bool isPostSaved = p.isSaved || homeFeed.isPostSaved(effectiveId) || profile.isPostSaved(effectiveId);
-        final int rawLikes = p.likesCount ?? 0;
+        PostInteractionRegistry.linkIds(<String?>[effectiveId, searchDocId, refId, p.id, p.refId, ...p.mediaRefs]);
+
+        final bool isPostLiked = PostInteractionRegistry.isLiked(
+          effectiveId,
+          fallback: (searchDocId.isNotEmpty && PostInteractionRegistry.isLiked(searchDocId)) ||
+              (refId.isNotEmpty && PostInteractionRegistry.isLiked(refId)) ||
+              p.isLiked ||
+              homeFeed.isPostLiked(effectiveId) ||
+              profile.isPostLiked(effectiveId),
+        );
+        final bool isPostSaved = PostInteractionRegistry.isSaved(
+          effectiveId,
+          fallback: (searchDocId.isNotEmpty && PostInteractionRegistry.isSaved(searchDocId)) ||
+              (refId.isNotEmpty && PostInteractionRegistry.isSaved(refId)) ||
+              p.isSaved ||
+              homeFeed.isPostSaved(effectiveId) ||
+              profile.isPostSaved(effectiveId),
+        );
+        final int rawLikes = PostInteractionRegistry.getLikeCount(
+          effectiveId,
+          fallback: (refId.isNotEmpty && refId != effectiveId)
+              ? PostInteractionRegistry.getLikeCount(refId, fallback: p.likesCount ?? 0)
+              : (p.likesCount ?? 0),
+        );
         final int postLikes = isPostLiked ? (rawLikes > 0 ? rawLikes : 1) : rawLikes;
         final bool isText = p.imageAsset.trim().isEmpty;
 
@@ -216,9 +237,30 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
           if (cleanM.isNotEmpty) seenIds.add(cleanM);
         }
 
-        final bool isReelLiked = r.isLiked || homeFeed.isPostLiked(effectiveId) || profile.isPostLiked(effectiveId);
-        final bool isReelSaved = r.isSaved || homeFeed.isPostSaved(effectiveId) || profile.isPostSaved(effectiveId);
-        final int rawLikes = r.likesCount ?? 0;
+        PostInteractionRegistry.linkIds(<String?>[effectiveId, searchDocId, refId, r.id, r.refId, ...r.mediaRefs]);
+
+        final bool isReelLiked = PostInteractionRegistry.isLiked(
+          effectiveId,
+          fallback: (searchDocId.isNotEmpty && PostInteractionRegistry.isLiked(searchDocId)) ||
+              (refId.isNotEmpty && PostInteractionRegistry.isLiked(refId)) ||
+              r.isLiked ||
+              homeFeed.isPostLiked(effectiveId) ||
+              profile.isPostLiked(effectiveId),
+        );
+        final bool isReelSaved = PostInteractionRegistry.isSaved(
+          effectiveId,
+          fallback: (searchDocId.isNotEmpty && PostInteractionRegistry.isSaved(searchDocId)) ||
+              (refId.isNotEmpty && PostInteractionRegistry.isSaved(refId)) ||
+              r.isSaved ||
+              homeFeed.isPostSaved(effectiveId) ||
+              profile.isPostSaved(effectiveId),
+        );
+        final int rawLikes = PostInteractionRegistry.getLikeCount(
+          effectiveId,
+          fallback: (refId.isNotEmpty && refId != effectiveId)
+              ? PostInteractionRegistry.getLikeCount(refId, fallback: r.likesCount ?? 0)
+              : (r.likesCount ?? 0),
+        );
         final int reelLikes = isReelLiked ? (rawLikes > 0 ? rawLikes : 1) : rawLikes;
 
         final int reelViews = PostInteractionRegistry.getViewsCount(
@@ -307,18 +349,19 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
                 videoUrl: p.postImageUrl,
                 thumbnailUrl: thumb,
                 caption: p.content,
-                likesCount: p.likesCount,
+                likesCount: PostInteractionRegistry.getLikeCount(p.id, fallback: p.likesCount),
                 commentsCount: p.commentsCount,
                 viewsCount: feedItemViews,
-                isLiked: p.isLiked || homeFeed.isPostLiked(p.id) || profile.isPostLiked(p.id),
-                isSaved: p.isSaved || homeFeed.isPostSaved(p.id) || profile.isPostSaved(p.id),
+                isLiked: PostInteractionRegistry.isLiked(p.id, fallback: p.isLiked || homeFeed.isPostLiked(p.id) || profile.isPostLiked(p.id)),
+                isSaved: PostInteractionRegistry.isSaved(p.id, fallback: p.isSaved || homeFeed.isPostSaved(p.id) || profile.isPostSaved(p.id)),
                 communityId: p.communityId,
               ));
             } else {
               photoPosts.add(p.copyWith(
+                likesCount: PostInteractionRegistry.getLikeCount(p.id, fallback: p.likesCount),
                 viewsCount: feedItemViews,
-                isLiked: p.isLiked || homeFeed.isPostLiked(p.id) || profile.isPostLiked(p.id),
-                isSaved: p.isSaved || homeFeed.isPostSaved(p.id) || profile.isPostSaved(p.id),
+                isLiked: PostInteractionRegistry.isLiked(p.id, fallback: p.isLiked || homeFeed.isPostLiked(p.id) || profile.isPostLiked(p.id)),
+                isSaved: PostInteractionRegistry.isSaved(p.id, fallback: p.isSaved || homeFeed.isPostSaved(p.id) || profile.isPostSaved(p.id)),
               ));
             }
           }
@@ -344,9 +387,10 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
               PostInteractionRegistry.setViewsCount(r.id, liveReelViews);
             }
             videoReels.add(r.copyWith(
+              likesCount: PostInteractionRegistry.getLikeCount(r.id, fallback: r.likesCount),
               viewsCount: liveReelViews,
-              isLiked: r.isLiked || homeFeed.isPostLiked(r.id) || profile.isPostLiked(r.id),
-              isSaved: r.isSaved || homeFeed.isPostSaved(r.id) || profile.isPostSaved(r.id),
+              isLiked: PostInteractionRegistry.isLiked(r.id, fallback: r.isLiked || homeFeed.isPostLiked(r.id) || profile.isPostLiked(r.id)),
+              isSaved: PostInteractionRegistry.isSaved(r.id, fallback: r.isSaved || homeFeed.isPostSaved(r.id) || profile.isPostSaved(r.id)),
             ));
           }
         }
@@ -418,9 +462,10 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
               ? videoUrl.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg')
               : null;
 
-          final bool isReelLiked = p.isLiked || homeFeed.isPostLiked(p.id) || profile.isPostLiked(p.id);
-          final bool isReelSaved = p.isSaved || homeFeed.isPostSaved(p.id) || profile.isPostSaved(p.id);
-          final int reelLikes = p.likesCount;
+          PostInteractionRegistry.linkIds(<String?>[p.id, ...p.mediaRefs]);
+          final bool isReelLiked = PostInteractionRegistry.isLiked(p.id, fallback: p.isLiked || homeFeed.isPostLiked(p.id) || profile.isPostLiked(p.id));
+          final bool isReelSaved = PostInteractionRegistry.isSaved(p.id, fallback: p.isSaved || homeFeed.isPostSaved(p.id) || profile.isPostSaved(p.id));
+          final int reelLikes = PostInteractionRegistry.getLikeCount(p.id, fallback: p.likesCount);
           final int reelViews = PostInteractionRegistry.getViewsCount(
             p.id,
             fallback: p.viewsCount,
@@ -476,9 +521,10 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
           final bool isText = p.type.toUpperCase().trim() == 'TEXT' ||
               (imgUrl == null && p.mediaRefs.isEmpty);
 
-          final bool isPostLiked = p.isLiked || homeFeed.isPostLiked(p.id) || profile.isPostLiked(p.id);
-          final bool isPostSaved = p.isSaved || homeFeed.isPostSaved(p.id) || profile.isPostSaved(p.id);
-          final int postLikes = p.likesCount;
+          PostInteractionRegistry.linkIds(<String?>[p.id, ...p.mediaRefs]);
+          final bool isPostLiked = PostInteractionRegistry.isLiked(p.id, fallback: p.isLiked || homeFeed.isPostLiked(p.id) || profile.isPostLiked(p.id));
+          final bool isPostSaved = PostInteractionRegistry.isSaved(p.id, fallback: p.isSaved || homeFeed.isPostSaved(p.id) || profile.isPostSaved(p.id));
+          final int postLikes = PostInteractionRegistry.getLikeCount(p.id, fallback: p.likesCount);
           final int postViews = PostInteractionRegistry.getViewsCount(
             p.id,
             fallback: p.viewsCount,
@@ -915,7 +961,14 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
         ),
         itemCount: _posts.length,
         itemBuilder: (BuildContext context, int index) {
-          final PostItemModel post = _posts[index];
+          final PostItemModel rawPost = _posts[index];
+          final PostItemModel post = rawPost.copyWith(
+            isLiked: PostInteractionRegistry.isLiked(rawPost.id, fallback: rawPost.isLiked),
+            isSaved: PostInteractionRegistry.isSaved(rawPost.id, fallback: rawPost.isSaved),
+            likesCount: PostInteractionRegistry.getLikeCount(rawPost.id, fallback: rawPost.likesCount),
+            commentsCount: CommentCountRegistry.getOr(rawPost.id, rawPost.commentsCount),
+            viewsCount: PostInteractionRegistry.getViewsCount(rawPost.id, fallback: rawPost.viewsCount),
+          );
           return PostFeedCard(
             post: post,
             onCardTap: () => PostFeedCard.openFullscreen(context, post),
@@ -959,11 +1012,15 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
         ),
         itemCount: _reels.length,
         itemBuilder: (BuildContext context, int index) {
-          final ReelItemModel reel = _reels[index];
-          final int views = PostInteractionRegistry.getViewsCount(
-            reel.id,
-            fallback: reel.viewsCount,
+          final ReelItemModel rawReel = _reels[index];
+          final ReelItemModel reel = rawReel.copyWith(
+            isLiked: PostInteractionRegistry.isLiked(rawReel.id, fallback: rawReel.isLiked),
+            isSaved: PostInteractionRegistry.isSaved(rawReel.id, fallback: rawReel.isSaved),
+            likesCount: PostInteractionRegistry.getLikeCount(rawReel.id, fallback: rawReel.likesCount),
+            commentsCount: CommentCountRegistry.getOr(rawReel.id, rawReel.commentsCount),
+            viewsCount: PostInteractionRegistry.getViewsCount(rawReel.id, fallback: rawReel.viewsCount),
           );
+          final int views = reel.viewsCount;
           return GestureDetector(
             onTap: () => _openReelPlayer(index),
             child: ClipRRect(

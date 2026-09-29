@@ -970,7 +970,7 @@ class PostResponseModel {
 
     final String cleanPostId = post.id.trim();
     if (cleanPostId.isNotEmpty) {
-      PostInteractionRegistry.registerServerPost(
+      PostInteractionRegistry.seedFromServer(
         cleanPostId,
         isLiked: post.isLiked,
         isSaved: post.isSaved,

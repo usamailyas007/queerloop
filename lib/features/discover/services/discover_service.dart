@@ -162,12 +162,13 @@ class DiscoverService {
       );
       return _parsePostsResponse(res);
     } catch (e) {
-      try {
-        final dynamic fallbackRes = await _client.getNoAuth(ApiEndpoints.posts);
-        return _parsePostsResponse(fallbackRes);
-      } catch (_) {
-        return <PostResponseModel>[];
+      if (!_client.isAuthenticated) {
+        try {
+          final dynamic fallbackRes = await _client.getNoAuth(ApiEndpoints.posts);
+          return _parsePostsResponse(fallbackRes);
+        } catch (_) {}
       }
+      return <PostResponseModel>[];
     }
   }
 
@@ -299,7 +300,9 @@ class DiscoverService {
                 useCache: false,
               );
             } catch (_) {
-              postData = await _client.getNoAuth(ApiEndpoints.post(cleanRefLower));
+              if (!_client.isAuthenticated) {
+                postData = await _client.getNoAuth(ApiEndpoints.post(cleanRefLower));
+              }
             }
             if (postData is Map) {
               final dynamic postMap = postData['data'] is Map
@@ -368,6 +371,15 @@ class DiscoverService {
         final String? effectiveId = (p.refId != null && p.refId!.trim().isNotEmpty)
             ? p.refId!.trim()
             : p.id?.trim();
+        PostInteractionRegistry.linkIds(<String?>[
+          effectiveId,
+          p.id,
+          p.refId,
+          cleanRef,
+          matchingLive?.id,
+          ...p.mediaRefs,
+          ...?matchingLive?.mediaRefs,
+        ]);
         final int regPostViews = PostInteractionRegistry.getViewsCount(
           effectiveId,
           fallback: p.id != null ? PostInteractionRegistry.getViewsCount(p.id) : 0,
@@ -552,7 +564,9 @@ class DiscoverService {
                 useCache: false,
               );
             } catch (_) {
-              postData = await _client.getNoAuth(ApiEndpoints.post(cleanRef));
+              if (!_client.isAuthenticated) {
+                postData = await _client.getNoAuth(ApiEndpoints.post(cleanRef));
+              }
             }
             if (postData is Map) {
               final dynamic postMap = postData['data'] is Map
@@ -622,6 +636,16 @@ class DiscoverService {
 
         if (idLower.isNotEmpty) seenReelKeys.add('id:$idLower');
         if (cleanRefLower.isNotEmpty) seenReelKeys.add('id:$cleanRefLower');
+        PostInteractionRegistry.linkIds(<String?>[
+          reelEffectiveId,
+          id,
+          cleanRef,
+          r.id,
+          r.refId,
+          matchingLive?.id,
+          ...r.mediaRefs,
+          ...?matchingLive?.mediaRefs,
+        ]);
         final bool isReelLiked = PostInteractionRegistry.isLiked(reelEffectiveId) ||
             (id.isNotEmpty && PostInteractionRegistry.isLiked(id)) ||
             (cleanRef.isNotEmpty && PostInteractionRegistry.isLiked(cleanRef)) ||

@@ -249,8 +249,12 @@ class PostContentService {
       try {
         response = await _client.get(ApiEndpoints.posts, useCache: false);
       } catch (authErr) {
-        debugPrint('📡 [FeedAPI] Authenticated GET ${ApiEndpoints.posts} failed, falling back to no-auth: $authErr');
-        response = await _client.getNoAuth(ApiEndpoints.posts);
+        if (!_client.isAuthenticated) {
+          debugPrint('📡 [FeedAPI] Unauthenticated GET ${ApiEndpoints.posts} failed, falling back to no-auth: $authErr');
+          response = await _client.getNoAuth(ApiEndpoints.posts);
+        } else {
+          rethrow;
+        }
       }
       final dynamic resToLog = response;
       debugPrint('📦 [FeedPosts] RAW type: ${resToLog.runtimeType}');
@@ -298,8 +302,10 @@ class PostContentService {
     }
 
     try {
-      final dynamic response =
-          await _client.getNoAuth(ApiEndpoints.trendingPosts);
+      final dynamic response = await _client.get(
+        ApiEndpoints.trendingPosts,
+        useCache: false,
+      );
       debugPrint('📦 [TrendingPosts] RAW type: ${response.runtimeType}');
       return _parsePostsList(response, tag: 'TrendingPosts');
     } catch (e) {
@@ -826,12 +832,14 @@ class PostContentService {
       return _parsePostsList(response);
     } catch (e) {
       debugPrint('⚠️ [PostContent] Failed to fetch community posts: $e');
-      try {
-        final dynamic fallbackRes = await _client.getNoAuth(
-          ApiEndpoints.postsByCommunity(communityId),
-        );
-        return _parsePostsList(fallbackRes);
-      } catch (_) {}
+      if (!_client.isAuthenticated) {
+        try {
+          final dynamic fallbackRes = await _client.getNoAuth(
+            ApiEndpoints.postsByCommunity(communityId),
+          );
+          return _parsePostsList(fallbackRes);
+        } catch (_) {}
+      }
       return const <PostResponseModel>[];
     }
   }
