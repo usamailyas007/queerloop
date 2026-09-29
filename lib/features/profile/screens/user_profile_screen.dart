@@ -217,6 +217,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ? post.authorAvatar!.trim()
           : (profileAvatar ?? AppImages.defaultAvatar);
 
+      final String resolvedAllowCommentsFrom =
+          (post.allowCommentsFrom.isNotEmpty && post.allowCommentsFrom != 'everyone')
+              ? post.allowCommentsFrom
+              : (_profile?.allowCommentsFrom ?? post.allowCommentsFrom);
+      final bool resolvedIsAuthorPrivate =
+          post.isAuthorPrivate || (_profile?.isPrivate ?? false) || widget.isPrivate;
+
       reels.add(
         ReelItemModel(
           id: post.id,
@@ -238,6 +245,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           isSaved: PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved),
           allowComments: post.allowComments,
           allowDownloads: post.allowDownloads,
+          isAuthorPrivate: resolvedIsAuthorPrivate,
+          allowCommentsFrom: resolvedAllowCommentsFrom,
           hideLikes: _profile?.hideMyLikes ?? false,
           tags: post.tags,
           communityId: post.communityId,
@@ -353,85 +362,101 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         loadedProfile?.isFollowing == true ||
         loadedProfile?.relationship == 'following';
 
+    final String? myName = auth.user?.displayName;
+    final bool isOwn = (curUserId != null &&
+            curUserId.isNotEmpty &&
+            (userId == curUserId || loadedProfile?.id == curUserId)) ||
+        (myName != null &&
+            myName.isNotEmpty &&
+            widget.username.replaceAll('@', '').toLowerCase() ==
+                myName.replaceAll('@', '').toLowerCase());
+
+    final String? pVis = loadedProfile?.profileVisibility?.toLowerCase();
+    final bool isPrivateProfile = (loadedProfile?.isPrivate ?? false) ||
+        (pVis != null && (pVis.contains('nobody') || pVis.contains('private'))) ||
+        widget.isPrivate;
+
+    final bool shouldRestrictPrivatePosts =
+        isPrivateProfile && !isOwn && !isCurrentlyFollowing;
+
     // 3. Fetch author posts - ensure both video reels and photo posts are fetched,
     // even if the user is private or posts have followers-only visibility.
     final List<PostResponseModel> allPosts = <PostResponseModel>[];
-    try {
-      debugPrint('🚀 [UserProfile] Calling GET ${ApiEndpoints.postsByAuthor(userId)}');
-      final dynamic postsData =
-          await client.get(ApiEndpoints.postsByAuthor(userId));
-      List<dynamic> rawList = <dynamic>[];
-      if (postsData is List) {
-        rawList = postsData;
-      } else if (postsData is Map<String, dynamic>) {
-        if (postsData['data'] is List) {
-          rawList = postsData['data'] as List<dynamic>;
-        } else if (postsData['data'] is Map) {
-          final Map d = postsData['data'] as Map;
-          if (d['posts'] is List) {
-            rawList = d['posts'] as List<dynamic>;
-          } else if (d['items'] is List) {
-            rawList = d['items'] as List<dynamic>;
-          } else if (d['results'] is List) {
-            rawList = d['results'] as List<dynamic>;
-          }
-        } else if (postsData['posts'] is List) {
-          rawList = postsData['posts'] as List<dynamic>;
-        } else if (postsData['items'] is List) {
-          rawList = postsData['items'] as List<dynamic>;
-        } else if (postsData['results'] is List) {
-          rawList = postsData['results'] as List<dynamic>;
-        }
-      }
-      for (final dynamic item in rawList) {
-        if (item is Map) {
-          try {
-            final Map<String, dynamic> rawMap = Map<String, dynamic>.from(item);
-            final dynamic nested = rawMap['post'] ?? rawMap['item'] ?? rawMap['savedPost'];
-            final Map<String, dynamic> typed = (nested is Map)
-                ? Map<String, dynamic>.from(nested)
-                : rawMap;
-            final PostResponseModel parsed = PostResponseModel.fromJson(typed);
-            if (!parsed.isDeleted && !allPosts.any((PostResponseModel p) => p.id == parsed.id)) {
-              allPosts.add(parsed);
+    if (!shouldRestrictPrivatePosts) {
+      try {
+        debugPrint('🚀 [UserProfile] Calling GET ${ApiEndpoints.postsByAuthor(userId)}');
+        final dynamic postsData =
+            await client.get(ApiEndpoints.postsByAuthor(userId));
+        List<dynamic> rawList = <dynamic>[];
+        if (postsData is List) {
+          rawList = postsData;
+        } else if (postsData is Map<String, dynamic>) {
+          if (postsData['data'] is List) {
+            rawList = postsData['data'] as List<dynamic>;
+          } else if (postsData['data'] is Map) {
+            final Map d = postsData['data'] as Map;
+            if (d['posts'] is List) {
+              rawList = d['posts'] as List<dynamic>;
+            } else if (d['items'] is List) {
+              rawList = d['items'] as List<dynamic>;
+            } else if (d['results'] is List) {
+              rawList = d['results'] as List<dynamic>;
             }
-          } catch (e) {
-            debugPrint('⚠️ [UserProfile] Error parsing post: $e');
+          } else if (postsData['posts'] is List) {
+            rawList = postsData['posts'] as List<dynamic>;
+          } else if (postsData['items'] is List) {
+            rawList = postsData['items'] as List<dynamic>;
+          } else if (postsData['results'] is List) {
+            rawList = postsData['results'] as List<dynamic>;
           }
         }
-      }
-    } catch (e) {
-      debugPrint('⚠️ [UserProfile] Could not fetch author posts via postsByAuthor: $e');
-    }
-
-    // Fallback/enrich from global feed /posts (Content Service) to guarantee all posts
-    // (both photo posts and video reels) are retrieved, especially for private users or
-    // if /posts?authorId= returned empty/partial results.
-    try {
-      final PostContentService contentService = PostContentService(client);
-      final List<PostResponseModel> feedPosts = await contentService.getFeedPosts();
-      final String cleanUserId = userId.trim().toLowerCase();
-      final String cleanUsername = widget.username.replaceAll('@', '').trim().toLowerCase();
-
-      for (final PostResponseModel p in feedPosts) {
-        final String? pAuthorId = p.authorId?.trim().toLowerCase();
-        final String? pAuthorName = p.authorName?.replaceAll('@', '').trim().toLowerCase();
-        final bool isMatch = (pAuthorId != null && pAuthorId == cleanUserId) ||
-            (pAuthorName != null && pAuthorName == cleanUsername);
-        if (isMatch && !p.isDeleted) {
-          if (!allPosts.any((PostResponseModel existing) => existing.id == p.id)) {
-            allPosts.add(p);
+        for (final dynamic item in rawList) {
+          if (item is Map) {
+            try {
+              final Map<String, dynamic> rawMap = Map<String, dynamic>.from(item);
+              final dynamic nested = rawMap['post'] ?? rawMap['item'] ?? rawMap['savedPost'];
+              final Map<String, dynamic> typed = (nested is Map)
+                  ? Map<String, dynamic>.from(nested)
+                  : rawMap;
+              final PostResponseModel parsed = PostResponseModel.fromJson(typed);
+              if (!parsed.isDeleted && !allPosts.any((PostResponseModel p) => p.id == parsed.id)) {
+                allPosts.add(parsed);
+              }
+            } catch (e) {
+              debugPrint('⚠️ [UserProfile] Error parsing post: $e');
+            }
           }
         }
+      } catch (e) {
+        debugPrint('⚠️ [UserProfile] Could not fetch author posts via postsByAuthor: $e');
       }
-    } catch (e) {
-      debugPrint('⚠️ [UserProfile] Fallback getFeedPosts error: $e');
-    }
 
-    // Also enrich from in-memory HomeFeedProvider posts and reels if present
-    try {
-      final String cleanUserId = userId.trim().toLowerCase();
-      final String cleanUsername = widget.username.replaceAll('@', '').trim().toLowerCase();
+      // Fallback/enrich from global feed /posts (Content Service) only for non-private or followed accounts
+      try {
+        final PostContentService contentService = PostContentService(client);
+        final List<PostResponseModel> feedPosts = await contentService.getFeedPosts();
+        final String cleanUserId = userId.trim().toLowerCase();
+        final String cleanUsername = widget.username.replaceAll('@', '').trim().toLowerCase();
+
+        for (final PostResponseModel p in feedPosts) {
+          final String? pAuthorId = p.authorId?.trim().toLowerCase();
+          final String? pAuthorName = p.authorName?.replaceAll('@', '').trim().toLowerCase();
+          final bool isMatch = (pAuthorId != null && pAuthorId == cleanUserId) ||
+              (pAuthorName != null && pAuthorName == cleanUsername);
+          if (isMatch && !p.isDeleted) {
+            if (!allPosts.any((PostResponseModel existing) => existing.id == p.id)) {
+              allPosts.add(p);
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ [UserProfile] Fallback getFeedPosts error: $e');
+      }
+
+      // Also enrich from in-memory HomeFeedProvider posts and reels if present
+      try {
+        final String cleanUserId = userId.trim().toLowerCase();
+        final String cleanUsername = widget.username.replaceAll('@', '').trim().toLowerCase();
 
       for (final PostItemModel p in homeFeed.posts) {
         final String? pAuthorId = p.authorId?.trim().toLowerCase();
@@ -490,6 +515,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         }
       }
     } catch (_) {}
+    }
 
     // Separate posts into text/photo posts vs video reels
     final List<PostResponseModel> textPosts =
@@ -587,15 +613,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (loadedProfile != null) {
         _profile = loadedProfile;
       }
-      _authorPosts = allPosts.isNotEmpty ? allPosts : _authorPosts;
-      _authorTextPosts = textPosts.isNotEmpty ? textPosts : _authorTextPosts;
-      _authorReels = convertedReels.isNotEmpty
-          ? convertedReels
-          : (_authorReels.isNotEmpty
-              ? _authorReels
-              : (widget.initialReel != null
-                  ? <ReelItemModel>[widget.initialReel!]
-                  : <ReelItemModel>[]));
+      if (shouldRestrictPrivatePosts) {
+        _authorPosts = <PostResponseModel>[];
+        _authorTextPosts = <PostResponseModel>[];
+        _authorReels = <ReelItemModel>[];
+      } else {
+        _authorPosts = allPosts.isNotEmpty ? allPosts : _authorPosts;
+        _authorTextPosts = textPosts.isNotEmpty ? textPosts : _authorTextPosts;
+        _authorReels = convertedReels.isNotEmpty
+            ? convertedReels
+            : (_authorReels.isNotEmpty
+                ? _authorReels
+                : (widget.initialReel != null
+                    ? <ReelItemModel>[widget.initialReel!]
+                    : <ReelItemModel>[]));
+      }
       _postImageUrls = <String, String>{..._postImageUrls, ...postImages};
       _userCommunities = comms;
       _followersCount = calculatedFollowers;
@@ -683,8 +715,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isPrivateAccount =
-        _profile?.isPrivate ?? (widget.isPrivate || widget.username.contains('kit.lumen'));
+    final String? profVis = _profile?.profileVisibility?.toLowerCase();
+    final bool isPrivateAccount = (_profile != null)
+        ? (_profile!.isPrivate == true ||
+            (profVis != null &&
+                (profVis.contains('nobody') || profVis.contains('private'))))
+        : (widget.isPrivate || widget.username.contains('kit.lumen'));
     final String currentUsername = _profile?.username ?? widget.username;
     final String currentName = _profile?.displayName ?? widget.name;
     final String currentAvatar = (_profile != null)
@@ -728,9 +764,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     final bool shouldShowPrivateScreen = isPrivateAccount &&
         !isOwnProfile &&
-        !_isFollowing &&
-        _authorReels.isEmpty &&
-        _authorTextPosts.isEmpty;
+        !_isFollowing;
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -1290,6 +1324,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 isSaved: isPostItemSaved,
                                 allowComments: post.allowComments,
                                 allowDownloads: post.allowDownloads,
+                                allowCommentsFrom: (post.allowCommentsFrom.isNotEmpty && post.allowCommentsFrom != 'everyone')
+                                    ? post.allowCommentsFrom
+                                    : (_profile?.allowCommentsFrom ?? post.allowCommentsFrom),
+                                isAuthorPrivate: post.isAuthorPrivate || (_profile?.isPrivate ?? false) || isPrivateAccount,
                                 hideLikes: _profile?.hideMyLikes ?? false,
                               );
                               return PostFeedCard(
@@ -1378,8 +1416,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       postAuthorId: post.authorId ?? _effectiveUserId,
                                       communityId: post.communityId,
                                       allowComments: post.allowComments,
-                                      allowCommentsFrom: post.allowCommentsFrom,
-                                      authorUsername: post.authorName,
+                                      allowCommentsFrom: (post.allowCommentsFrom.isNotEmpty && post.allowCommentsFrom != 'everyone')
+                                          ? post.allowCommentsFrom
+                                          : (_profile?.allowCommentsFrom ?? post.allowCommentsFrom),
+                                      authorUsername: post.authorName ?? currentUsername,
                                       onCommentAdded: () {
                                         CommentCountRegistry.increment(post.id);
                                         context.read<HomeFeedProvider>().incrementCommentCount(post.id);
@@ -1585,13 +1625,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       builder: (_) => CommentsBottomSheet(
                                         totalComments: effectiveComments,
                                         postId: post.id,
-                                        postAuthorId: post.authorId ??
-                                            context.read<AuthProvider>().userId ??
-                                            profile.profile?.id,
+                                        postAuthorId: post.authorId ?? _effectiveUserId,
                                         communityId: post.communityId,
                                         allowComments: post.allowComments,
-                                        allowCommentsFrom: post.allowCommentsFrom,
-                                        authorUsername: post.username,
+                                        allowCommentsFrom: (post.allowCommentsFrom.isNotEmpty && post.allowCommentsFrom != 'everyone')
+                                            ? post.allowCommentsFrom
+                                            : (_profile?.allowCommentsFrom ?? post.allowCommentsFrom),
+                                        authorUsername: post.username.isNotEmpty ? post.username : currentUsername,
                                         onCommentAdded: () {
                                           CommentCountRegistry.increment(post.id);
                                           context.read<HomeFeedProvider>().incrementCommentCount(post.id);
@@ -1753,13 +1793,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       builder: (_) => CommentsBottomSheet(
                                         totalComments: effectiveComments,
                                         postId: post.id,
-                                        postAuthorId: post.authorId ??
-                                            context.read<AuthProvider>().userId ??
-                                            profile.profile?.id,
+                                        postAuthorId: post.authorId ?? _effectiveUserId,
                                         communityId: post.communityId,
                                         allowComments: post.allowComments,
-                                        allowCommentsFrom: post.allowCommentsFrom,
-                                        authorUsername: post.username,
+                                        allowCommentsFrom: (post.allowCommentsFrom.isNotEmpty && post.allowCommentsFrom != 'everyone')
+                                            ? post.allowCommentsFrom
+                                            : (_profile?.allowCommentsFrom ?? post.allowCommentsFrom),
+                                        authorUsername: post.username.isNotEmpty ? post.username : currentUsername,
                                         onCommentAdded: () {
                                           CommentCountRegistry.increment(post.id);
                                           context.read<HomeFeedProvider>().incrementCommentCount(post.id);

@@ -441,18 +441,21 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                   provider.bottomNavIndex == 0 &&
                   provider.activeSubMode == SubMode.reels);
 
-          final bool isItemLiked = PostInteractionRegistry.isLiked(item.id, fallback: item.isLiked);
-          final bool isItemSaved = PostInteractionRegistry.isSaved(item.id, fallback: item.isSaved);
-          final int itemLikesCount = PostInteractionRegistry.getLikeCount(item.id, fallback: item.likesCount);
-          final int itemCommentsCount = CommentCountRegistry.getOr(item.id, item.commentsCount);
+          return ListenableBuilder(
+            listenable: PostInteractionRegistry.notifier,
+            builder: (BuildContext ctx, _) {
+              final bool isItemLiked = PostInteractionRegistry.isLiked(item.id, fallback: item.isLiked);
+              final bool isItemSaved = PostInteractionRegistry.isSaved(item.id, fallback: item.isSaved);
+              final int itemLikesCount = PostInteractionRegistry.getLikeCount(item.id, fallback: item.likesCount);
+              final int itemCommentsCount = CommentCountRegistry.getOr(item.id, item.commentsCount);
 
-          return ReelFeedCard(
-            key: ValueKey<String>(item.id),
-            reel: item.copyWith(
-              isFollowing: isAuthorFollowed,
-              isLiked: isItemLiked,
-              isSaved: isItemSaved,
-              likesCount: itemLikesCount,
+              return ReelFeedCard(
+                key: ValueKey<String>(item.id),
+                reel: item.copyWith(
+                  isFollowing: isAuthorFollowed,
+                  isLiked: isItemLiked,
+                  isSaved: isItemSaved,
+                  likesCount: itemLikesCount,
               commentsCount: itemCommentsCount,
             ),
             isActive: isVisuallyActive,
@@ -592,6 +595,8 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                 _showFilterCommunitiesSheet(context, provider),
           );
         },
+      );
+    },
       ),
     );
   }

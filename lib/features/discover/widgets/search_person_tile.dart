@@ -48,8 +48,11 @@ class SearchPersonTile extends StatelessWidget {
                   builder: (_) => UserProfileScreen(
                     userId: person.id,
                     username: person.username,
-                    name: person.username.replaceAll('@', '').split('.').first,
+                    name: (person.displayName != null && person.displayName!.trim().isNotEmpty)
+                        ? person.displayName!.trim()
+                        : person.username.replaceAll('@', '').split('.').first,
                     avatarAsset: person.avatarAsset,
+                    isPrivate: person.isPrivate,
                   ),
                 ),
               );
@@ -65,12 +68,28 @@ class SearchPersonTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        person.username,
-                        style: AppTextStyles.titleSmall.copyWith(
-                          color: context.themeTextPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Flexible(
+                            child: Text(
+                              person.username,
+                              style: AppTextStyles.titleSmall.copyWith(
+                                color: context.themeTextPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (person.isPrivate) ...<Widget>[
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.lock_outline_rounded,
+                              size: 14,
+                              color: context.themeTextSecondary,
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(

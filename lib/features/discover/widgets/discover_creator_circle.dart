@@ -31,8 +31,11 @@ class DiscoverCreatorCircle extends StatelessWidget {
             builder: (_) => UserProfileScreen(
               userId: creator.id,
               username: creator.username.replaceAll('@', ''),
-              name: creator.username.replaceAll('@', '').split('.').first,
+              name: (creator.displayName != null && creator.displayName!.trim().isNotEmpty)
+                  ? creator.displayName!.trim()
+                  : creator.username.replaceAll('@', '').split('.').first,
               avatarAsset: creator.avatarAsset,
+              isPrivate: creator.isPrivate,
             ),
           ),
         );
@@ -46,11 +49,28 @@ class DiscoverCreatorCircle extends StatelessWidget {
             hasGradientBorder: hasGradientBorder,
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            creator.username,
-            style: AppTextStyles.caption.copyWith(
-              color: context.themeTextSecondary,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Flexible(
+                child: Text(
+                  creator.username,
+                  style: AppTextStyles.caption.copyWith(
+                    color: context.themeTextSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (creator.isPrivate) ...<Widget>[
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.lock_outline_rounded,
+                  size: 11,
+                  color: context.themeTextSecondary,
+                ),
+              ],
+            ],
           ),
         ],
       ),

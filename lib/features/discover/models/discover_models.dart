@@ -659,6 +659,8 @@ class DiscoverPerson {
     this.id,
     this.displayName,
     this.bio,
+    this.isPrivate = false,
+    this.allowCommentsFrom = 'everyone',
   });
 
   final String avatarAsset;
@@ -669,6 +671,8 @@ class DiscoverPerson {
   final String? id;
   final String? displayName;
   final String? bio;
+  final bool isPrivate;
+  final String allowCommentsFrom;
 
   factory DiscoverPerson.fromJson(Map<String, dynamic> json) {
     final String unameRaw = (json['username'] ??
@@ -706,6 +710,34 @@ class DiscoverPerson {
                 : null))
         ?.toString();
 
+    final bool isPriv = json['isPrivate'] == true ||
+        json['is_private'] == true ||
+        json['private'] == true ||
+        (json['privacySettings'] is Map &&
+            (json['privacySettings']['isPrivate'] == true ||
+                json['privacySettings']['private'] == true)) ||
+        (json['user'] is Map &&
+            (json['user']['isPrivate'] == true ||
+                json['user']['is_private'] == true)) ||
+        (json['profile'] is Map &&
+            (json['profile']['isPrivate'] == true ||
+                json['profile']['is_private'] == true));
+
+    final String commentsFrom = ((json['allowCommentsFrom'] ??
+                json['allow_comments_from'] ??
+                (json['author'] is Map
+                    ? (json['author']['allowCommentsFrom'] ??
+                        json['author']['allow_comments_from'])
+                    : null) ??
+                (json['user'] is Map
+                    ? (json['user']['allowCommentsFrom'] ??
+                        json['user']['allow_comments_from'])
+                    : null) ??
+                'everyone')
+            .toString())
+        .trim()
+        .toLowerCase();
+
     return DiscoverPerson(
       id: resolvedId,
       avatarAsset: (json['avatarUrl'] ??
@@ -719,6 +751,8 @@ class DiscoverPerson {
       followers: fStr,
       isFollowing: json['isFollowing'] == true,
       bio: json['bio']?.toString(),
+      isPrivate: isPriv,
+      allowCommentsFrom: commentsFrom,
     );
   }
 }
@@ -804,6 +838,8 @@ class DiscoverCreator {
     this.followerCount,
     this.bio,
     this.isFollowing = false,
+    this.isPrivate = false,
+    this.allowCommentsFrom = 'everyone',
   });
 
   final String avatarAsset;
@@ -813,6 +849,8 @@ class DiscoverCreator {
   final int? followerCount;
   final String? bio;
   final bool isFollowing;
+  final bool isPrivate;
+  final String allowCommentsFrom;
 
   factory DiscoverCreator.fromJson(Map<String, dynamic> json) {
     final String unameRaw = (json['username'] ??
@@ -846,6 +884,34 @@ class DiscoverCreator {
                 : null))
         ?.toString();
 
+    final bool isPriv = json['isPrivate'] == true ||
+        json['is_private'] == true ||
+        json['private'] == true ||
+        (json['privacySettings'] is Map &&
+            (json['privacySettings']['isPrivate'] == true ||
+                json['privacySettings']['private'] == true)) ||
+        (json['user'] is Map &&
+            (json['user']['isPrivate'] == true ||
+                json['user']['is_private'] == true)) ||
+        (json['profile'] is Map &&
+            (json['profile']['isPrivate'] == true ||
+                json['profile']['is_private'] == true));
+
+    final String commentsFrom = ((json['allowCommentsFrom'] ??
+                json['allow_comments_from'] ??
+                (json['author'] is Map
+                    ? (json['author']['allowCommentsFrom'] ??
+                        json['author']['allow_comments_from'])
+                    : null) ??
+                (json['user'] is Map
+                    ? (json['user']['allowCommentsFrom'] ??
+                        json['user']['allow_comments_from'])
+                    : null) ??
+                'everyone')
+            .toString())
+        .trim()
+        .toLowerCase();
+
     return DiscoverCreator(
       id: resolvedId,
       username: uname,
@@ -858,6 +924,8 @@ class DiscoverCreator {
               ''),
       bio: json['bio']?.toString(),
       isFollowing: json['isFollowing'] == true,
+      isPrivate: isPriv,
+      allowCommentsFrom: commentsFrom,
     );
   }
 }

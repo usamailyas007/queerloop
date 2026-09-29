@@ -389,8 +389,7 @@ class PostInteractionRegistry {
     final String clean = postId.trim();
     if (clean.isEmpty) return fallback;
     if (_likedOverrides.containsKey(clean)) {
-      final bool val = _likedOverrides[clean]!;
-      return val || fallback;
+      return _likedOverrides[clean]!;
     }
     return fallback;
   }
@@ -402,8 +401,7 @@ class PostInteractionRegistry {
     final String clean = postId.trim();
     if (clean.isEmpty) return fallback;
     if (_savedOverrides.containsKey(clean)) {
-      final bool val = _savedOverrides[clean]!;
-      return val || fallback;
+      return _savedOverrides[clean]!;
     }
     return fallback;
   }
