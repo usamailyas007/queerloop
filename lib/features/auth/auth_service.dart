@@ -50,6 +50,7 @@ abstract final class _StorageKey {
   /// account's email on the very first authorization, so we cache it
   /// (Keychain-backed, survives reinstall) to resolve later sign-ins.
   static const String appleEmailPrefix = 'auth.appleEmail.';
+  static const String socialPassword = 'auth.socialPassword';
 }
 
 class AuthService {
@@ -139,6 +140,8 @@ class AuthService {
           password: googleAuthPassword,
         );
         debugPrint('✅ [AuthService] Google login successful for: $email');
+        await _storage.write(
+            key: _StorageKey.socialPassword, value: googleAuthPassword);
         // Existing user logged in — go straight to home.
         // Profile setup is only needed for brand-new registrations.
         return SocialSignInResult.success(session);
@@ -306,6 +309,8 @@ class AuthService {
         final AuthSession session =
             await signIn(email: email, password: applePassword);
         debugPrint('✅ [AuthService] Apple login successful for: $email');
+        await _storage.write(
+            key: _StorageKey.socialPassword, value: applePassword);
         // Existing user logged in — go straight to home.
         // Profile setup is only needed for brand-new registrations.
         return SocialSignInResult.success(session);
@@ -810,7 +815,7 @@ class AuthService {
   // After calling: session is invalidated server-side. Clear local data.
 
   Future<AccountDeletionResult> requestAccountDeletion({
-    required String password,
+    String? password,
     required String reason,
     String? feedback,
   }) async {
@@ -825,9 +830,17 @@ class AuthService {
 
     debugPrint('🚀 [AuthService] Requesting account deletion...');
     final Map<String, dynamic> body = <String, dynamic>{
-      'password': password,
       'reason': reason,
     };
+    if (password != null && password.trim().isNotEmpty) {
+      body['password'] = password.trim();
+    } else {
+      final String? socialPass =
+          await _storage.read(key: _StorageKey.socialPassword);
+      if (socialPass != null && socialPass.isNotEmpty) {
+        body['password'] = socialPass;
+      }
+    }
     if (feedback != null && feedback.trim().isNotEmpty) {
       body['feedback'] = feedback.trim();
     }

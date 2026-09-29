@@ -239,7 +239,7 @@ class _InterestsBottomSheetState extends State<InterestsBottomSheet> {
 
               // Subtitle
               Text(
-                'Pick up to 10. These show on your profile and shape what Explore recommends. You can leave this empty.',
+                'Pick up to 10. These show on your profile and shape what Discover recommends. You can leave this empty.',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: context.themeTextSecondary,
                   fontSize: 13,

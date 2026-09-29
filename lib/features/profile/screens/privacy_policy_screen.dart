@@ -233,7 +233,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      'QueerLoop+ Data Protection & Privacy · Effective: March 2026',
+                      'QueerLoop+ Data Protection & Privacy · Effective: September 30, 2026',
                       style: AppTextStyles.caption.copyWith(
                         color: context.themeTextMuted,
                         fontWeight: FontWeight.w600,
@@ -247,9 +247,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   // 1. Introduction
                   _buildSection(
                     context: context,
-                    numberAndTitle: '1. Introduction & Overview',
+                    numberAndTitle: '1. Introduction & Data Controller',
                     bodyText:
-                        'QueerLoop+ ("we", "us", or "our") is dedicated to protecting the privacy, identity, and personal data of our members. This Privacy Policy describes what information we collect, why we collect it, how it is secured, and how you can manage or delete your data across our mobile applications on iOS (Apple App Store) and Android (Google Play Store). By accessing or using QueerLoop+, you acknowledge the terms of this Privacy Policy.',
+                        'QueerLoop+ ("we", "us", or "our", operated by the individual developer and proprietor trading as QueerLoop+, or any successor entity) is dedicated to protecting the privacy, identity, and personal data of our members. This Privacy Policy describes what information we collect, why we collect it, how it is secured, and how you can manage or delete your data across our mobile applications on iOS (Apple App Store) and Android (Google Play Store). By accessing or using QueerLoop+, you acknowledge the terms of this Privacy Policy.',
                   ),
 
                   // 2. Information We Collect
@@ -258,8 +258,13 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     numberAndTitle: '2. Information We Collect',
                     bodyText:
                         'We collect the following categories of information to provide and safeguard our services:\n'
-                        '• Account Information: Email address, username, display name, cryptographically hashed passwords, and profile details you choose to share (pronouns, bio, profile photo, banner image, and community affiliations).\n'
+                        '• Account & Profile Information: Email address, username, display name, cryptographically hashed passwords, and profile details you choose to share (pronouns, bio, profile photo, and community affiliations).\n'
+                        '• Sensitive Identity Labels & Interests (Voluntary): You may choose to select identity labels (such as Lesbian, Gay, Bisexual, Transgender, Non-Binary, Queer, etc.) and personal interests. Because identity labels reveal sexual orientation and gender identity—treated as sensitive or special category data under GDPR and privacy regulations—you provide this information voluntarily, and you can edit or remove these labels at any time in Edit Profile.\n'
+                        '• Third-Party Sign-In Data: When you register or sign in using Apple or Google, we collect your name, authenticated email address, and authorized provider identifiers (such as Apple Private Relay IDs) to create and secure your account.\n'
                         '• User-Generated Content (UGC): Posts, photo uploads, video reels, captions, tags, comments, bookmarks, and direct messages that you post or send.\n'
+                        '• Search & Interaction History: Searches, keywords, and hashtags you enter in Discover, along with post engagement history, to provide search results and relevant community content.\n'
+                        '• Safety & Moderation Reports: Details of reports you file against abusive users or content (including reason and description), used strictly by human moderators to investigate safety violations.\n'
+                        '• Activity Status & Read Receipts: Indicators showing when you are active and whether direct messages have been read (which you can toggle off at any time in Settings → Privacy).\n'
                         '• Device & Technical Data: IP address, device hardware model, operating system version, push notification tokens (Firebase Cloud Messaging / APNs), language preferences, and anonymized diagnostic crash logs.\n'
                         '• Guest Browsing: When using the App as a guest, you can view public content without creating an account. We do not track personal identities or link browsing history to guest sessions.',
                   ),
@@ -302,10 +307,15 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     context: context,
                     numberAndTitle: '6. Content Visibility & Privacy Settings',
                     bodyText:
-                        'You maintain full granular control over who sees your content on QueerLoop+:\n'
-                        '• Post Visibility: You can designate each post or reel as visible to "Everyone", "Followers Only", or "Community Only".\n'
-                        '• Messaging Privacy: In Profile Settings, you can choose whether to allow direct messages from Everyone or Followers Only.\n'
-                        '• Comment Moderation: You can enable or disable comments on any of your posts.\n'
+                        'You maintain full granular control over your profile, content, and interactions directly under Settings → Privacy:\n'
+                        '• Direct Messaging Controls: You choose who can send you direct messages with four distinct options: Everyone, People you follow, Mutual follows, or Nobody.\n'
+                        '• Commenting Controls: You control who can comment on your posts and reels with the same four options: Everyone, People you follow, Mutual follows, or Nobody.\n'
+                        '• Private Account: You can switch your account to Private, requiring you to approve any follow requests before other users can view your posts or followers.\n'
+                        '• Profile Visibility: You can configure whether your profile is broadly visible or restricted to approved community connections.\n'
+                        '• Appear in Discover: You can toggle whether your profile and content appear in the public Discover and search feeds.\n'
+                        '• Hide Likes: You can choose to hide your liked posts so other users cannot see what content you have liked.\n'
+                        '• Activity Status & Read Receipts: You can independently toggle whether others see when you are active and whether message read receipts are sent.\n'
+                        '• Post Audience Visibility: When creating any post or reel, you can designate its individual audience as "Everyone", "Followers Only", or "Community Only".\n'
                         '• Blocking & Muting: You can block or mute any user instantly. Blocked users cannot see your profile, view your posts, or send you messages.',
                   ),
 
@@ -316,9 +326,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     numberAndTitle: '7. Account & Data Deletion Rights',
                     bodyText:
                         'QueerLoop+ empowers users to permanently delete their account and associated personal data directly within the App at any time:\n'
-                        '• How to Delete: Navigate to Settings → Delete account.\n'
-                        '• What is Erased: Deleting your account initiates the permanent purge of your profile, email, authentication credentials, uploaded photos, videos, reels, captions, comments, and direct messages from our active servers.\n'
-                        '• Grace Period: If you initiate deletion, a temporary account restoration window may be provided, after which your data is irrevocably and permanently deleted.',
+                        '• How to Delete: Navigate to Settings → Delete account and confirm your deletion request.\n'
+                        '• Data Erasure: When account deletion is requested, all personal data associated with your account (profile, posts, reels, photos, videos, captions, comments, and messages) is permanently erased from active servers within 30 days.\n'
+                        '• Anonymized Moderation Records: Safety and abuse reports you filed prior to deletion remain in moderation records to preserve community safety, but your name and identifying account details are permanently stripped and anonymized.',
                   ),
 
                   // 8. Data Security & Retention

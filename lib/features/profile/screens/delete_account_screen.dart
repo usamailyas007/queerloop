@@ -8,6 +8,7 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/app_outline_button.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../auth/auth_provider.dart';
@@ -26,7 +27,6 @@ class DeleteAccountScreen extends StatefulWidget {
 }
 
 class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
-  final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _feedbackController = TextEditingController();
   String _selectedReason = 'I no longer want to use this service';
 
@@ -40,24 +40,104 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
 
   @override
   void dispose() {
-    _passwordController.dispose();
     _feedbackController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
-    if (_passwordController.text.trim().isEmpty) {
-      AppSnackBar.showError(
-        context,
-        title: 'Password Required',
-        subtitle: 'Please enter your password to confirm deletion.',
-      );
-      return;
-    }
+    await _showConfirmationDialog();
+  }
 
+  Future<void> _showConfirmationDialog() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            decoration: BoxDecoration(
+              color: dialogContext.themeCardBackground,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: dialogContext.themeBorder),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black.withValues(
+                    alpha: dialogContext.isDarkMode ? 0.5 : 0.08,
+                  ),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      color: Color(0xFFEF4444),
+                      size: 28,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  'Delete account permanently?',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: dialogContext.themeTextPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Are you sure you want to delete your account? All your posts, comments, reels, and personal data will be permanently erased within 30 days. This action cannot be undone.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: dialogContext.themeTextSecondary,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                AppGradientButton(
+                  text: 'Yes, delete account',
+                  gradient: const LinearGradient(
+                    colors: <Color>[Color(0xFFEF4444), Color(0xFFDC2626)],
+                  ),
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                AppOutlineButton(
+                  text: 'Cancel',
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      await _performDeletion();
+    }
+  }
+
+  Future<void> _performDeletion() async {
     final AuthProvider auth = context.read<AuthProvider>();
     final AccountDeletionResult? result = await auth.requestAccountDeletion(
-      password: _passwordController.text.trim(),
       reason: _selectedReason,
       feedback: _feedbackController.text.trim().isEmpty
           ? null
@@ -69,8 +149,8 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
     if (result != null) {
       AppSnackBar.show(
         context,
-        title: 'Deletion Requested',
-        subtitle: 'You have 30 days to log back in and cancel.',
+        title: 'Account Deletion Requested',
+        subtitle: 'Your account deletion request has been submitted.',
       );
       Navigator.pushNamedAndRemoveUntil(
         context,
@@ -335,25 +415,6 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                           },
                         ),
                       ),
-                    ),
-
-                    const SizedBox(height: AppSpacing.xl),
-
-                    // Password confirmation
-                    Text(
-                      'Confirm with your password',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: context.themeTextPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AppTextField(
-                      controller: _passwordController,
-                      hintText: 'Enter your password',
-                      isPassword: true,
-                      prefixIconPath: AppIcons.password,
                     ),
 
                     const SizedBox(height: AppSpacing.xl),

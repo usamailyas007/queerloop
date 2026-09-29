@@ -562,7 +562,7 @@ class AuthProvider extends ChangeNotifier {
 
   /// Request account deletion. Clears session on success.
   Future<AccountDeletionResult?> requestAccountDeletion({
-    required String password,
+    String? password,
     required String reason,
     String? feedback,
   }) async {

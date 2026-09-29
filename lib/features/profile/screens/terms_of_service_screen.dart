@@ -195,7 +195,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   ),
                   Expanded(
                     child: Text(
-                      'Terms of Service & EULA',
+                      'Terms of Service',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleMedium.copyWith(
                         color: context.themeTextPrimary,
@@ -233,7 +233,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      'End User License Agreement (EULA) · Effective: March 2026',
+                      'Terms of Service · Effective: September 30, 2026',
                       style: AppTextStyles.caption.copyWith(
                         color: context.themeTextMuted,
                         fontWeight: FontWeight.w600,
@@ -244,12 +244,12 @@ class TermsOfServiceScreen extends StatelessWidget {
 
                   const SizedBox(height: AppSpacing.lg),
 
-                  // 1. Acceptance of Terms & EULA
+                  // 1. Acceptance of Terms & Contracting Party
                   _buildSection(
                     context: context,
-                    numberAndTitle: '1. Acceptance of Terms & License Agreement',
+                    numberAndTitle: '1. Acceptance of Terms & Contracting Party',
                     bodyText:
-                        'These Terms of Service, incorporating this End User License Agreement ("EULA"), constitute a legally binding agreement between you and QueerLoop+ ("we", "us", or "our"). By downloading, installing, accessing, creating an account, or using the QueerLoop+ application (the "App"), you confirm that you have read, understood, and agreed to be bound by these terms. If you do not agree, you must not access or use the App.',
+                        'These Terms of Service constitute a legally binding agreement between you ("User") and the individual developer and operator of QueerLoop+ ("Developer", "we", "us", or "our", trading as "QueerLoop+"), or any successor legal entity that may assume operations in the future. For users acquiring the App through the Apple App Store, Apple\'s standard Licensed Application End User License Agreement (EULA) applies in conjunction with these Terms. By downloading, installing, accessing, creating an account, or using the QueerLoop+ application (the "App"), you confirm that you have read, understood, and agreed to be bound by these terms. If you do not agree, you must not access or use the App.',
                   ),
 
                   // 2. Eligibility & Age Restriction (18+)
@@ -301,7 +301,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                     context: context,
                     numberAndTitle: '6. User-Generated Content (UGC) & Limited License',
                     bodyText:
-                        'You retain all intellectual property ownership rights in the text, photos, videos, and reels you submit to QueerLoop+. By submitting content, you grant QueerLoop+ a worldwide, non-exclusive, royalty-free, transferable license to host, store, cache, encode, reproduce, display, and distribute your content solely for operating, promoting, and improving the App in accordance with your chosen audience visibility settings (Everyone, Followers Only, or Community Only). You represent and warrant that you own or have obtained all necessary licenses and permissions for the content you upload.',
+                        'You retain all intellectual property ownership rights in the text, photos, videos, and reels you submit to QueerLoop+. By submitting content, you grant QueerLoop+ a worldwide, non-exclusive, royalty-free, transferable license to host, store, cache, encode, reproduce, display, and distribute your content solely for operating and improving the App in accordance with your chosen audience visibility settings (Everyone, Followers Only, or Community Only). To protect member safety, identity, and privacy, QueerLoop+ will NEVER use, feature, or display your posts, photos, reels, or identity in external advertising, marketing, or promotional campaigns without your express, prior written consent. You represent and warrant that you own or have obtained all necessary licenses and permissions for the content you upload.',
                   ),
 
                   // 7. Account Registration, Security & Termination
@@ -317,7 +317,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                     context: context,
                     numberAndTitle: '8. Account Deletion Rights',
                     bodyText:
-                        'You have the unconditional right to delete your QueerLoop+ account and all associated personal data at any time directly within the App via Settings → Delete account. Deleting your account initiates the permanent removal of your profile, posts, reels, comments, and messages from our active servers.',
+                        'You have the unconditional right to delete your QueerLoop+ account and all associated personal data at any time directly within the App via Settings → Delete account. Upon request, all personal data (profile, posts, reels, comments, photos, videos, and messages) is permanently erased from active servers within 30 days. Any safety reports you submitted remain with moderation in an anonymized form without your name or identifying details to maintain community safety.',
                   ),
 
                   // 9. Intellectual Property
@@ -362,15 +362,23 @@ class TermsOfServiceScreen extends StatelessWidget {
                     context: context,
                     numberAndTitle: '13. Changes to These Terms',
                     bodyText:
-                        'We may update these Terms and EULA from time to time. When we make material changes, we will notify you through the App or by other reasonable means. Your continued use of the App following the effective date of revised terms constitutes your acceptance of the updated Terms.',
+                        'We may update these Terms from time to time. When we make material changes, we will notify you through the App or by other reasonable means. Your continued use of the App following the effective date of revised terms constitutes your acceptance of the updated Terms.',
                   ),
 
-                  // 14. Contact Information
+                  // 14. Governing Law & Jurisdiction
                   _buildSection(
                     context: context,
-                    numberAndTitle: '14. Contact & Support',
+                    numberAndTitle: '14. Governing Law & Jurisdiction',
                     bodyText:
-                        'If you have questions, feedback, or need to report violations regarding these Terms of Service or EULA, please reach out to our team directly:',
+                        'These Terms and any dispute, claim, or controversy arising out of or relating to your use of the App shall be governed by and construed in accordance with the laws applicable to the Developer\'s primary jurisdiction of operation and residence, without regard to its conflict of law principles. You agree to submit to the personal and exclusive jurisdiction of the competent courts located within the Developer\'s jurisdiction for the resolution of any legal proceedings, except where prohibited by mandatory local consumer protection laws.',
+                  ),
+
+                  // 15. Contact Information
+                  _buildSection(
+                    context: context,
+                    numberAndTitle: '15. Contact & Support',
+                    bodyText:
+                        'If you have questions, feedback, or need to report violations regarding these Terms of Service, please reach out to our team directly:',
                     customContent: _buildEmailCard(
                       context: context,
                       email: 'hello@queerloopplus.com',

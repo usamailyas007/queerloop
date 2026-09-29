@@ -180,7 +180,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   Widget build(BuildContext context) {
     final ProfileProvider provider = context.watch<ProfileProvider>();
     final bool privateAccount = provider.isPrivate;
-    final bool appearInExplore = provider.showInDiscover;
+    final bool appearInDiscover = provider.showInDiscover;
     final bool hideLikes = provider.hideMyLikes;
     final String whoCanMessage = provider.allowMessagesFromLabel;
     final String whoCanComment = provider.allowCommentsFromLabel;
@@ -266,9 +266,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                     onChanged: (bool val) => _syncSetting(isPrivate: val),
                   ),
                   _buildCardToggle(
-                    title: 'Appear in Explore',
+                    title: 'Appear in Discover',
                     subtitle: 'Search and suggestions',
-                    value: appearInExplore,
+                    value: appearInDiscover,
                     onChanged: (bool val) => _syncSetting(showInDiscover: val),
                   ),
                   _buildCardToggle(
