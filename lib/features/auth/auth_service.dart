@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../core/api/api_client.dart';
@@ -253,31 +254,43 @@ class AuthService {
               : null;
 
       // Apple only shares the email on the first authorization — cache it
-      // (or fall back to a previously cached one) so repeat sign-ins work.
+      // in both SecureStorage and SharedPreferences so repeat sign-ins work seamlessly.
       String? email = credential.email?.trim();
+      final String appleStorageKey = '${_StorageKey.appleEmailPrefix}$userIdentifier';
+
       if (email != null && email.isNotEmpty) {
         debugPrint(
             '🔑 [AuthService] Apple returned a fresh email for $userIdentifier — caching it.');
-        await _storage.write(
-          key: '${_StorageKey.appleEmailPrefix}$userIdentifier',
-          value: email,
-        );
+        await _storage.write(key: appleStorageKey, value: email);
+        try {
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          await prefs.setString(appleStorageKey, email);
+        } catch (e) {
+          debugPrint('⚠️ [AuthService] Error caching Apple email in SharedPreferences: $e');
+        }
       } else {
-        email = await _storage.read(
-          key: '${_StorageKey.appleEmailPrefix}$userIdentifier',
-        );
-        debugPrint(
-            'ℹ️ [AuthService] Apple did not share an email this time; using cached: $email');
+        // 1. Try reading from SecureStorage
+        email = await _storage.read(key: appleStorageKey);
+        // 2. If null, fall back to SharedPreferences backup
+        if (email == null || email.isEmpty) {
+          try {
+            final SharedPreferences prefs = await SharedPreferences.getInstance();
+            email = prefs.getString(appleStorageKey);
+          } catch (_) {}
+        }
+        if (email != null && email.isNotEmpty) {
+          debugPrint(
+              'ℹ️ [AuthService] Apple did not share an email this time; using cached: $email');
+        }
       }
 
+      // 3. If email is STILL null (e.g. fresh reinstall or brand-new device where Apple only sends userIdentifier),
+      // fall back to a deterministic Apple synthetic email so sign-in/register succeeds instead of throwing an error.
       if (email == null || email.isEmpty) {
+        final String sanitizedId = userIdentifier.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+        email = '$sanitizedId@apple.queerloop.app';
         debugPrint(
-            '❌ [AuthService] Apple sign-in: no email available for $userIdentifier.');
-        return SocialSignInResult.error(
-          'Apple did not share an email for this sign-in. Go to Settings → '
-          'Apple ID → Sign-In & Security → Sign in with Apple, remove this '
-          'app, then try again.',
-        );
+            'ℹ️ [AuthService] Apple did not share email and no cached email was found. Using fallback Apple email: $email');
       }
 
       debugPrint(
@@ -734,9 +747,19 @@ class AuthService {
     _inMemoryAccessToken = null;
     _inMemoryRefreshToken = null;
     try {
-      await _storage.deleteAll();
+      final Map<String, String> allKeys = await _storage.readAll();
+      for (final String key in allKeys.keys) {
+        if (!key.startsWith(_StorageKey.appleEmailPrefix)) {
+          await _storage.delete(key: key);
+        }
+      }
     } catch (e) {
-      debugPrint('⚠️ [AuthService] Error clearing secure storage: $e');
+      debugPrint('⚠️ [AuthService] Error selectively clearing secure storage: $e');
+      try {
+        await _storage.delete(key: _StorageKey.accessToken);
+        await _storage.delete(key: _StorageKey.refreshToken);
+        await _storage.delete(key: _StorageKey.userData);
+      } catch (_) {}
     }
     try {
       await CacheManager.instance.clearAll();
