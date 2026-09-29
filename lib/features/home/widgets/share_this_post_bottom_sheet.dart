@@ -410,43 +410,51 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                           iconColor: isSaved ? AppColors.gradientCyan : context.themeIcon,
                           labelColor: isSaved ? AppColors.gradientCyan : context.themeTextSecondary,
                           onTap: () {
-                            Navigator.pop(context);
+                            final ProfileProvider profileProv = context.read<ProfileProvider>();
+                            final HomeFeedProvider homeFeedProv = context.read<HomeFeedProvider>();
+                            final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+                            final NavigatorState navigator = Navigator.of(context);
+
+                            navigator.pop();
+
                             if (targetId != null && targetId.isNotEmpty) {
                               final bool newSaved = !isSaved;
                               PostInteractionRegistry.setSaved(targetId, newSaved);
                               if (widget.reel != null || isVideo) {
-                                homeFeed.toggleSaveReel(
+                                homeFeedProv.toggleSaveReel(
                                   targetId,
                                   fallbackReel: widget.reel,
                                   explicitSaved: newSaved,
                                 );
-                                try {
-                                  context.read<ProfileProvider>().updateSavedReel(
-                                    targetId,
-                                    isSaved: newSaved,
-                                    fallbackReel: widget.reel?.copyWith(isSaved: newSaved),
-                                  );
-                                } catch (_) {}
                               } else {
-                                homeFeed.toggleSavePost(
+                                homeFeedProv.toggleSavePost(
                                   targetId,
                                   fallbackPost: widget.post,
                                   explicitSaved: newSaved,
                                 );
-                                try {
-                                  context.read<ProfileProvider>().updateSavedPost(
-                                    targetId,
-                                    isSaved: newSaved,
-                                    fallbackPost: widget.post?.copyWith(isSaved: newSaved),
-                                  );
-                                } catch (_) {}
                               }
-                              AppSnackBar.showSuccess(
-                                context,
-                                title: isSaved ? 'Removed' : 'Saved',
-                                subtitle: isSaved
-                                    ? 'Removed from your saved items.'
-                                    : 'Saved to your profile!',
+                              try {
+                                profileProv.updateSavedPost(
+                                  targetId,
+                                  isSaved: newSaved,
+                                  fallbackPost: widget.post?.copyWith(isSaved: newSaved),
+                                );
+                                profileProv.updateSavedReel(
+                                  targetId,
+                                  isSaved: newSaved,
+                                  fallbackReel: widget.reel?.copyWith(isSaved: newSaved),
+                                );
+                              } catch (_) {}
+
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    isSaved
+                                        ? 'Removed from your saved items.'
+                                        : 'Saved to your profile!',
+                                  ),
+                                  duration: const Duration(seconds: 2),
+                                ),
                               );
                             }
                           },

@@ -1058,60 +1058,68 @@ class ProfileProvider extends ChangeNotifier {
   }
 
   void updateSavedPost(String id, {required bool isSaved, PostItemModel? fallbackPost}) {
+    final String cleanId = id.trim().toLowerCase();
     // 1. Update _userPosts
-    final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id == id);
-    if (upIndex != -1) {
-      _userPosts[upIndex] = _userPosts[upIndex].copyWith(isSaved: isSaved);
+    for (int i = 0; i < _userPosts.length; i++) {
+      if (_userPosts[i].id.trim().toLowerCase() == cleanId) {
+        _userPosts[i] = _userPosts[i].copyWith(isSaved: isSaved);
+      }
     }
     // 2. Update _savedPosts
-    final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id == id);
-    if (spIndex != -1) {
-      if (!isSaved) {
-        _savedPosts.removeAt(spIndex);
-      } else {
+    if (!isSaved) {
+      _savedPosts.removeWhere((PostItemModel p) => p.id.trim().toLowerCase() == cleanId);
+    } else {
+      final int spIndex = _savedPosts.indexWhere((PostItemModel p) => p.id.trim().toLowerCase() == cleanId);
+      if (spIndex != -1) {
         _savedPosts[spIndex] = _savedPosts[spIndex].copyWith(isSaved: isSaved);
-      }
-    } else if (isSaved) {
-      if (upIndex != -1) {
-        _savedPosts.insert(0, _userPosts[upIndex].copyWith(isSaved: true));
-      } else if (fallbackPost != null) {
-        _savedPosts.insert(0, fallbackPost.copyWith(isSaved: true));
+      } else {
+        final int upIndex = _userPosts.indexWhere((PostItemModel p) => p.id.trim().toLowerCase() == cleanId);
+        if (upIndex != -1) {
+          _savedPosts.insert(0, _userPosts[upIndex].copyWith(isSaved: true));
+        } else if (fallbackPost != null) {
+          _savedPosts.insert(0, fallbackPost.copyWith(isSaved: true));
+        }
       }
     }
     // 3. Update _likedPosts
-    final int lpIndex = _likedPosts.indexWhere((PostItemModel p) => p.id == id);
-    if (lpIndex != -1) {
-      _likedPosts[lpIndex] = _likedPosts[lpIndex].copyWith(isSaved: isSaved);
+    for (int i = 0; i < _likedPosts.length; i++) {
+      if (_likedPosts[i].id.trim().toLowerCase() == cleanId) {
+        _likedPosts[i] = _likedPosts[i].copyWith(isSaved: isSaved);
+      }
     }
     PostInteractionRegistry.setSaved(id, isSaved);
     notifyListeners();
   }
 
   void updateSavedReel(String id, {required bool isSaved, ReelItemModel? fallbackReel}) {
+    final String cleanId = id.trim().toLowerCase();
     // 1. Update _userReels
-    final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id == id);
-    if (urIndex != -1) {
-      _userReels[urIndex] = _userReels[urIndex].copyWith(isSaved: isSaved);
+    for (int i = 0; i < _userReels.length; i++) {
+      if (_userReels[i].id.trim().toLowerCase() == cleanId) {
+        _userReels[i] = _userReels[i].copyWith(isSaved: isSaved);
+      }
     }
     // 2. Update _savedReels
-    final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id == id);
-    if (srIndex != -1) {
-      if (!isSaved) {
-        _savedReels.removeAt(srIndex);
-      } else {
+    if (!isSaved) {
+      _savedReels.removeWhere((ReelItemModel r) => r.id.trim().toLowerCase() == cleanId);
+    } else {
+      final int srIndex = _savedReels.indexWhere((ReelItemModel r) => r.id.trim().toLowerCase() == cleanId);
+      if (srIndex != -1) {
         _savedReels[srIndex] = _savedReels[srIndex].copyWith(isSaved: isSaved);
-      }
-    } else if (isSaved) {
-      if (urIndex != -1) {
-        _savedReels.insert(0, _userReels[urIndex].copyWith(isSaved: true));
-      } else if (fallbackReel != null) {
-        _savedReels.insert(0, fallbackReel.copyWith(isSaved: true));
+      } else {
+        final int urIndex = _userReels.indexWhere((ReelItemModel r) => r.id.trim().toLowerCase() == cleanId);
+        if (urIndex != -1) {
+          _savedReels.insert(0, _userReels[urIndex].copyWith(isSaved: true));
+        } else if (fallbackReel != null) {
+          _savedReels.insert(0, fallbackReel.copyWith(isSaved: true));
+        }
       }
     }
     // 3. Update _likedReels
-    final int lrIndex = _likedReels.indexWhere((ReelItemModel r) => r.id == id);
-    if (lrIndex != -1) {
-      _likedReels[lrIndex] = _likedReels[lrIndex].copyWith(isSaved: isSaved);
+    for (int i = 0; i < _likedReels.length; i++) {
+      if (_likedReels[i].id.trim().toLowerCase() == cleanId) {
+        _likedReels[i] = _likedReels[i].copyWith(isSaved: isSaved);
+      }
     }
     PostInteractionRegistry.setSaved(id, isSaved);
     notifyListeners();

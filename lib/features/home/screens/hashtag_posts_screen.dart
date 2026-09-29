@@ -25,7 +25,7 @@ import 'reels_feed_view.dart';
 class HashtagPostsScreen extends StatefulWidget {
   const HashtagPostsScreen({
     required this.hashtag,
-    required this.postsCount,
+    this.postsCount = '',
     required this.rankColor,
     super.key,
   });
@@ -756,9 +756,8 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
   @override
   Widget build(BuildContext context) {
     final int totalCount = _posts.length + _reels.length;
-    final String postCountText = _isLoading
-        ? widget.postsCount
-        : '$totalCount ${totalCount == 1 ? 'post' : 'posts'}';
+    final String postCountText =
+        '$totalCount ${totalCount == 1 ? 'post' : 'posts'}';
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -825,12 +824,13 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
                             ),
                           ),
                         ),
-                        Text(
-                          postCountText,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: context.themeTextSecondary,
+                        if (!_isLoading)
+                          Text(
+                            postCountText,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: context.themeTextSecondary,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
