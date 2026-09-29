@@ -63,15 +63,17 @@ class _ReportCommentBottomSheetState extends State<ReportCommentBottomSheet> {
   int _selectedReasonIndex = 2; // Default: Harassment or bullying
   bool _alsoBlock = false;
 
-  // All 8 server-supported reasons.
+  // All server-supported reasons.
   static const List<ReportReason> _reasons = <ReportReason>[
     ReportReason.threats,
     ReportReason.selfHarm,
     ReportReason.harassment,
     ReportReason.hateSpeech,
+    ReportReason.minorSafety,
+    ReportReason.sexualContent,
+    ReportReason.copyrightOrImpersonation,
     ReportReason.spam,
     ReportReason.outing,
-    ReportReason.sexualContent,
     ReportReason.other,
   ];
 

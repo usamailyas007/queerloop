@@ -69,15 +69,17 @@ class _ReportConversationBottomSheetState
   int _selectedIndex = 2; // Default: Harassment or bullying
   bool _alsoBlock = false;
 
-  // Ordered list of reasons exposed in this sheet (all 8 server reasons).
+  // Ordered list of reasons exposed in this sheet.
   static const List<ReportReason> _reasons = <ReportReason>[
     ReportReason.threats,
     ReportReason.selfHarm,
     ReportReason.harassment,
     ReportReason.hateSpeech,
+    ReportReason.minorSafety,
+    ReportReason.sexualContent,
+    ReportReason.copyrightOrImpersonation,
     ReportReason.spam,
     ReportReason.outing,
-    ReportReason.sexualContent,
     ReportReason.other,
   ];
 

@@ -1,4 +1,4 @@
-﻿// Report service -- wraps POST /reports with mock support.
+// Report service -- wraps POST /reports with mock support.
 
 import 'dart:math';
 
@@ -70,10 +70,14 @@ class ReportService {
   }
 
   String _mockPriority(ReportReason reason) => switch (reason) {
-        ReportReason.threats || ReportReason.selfHarm => 'urgent',
+        ReportReason.threats ||
+        ReportReason.selfHarm ||
+        ReportReason.minorSafety =>
+          'urgent',
         ReportReason.harassment ||
         ReportReason.hateSpeech ||
-        ReportReason.outing =>
+        ReportReason.outing ||
+        ReportReason.copyrightOrImpersonation =>
           'high',
         _ => 'normal',
       };

@@ -213,11 +213,16 @@ class ModReport {
   final DateTime? resolvedAt;
 
   /// Human-friendly reason (`self_harm` → `Self harm`).
-  String get reasonLabel =>
-      reason.isEmpty ? '—' : reason.replaceAll('_', ' ').replaceFirstMapped(
-            RegExp('^.'),
-            (Match m) => m[0]!.toUpperCase(),
-          );
+  String get reasonLabel => reason.isEmpty
+      ? '—'
+      : switch (reason) {
+          'child_safety' || 'minor_safety' => 'Child safety / Minor',
+          'copyright_or_impersonation' => 'Copyright or impersonation',
+          _ => reason.replaceAll('_', ' ').replaceFirstMapped(
+                RegExp('^.'),
+                (Match m) => m[0]!.toUpperCase(),
+              ),
+        };
 
   bool get isResolved => status == ReportStatus.resolved;
   bool get isAssigned => assignedTo != null;
@@ -281,10 +286,14 @@ class ReasonCount {
 
   String get label => reason.isEmpty
       ? '—'
-      : reason.replaceAll('_', ' ').replaceFirstMapped(
-            RegExp('^.'),
-            (Match m) => m[0]!.toUpperCase(),
-          );
+      : switch (reason) {
+          'child_safety' || 'minor_safety' => 'Child safety / Minor',
+          'copyright_or_impersonation' => 'Copyright or impersonation',
+          _ => reason.replaceAll('_', ' ').replaceFirstMapped(
+                RegExp('^.'),
+                (Match m) => m[0]!.toUpperCase(),
+              ),
+        };
 }
 
 class ModDashboard {

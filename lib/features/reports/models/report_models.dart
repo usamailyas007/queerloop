@@ -1,4 +1,4 @@
-﻿// Report feature models — enums and value types for POST /reports.
+// Report feature models — enums and value types for POST /reports.
 
 /// The content type being reported.
 enum ReportTargetType {
@@ -24,9 +24,11 @@ enum ReportReason {
   selfHarm,
   harassment,
   hateSpeech,
+  minorSafety,
+  sexualContent,
+  copyrightOrImpersonation,
   spam,
   outing,
-  sexualContent,
   other;
 
   /// Wire value sent to the server.
@@ -35,9 +37,11 @@ enum ReportReason {
         ReportReason.selfHarm => 'self_harm',
         ReportReason.harassment => 'harassment',
         ReportReason.hateSpeech => 'hate_speech',
+        ReportReason.minorSafety => 'child_safety',
+        ReportReason.sexualContent => 'sexual_content',
+        ReportReason.copyrightOrImpersonation => 'copyright_or_impersonation',
         ReportReason.spam => 'spam',
         ReportReason.outing => 'outing',
-        ReportReason.sexualContent => 'sexual_content',
         ReportReason.other => 'other',
       };
 
@@ -47,9 +51,11 @@ enum ReportReason {
         ReportReason.selfHarm => 'Self-harm or suicide',
         ReportReason.harassment => 'Harassment or bullying',
         ReportReason.hateSpeech => 'Hate speech or slurs',
+        ReportReason.minorSafety => 'Involves a minor / child safety',
+        ReportReason.sexualContent => 'Sexual content or nudity',
+        ReportReason.copyrightOrImpersonation => 'Copyright or impersonation',
         ReportReason.spam => 'Spam or a fake account',
         ReportReason.outing => 'Outing someone without consent',
-        ReportReason.sexualContent => 'Sexual content or nudity',
         ReportReason.other => 'Something else',
       };
 }
