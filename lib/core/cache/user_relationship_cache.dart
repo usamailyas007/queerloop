@@ -145,7 +145,14 @@ class PostVisibilityFilter {
     bool isGuest = false,
     bool isFollowing = false,
     bool isAuthorPrivate = false,
+    bool isCommunityPost = false,
   }) {
+    // 0. Community posts: Posts published to a community are visible to all users
+    // browsing communities (both on "All Communities" and filtered community feeds).
+    if (isCommunityPost) {
+      return true;
+    }
+
     // 1. Author can ALWAYS see their own post (even if private or FOLLOWERS only)
     final bool isCurrentUserAuthor = !isGuest && (
       (currentUserId != null &&
@@ -328,7 +335,28 @@ class PostInteractionRegistry {
   static final Map<String, bool> _savedOverrides = <String, bool>{};
   static final Map<String, int> _likesCountOverrides = <String, int>{};
   static final Map<String, int> _viewsCountOverrides = <String, int>{};
+  static final Set<String> _hiddenLikeCountIds = <String>{};
   static final RegistryNotifier notifier = RegistryNotifier();
+
+  /// Returns whether like count is explicitly hidden (null or hidden by author).
+  static bool isLikeCountHidden(String? postId) {
+    if (postId == null) return false;
+    final String clean = postId.trim();
+    if (clean.isEmpty) return false;
+    return _hiddenLikeCountIds.contains(clean);
+  }
+
+  /// Sets whether like count should be hidden for a post/reel.
+  static void setLikeCountHidden(String? postId, bool hidden) {
+    if (postId == null) return;
+    final String clean = postId.trim();
+    if (clean.isEmpty) return;
+    if (hidden) {
+      _hiddenLikeCountIds.add(clean);
+    } else {
+      _hiddenLikeCountIds.remove(clean);
+    }
+  }
 
   /// Returns views count if recorded, otherwise [fallback].
   static int getViewsCount(String? postId, {int fallback = 0}) {
@@ -361,7 +389,8 @@ class PostInteractionRegistry {
     final String clean = postId.trim();
     if (clean.isEmpty) return fallback;
     if (_likedOverrides.containsKey(clean)) {
-      return _likedOverrides[clean]!;
+      final bool val = _likedOverrides[clean]!;
+      return val || fallback;
     }
     return fallback;
   }
@@ -373,7 +402,8 @@ class PostInteractionRegistry {
     final String clean = postId.trim();
     if (clean.isEmpty) return fallback;
     if (_savedOverrides.containsKey(clean)) {
-      return _savedOverrides[clean]!;
+      final bool val = _savedOverrides[clean]!;
+      return val || fallback;
     }
     return fallback;
   }
@@ -422,17 +452,25 @@ class PostInteractionRegistry {
     required bool isSaved,
     int? likesCount,
     int? commentsCount,
+    int? viewsCount,
   }) {
     if (postId == null) return;
     final String clean = postId.trim();
     if (clean.isEmpty) return;
-    _likedOverrides[clean] = isLiked;
-    _savedOverrides[clean] = isSaved;
+    if (isLiked) {
+      _likedOverrides[clean] = true;
+    }
+    if (isSaved) {
+      _savedOverrides[clean] = true;
+    }
     if (likesCount != null) {
       _likesCountOverrides[clean] = likesCount.clamp(0, 9999999);
     }
     if (commentsCount != null) {
       CommentCountRegistry.set(clean, commentsCount);
+    }
+    if (viewsCount != null && viewsCount > 0) {
+      setViewsCount(clean, viewsCount);
     }
     notifier.notify();
   }
@@ -447,14 +485,15 @@ class PostInteractionRegistry {
     if (postId == null) return;
     final String clean = postId.trim();
     if (clean.isEmpty) return;
-    if (isLiked != null && !_likedOverrides.containsKey(clean)) {
-      _likedOverrides[clean] = isLiked;
-      if (isLiked && (!_likesCountOverrides.containsKey(clean) || _likesCountOverrides[clean] == 0)) {
-        _likesCountOverrides[clean] = 1;
+    if (isLiked != null) {
+      if (isLiked) {
+        _likedOverrides[clean] = true;
       }
     }
-    if (isSaved != null && !_savedOverrides.containsKey(clean)) {
-      _savedOverrides[clean] = isSaved;
+    if (isSaved != null) {
+      if (isSaved) {
+        _savedOverrides[clean] = true;
+      }
     }
     if (likesCount != null && !_likesCountOverrides.containsKey(clean)) {
       _likesCountOverrides[clean] = likesCount.clamp(0, 9999999);
@@ -469,19 +508,16 @@ class PostInteractionRegistry {
     required bool isSaved,
     int? likesCount,
     int? commentsCount,
+    int? viewsCount,
   }) {
     if (postId == null) return;
     final String clean = postId.trim();
     if (clean.isEmpty) return;
-    // Only seed if not already set by an active user override
-    if (!_likedOverrides.containsKey(clean)) {
-      _likedOverrides[clean] = isLiked;
-    } else if (isLiked && _likedOverrides[clean] == false) {
+    // Server confirms liked: always update to true
+    if (isLiked) {
       _likedOverrides[clean] = true;
     }
-    if (!_savedOverrides.containsKey(clean)) {
-      _savedOverrides[clean] = isSaved;
-    } else if (isSaved && _savedOverrides[clean] == false) {
+    if (isSaved) {
       _savedOverrides[clean] = true;
     }
     if (likesCount != null) {
@@ -497,6 +533,12 @@ class PostInteractionRegistry {
     }
     if (commentsCount != null) {
       CommentCountRegistry.seedIfAbsent(clean, commentsCount);
+    }
+    if (viewsCount != null && viewsCount > 0) {
+      final int existing = _viewsCountOverrides[clean] ?? 0;
+      if (viewsCount > existing) {
+        _viewsCountOverrides[clean] = viewsCount;
+      }
     }
     // No notification needed — this is a background seed
   }

@@ -78,7 +78,13 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (showActivityStatus != null && showActivityStatus != _showActivityStatus) {
       _showActivityStatus = showActivityStatus;
       changed = true;
-      _socketService?.sendPresence(isOnline: _showActivityStatus);
+      if (!_showActivityStatus) {
+        stopPresenceHeartbeat();
+        _socketService?.sendPresence(isOnline: false);
+      } else {
+        _socketService?.sendPresence(isOnline: true);
+        startPresenceHeartbeat();
+      }
       _persistPrivacySettings();
     }
     if (sendReadReceipts != null && sendReadReceipts != _sendReadReceipts) {
@@ -107,7 +113,13 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (newShowActivity != _showActivityStatus) {
         _showActivityStatus = newShowActivity;
         changed = true;
-        _socketService?.sendPresence(isOnline: _showActivityStatus);
+        if (!_showActivityStatus) {
+          stopPresenceHeartbeat();
+          _socketService?.sendPresence(isOnline: false);
+        } else {
+          _socketService?.sendPresence(isOnline: true);
+          startPresenceHeartbeat();
+        }
       }
       if (newSendReadReceipts != _sendReadReceipts) {
         _sendReadReceipts = newSendReadReceipts;
@@ -324,14 +336,21 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         final dynamic decoded = jsonDecode(raw);
         if (decoded is List) {
           final List<ConversationModel> cached = decoded
-              .whereType<Map<String, dynamic>>()
-              .map((Map<String, dynamic> item) =>
-                  ConversationModel.fromJson(item, currentUserId: _currentUserId))
+              .whereType<Map>()
+              .map((Map item) =>
+                  ConversationModel.fromJson(item.cast<String, dynamic>(), currentUserId: _currentUserId))
               .toList();
-          if (cached.isNotEmpty && _conversations.isEmpty) {
-            _conversations.addAll(cached);
-            _sortConversations();
-            notifyListeners();
+          if (cached.isNotEmpty) {
+            for (final ConversationModel c in cached) {
+              if (c.messages.isNotEmpty && !_messagesByConvId.containsKey(c.id)) {
+                _messagesByConvId[c.id] = c.messages;
+              }
+            }
+            if (_conversations.isEmpty) {
+              _conversations.addAll(cached);
+              _sortConversations();
+              notifyListeners();
+            }
           }
         }
       }
@@ -342,6 +361,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _persistConversations() async {
     try {
+      if (_conversations.isEmpty) return; // NEVER overwrite valid saved cache with an empty list!
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       final String userSuffix = _currentUserId ?? 'guest';
       final List<Map<String, dynamic>> rawList =
@@ -600,7 +620,10 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void _handleSocketPresenceQuery() {
     if (_currentUserId == null || _currentUserId!.isEmpty) return;
-    if (!_showActivityStatus) return;
+    if (!_showActivityStatus) {
+      _socketService?.sendPresence(isOnline: false);
+      return;
+    }
     // Broadcast our presence globally
     _socketService?.sendPresence(isOnline: true);
     // Also send targeted presence to each conversation participant so
@@ -769,10 +792,16 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     // Enrich reply metadata if replyToId is present but text or sender is missing
-    if (newMsg.replyToId != null && newMsg.replyToId!.isNotEmpty) {
+    final String? effectiveReplyToId = (newMsg.replyToId != null && newMsg.replyToId!.isNotEmpty)
+        ? newMsg.replyToId
+        : event.replyToMessageId;
+    if (effectiveReplyToId != null && effectiveReplyToId.isNotEmpty) {
+      if (newMsg.replyToId != effectiveReplyToId) {
+        newMsg = newMsg.copyWith(replyToId: effectiveReplyToId);
+      }
       if (newMsg.replyToText == null || newMsg.replyToSender == null) {
         final ChatMessageModel? orig = msgs.cast<ChatMessageModel?>().firstWhere(
-          (ChatMessageModel? m) => m != null && m.id == newMsg.replyToId,
+          (ChatMessageModel? m) => m != null && m.id == effectiveReplyToId,
           orElse: () => null,
         );
         if (orig != null) {
@@ -2748,8 +2777,12 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     try {
       final List<ConversationModel> items =
           await _service!.getConversations(currentUserId: _currentUserId);
-      _conversations.clear();
-      _conversations.addAll(items);
+      if (items.isNotEmpty) {
+        _conversations.clear();
+        _conversations.addAll(items);
+      } else {
+        debugPrint('⚠️ [MessagesProvider] getConversations returned empty, preserving ${_conversations.length} cached conversations');
+      }
       // Sync muted map, socket rooms, and presence
       for (final ConversationModel c in items) {
         if (c.isMuted) {
@@ -3191,8 +3224,27 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       );
       final List<ChatMessageModel>? prevMsgs = _messagesByConvId[conversationId];
       final int prevCount = prevMsgs?.length ?? 0;
-      final List<ChatMessageModel> msgs =
-          _applyReadStatesToMessages(conversationId, fetched);
+
+      List<ChatMessageModel> msgs;
+      if (fetched.isNotEmpty) {
+        msgs = _applyReadStatesToMessages(conversationId, fetched);
+        // Retain any pending optimistic messages that haven't landed on server yet
+        if (prevMsgs != null && prevMsgs.isNotEmpty) {
+          for (final ChatMessageModel pm in prevMsgs) {
+            if (pm.id.startsWith('temp_') &&
+                !msgs.any((ChatMessageModel m) =>
+                    m.id == pm.id ||
+                    (m.text == pm.text && m.text != null && m.text!.isNotEmpty))) {
+              msgs.add(pm);
+            }
+          }
+        }
+      } else if (prevMsgs != null && prevMsgs.isNotEmpty) {
+        debugPrint('⚠️ [MessagesProvider] getMessages returned empty for $conversationId, preserving ${prevMsgs.length} cached messages');
+        msgs = List<ChatMessageModel>.from(prevMsgs);
+      } else {
+        msgs = <ChatMessageModel>[];
+      }
 
       // Enrich reply references from known messages in the conversation
       final Map<String, ChatMessageModel> msgMap = <String, ChatMessageModel>{
@@ -3216,6 +3268,15 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
       _messagesByConvId[conversationId] = msgs;
+
+      // Keep messages synced with conversation model & persist
+      final int cIdx = _conversations.indexWhere(
+        (ConversationModel c) => c.id == conversationId || c.participantId == conversationId,
+      );
+      if (cIdx != -1 && msgs.isNotEmpty) {
+        _conversations[cIdx] = _conversations[cIdx].copyWith(messages: msgs);
+        _persistConversations();
+      }
 
       for (final ChatMessageModel m in fetched) {
         if (m.sharedPostId != null && m.sharedPostId!.isNotEmpty) {
@@ -3342,6 +3403,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
     String? replyToSender,
   }) async {
     final String trimmed = text.trim();
+    chatLog('💬 [MessagesProvider.sendMessage] convId: "$conversationId", trimmed: "$trimmed", replyToId: "$replyToId", replyToText: "$replyToText", replyToSender: "$replyToSender", hasService: ${_service != null}, hasSocket: ${_socketService != null}');
     if (trimmed.isEmpty) return;
 
     final int convIdx =
@@ -3466,6 +3528,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
         }
 
         // Emit through socket gateway (pure socket per backend spec)
+        chatLog('⚡ [MessagesProvider] Emitting _socketService?.sendMessage targetConvId: "$targetConvId", isConnected: ${_socketService?.isConnected}');
         _socketService?.sendMessage(
           conversationId: targetConvId,
           text: trimmed,
@@ -3494,10 +3557,16 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    _socketService?.markMessageRead(
-      conversationId: conversationId,
-      messageId: messageId,
-    );
+    if (_sendReadReceipts) {
+      _socketService?.markMessageRead(
+        conversationId: conversationId,
+        messageId: messageId,
+      );
+      _service?.markMessageRead(
+        conversationId: conversationId,
+        messageId: messageId,
+      );
+    }
   }
 
   // ── Mark All Messages Read In Conversation ─────────────────────────────────
@@ -3535,6 +3604,7 @@ class MessagesProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // 3. Emit message_read on socket and persist on server only if sendReadReceipts is enabled
     if (_sendReadReceipts) {
+      _service?.markConversationRead(conversationId);
       for (final String msgId in unreadIds) {
         _socketService?.markMessageRead(
           conversationId: conversationId,

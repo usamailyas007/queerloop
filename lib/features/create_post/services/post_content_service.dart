@@ -373,7 +373,8 @@ class PostContentService {
   }
 
   // ── Community Feed ────────────────────────────────────────────────────────
-  // For All Communities: calls GET /posts (Content Service)
+  // For All Communities: calls getAllCommunityPosts() which fetches each community's
+  // posts with authenticated likedByMe and author info.
   // For filtered Community: calls GET /posts?communityId=:id
   Future<List<PostResponseModel>> getCommunityFeed({
     String? communityId,
@@ -386,9 +387,105 @@ class PostContentService {
     if (communityId != null && communityId.trim().isNotEmpty) {
       return await getPostsByCommunity(communityId.trim());
     } else {
-      // "All Communities" -> Always call GET /posts directly
-      return await getFeedPosts();
+      // "All Communities" -> Always fetch with community-level metadata and likedByMe
+      return await getAllCommunityPosts();
     }
+  }
+
+  /// Fetches posts across all communities using the community-filtered endpoints
+  /// so that user-specific `likedByMe` flags and full author profiles are preserved.
+  Future<List<PostResponseModel>> getAllCommunityPosts() async {
+    if (AppConfig.useMockApi) return const <PostResponseModel>[];
+    try {
+      // 1. Gather all community IDs
+      final Set<String> communityIds = <String>{};
+      final dynamic cached = CacheManager.instance.get('all_communities');
+      if (cached is List && cached.isNotEmpty) {
+        for (final dynamic item in cached) {
+          if (item is Map) {
+            final String? id = item['id']?.toString() ?? item['_id']?.toString();
+            if (id != null && id.trim().isNotEmpty) {
+              communityIds.add(id.trim());
+            }
+          }
+        }
+      }
+
+      if (communityIds.isEmpty) {
+        try {
+          final dynamic commsRes =
+              await _client.get(ApiEndpoints.communities, useCache: true);
+          final List<dynamic> list = (commsRes is List)
+              ? commsRes
+              : (commsRes is Map
+                  ? ((commsRes['data'] ?? commsRes['communities'])
+                          as List<dynamic>? ??
+                      <dynamic>[])
+                  : <dynamic>[]);
+          for (final dynamic item in list) {
+            if (item is Map) {
+              final String? id =
+                  item['id']?.toString() ?? item['_id']?.toString();
+              if (id != null && id.trim().isNotEmpty) {
+                communityIds.add(id.trim());
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint(
+              '⚠️ [PostContentService] Failed to fetch communities for all-posts: $e');
+        }
+      }
+
+      // 2. Fetch posts per community in parallel (these include authenticated `likedByMe` and full author)
+      if (communityIds.isNotEmpty) {
+        final List<List<PostResponseModel>> perCommResults =
+            await Future.wait(
+          communityIds.map((String cid) => getPostsByCommunity(cid)
+              .catchError((_) => <PostResponseModel>[])),
+        );
+
+        final Map<String, PostResponseModel> postMap =
+            <String, PostResponseModel>{};
+        for (final List<PostResponseModel> list in perCommResults) {
+          for (final PostResponseModel p in list) {
+            if (p.id.isNotEmpty && !postMap.containsKey(p.id)) {
+              postMap[p.id] = p;
+            }
+          }
+        }
+
+        // Also fetch getFeedPosts() in case there are any uncategorized posts, merging without overwriting
+        try {
+          final List<PostResponseModel> rawFeedPosts = await getFeedPosts();
+          for (final PostResponseModel p in rawFeedPosts) {
+            if (p.id.isNotEmpty && !postMap.containsKey(p.id)) {
+              postMap[p.id] = p;
+            }
+          }
+        } catch (_) {}
+
+        final List<PostResponseModel> combined = postMap.values.toList();
+        combined.sort((PostResponseModel a, PostResponseModel b) {
+          final DateTime dtA = DateTime.tryParse(a.createdAt ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          final DateTime dtB = DateTime.tryParse(b.createdAt ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          return dtB.compareTo(dtA);
+        });
+
+        if (combined.isNotEmpty) {
+          debugPrint(
+              '🏘️ [PostContentService] getAllCommunityPosts fetched ${combined.length} posts across ${communityIds.length} communities');
+          return combined;
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [PostContentService] Error in getAllCommunityPosts: $e');
+    }
+
+    // Fallback if parallel fetch fails
+    return await getFeedPosts();
   }
 
   List<PostResponseModel> _parsePostsList(dynamic response, {String tag = 'Posts'}) {
@@ -463,12 +560,31 @@ class PostContentService {
           final Map<String, dynamic> rawMap = item.map<String, dynamic>(
             (dynamic k, dynamic v) => MapEntry<String, dynamic>(k.toString(), v),
           );
-          final dynamic nested = rawMap['post'] ?? rawMap['item'] ?? rawMap['savedPost'];
+          final dynamic nested = rawMap['post'] ??
+              rawMap['item'] ??
+              rawMap['savedPost'] ??
+              rawMap['likedPost'] ??
+              rawMap['like'];
           final Map<String, dynamic> typed = (nested is Map)
               ? nested.map<String, dynamic>(
                   (dynamic k, dynamic v) => MapEntry<String, dynamic>(k.toString(), v),
                 )
               : rawMap;
+
+          // If item is a like or save wrapper without direct post id, fallback to postId
+          if ((typed['id'] == null || typed['id'].toString().isEmpty) &&
+              (rawMap['postId'] != null || rawMap['post_id'] != null)) {
+            typed['id'] = (rawMap['postId'] ?? rawMap['post_id']).toString();
+          }
+
+          if (tag == 'UserLikes') {
+            typed['likedByMe'] = true;
+            typed['isLiked'] = true;
+          } else if (tag == 'UserSaved') {
+            typed['savedByMe'] = true;
+            typed['isSaved'] = true;
+          }
+
           final PostResponseModel parsed = PostResponseModel.fromJson(typed);
           result.add(parsed);
           // ── DEBUG: Print each parsed post ──────────────────────────────
@@ -587,15 +703,35 @@ class PostContentService {
   // GET /posts/:id/comments (Content Service)
   Future<List<dynamic>> getComments(String postId) async {
     if (AppConfig.useMockApi) return const <dynamic>[];
-    final dynamic response =
-        await _client.get(ApiEndpoints.postComments(postId), useCache: false);
+    dynamic response;
+    try {
+      response =
+          await _client.get(ApiEndpoints.postComments(postId), useCache: false);
+    } catch (e) {
+      debugPrint(
+          '⚠️ [PostContentService] getComments with auth failed: $e. Falling back to getNoAuth...');
+      try {
+        response = await _client.getNoAuth(
+          ApiEndpoints.postComments(postId),
+        );
+      } catch (fallbackError) {
+        debugPrint(
+            '⚠️ [PostContentService] getComments getNoAuth failed: $fallbackError');
+        return const <dynamic>[];
+      }
+    }
+
     debugPrint('=== [COMMENTS API RESPONSE] postId: $postId ===\n$response');
     if (response is List) return response;
-    if (response is Map<String, dynamic>) {
+    if (response is Map) {
       if (response['data'] is List) return response['data'] as List<dynamic>;
       if (response['comments'] is List) {
         return response['comments'] as List<dynamic>;
       }
+      if (response['data'] is Map && response['data']['comments'] is List) {
+        return response['data']['comments'] as List<dynamic>;
+      }
+      if (response['items'] is List) return response['items'] as List<dynamic>;
     }
     return const <dynamic>[];
   }
@@ -711,7 +847,7 @@ class PostContentService {
       return _parsePostsList(response, tag: 'UserLikes');
     } catch (e) {
       debugPrint('⚠️ [PostContent] Failed to fetch liked posts: $e');
-      return const <PostResponseModel>[];
+      rethrow;
     }
   }
 
@@ -726,7 +862,7 @@ class PostContentService {
       return _parsePostsList(response, tag: 'UserSaved');
     } catch (e) {
       debugPrint('⚠️ [PostContent] Failed to fetch saved posts: $e');
-      return const <PostResponseModel>[];
+      rethrow;
     }
   }
 }

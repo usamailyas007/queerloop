@@ -19,6 +19,7 @@ class CotdProvider extends ChangeNotifier {
   bool _hasAnswered = false;
   String? _error;
   String? _currentUserId;
+  String? _currentUsername;
 
   CotdQuestion? get currentQuestion => _currentQuestion;
   List<CotdAnswer> get answers => List<CotdAnswer>.unmodifiable(_answers);
@@ -26,6 +27,21 @@ class CotdProvider extends ChangeNotifier {
   bool get isSubmitting => _isSubmitting;
   bool get hasAnswered => _hasAnswered;
   String? get error => _error;
+
+  void updateUserInfo({String? userId, String? username}) {
+    bool changed = false;
+    if (_currentUserId != userId) {
+      _currentUserId = userId;
+      changed = true;
+    }
+    if (_currentUsername != username) {
+      _currentUsername = username;
+      changed = true;
+    }
+    if (changed) {
+      _checkHasAnswered();
+    }
+  }
 
   void updateUserId(String? userId) {
     if (_currentUserId != userId) {
@@ -50,9 +66,10 @@ class CotdProvider extends ChangeNotifier {
       _currentQuestion = question;
       if (question != null) {
         _hasAnswered = question.hasAnswered;
-        await _checkHasAnswered();
-        // Pre-load answers in the background
-        _fetchAnswersIfNeeded(question.id);
+        // Fetch answers to verify if current user has answered
+        await fetchAnswers();
+      } else {
+        _hasAnswered = false;
       }
     } catch (e) {
       _error = 'Could not load today\'s question.';
@@ -65,58 +82,84 @@ class CotdProvider extends ChangeNotifier {
 
   Future<void> _checkHasAnswered() async {
     final String? qid = _currentQuestion?.id;
-    if (qid == null || qid.isEmpty) return;
-
-    if (_currentQuestion?.hasAnswered == true) {
-      _hasAnswered = true;
-      notifyListeners();
+    if (qid == null || qid.isEmpty) {
+      if (_hasAnswered) {
+        _hasAnswered = false;
+        notifyListeners();
+      }
       return;
     }
 
-    try {
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      final List<String> globalAnswered =
-          prefs.getStringList('cotd_answered_questions_global') ?? <String>[];
-      if (globalAnswered.contains(qid)) {
+    // 1. If backend explicitly returned hasAnswered for this authenticated user
+    if (_currentQuestion?.hasAnswered == true) {
+      if (!_hasAnswered) {
         _hasAnswered = true;
         notifyListeners();
+      }
+      return;
+    }
+
+    // 2. Clear any legacy global cache that poisoned the device across accounts
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      if (prefs.containsKey('cotd_answered_questions_global')) {
+        await prefs.remove('cotd_answered_questions_global');
+      }
+    } catch (_) {}
+
+    // 3. If user is logged in, check if their answer is in the answers list
+    if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+      final bool alreadyInAnswers = _answers.any((CotdAnswer a) =>
+          (a.authorId.isNotEmpty && a.authorId == _currentUserId) ||
+          (_currentUsername != null &&
+              _currentUsername!.isNotEmpty &&
+              a.authorUsername != null &&
+              a.authorUsername!.toLowerCase() ==
+                  _currentUsername!.toLowerCase()));
+
+      if (alreadyInAnswers) {
+        if (!_hasAnswered) {
+          _hasAnswered = true;
+          notifyListeners();
+        }
+        await _saveAnsweredQuestionLocally(qid);
         return;
       }
 
-      if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+      // Check user-specific SharedPreferences
+      try {
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
         final List<String> userAnswers =
             prefs.getStringList('cotd_answered_questions_$_currentUserId') ??
                 <String>[];
         if (userAnswers.contains(qid)) {
-          _hasAnswered = true;
-          notifyListeners();
+          if (!_hasAnswered) {
+            _hasAnswered = true;
+            notifyListeners();
+          }
           return;
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
 
-    if (_currentUserId != null && _currentUserId!.isNotEmpty) {
-      final bool alreadyInAnswers = _answers.any((CotdAnswer a) =>
-          a.authorId.isNotEmpty && a.authorId == _currentUserId);
-      if (alreadyInAnswers) {
-        _hasAnswered = true;
-        _saveAnsweredQuestionLocally(qid);
+      // Current user has NOT answered this question
+      if (_hasAnswered) {
+        _hasAnswered = false;
         notifyListeners();
       }
+      return;
+    }
+
+    // Guest or unknown user has NOT answered
+    if (_hasAnswered) {
+      _hasAnswered = false;
+      notifyListeners();
     }
   }
 
   Future<void> _saveAnsweredQuestionLocally(String qid) async {
     try {
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      final List<String> globalList =
-          prefs.getStringList('cotd_answered_questions_global') ?? <String>[];
-      if (!globalList.contains(qid)) {
-        globalList.add(qid);
-        await prefs.setStringList('cotd_answered_questions_global', globalList);
-      }
-
       if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
         final List<String> userList =
             prefs.getStringList('cotd_answered_questions_$_currentUserId') ??
                 <String>[];
@@ -129,15 +172,6 @@ class CotdProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('⚠️ [CotdProvider] Error saving answered question locally: $e');
     }
-  }
-
-  Future<void> _fetchAnswersIfNeeded(String questionId) async {
-    if (_answers.isNotEmpty) return;
-    try {
-      _answers = await _service.fetchAnswers(questionId);
-      await _checkHasAnswered();
-      notifyListeners();
-    } catch (_) {}
   }
 
   /// Fetch (or refresh) the answers for the current question.

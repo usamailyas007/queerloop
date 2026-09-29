@@ -111,6 +111,7 @@ class DiscoverProvider extends ChangeNotifier {
 
   List<DiscoverSearchResult> _filterDeletedPosts(List<DiscoverSearchResult> list) {
     return list.where((DiscoverSearchResult p) {
+      if (!p.isPublished) return false;
       final String id = (p.id ?? '').trim();
       final String refId = (p.refId ?? '').trim();
       if (id.isNotEmpty && DeletedPostsRegistry.isDeleted(id)) return false;
@@ -125,6 +126,7 @@ class DiscoverProvider extends ChangeNotifier {
         userId: p.authorId,
         username: p.authorUsername,
       );
+      final bool isCommunityPost = p.communityId != null && p.communityId!.trim().isNotEmpty;
       return PostVisibilityFilter.canViewPost(
         visibility: p.visibility,
         authorId: p.authorId,
@@ -134,6 +136,7 @@ class DiscoverProvider extends ChangeNotifier {
         isGuest: _currentUserId == null || _currentUserId!.isEmpty,
         isFollowing: isFollowing,
         isAuthorPrivate: p.isAuthorPrivate,
+        isCommunityPost: isCommunityPost,
       );
     }).toList();
   }
@@ -172,13 +175,24 @@ class DiscoverProvider extends ChangeNotifier {
             (refId.isNotEmpty && (r.id?.toLowerCase() == refId || r.refId?.toLowerCase() == refId)));
         if (existingIdx != -1) {
           final DiscoverSearchResult existing = result[existingIdx];
-          if (item.viewsCount > existing.viewsCount ||
-              (existing.viewsCount == 0 && item.viewCount != null && item.viewCount != '0')) {
-            result[existingIdx] = existing.copyWith(
-              viewsCount: item.viewsCount,
-              viewCount: item.viewCount,
-            );
-          }
+          final bool mergedLiked = existing.isLiked ||
+              item.isLiked ||
+              (id.isNotEmpty && PostInteractionRegistry.isLiked(id)) ||
+              (refId.isNotEmpty && PostInteractionRegistry.isLiked(refId));
+          final bool mergedSaved = existing.isSaved ||
+              item.isSaved ||
+              (id.isNotEmpty && PostInteractionRegistry.isSaved(id)) ||
+              (refId.isNotEmpty && PostInteractionRegistry.isSaved(refId));
+          final int curLikes = (existing.likesCount ?? 0) > (item.likesCount ?? 0)
+              ? (existing.likesCount ?? 0)
+              : (item.likesCount ?? 0);
+          result[existingIdx] = existing.copyWith(
+            isLiked: mergedLiked,
+            isSaved: mergedSaved,
+            likesCount: curLikes > 0 ? curLikes : existing.likesCount,
+            viewsCount: item.viewsCount > existing.viewsCount ? item.viewsCount : existing.viewsCount,
+            viewCount: item.viewsCount > existing.viewsCount ? item.viewCount : existing.viewCount,
+          );
         }
         continue;
       }
@@ -191,7 +205,17 @@ class DiscoverProvider extends ChangeNotifier {
       }
       if (mediaKey.isNotEmpty) seen.add(mediaKey);
 
-      result.add(item);
+      final bool effectiveLiked = item.isLiked ||
+          (id.isNotEmpty && PostInteractionRegistry.isLiked(id)) ||
+          (refId.isNotEmpty && PostInteractionRegistry.isLiked(refId));
+      final bool effectiveSaved = item.isSaved ||
+          (id.isNotEmpty && PostInteractionRegistry.isSaved(id)) ||
+          (refId.isNotEmpty && PostInteractionRegistry.isSaved(refId));
+
+      result.add(item.copyWith(
+        isLiked: effectiveLiked,
+        isSaved: effectiveSaved,
+      ));
     }
 
     return result;
@@ -239,10 +263,9 @@ class DiscoverProvider extends ChangeNotifier {
 
     switch (_selectedSearchTab) {
       case 0:
-        return _searchResults.isNotEmpty ||
-            _searchResults.posts.isNotEmpty ||
-            _searchResults.reels.isNotEmpty ||
-            _searchResults.people.isNotEmpty ||
+        return searchResults.isNotEmpty ||
+            reelsResults.isNotEmpty ||
+            peopleResults.isNotEmpty ||
             _searchResults.tags.isNotEmpty ||
             _searchResults.communities.isNotEmpty;
       case 1:
@@ -289,13 +312,34 @@ class DiscoverProvider extends ChangeNotifier {
   }
 
   void setSelectedSearchTab(int index) {
-    if (_selectedSearchTab == index) return;
     _selectedSearchTab = index;
-    notifyListeners();
 
     final String trimmed = _searchQuery.trim();
     if (trimmed.isNotEmpty) {
+      final String tabName =
+          (index >= 0 && index < _tabMapping.length) ? _tabMapping[index] : 'all';
+      final String cacheKey = '$tabName:${trimmed.toLowerCase()}';
+      if (_searchCache.containsKey(cacheKey)) {
+        final MultiTabSearchResults cached = _searchCache[cacheKey]!;
+        if (tabName == 'all') {
+          _searchResults = cached;
+        } else if (tabName == 'posts') {
+          _searchResults = _searchResults.copyWith(posts: cached.posts);
+        } else if (tabName == 'reels') {
+          _searchResults = _searchResults.copyWith(reels: cached.reels);
+        } else if (tabName == 'people') {
+          _searchResults = _searchResults.copyWith(people: cached.people);
+        } else if (tabName == 'tags') {
+          _searchResults = _searchResults.copyWith(tags: cached.tags);
+        } else if (tabName == 'communities') {
+          _searchResults = _searchResults.copyWith(communities: cached.communities);
+        }
+      }
+      _isLoadingSearch = true;
+      notifyListeners();
       _executeSearch(trimmed, index);
+    } else {
+      notifyListeners();
     }
   }
 
@@ -327,13 +371,6 @@ class DiscoverProvider extends ChangeNotifier {
         (tabIndex >= 0 && tabIndex < _tabMapping.length) ? _tabMapping[tabIndex] : 'all';
     final String cacheKey = '$tabName:${query.toLowerCase()}';
 
-    if (_searchCache.containsKey(cacheKey)) {
-      _searchResults = _searchCache[cacheKey]!;
-      _isLoadingSearch = false;
-      notifyListeners();
-      return;
-    }
-
     if (_discoverService == null) {
       _isLoadingSearch = false;
       notifyListeners();
@@ -354,6 +391,7 @@ class DiscoverProvider extends ChangeNotifier {
       if (tabName == 'all' || tabName == 'posts') {
         final Set<String> seenLocalPostIds = <String>{};
         for (final PostItemModel p in _liveHomePosts) {
+          if (!p.isPublished) continue;
           if (DeletedPostsRegistry.isDeleted(p.id)) continue;
           if (p.postType.toUpperCase().trim() == 'VIDEO') continue;
           if (p.content.toLowerCase().contains(qLower) ||
@@ -368,6 +406,7 @@ class DiscoverProvider extends ChangeNotifier {
       if (tabName == 'all' || tabName == 'reels') {
         final Set<String> seenLocalReelIds = <String>{};
         for (final ReelItemModel r in _liveHomeReels) {
+          if (!r.isPublished) continue;
           if (DeletedPostsRegistry.isDeleted(r.id)) continue;
           if (r.caption.toLowerCase().contains(qLower) ||
               r.username.toLowerCase().contains(qLower) ||
@@ -382,6 +421,7 @@ class DiscoverProvider extends ChangeNotifier {
       final List<DiscoverSearchResult> filteredPosts = _deduplicateSearchResults(
         results.posts
             .where((DiscoverSearchResult p) =>
+                p.isPublished &&
                 !DeletedPostsRegistry.isDeleted(p.id ?? '') &&
                 !DeletedPostsRegistry.isDeleted(p.refId ?? ''))
             .toList(),
@@ -389,16 +429,17 @@ class DiscoverProvider extends ChangeNotifier {
       final List<DiscoverSearchResult> filteredReels = _deduplicateSearchResults(
         results.reels
             .where((DiscoverSearchResult r) =>
+                r.isPublished &&
                 !DeletedPostsRegistry.isDeleted(r.id ?? '') &&
                 !DeletedPostsRegistry.isDeleted(r.refId ?? ''))
             .toList(),
       );
 
       final List<DiscoverSearchResult> mergedPosts = _deduplicateSearchResults(
-        <DiscoverSearchResult>[...filteredPosts, ...localMatchedPosts],
+        <DiscoverSearchResult>[...localMatchedPosts, ...filteredPosts],
       );
       final List<DiscoverSearchResult> mergedReels = _deduplicateSearchResults(
-        <DiscoverSearchResult>[...filteredReels, ...localMatchedReels],
+        <DiscoverSearchResult>[...localMatchedReels, ...filteredReels],
       );
 
       results = results.copyWith(posts: mergedPosts, reels: mergedReels);
@@ -407,7 +448,21 @@ class DiscoverProvider extends ChangeNotifier {
 
       // Only apply if the search query hasn't changed while request was in-flight
       if (_searchQuery.trim() == query) {
-        _searchResults = results;
+        if (tabName == 'all') {
+          _searchResults = results;
+        } else if (tabName == 'posts') {
+          _searchResults = _searchResults.copyWith(posts: results.posts);
+        } else if (tabName == 'reels') {
+          _searchResults = _searchResults.copyWith(reels: results.reels);
+        } else if (tabName == 'people') {
+          _searchResults = _searchResults.copyWith(people: results.people);
+        } else if (tabName == 'tags') {
+          _searchResults = _searchResults.copyWith(tags: results.tags);
+        } else if (tabName == 'communities') {
+          _searchResults = _searchResults.copyWith(communities: results.communities);
+        } else {
+          _searchResults = results;
+        }
         _isLoadingSearch = false;
         notifyListeners();
 

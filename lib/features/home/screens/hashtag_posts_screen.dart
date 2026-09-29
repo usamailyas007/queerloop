@@ -91,6 +91,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
       );
 
       for (final DiscoverSearchResult p in searchResults.posts) {
+        if (!p.isPublished) continue;
         final String searchDocId = (p.id ?? '').trim().toLowerCase();
         final String refId = (p.refId ?? '').trim().toLowerCase().replaceAll(RegExp(r'^/+|^media/'), '');
         final String effectiveId = (p.refId != null && p.refId!.trim().isNotEmpty)
@@ -133,6 +134,21 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
         final int postLikes = isPostLiked ? (rawLikes > 0 ? rawLikes : 1) : rawLikes;
         final bool isText = p.imageAsset.trim().isEmpty;
 
+        final int postViews = PostInteractionRegistry.getViewsCount(
+          effectiveId,
+          fallback: PostInteractionRegistry.getViewsCount(
+            refId,
+            fallback: searchDocId.isNotEmpty
+                ? PostInteractionRegistry.getViewsCount(searchDocId, fallback: p.viewsCount)
+                : p.viewsCount,
+          ),
+        );
+        if (postViews > 0) {
+          PostInteractionRegistry.setViewsCount(effectiveId, postViews);
+          if (refId.isNotEmpty) PostInteractionRegistry.setViewsCount(refId, postViews);
+          if (searchDocId.isNotEmpty) PostInteractionRegistry.setViewsCount(searchDocId, postViews);
+        }
+
         photoPosts.add(PostItemModel(
           id: effectiveId,
           authorId: p.authorId,
@@ -149,7 +165,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
           content: p.caption ?? '',
           likesCount: postLikes,
           commentsCount: p.commentsCount ?? 0,
-          viewsCount: p.viewsCount,
+          viewsCount: postViews,
           postImageUrl: !isText ? p.imageAsset : null,
           postType: isText ? 'TEXT' : 'PHOTO',
           communityId: p.communityId,
@@ -158,10 +174,12 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
           allowComments: p.allowComments,
           allowCommentsFrom: p.allowCommentsFrom,
           isAuthorPrivate: p.isAuthorPrivate,
+          status: p.status,
         ));
       }
 
       for (final DiscoverSearchResult r in searchResults.reels) {
+        if (!r.isPublished) continue;
         final String searchDocId = (r.id ?? '').trim().toLowerCase();
         final String refId = (r.refId ?? '').trim().toLowerCase().replaceAll(RegExp(r'^/+|^media/'), '');
         final String effectiveId = (r.refId != null && r.refId!.trim().isNotEmpty)
@@ -203,6 +221,21 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
         final int rawLikes = r.likesCount ?? 0;
         final int reelLikes = isReelLiked ? (rawLikes > 0 ? rawLikes : 1) : rawLikes;
 
+        final int reelViews = PostInteractionRegistry.getViewsCount(
+          effectiveId,
+          fallback: PostInteractionRegistry.getViewsCount(
+            refId,
+            fallback: searchDocId.isNotEmpty
+                ? PostInteractionRegistry.getViewsCount(searchDocId, fallback: r.viewsCount)
+                : r.viewsCount,
+          ),
+        );
+        if (reelViews > 0) {
+          PostInteractionRegistry.setViewsCount(effectiveId, reelViews);
+          if (refId.isNotEmpty) PostInteractionRegistry.setViewsCount(refId, reelViews);
+          if (searchDocId.isNotEmpty) PostInteractionRegistry.setViewsCount(searchDocId, reelViews);
+        }
+
         videoReels.add(ReelItemModel(
           id: effectiveId,
           authorId: r.authorId,
@@ -222,12 +255,14 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
           caption: r.caption ?? '',
           likesCount: reelLikes,
           commentsCount: r.commentsCount ?? 0,
+          viewsCount: reelViews,
           isLiked: isReelLiked,
           isSaved: isReelSaved,
           communityId: r.communityId,
           allowComments: r.allowComments,
           allowCommentsFrom: r.allowCommentsFrom,
           isAuthorPrivate: r.isAuthorPrivate,
+          status: r.status,
         ));
       }
     } catch (e) {
@@ -237,6 +272,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
     // 2. Scan live feed posts for matching hashtag
     try {
       for (final PostItemModel p in homeFeed.posts) {
+        if (!p.isPublished) continue;
         if (DeletedPostsRegistry.isDeleted(p.id)) continue;
         final String contentLower = p.content.toLowerCase();
         if (contentLower.contains(hashTag.toLowerCase()) ||
@@ -249,6 +285,13 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
                         p.postImageUrl!.endsWith('.m3u8') ||
                         p.postImageUrl!.contains('video') ||
                         p.postImageUrl!.contains('/videos/')));
+            final int feedItemViews = PostInteractionRegistry.getViewsCount(
+              p.id,
+              fallback: p.viewsCount,
+            );
+            if (feedItemViews > 0) {
+              PostInteractionRegistry.setViewsCount(p.id, feedItemViews);
+            }
             if (isVid) {
               final String? thumb = (p.postImageUrl != null && p.postImageUrl!.contains('/videos/processed/'))
                   ? p.postImageUrl!.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg')
@@ -266,12 +309,14 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
                 caption: p.content,
                 likesCount: p.likesCount,
                 commentsCount: p.commentsCount,
+                viewsCount: feedItemViews,
                 isLiked: p.isLiked || homeFeed.isPostLiked(p.id) || profile.isPostLiked(p.id),
                 isSaved: p.isSaved || homeFeed.isPostSaved(p.id) || profile.isPostSaved(p.id),
                 communityId: p.communityId,
               ));
             } else {
               photoPosts.add(p.copyWith(
+                viewsCount: feedItemViews,
                 isLiked: p.isLiked || homeFeed.isPostLiked(p.id) || profile.isPostLiked(p.id),
                 isSaved: p.isSaved || homeFeed.isPostSaved(p.id) || profile.isPostSaved(p.id),
               ));
@@ -281,6 +326,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
       }
       // Scan live reels for matching hashtag – keep as reels
       for (final ReelItemModel r in homeFeed.reels) {
+        if (!r.isPublished) continue;
         if (DeletedPostsRegistry.isDeleted(r.id)) continue;
         final String captionLower = r.caption.toLowerCase();
         final bool hasTag = r.tags.any(
@@ -290,7 +336,15 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
             captionLower.contains(hashTag.toLowerCase()) ||
             captionLower.contains(tagLower)) {
           if (seenIds.add(r.id.toLowerCase())) {
+            final int liveReelViews = PostInteractionRegistry.getViewsCount(
+              r.id,
+              fallback: r.viewsCount,
+            );
+            if (liveReelViews > 0) {
+              PostInteractionRegistry.setViewsCount(r.id, liveReelViews);
+            }
             videoReels.add(r.copyWith(
+              viewsCount: liveReelViews,
               isLiked: r.isLiked || homeFeed.isPostLiked(r.id) || profile.isPostLiked(r.id),
               isSaved: r.isSaved || homeFeed.isPostSaved(r.id) || profile.isPostSaved(r.id),
             ));
@@ -305,6 +359,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
       final List<PostResponseModel> livePosts = await postService.getFeedPosts();
 
       for (final PostResponseModel p in livePosts) {
+        if (!p.isPublished) continue;
         if (DeletedPostsRegistry.isDeleted(p.id)) continue;
 
         if (!PostVisibilityFilter.canViewPost(
@@ -366,6 +421,13 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
           final bool isReelLiked = p.isLiked || homeFeed.isPostLiked(p.id) || profile.isPostLiked(p.id);
           final bool isReelSaved = p.isSaved || homeFeed.isPostSaved(p.id) || profile.isPostSaved(p.id);
           final int reelLikes = p.likesCount;
+          final int reelViews = PostInteractionRegistry.getViewsCount(
+            p.id,
+            fallback: p.viewsCount,
+          );
+          if (reelViews > 0) {
+            PostInteractionRegistry.setViewsCount(p.id, reelViews);
+          }
 
           videoReels.add(ReelItemModel(
             id: p.id,
@@ -387,7 +449,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
             caption: p.caption,
             likesCount: reelLikes,
             commentsCount: p.commentsCount,
-            viewsCount: p.viewsCount,
+            viewsCount: reelViews,
             isLiked: isReelLiked,
             isSaved: isReelSaved,
             communityId: p.communityId,
@@ -395,6 +457,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
             allowComments: p.allowComments,
             allowCommentsFrom: p.allowCommentsFrom,
             isAuthorPrivate: p.isAuthorPrivate,
+            status: p.status,
           ));
         } else {
           String? imgUrl = p.postImageUrl;
@@ -416,6 +479,13 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
           final bool isPostLiked = p.isLiked || homeFeed.isPostLiked(p.id) || profile.isPostLiked(p.id);
           final bool isPostSaved = p.isSaved || homeFeed.isPostSaved(p.id) || profile.isPostSaved(p.id);
           final int postLikes = p.likesCount;
+          final int postViews = PostInteractionRegistry.getViewsCount(
+            p.id,
+            fallback: p.viewsCount,
+          );
+          if (postViews > 0) {
+            PostInteractionRegistry.setViewsCount(p.id, postViews);
+          }
 
           photoPosts.add(PostItemModel(
             id: p.id,
@@ -434,7 +504,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
             content: p.caption,
             likesCount: postLikes,
             commentsCount: p.commentsCount,
-            viewsCount: p.viewsCount,
+            viewsCount: postViews,
             postImageUrl: !isText ? imgUrl : null,
             postType: isText ? 'TEXT' : (p.type.isNotEmpty ? p.type : 'PHOTO'),
             communityId: p.communityId,
@@ -443,6 +513,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
             allowComments: p.allowComments,
             allowCommentsFrom: p.allowCommentsFrom,
             isAuthorPrivate: p.isAuthorPrivate,
+            status: p.status,
           ));
         }
       }
@@ -472,6 +543,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
       isSaved: PostInteractionRegistry.isSaved(r.id, fallback: r.isSaved),
       likesCount: PostInteractionRegistry.getLikeCount(r.id, fallback: r.likesCount),
       commentsCount: CommentCountRegistry.getOr(r.id, r.commentsCount),
+      viewsCount: PostInteractionRegistry.getViewsCount(r.id, fallback: r.viewsCount),
     )).toList();
 
     await Navigator.push<void>(
@@ -528,6 +600,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
             isSaved: PostInteractionRegistry.isSaved(id, fallback: _reels[i].isSaved),
             likesCount: PostInteractionRegistry.getLikeCount(id, fallback: _reels[i].likesCount),
             commentsCount: CommentCountRegistry.getOr(id, _reels[i].commentsCount),
+            viewsCount: PostInteractionRegistry.getViewsCount(id, fallback: _reels[i].viewsCount),
           );
         }
         for (int i = 0; i < _posts.length; i++) {
@@ -537,6 +610,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
             isSaved: PostInteractionRegistry.isSaved(id, fallback: _posts[i].isSaved),
             likesCount: PostInteractionRegistry.getLikeCount(id, fallback: _posts[i].likesCount),
             commentsCount: CommentCountRegistry.getOr(id, _posts[i].commentsCount),
+            viewsCount: PostInteractionRegistry.getViewsCount(id, fallback: _posts[i].viewsCount),
           );
         }
       });
@@ -886,6 +960,10 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
         itemCount: _reels.length,
         itemBuilder: (BuildContext context, int index) {
           final ReelItemModel reel = _reels[index];
+          final int views = PostInteractionRegistry.getViewsCount(
+            reel.id,
+            fallback: reel.viewsCount,
+          );
           return GestureDetector(
             onTap: () => _openReelPlayer(index),
             child: ClipRRect(
@@ -932,7 +1010,7 @@ class _HashtagPostsScreenState extends State<HashtagPostsScreen>
                         ),
                         const SizedBox(width: 2),
                         Text(
-                          _formatCount(reel.viewsCount),
+                          _formatCount(views),
                           style: AppTextStyles.caption.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,

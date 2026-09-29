@@ -319,6 +319,7 @@ class PostResponseModel {
       deletedAt != null ||
       status?.toLowerCase() == 'deleted' ||
       status?.toLowerCase() == 'removed';
+  bool get isPublished => (status ?? '').toLowerCase().trim() == 'published';
 
   PostResponseModel copyWith({
     String? id,
@@ -857,7 +858,8 @@ class PostResponseModel {
                 : null);
         return raw == true || raw == 1 || raw == 'true';
       }(),
-      hideLikes: (map['hideLikes'] ??
+      hideLikes: rawLikes == null ||
+          (map['hideLikes'] ??
               map['hideMyLikes'] ??
               (map['author'] is Map
                   ? (map['author']['hideMyLikes'] ?? map['author']['hideLikes'])

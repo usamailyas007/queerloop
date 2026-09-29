@@ -353,9 +353,9 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     isOwnProfile: true,
                     onTabSelected: (int index) {
                       if (index == 2) {
-                        context.read<ProfileProvider>().fetchSavedPosts();
+                        context.read<ProfileProvider>().fetchSavedPosts(force: true);
                       } else if (index == 3) {
-                        context.read<ProfileProvider>().fetchLikedPosts();
+                        context.read<ProfileProvider>().fetchLikedPosts(force: true);
                       }
                       setState(() => _selectedTabIndex = index);
                     },

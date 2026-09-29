@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/routes.dart';
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/widgets/app_follow_button.dart';
@@ -165,7 +166,8 @@ class _ReelFeedCardState extends State<ReelFeedCard>
       _videoInitialized = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _isDisposed) return;
-        if (_canPlayAudio) {
+        if (widget.isActive && !_isPaused && !_isCoveredByRoute) {
+          ReelVideoPreloader.instance.setFeedVisible(true);
           ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
           existing.play();
         } else {
@@ -185,7 +187,9 @@ class _ReelFeedCardState extends State<ReelFeedCard>
       if (_isDisposed || !mounted) return;
       _videoController = existing;
       setState(() => _videoInitialized = true);
-      if (widget.isActive && !_isPaused) {
+      if (widget.isActive && !_isPaused && !_isCoveredByRoute) {
+        ReelVideoPreloader.instance.setFeedVisible(true);
+        ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
         existing.play();
       } else {
         existing.pause();
@@ -207,7 +211,8 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         }
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted || _isDisposed) return;
-          if (_canPlayAudio) {
+          if (widget.isActive && !_isPaused && !_isCoveredByRoute) {
+            ReelVideoPreloader.instance.setFeedVisible(true);
             ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
             controller.play();
           } else {
@@ -230,7 +235,8 @@ class _ReelFeedCardState extends State<ReelFeedCard>
             setState(() => _videoInitialized = true);
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted || _isDisposed) return;
-              if (_canPlayAudio) {
+              if (widget.isActive && !_isPaused && !_isCoveredByRoute) {
+                ReelVideoPreloader.instance.setFeedVisible(true);
                 ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
                 controller.play();
               } else {
@@ -276,23 +282,31 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   void didUpdateWidget(ReelFeedCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
+      _isPaused = false;
+      ReelVideoPreloader.instance.setFeedVisible(true);
       ReelVideoPreloader.instance.markActive(widget.reel.id);
       ReelVideoPreloader.instance.markInactive(oldWidget.reel.id);
-      if (_videoInitialized && _videoController != null) {
-        if (_canPlayAudio) {
-          ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
-          _videoController?.play();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isDisposed) return;
+        if (_videoInitialized && _videoController != null) {
+          if (!_isCoveredByRoute) {
+            ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
+            _videoController?.play();
+          } else {
+            _videoController?.pause();
+            _videoController?.setVolume(0);
+          }
         } else {
-          _videoController?.pause();
-          _videoController?.setVolume(0);
+          _initVideo();
         }
-      } else {
-        _initVideo();
-      }
+      });
     } else if (!widget.isActive && oldWidget.isActive) {
       ReelVideoPreloader.instance.markInactive(widget.reel.id);
-      _videoController?.pause();
-      _videoController?.setVolume(0);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isDisposed) return;
+        _videoController?.pause();
+        _videoController?.setVolume(0);
+      });
     }
   }
 
@@ -382,9 +396,17 @@ class _ReelFeedCardState extends State<ReelFeedCard>
 
   void _handleTap() {
     if (!_videoInitialized || _videoController == null) return;
+    final bool isActuallyPlaying = _videoController!.value.isPlaying;
     setState(() {
-      _isPaused = !_isPaused;
-      _isPaused ? _videoController!.pause() : _videoController!.play();
+      if (isActuallyPlaying) {
+        _isPaused = true;
+        _videoController!.pause();
+      } else {
+        _isPaused = false;
+        ReelVideoPreloader.instance.setFeedVisible(true);
+        ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
+        _videoController!.play();
+      }
     });
   }
 
@@ -532,11 +554,13 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         ? AuthorProfileCache.get(reelAuthorId)
         : null;
     final bool authorHidesLikes =
-        item.hideLikes || (cachedAuthor?.hideMyLikes == true);
+        item.hideLikes || !item.hasLikeCount || (cachedAuthor?.hideMyLikes == true);
     final bool myProfileHidesLikes = profileProvider.hideMyLikes;
-    final bool shouldHideLikes =
-        !isOwnReel &&
-        (authorHidesLikes ||
+    final bool shouldHideLikes = !item.hasLikeCount ||
+        item.hideLikes ||
+        authorHidesLikes ||
+        PostInteractionRegistry.isLikeCountHidden(item.id) ||
+        (!isOwnReel &&
             (reelAuthorId.isNotEmpty &&
                 currentUserId != null &&
                 reelAuthorId == currentUserId.trim().toLowerCase() &&
@@ -674,7 +698,9 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                 // Like
                 _RightActionButton(
                   onTap: widget.onLikeToggle,
-                  label: shouldHideLikes ? '' : '${item.likesCount}',
+                  label: (shouldHideLikes || !item.hasLikeCount || item.hideLikes)
+                      ? ''
+                      : '${item.likesCount}',
                   child: Image.asset(
                     item.isLiked ? AppIcons.likedLogo : AppIcons.unlikeLogo,
                     width: 28,

@@ -697,6 +697,38 @@ class ChatMessageModel {
       replyToSender: replyToSender ?? this.replyToSender,
     );
   }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        if (conversationId != null) 'conversationId': conversationId,
+        if (senderId != null) 'senderId': senderId,
+        'senderUsername': senderUsername,
+        'isMe': isMe,
+        'timestamp': timestamp,
+        if (text != null) 'text': text,
+        if (mediaUrl != null) 'mediaUrl': mediaUrl,
+        if (postThumbnailAsset != null) 'postThumbnailAsset': postThumbnailAsset,
+        if (postAuthor != null) 'postAuthor': postAuthor,
+        if (postAuthorId != null) 'postAuthorId': postAuthorId,
+        if (postAuthorAvatarUrl != null) 'postAuthorAvatarUrl': postAuthorAvatarUrl,
+        if (postCaption != null) 'postCaption': postCaption,
+        if (postType != null) 'postType': postType,
+        if (postLikes != null) 'postLikes': postLikes,
+        if (postComments != null) 'postComments': postComments,
+        if (sharedPostId != null) 'sharedPostId': sharedPostId,
+        if (postViews != null) 'postViews': postViews,
+        if (reactionEmoji != null) 'reactionEmoji': reactionEmoji,
+        if (reactionCount != null) 'reactionCount': reactionCount,
+        'reactions': reactions.map((MessageReactionModel r) => r.toJson()).toList(),
+        'isRead': isRead,
+        'isUnsent': isUnsent,
+        if (unsentAt != null) 'unsentAt': unsentAt!.toIso8601String(),
+        if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+        'type': type.name,
+        if (replyToId != null) 'replyToId': replyToId,
+        if (replyToText != null) 'replyToText': replyToText,
+        if (replyToSender != null) 'replyToSender': replyToSender,
+      };
 }
 
 class ConversationModel {
@@ -1164,6 +1196,12 @@ class ConversationModel {
       hasStoryRing: json['hasStoryRing'] == true,
       lastMessageSenderId: lastSender,
       lastMessageAt: lastMsgTime,
+      messages: json['messages'] is List
+          ? (json['messages'] as List)
+              .whereType<Map>()
+              .map((Map m) => ChatMessageModel.fromJson(m.cast<String, dynamic>(), currentUserId: currentUserId))
+              .toList()
+          : const <ChatMessageModel>[],
     );
   }
 
@@ -1227,6 +1265,7 @@ class ConversationModel {
         'hasStoryRing': hasStoryRing,
         'lastMessageSenderId': lastMessageSenderId,
         'lastMessageAt': lastMessageAt?.toIso8601String(),
+        'messages': messages.map((ChatMessageModel m) => m.toJson()).toList(),
       };
 }
 

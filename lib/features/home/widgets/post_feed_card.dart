@@ -58,8 +58,16 @@ class PostFeedCard extends StatelessWidget {
     PostItemModel post, {
     bool isProfileScreen = false,
   }) {
-    final bool isLiked = PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked);
-    final bool isSaved = PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved);
+    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+    final ProfileProvider profile = context.read<ProfileProvider>();
+    final bool isLiked = PostInteractionRegistry.isLiked(
+      post.id,
+      fallback: post.isLiked || homeFeed.isPostLiked(post.id) || profile.isPostLiked(post.id),
+    );
+    final bool isSaved = PostInteractionRegistry.isSaved(
+      post.id,
+      fallback: post.isSaved || homeFeed.isPostSaved(post.id) || profile.isPostSaved(post.id),
+    );
     final int commentsCount = CommentCountRegistry.getOr(post.id, post.commentsCount);
     final int likesCount = PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
     final PostItemModel resolvedPost = post.copyWith(
@@ -94,6 +102,10 @@ class PostFeedCard extends StatelessWidget {
         isSaved: isSaved,
         hideLikes: post.hideLikes,
         communityId: post.communityId,
+        allowComments: post.allowComments,
+        allowDownloads: post.allowDownloads,
+        isAuthorPrivate: post.isAuthorPrivate,
+        allowCommentsFrom: post.allowCommentsFrom,
       );
       Navigator.push<void>(
         context,
@@ -165,10 +177,15 @@ class PostFeedCard extends StatelessWidget {
 
         final AuthProvider auth = context.read<AuthProvider>();
         final ProfileProvider profileProvider = context.watch<ProfileProvider>();
-        final bool effectiveLiked =
-        PostInteractionRegistry.isLiked(post.id, fallback: post.isLiked);
-    final bool effectiveSaved =
-        PostInteractionRegistry.isSaved(post.id, fallback: post.isSaved);
+        final HomeFeedProvider homeFeed = context.watch<HomeFeedProvider>();
+        final bool effectiveLiked = PostInteractionRegistry.isLiked(
+          post.id,
+          fallback: post.isLiked || homeFeed.isPostLiked(post.id) || profileProvider.isPostLiked(post.id),
+        );
+        final bool effectiveSaved = PostInteractionRegistry.isSaved(
+          post.id,
+          fallback: post.isSaved || homeFeed.isPostSaved(post.id) || profileProvider.isPostSaved(post.id),
+        );
     final int effectiveLikesCount =
         PostInteractionRegistry.getLikeCount(post.id, fallback: post.likesCount);
     final int effectiveCommentsCount =
@@ -190,10 +207,13 @@ class PostFeedCard extends StatelessWidget {
 
     final AuthorInfo? cachedAuthor =
         (authorId != null && authorId.isNotEmpty) ? AuthorProfileCache.get(authorId) : null;
-    final bool authorHidesLikes = post.hideLikes || (cachedAuthor?.hideMyLikes == true);
+    final bool authorHidesLikes = post.hideLikes || !post.hasLikeCount || (cachedAuthor?.hideMyLikes == true);
     final bool myProfileHidesLikes = profileProvider.hideMyLikes;
-    final bool shouldHideLikes = !isCurrentUser &&
-        (authorHidesLikes ||
+    final bool shouldHideLikes = !post.hasLikeCount ||
+        post.hideLikes ||
+        authorHidesLikes ||
+        PostInteractionRegistry.isLikeCountHidden(post.id) ||
+        (!isCurrentUser &&
             (authorId != null &&
                 currentUserId != null &&
                 authorId.trim().toLowerCase() == currentUserId.trim().toLowerCase() &&
@@ -238,7 +258,6 @@ class PostFeedCard extends StatelessWidget {
                           ? post.authorDisplayName!.trim()
                           : post.username.replaceAll('@', '').split('.').first,
                       avatarAsset: post.avatarAsset,
-                      initialPost: post,
                     ),
                   ),
                 );
@@ -482,7 +501,7 @@ class PostFeedCard extends StatelessWidget {
                       width: 22,
                       height: 22,
                     ),
-                    if (!shouldHideLikes && effectiveLikesCount > 0) ...<Widget>[
+                    if (!shouldHideLikes && post.hasLikeCount && !post.hideLikes && effectiveLikesCount > 0) ...<Widget>[
                       const SizedBox(width: 6),
                       Text(
                         '${effectiveLikesCount > 1000 ? '${(effectiveLikesCount / 1000).toStringAsFixed(1)}K' : effectiveLikesCount}',

@@ -56,6 +56,9 @@ class _HomeScreenContentState extends State<_HomeScreenContent>
       if (mounted) {
         final HomeFeedProvider feed = context.read<HomeFeedProvider>();
         feed.setGuestMode(widget.isGuest);
+        if (feed.bottomNavIndex == 0 && feed.activeSubMode == SubMode.reels) {
+          ReelVideoPreloader.instance.setFeedVisible(true);
+        }
         if (feed.reels.isEmpty && feed.posts.isEmpty && !feed.isLoadingFeed) {
           feed.loadFeed();
         }
@@ -202,7 +205,16 @@ class _HomeScreenContentState extends State<_HomeScreenContent>
                 isGuest: true,
                 onTabSelected: (tab) =>
                     _handleTopTabTap(context, provider, tab),
-                onSubModeSelected: (mode) => provider.setSubMode(mode),
+                onSubModeSelected: (mode) {
+                  if (mode == SubMode.reels) {
+                    ReelVideoPreloader.instance.setFeedVisible(true);
+                  } else {
+                    ReelVideoPreloader.instance.setFeedVisible(false);
+                    ReelVideoPreloader.instance.pauseAll();
+                    ReelVideoPreloader.instance.muteAll();
+                  }
+                  provider.setSubMode(mode);
+                },
               ),
             ),
             // Centered Guest Action Overlay Card with Dark Dimmed Background
@@ -272,7 +284,16 @@ class _HomeScreenContentState extends State<_HomeScreenContent>
                 isGuest: false,
                 onTabSelected: (tab) =>
                     _handleTopTabTap(context, provider, tab),
-                onSubModeSelected: (mode) => provider.setSubMode(mode),
+                onSubModeSelected: (mode) {
+                  if (mode == SubMode.reels) {
+                    ReelVideoPreloader.instance.setFeedVisible(true);
+                  } else {
+                    ReelVideoPreloader.instance.setFeedVisible(false);
+                    ReelVideoPreloader.instance.pauseAll();
+                    ReelVideoPreloader.instance.muteAll();
+                  }
+                  provider.setSubMode(mode);
+                },
               ),
             ),
           ],

@@ -1404,6 +1404,7 @@ class ProfileProvider extends ChangeNotifier {
 
   /// List User's Liked Posts. GET /users/me/likes
   Future<void> fetchLikedPosts({bool force = false}) async {
+    if (_isLoadingLiked) return;
     if (!force && _hasFetchedLiked && (_likedPosts.isNotEmpty || _likedReels.isNotEmpty)) {
       return;
     }
@@ -1420,18 +1421,23 @@ class ProfileProvider extends ChangeNotifier {
 
       _likedPosts = batch.posts;
       _likedReels = batch.reels;
+      for (final PostResponseModel p in posts) {
+        if (p.id.isNotEmpty) {
+          PostInteractionRegistry.setLiked(p.id, true);
+        }
+      }
       _hasFetchedLiked = true;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Error fetching liked posts: $e');
     } finally {
       _isLoadingLiked = false;
-      _hasFetchedLiked = true;
       notifyListeners();
     }
   }
 
   /// List User's Saved Posts. GET /users/me/saved
   Future<void> fetchSavedPosts({bool force = false}) async {
+    if (_isLoadingSaved) return;
     if (!force && _hasFetchedSaved && (_savedPosts.isNotEmpty || _savedReels.isNotEmpty)) {
       return;
     }
@@ -1448,12 +1454,16 @@ class ProfileProvider extends ChangeNotifier {
 
       _savedPosts = batch.posts;
       _savedReels = batch.reels;
+      for (final PostResponseModel p in posts) {
+        if (p.id.isNotEmpty) {
+          PostInteractionRegistry.setSaved(p.id, true);
+        }
+      }
       _hasFetchedSaved = true;
     } catch (e) {
       debugPrint('⚠️ [ProfileProvider] Error fetching saved posts: $e');
     } finally {
       _isLoadingSaved = false;
-      _hasFetchedSaved = true;
       notifyListeners();
     }
   }

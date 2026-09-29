@@ -72,13 +72,10 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     super.initState();
     _activePage = widget.initialPage;
     _pageController = PageController(initialPage: widget.initialPage);
+    // Ensure feed is visible so reel starts playing automatically on entry or login
+    ReelVideoPreloader.instance.setFeedVisible(true);
     if (widget.customReels != null) {
       _localReels = List<ReelItemModel>.from(widget.customReels!);
-      // Restore feed visibility for standalone/custom reel viewers.
-      // When the home feed's ReelFeedCard.didPushNext fires (e.g. user opened
-      // profile), it sets isFeedVisible=false. If the user then opens a custom
-      // reel player, that flag is still false → _canPlayAudio = false → no audio.
-      ReelVideoPreloader.instance.setFeedVisible(true);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -471,9 +468,11 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                     PostInteractionRegistry.isLiked(item.id, fallback: item.isLiked);
                 final bool newLiked = !currentlyLiked;
                 final int currentCount = PostInteractionRegistry.getLikeCount(item.id, fallback: item.likesCount);
-                final int newCount = newLiked
-                    ? currentCount + 1
-                    : (currentCount > 0 ? currentCount - 1 : 0);
+                final int newCount = item.hasLikeCount
+                    ? (newLiked
+                        ? currentCount + 1
+                        : (currentCount > 0 ? currentCount - 1 : 0))
+                    : currentCount;
                 PostInteractionRegistry.setLiked(item.id, newLiked, newCount: newCount);
 
                 if (widget.customReels != null) {

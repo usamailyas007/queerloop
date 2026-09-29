@@ -398,7 +398,6 @@ class _PostFullscreenImageViewerScreenState
             username: _post.username.replaceAll('@', ''),
             name: _post.username.replaceAll('@', '').split('.').first,
             avatarAsset: _post.avatarAsset,
-            initialPost: _post,
           ),
         ),
       );
@@ -449,10 +448,14 @@ class _PostFullscreenImageViewerScreenState
     final String authorId = (_post.authorId ?? '').trim().toLowerCase();
     final AuthorInfo? cachedAuthor =
         authorId.isNotEmpty ? AuthorProfileCache.get(authorId) : null;
-    final bool authorHidesLikes = _post.hideLikes || (cachedAuthor?.hideMyLikes == true);
+    final bool authorHidesLikes =
+        _post.hideLikes || !_post.hasLikeCount || (cachedAuthor?.hideMyLikes == true);
     final bool myProfileHidesLikes = profileProvider.hideMyLikes;
-    final bool shouldHideLikes = !isCurrentUser &&
-        (authorHidesLikes ||
+    final bool shouldHideLikes = !_post.hasLikeCount ||
+        _post.hideLikes ||
+        authorHidesLikes ||
+        PostInteractionRegistry.isLikeCountHidden(_post.id) ||
+        (!isCurrentUser &&
             (authorId.isNotEmpty &&
                 currentUserId != null &&
                 authorId == currentUserId.trim().toLowerCase() &&
@@ -668,7 +671,9 @@ class _PostFullscreenImageViewerScreenState
                   // Like Button
                   _ViewerActionButton(
                     onTap: _handleLikeToggle,
-                    label: shouldHideLikes ? '' : '$currentLikesCount',
+                    label: (shouldHideLikes || !_post.hasLikeCount || _post.hideLikes)
+                        ? ''
+                        : '$currentLikesCount',
                     child: Image.asset(
                       isLiked ? AppIcons.likedLogo : AppIcons.unlikeLogo,
                       width: 28,

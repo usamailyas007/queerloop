@@ -1,5 +1,6 @@
 import 'dart:async' show Timer;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
@@ -118,9 +119,65 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
     });
   }
 
+  void _setReplyingTo(ChatMessageModel msg) {
+    try {
+      HapticFeedback.mediumImpact();
+    } catch (_) {}
+    chatLog('🎯 [ChatScreen] Reply selected for message id: "${msg.id}", text: "${msg.text}", sender: "${msg.senderUsername}"');
+    setState(() {
+      _replyingToMessage = msg;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
+  }
+
+  void _submitMessage(ConversationModel activeConv, MessagesProvider provider) {
+    final String text = _messageController.text.trim();
+    chatLog('💬 [ChatScreen Send Triggered] text: "$text", convId: "${activeConv.id}", replyingToMsgId: "${_replyingToMessage?.id}"');
+    if (text.isNotEmpty) {
+      _typingTimer?.cancel();
+      if (_isTypingSent) {
+        _isTypingSent = false;
+        provider.sendTyping(activeConv.id, false);
+      }
+      final String? replySender = _replyingToMessage != null
+          ? (_replyingToMessage!.isMe
+              ? 'You'
+              : (_replyingToMessage!.senderUsername.isNotEmpty &&
+                      _replyingToMessage!.senderUsername != 'User'
+                  ? _replyingToMessage!.senderUsername
+                  : (activeConv.displayName ?? activeConv.username)))
+          : null;
+      final String? replyText = _replyingToMessage != null
+          ? ((_replyingToMessage!.text != null &&
+                  _replyingToMessage!.text!.trim().isNotEmpty)
+              ? _replyingToMessage!.text
+              : (_replyingToMessage!.mediaUrl != null
+                  ? '📷 Photo'
+                  : null))
+          : null;
+      final String? targetReplyId = _replyingToMessage?.id;
+      chatLog('🚀 [ChatScreen] Submitting message with targetReplyId: "$targetReplyId"');
+      provider.sendMessage(
+        activeConv.id,
+        text,
+        replyToId: targetReplyId,
+        replyToText: replyText,
+        replyToSender: replySender,
+      );
+      _messageController.clear();
+      setState(() {
+        _replyingToMessage = null;
+      });
+      _scrollToBottom(animated: true);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    chatLog('📱 [ChatScreen] OPENED for convId: "${widget.conversation.id}", title: "${widget.conversation.displayName ?? widget.conversation.username}"');
     _messageController = TextEditingController();
     _scrollController = ScrollController();
     _focusNode = FocusNode();
@@ -173,7 +230,10 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
   void deactivate() {
     try {
       final MessagesProvider p = context.read<MessagesProvider>();
-      p.markAllMessagesAsRead(widget.conversation.id);
+      final String activeId = p.activeChatConvId ?? widget.conversation.id;
+      if (activeId.isNotEmpty) {
+        p.markAllMessagesAsRead(activeId);
+      }
       p.setActiveChat(null);
     } catch (_) {}
     super.deactivate();
@@ -854,42 +914,61 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                           children: <Widget>[
                             for (final ChatMessageModel msg
                                 in effectiveMessages)
-                              GestureDetector(
-                                onLongPress: () {
-                                  if (msg.isUnsent) return;
-                                  ChatMessageActionSheet.show(
-                                    context,
-                                    messageText: msg.text ?? '',
-                                    isMe: msg.isMe,
-                                    onReply: () {
-                                      setState(() {
-                                        _replyingToMessage = msg;
-                                      });
-                                      WidgetsBinding.instance
-                                          .addPostFrameCallback((_) {
-                                        _focusNode.requestFocus();
-                                      });
-                                    },
-                                    onEmojiReaction: (String emoji) {
-                                      provider.toggleReaction(
-                                        activeConv.id,
-                                        msg.id,
-                                        emoji,
-                                      );
-                                    },
-                                    onUnsend: () {
-                                      provider.unsendMessage(
-                                        activeConv.id,
-                                        msg.id,
-                                      );
-                                    },
-                                  );
+                              Dismissible(
+                                key: ValueKey<String>('reply_${msg.id}_${msg.timestamp}'),
+                                direction: DismissDirection.startToEnd,
+                                dismissThresholds: const <DismissDirection, double>{
+                                  DismissDirection.startToEnd: 0.1,
                                 },
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: AppSpacing.md,
+                                confirmDismiss: (DismissDirection direction) async {
+                                  if (!msg.isUnsent) {
+                                    _setReplyingTo(msg);
+                                  }
+                                  return false;
+                                },
+                                background: Container(
+                                  alignment: Alignment.centerLeft,
+                                  padding: const EdgeInsets.only(left: 20),
+                                  child: const Icon(
+                                    Icons.reply_rounded,
+                                    color: AppColors.gradientCyan,
+                                    size: 24,
                                   ),
-                                  child: ChatBubble(message: msg),
+                                ),
+                                child: GestureDetector(
+                                  onDoubleTap: () {
+                                    if (!msg.isUnsent) {
+                                      _setReplyingTo(msg);
+                                    }
+                                  },
+                                  onLongPress: () {
+                                    if (msg.isUnsent) return;
+                                    ChatMessageActionSheet.show(
+                                      context,
+                                      messageText: msg.text ?? '',
+                                      isMe: msg.isMe,
+                                      onReply: () => _setReplyingTo(msg),
+                                      onEmojiReaction: (String emoji) {
+                                        provider.toggleReaction(
+                                          activeConv.id,
+                                          msg.id,
+                                          emoji,
+                                        );
+                                      },
+                                      onUnsend: () {
+                                        provider.unsendMessage(
+                                          activeConv.id,
+                                          msg.id,
+                                        );
+                                      },
+                                    );
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: AppSpacing.md,
+                                    ),
+                                    child: ChatBubble(message: msg),
+                                  ),
                                 ),
                               ),
 
@@ -1116,50 +1195,15 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                             controller: _messageController,
                             focusNode: _focusNode,
                             hintText: 'Message...',
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => _submitMessage(activeConv, provider),
                           ),
                         ),
                         const SizedBox(width: AppSpacing.md),
 
                         // Send Button
                         GestureDetector(
-                          onTap: () {
-                            final String text = _messageController.text.trim();
-                            if (text.isNotEmpty) {
-                              _typingTimer?.cancel();
-                              if (_isTypingSent) {
-                                _isTypingSent = false;
-                                provider.sendTyping(activeConv.id, false);
-                              }
-                              final String? replySender = _replyingToMessage != null
-                                  ? (_replyingToMessage!.isMe
-                                      ? 'You'
-                                      : (_replyingToMessage!.senderUsername.isNotEmpty &&
-                                              _replyingToMessage!.senderUsername != 'User'
-                                          ? _replyingToMessage!.senderUsername
-                                          : (activeConv.displayName ?? activeConv.username)))
-                                  : null;
-                              final String? replyText = _replyingToMessage != null
-                                  ? ((_replyingToMessage!.text != null &&
-                                          _replyingToMessage!.text!.trim().isNotEmpty)
-                                      ? _replyingToMessage!.text
-                                      : (_replyingToMessage!.mediaUrl != null
-                                          ? '📷 Photo'
-                                          : null))
-                                  : null;
-                              provider.sendMessage(
-                                activeConv.id,
-                                text,
-                                replyToId: _replyingToMessage?.id,
-                                replyToText: replyText,
-                                replyToSender: replySender,
-                              );
-                              _messageController.clear();
-                              setState(() {
-                                _replyingToMessage = null;
-                              });
-                              _scrollToBottom(animated: true);
-                            }
-                          },
+                          onTap: () => _submitMessage(activeConv, provider),
                           child: Container(
                             width: 40,
                             height: 40,
