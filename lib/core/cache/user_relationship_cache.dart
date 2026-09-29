@@ -119,12 +119,49 @@ class UserRelationshipCache {
     }
   }
 
+  static final Set<String> _privateUserIds = <String>{};
+  static final Set<String> _privateUsernames = <String>{};
+
+  /// Records or updates an author's private status in cache.
+  static void markPrivate(String? userId, {String? username, bool isPrivate = true}) {
+    if (userId != null && userId.trim().isNotEmpty) {
+      final String u = userId.trim().toLowerCase();
+      if (isPrivate) {
+        _privateUserIds.add(u);
+      } else {
+        _privateUserIds.remove(u);
+      }
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      final String un = username.replaceAll('@', '').trim().toLowerCase();
+      if (isPrivate) {
+        _privateUsernames.add(un);
+      } else {
+        _privateUsernames.remove(un);
+      }
+    }
+  }
+
+  /// Checks if an author's account is known to be private in cache.
+  static bool isUserPrivate({String? userId, String? username}) {
+    if (userId != null && userId.trim().isNotEmpty) {
+      if (_privateUserIds.contains(userId.trim().toLowerCase())) return true;
+    }
+    if (username != null && username.trim().isNotEmpty) {
+      final String un = username.replaceAll('@', '').trim().toLowerCase();
+      if (_privateUsernames.contains(un)) return true;
+    }
+    return false;
+  }
+
   /// Clears cache on logout.
   static void clear() {
     _followingUserIds.clear();
     _followingUsernames.clear();
     _followerUserIds.clear();
     _followerUsernames.clear();
+    _privateUserIds.clear();
+    _privateUsernames.clear();
   }
 }
 
@@ -147,12 +184,6 @@ class PostVisibilityFilter {
     bool isAuthorPrivate = false,
     bool isCommunityPost = false,
   }) {
-    // 0. Community posts: Posts published to a community are visible to all users
-    // browsing communities (both on "All Communities" and filtered community feeds).
-    if (isCommunityPost) {
-      return true;
-    }
-
     // 1. Author can ALWAYS see their own post (even if private or FOLLOWERS only)
     final bool isCurrentUserAuthor = !isGuest && (
       (currentUserId != null &&
@@ -172,18 +203,30 @@ class PostVisibilityFilter {
 
     // 2. Private Account Enforcement:
     // If the author's account is private, it must NEVER be shown to non-followers or guests,
-    // even if post-level visibility was set to 'EVERYONE'.
-    if (isAuthorPrivate) {
+    // anywhere in the app (Feed, Discover, Hashtags, Search, Liked/Saved).
+    final bool resolvedAuthorPrivate = isAuthorPrivate ||
+        UserRelationshipCache.isUserPrivate(
+          userId: authorId,
+          username: authorUsername,
+        );
+
+    if (resolvedAuthorPrivate) {
       if (isGuest || currentUserId == null || currentUserId.trim().isEmpty) {
         return false;
       }
-      if (isFollowing) {
-        return true;
+      final bool following = isFollowing ||
+          UserRelationshipCache.isFollowing(
+            userId: authorId,
+            username: authorUsername,
+          );
+      if (!following) {
+        return false;
       }
-      return UserRelationshipCache.isFollowing(
-        userId: authorId,
-        username: authorUsername,
-      );
+    }
+
+    // 3. Community posts: visible to followers/public users browsing communities
+    if (isCommunityPost) {
+      return true;
     }
 
     final String vis = (visibility ?? 'EVERYONE').trim().toUpperCase();

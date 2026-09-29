@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/widgets/app_follow_button.dart';
 import '../../../core/widgets/app_user_avatar.dart';
+import '../../../core/widgets/safe_value_listenable_builder.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/auth_provider.dart';
 import '../../profile/provider/profile_provider.dart';
@@ -465,7 +466,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
       );
     }
 
-    return ValueListenableBuilder<VideoPlayerValue>(
+    return SafeValueListenableBuilder<VideoPlayerValue>(
       valueListenable: _videoController!,
       builder: (BuildContext context, VideoPlayerValue val, Widget? _) {
         final bool isPlaying = val.isPlaying && !_isPaused;

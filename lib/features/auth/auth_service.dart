@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../core/api/api_client.dart';
@@ -742,6 +743,20 @@ class AuthService {
       await CacheManager.instance.clearAll();
     } catch (e) {
       debugPrint('⚠️ [AuthService] Error clearing CacheManager: $e');
+    }
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? theme = prefs.getString('app_theme_mode');
+      final bool? onboarding = prefs.getBool('onboarding_seen');
+      await prefs.clear();
+      if (theme != null) {
+        await prefs.setString('app_theme_mode', theme);
+      }
+      if (onboarding != null) {
+        await prefs.setBool('onboarding_seen', onboarding);
+      }
+    } catch (e) {
+      debugPrint('⚠️ [AuthService] Error clearing SharedPreferences: $e');
     }
   }
 

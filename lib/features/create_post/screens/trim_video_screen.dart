@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
+import '../../../core/widgets/safe_value_listenable_builder.dart';
 import '../../home/services/reel_video_preloader.dart';
 import '../models/create_post_models.dart';
 import '../provider/create_post_provider.dart';
@@ -82,8 +83,11 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
     final double trimEndSec = provider.trimEnd * totalSec;
     final double trimStartSec = provider.trimStart * totalSec;
 
-    if (_controller!.value.position.inMilliseconds >= (trimEndSec * 1000).round()) {
-      _controller!.seekTo(Duration(milliseconds: (trimStartSec * 1000).round()));
+    if (_controller!.value.position.inMilliseconds >=
+        (trimEndSec * 1000).round()) {
+      _controller!.seekTo(
+        Duration(milliseconds: (trimStartSec * 1000).round()),
+      );
       if (!_controller!.value.isPlaying && _isPlaying) {
         _controller!.play();
       }
@@ -221,7 +225,9 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
                             ),
                           );
                         } else if (!success && context.mounted) {
-                          context.read<CreatePostProvider>().cancelMediaUpload();
+                          context
+                              .read<CreatePostProvider>()
+                              .cancelMediaUpload();
                         }
                       },
                       height: 32,
@@ -232,214 +238,218 @@ class _TrimVideoScreenState extends State<TrimVideoScreen> {
                 ),
               ),
 
-            const SizedBox(height: AppSpacing.sm),
+              const SizedBox(height: AppSpacing.sm),
 
-            // ── Video Preview Section ─────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Container(
-                height: 330,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: GestureDetector(
-                    onTap: _togglePlayPause,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: <Widget>[
-                        // Video Player or Thumbnail fallback
-                        if (_isInitialized && _controller != null)
-                          SizedBox.expand(
-                            child: FittedBox(
-                              fit: BoxFit.cover,
-                              child: SizedBox(
-                                width: _controller!.value.size.width,
-                                height: _controller!.value.size.height,
-                                child: VideoPlayer(_controller!),
-                              ),
-                            ),
-                          )
-                        else
-                          MediaThumbnailWidget(item: selectedItem),
-
-                        // Play/Pause center overlay
-                        if (!_isPlaying)
-                          Center(
-                            child: Container(
-                              width: 56,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.55),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.play_arrow_rounded,
-                                color: Colors.white,
-                                size: 36,
-                              ),
-                            ),
-                          ),
-
-                        // Selected duration pill badge bottom-left
-                        Positioned(
-                          bottom: AppSpacing.md,
-                          left: AppSpacing.md,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.md,
-                              vertical: AppSpacing.xs,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.75),
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.pill),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.15),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: <Widget>[
-                                const Icon(
-                                  Icons.cut_rounded,
-                                  color: AppColors.gradientCyan,
-                                  size: 14,
+              // ── Video Preview Section ─────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                child: Container(
+                  height: 330,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: GestureDetector(
+                      onTap: _togglePlayPause,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: <Widget>[
+                          // Video Player or Thumbnail fallback
+                          if (_isInitialized && _controller != null)
+                            SizedBox.expand(
+                              child: FittedBox(
+                                fit: BoxFit.cover,
+                                child: SizedBox(
+                                  width: _controller!.value.size.width,
+                                  height: _controller!.value.size.height,
+                                  child: VideoPlayer(_controller!),
                                 ),
-                                const SizedBox(width: 6),
-                                if (_controller != null && _isInitialized)
-                                  ValueListenableBuilder<VideoPlayerValue>(
-                                    valueListenable: _controller!,
-                                    builder: (
-                                      BuildContext context,
-                                      VideoPlayerValue val,
-                                      Widget? _,
-                                    ) {
-                                      final int currentSec =
-                                          val.position.inSeconds;
-                                      final int m = currentSec ~/ 60;
-                                      final int s = currentSec % 60;
-                                      final String posFormatted =
-                                          '$m:${s.toString().padLeft(2, '0')}';
-                                      return Text(
-                                        '$posFormatted / ${provider.totalDurationFormatted} (${provider.selectedDurationSeconds}s)',
-                                        style: AppTextStyles.bodySmall.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 12,
-                                        ),
-                                      );
-                                    },
-                                  )
-                                else
-                                  Text(
-                                    '${provider.trimStartFormatted} / ${provider.totalDurationFormatted} (${provider.selectedDurationSeconds}s)',
-                                    style: AppTextStyles.bodySmall.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                    ),
+                              ),
+                            )
+                          else
+                            MediaThumbnailWidget(item: selectedItem),
+
+                          // Play/Pause center overlay
+                          if (!_isPlaying)
+                            Center(
+                              child: Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 36,
+                                ),
+                              ),
+                            ),
+
+                          // Selected duration pill badge bottom-left
+                          Positioned(
+                            bottom: AppSpacing.md,
+                            left: AppSpacing.md,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                                vertical: AppSpacing.xs,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.75),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.pill,
+                                ),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  const Icon(
+                                    Icons.cut_rounded,
+                                    color: AppColors.gradientCyan,
+                                    size: 14,
                                   ),
-                              ],
+                                  const SizedBox(width: 6),
+                                  if (_controller != null && _isInitialized)
+                                    SafeValueListenableBuilder<
+                                      VideoPlayerValue
+                                    >(
+                                      valueListenable: _controller!,
+                                      builder:
+                                          (
+                                            BuildContext context,
+                                            VideoPlayerValue val,
+                                            Widget? _,
+                                          ) {
+                                            final int currentSec =
+                                                val.position.inSeconds;
+                                            final int m = currentSec ~/ 60;
+                                            final int s = currentSec % 60;
+                                            final String posFormatted =
+                                                '$m:${s.toString().padLeft(2, '0')}';
+                                            return Text(
+                                              '$posFormatted / ${provider.totalDurationFormatted} (${provider.selectedDurationSeconds}s)',
+                                              style: AppTextStyles.bodySmall
+                                                  .copyWith(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 12,
+                                                  ),
+                                            );
+                                          },
+                                    )
+                                  else
+                                    Text(
+                                      '${provider.trimStartFormatted} / ${provider.totalDurationFormatted} (${provider.selectedDurationSeconds}s)',
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: AppSpacing.xxl),
-
-            // ── DRAG THE HANDLES TO TRIM Section Header ───────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Text(
-                'DRAG THE HANDLES TO TRIM',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: context.themeTextMuted,
-                  letterSpacing: 1.2,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: AppSpacing.md),
-
-            // ── Interactive Timeline Trim Handle Strip ────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: _VideoTrimTimelineStrip(
-                trimStart: provider.trimStart,
-                trimEnd: provider.trimEnd,
-                onChanged: (double start, double end) {
-                  provider.setTrimRange(start, end);
-                  _seekToTrimStart(start, provider.totalDurationSeconds);
-                },
-                item: selectedItem,
-              ),
-            ),
-
-            const SizedBox(height: AppSpacing.xs),
-
-            // ── Time range counters below timeline ──────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Text(
-                    provider.trimStartFormatted,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.themeTextSecondary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.gradientPink.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '${provider.selectedDurationSeconds}s selected',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.gradientPink,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
+                        ],
                       ),
                     ),
                   ),
-                  Text(
-                    provider.totalDurationFormatted,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.themeTextSecondary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
 
-            const Spacer(),
-          ],
+              const SizedBox(height: AppSpacing.xxl),
+
+              // ── DRAG THE HANDLES TO TRIM Section Header ───────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                child: Text(
+                  'DRAG THE HANDLES TO TRIM',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: context.themeTextMuted,
+                    letterSpacing: 1.2,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: AppSpacing.md),
+
+              // ── Interactive Timeline Trim Handle Strip ────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                child: _VideoTrimTimelineStrip(
+                  trimStart: provider.trimStart,
+                  trimEnd: provider.trimEnd,
+                  onChanged: (double start, double end) {
+                    provider.setTrimRange(start, end);
+                    _seekToTrimStart(start, provider.totalDurationSeconds);
+                  },
+                  item: selectedItem,
+                ),
+              ),
+
+              const SizedBox(height: AppSpacing.xs),
+
+              // ── Time range counters below timeline ──────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                    Text(
+                      provider.trimStartFormatted,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.themeTextSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.gradientPink.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${provider.selectedDurationSeconds}s selected',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.gradientPink,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      provider.totalDurationFormatted,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.themeTextSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Spacer(),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
-}
-
 
 class _VideoTrimTimelineStrip extends StatefulWidget {
   const _VideoTrimTimelineStrip({
@@ -500,9 +510,7 @@ class _VideoTrimTimelineStripState extends State<_VideoTrimTimelineStrip> {
                 top: 0,
                 bottom: 0,
                 width: leftPos.clamp(0, width),
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.65),
-                ),
+                child: Container(color: Colors.black.withValues(alpha: 0.65)),
               ),
 
               // Unselected right dim overlay
@@ -511,9 +519,7 @@ class _VideoTrimTimelineStripState extends State<_VideoTrimTimelineStrip> {
                 right: 0,
                 top: 0,
                 bottom: 0,
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.65),
-                ),
+                child: Container(color: Colors.black.withValues(alpha: 0.65)),
               ),
 
               // Selected active frame border (Pink outline)
@@ -576,8 +582,10 @@ class _VideoTrimTimelineStripState extends State<_VideoTrimTimelineStrip> {
                   onHorizontalDragUpdate: (DragUpdateDetails details) {
                     final double deltaRatio =
                         details.delta.dx / (width - handleWidth * 2);
-                    final double newEnd = (widget.trimEnd + deltaRatio)
-                        .clamp(widget.trimStart + 0.05, 1.0);
+                    final double newEnd = (widget.trimEnd + deltaRatio).clamp(
+                      widget.trimStart + 0.05,
+                      1.0,
+                    );
                     widget.onChanged(widget.trimStart, newEnd);
                   },
                   child: Container(

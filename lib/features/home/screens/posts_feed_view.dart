@@ -11,6 +11,7 @@ import '../widgets/comments_bottom_sheet.dart';
 import '../widgets/filter_communities_bottom_sheet.dart';
 import '../widgets/home_empty_state_view.dart';
 import '../widgets/post_feed_card.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/cache/user_relationship_cache.dart';
 
 class PostsFeedView extends StatelessWidget {
@@ -392,6 +393,20 @@ class PostsFeedView extends StatelessWidget {
                   fallbackPost: item,
                   explicitSaved: newSaved,
                 );
+                if (newSaved) {
+                  AppSnackBar.showSuccess(
+                    context,
+                    title: 'Saved to your profile!',
+                    duration: const Duration(seconds: 2),
+                  );
+                } else {
+                  AppSnackBar.show(
+                    context,
+                    title: 'Removed from your saved items.',
+                    type: SnackBarType.info,
+                    duration: const Duration(seconds: 2),
+                  );
+                }
               }
             },
             onOpenComments: () {

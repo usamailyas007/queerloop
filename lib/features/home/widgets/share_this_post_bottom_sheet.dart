@@ -446,16 +446,22 @@ class _ShareThisPostBottomSheetState extends State<ShareThisPostBottomSheet> {
                                 );
                               } catch (_) {}
 
-                              messenger.showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    isSaved
-                                        ? 'Removed from your saved items.'
-                                        : 'Saved to your profile!',
-                                  ),
+                              if (isSaved) {
+                                AppSnackBar.show(
+                                  context,
+                                  title: 'Removed from your saved items.',
+                                  type: SnackBarType.info,
                                   duration: const Duration(seconds: 2),
-                                ),
-                              );
+                                  messenger: messenger,
+                                );
+                              } else {
+                                AppSnackBar.showSuccess(
+                                  context,
+                                  title: 'Saved to your profile!',
+                                  duration: const Duration(seconds: 2),
+                                  messenger: messenger,
+                                );
+                              }
                             }
                           },
                         );

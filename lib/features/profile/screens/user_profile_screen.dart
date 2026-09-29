@@ -160,6 +160,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return false;
   }
 
+  String _resolveCommentRule(String? postRule) {
+    final String pRule = (postRule ?? '').trim().toLowerCase();
+    final String aRule = (_profile?.allowCommentsFrom ?? '').trim().toLowerCase();
+    if (aRule == 'nobody' || pRule == 'nobody') return 'nobody';
+    if (aRule == 'mutual' || pRule == 'mutual') return 'mutual';
+    if (aRule == 'following' || pRule == 'following' || aRule.contains('you follow') || pRule.contains('you follow')) {
+      return 'following';
+    }
+    if (aRule.contains('follower') || pRule.contains('follower')) return 'followers';
+    if (aRule.isNotEmpty && aRule != 'everyone') return aRule;
+    if (pRule.isNotEmpty && pRule != 'everyone') return pRule;
+    return 'everyone';
+  }
+
   Future<List<ReelItemModel>> _convertPostsToReels(
     List<PostResponseModel> reelPosts, {
     required ApiClient client,
@@ -217,10 +231,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ? post.authorAvatar!.trim()
           : (profileAvatar ?? AppImages.defaultAvatar);
 
-      final String resolvedAllowCommentsFrom =
-          (post.allowCommentsFrom.isNotEmpty && post.allowCommentsFrom != 'everyone')
-              ? post.allowCommentsFrom
-              : (_profile?.allowCommentsFrom ?? post.allowCommentsFrom);
+      final String resolvedAllowCommentsFrom = _resolveCommentRule(post.allowCommentsFrom);
       final bool resolvedIsAuthorPrivate =
           post.isAuthorPrivate || (_profile?.isPrivate ?? false) || widget.isPrivate;
 
@@ -313,6 +324,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
       if (data is Map<String, dynamic>) {
         loadedProfile = UserProfile.fromJson(data);
+        final bool isPriv = loadedProfile.isPrivate ?? false;
+        final String commentRule = loadedProfile.allowCommentsFrom ?? 'everyone';
         AuthorProfileCache.set(
           loadedProfile.id,
           AuthorInfo(
@@ -321,7 +334,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             displayName: loadedProfile.displayName ?? '',
             avatarUrl: loadedProfile.avatarUrl,
             hideMyLikes: loadedProfile.hideMyLikes,
+            isPrivate: isPriv,
+            allowCommentsFrom: commentRule,
           ),
+        );
+        UserRelationshipCache.markPrivate(
+          loadedProfile.id,
+          username: loadedProfile.username,
+          isPrivate: isPriv,
         );
       }
     } catch (e) {
@@ -361,6 +381,33 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         amIFollower ||
         loadedProfile?.isFollowing == true ||
         loadedProfile?.relationship == 'following';
+
+    if (isCurrentlyFollowing) {
+      UserRelationshipCache.add(
+        userId: loadedProfile?.id ?? userId,
+        username: loadedProfile?.username ?? widget.username,
+      );
+    } else {
+      UserRelationshipCache.remove(
+        userId: loadedProfile?.id ?? userId,
+        username: loadedProfile?.username ?? widget.username,
+      );
+    }
+
+    final bool isAuthorFollowingMe = curUserId != null &&
+        curUserId.isNotEmpty &&
+        followingList.any((UserRelationItem f) => f.userId == curUserId);
+    if (isAuthorFollowingMe) {
+      UserRelationshipCache.addFollower(
+        userId: loadedProfile?.id ?? userId,
+        username: loadedProfile?.username ?? widget.username,
+      );
+    } else {
+      UserRelationshipCache.removeFollower(
+        userId: loadedProfile?.id ?? userId,
+        username: loadedProfile?.username ?? widget.username,
+      );
+    }
 
     final String? myName = auth.user?.displayName;
     final bool isOwn = (curUserId != null &&
@@ -1416,9 +1463,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       postAuthorId: post.authorId ?? _effectiveUserId,
                                       communityId: post.communityId,
                                       allowComments: post.allowComments,
-                                      allowCommentsFrom: (post.allowCommentsFrom.isNotEmpty && post.allowCommentsFrom != 'everyone')
-                                          ? post.allowCommentsFrom
-                                          : (_profile?.allowCommentsFrom ?? post.allowCommentsFrom),
+                                      allowCommentsFrom: (_profile?.allowCommentsFrom != null &&
+                                              _profile!.allowCommentsFrom!.trim().isNotEmpty &&
+                                              _profile!.allowCommentsFrom != 'everyone')
+                                          ? _profile!.allowCommentsFrom!
+                                          : ((post.allowCommentsFrom.isNotEmpty && post.allowCommentsFrom != 'everyone')
+                                              ? post.allowCommentsFrom
+                                              : (_profile?.allowCommentsFrom ?? 'everyone')),
                                       authorUsername: post.authorName ?? currentUsername,
                                       onCommentAdded: () {
                                         CommentCountRegistry.increment(post.id);

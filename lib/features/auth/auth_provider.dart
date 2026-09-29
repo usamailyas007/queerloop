@@ -8,7 +8,10 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/cache/user_relationship_cache.dart';
 import '../../core/services/push_notification_service.dart';
+import '../create_post/models/create_post_models.dart';
 import '../home/services/reel_video_preloader.dart';
+import '../home/widgets/comments_bottom_sheet.dart';
+import '../messages/services/shared_post_cache.dart';
 import 'auth_service.dart';
 import 'user.dart';
 
@@ -48,7 +51,7 @@ class AuthProvider extends ChangeNotifier {
       if (token != null && token.isNotEmpty) {
         PushNotificationService.unregisterDeviceToken(_client, authToken: token).ignore();
       }
-      _clearSession();
+      _clearSession().ignore();
     } else {
       debugPrint(
           '⚠️ [AuthProvider] Transient error refreshing token (${result.errorMessage}). Retaining user session.');
@@ -61,7 +64,7 @@ class AuthProvider extends ChangeNotifier {
     if (token != null && token.isNotEmpty) {
       PushNotificationService.unregisterDeviceToken(_client, authToken: token).ignore();
     }
-    _clearSession();
+    _clearSession().ignore();
   }
 
   // ── Private state ─────────────────────────────────────────────────────────
@@ -528,7 +531,7 @@ class AuthProvider extends ChangeNotifier {
       // Best-effort logout — clear local state regardless.
     } catch (_) {
     } finally {
-      _clearSession();
+      await _clearSession();
     }
   }
 
@@ -571,7 +574,7 @@ class AuthProvider extends ChangeNotifier {
         reason: reason,
         feedback: feedback,
       );
-      _clearSession();
+      await _clearSession();
       return result;
     } on ApiException catch (failure) {
       _error = failure.message;
@@ -649,7 +652,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Clear all session state and notify listeners once.
-  void _clearSession() {
+  Future<void> _clearSession() async {
     final String? currentToken = _client.authToken;
     if (currentToken != null && currentToken.isNotEmpty) {
       PushNotificationService.unregisterDeviceToken(_client, authToken: currentToken).ignore();
@@ -657,16 +660,25 @@ class AuthProvider extends ChangeNotifier {
     _client.authToken = null;
     _user = null;
     _refreshToken = null;
-    _status = AuthStatus.signedOut;
-    _error = null;
-    _service.clearAllLocalData();
+    _pendingSocialName = null;
+    _pendingSocialEmail = null;
+    _pendingSocialAvatar = null;
+    // Await clearAllLocalData so SharedPreferences + secure storage are
+    // fully wiped before notifyListeners() triggers navigation to login.
+    await _service.clearAllLocalData();
     // Silence and clear video + shared-post caches so next user starts fresh
     ReelVideoPreloader.instance.setFeedVisible(false);
     ReelVideoPreloader.instance.pauseAll();
     ReelVideoPreloader.instance.muteAll();
     ReelVideoPreloader.instance.disposeAll();
     ReelVideoPreloader.instance.clearAllCaches().ignore();
+    PostInteractionRegistry.clear();
     UserRelationshipCache.clear();
+    AuthorProfileCache.clear();
+    CommentCountRegistry.clear();
+    CommentLikesTracker.clear();
+    DeletedPostsRegistry.clear();
+    SharedPostCache.clearAll().ignore();
     notifyListeners();
   }
 

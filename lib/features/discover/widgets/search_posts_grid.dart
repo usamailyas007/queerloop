@@ -36,6 +36,20 @@ class SearchPostsGrid extends StatelessWidget {
       if (id.isNotEmpty && DeletedPostsRegistry.isDeleted(id)) continue;
       if (refId.isNotEmpty && DeletedPostsRegistry.isDeleted(refId)) continue;
 
+      final bool isFollowing = UserRelationshipCache.isFollowing(
+        userId: item.authorId,
+        username: item.authorUsername,
+      );
+      if (!PostVisibilityFilter.canViewPost(
+        visibility: item.visibility,
+        authorId: item.authorId,
+        authorUsername: item.authorUsername,
+        isFollowing: isFollowing,
+        isAuthorPrivate: item.isAuthorPrivate,
+      )) {
+        continue;
+      }
+
       if (id.isNotEmpty && seen.contains('id:$id')) continue;
       if (refId.isNotEmpty && seen.contains('id:$refId')) continue;
 

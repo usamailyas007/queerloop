@@ -131,8 +131,24 @@ class SharedPostCache {
     }
   }
 
+  /// Clear in-memory cache and remove persisted disk cache (e.g. on logout)
+  static Future<void> clearAll() async {
+    _memoryCache.clear();
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefKey);
+    } catch (e) {
+      debugPrint('⚠️ [SharedPostCache] Error clearing disk cache: $e');
+    }
+  }
+
   /// Clear cache if needed (e.g. on logout)
   static void clearMemory() {
     _memoryCache.clear();
+  }
+
+  /// Alias for clearing memory cache
+  static void clear() {
+    clearMemory();
   }
 }

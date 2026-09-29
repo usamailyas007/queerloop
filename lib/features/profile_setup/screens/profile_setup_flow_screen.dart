@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/routes.dart';
@@ -26,19 +27,25 @@ class _ProfileSetupFlowScreenState extends State<ProfileSetupFlowScreen> {
     super.initState();
     final ProfileSetupProvider provider = context.read<ProfileSetupProvider>();
     final AuthProvider auth = context.read<AuthProvider>();
+    final int initialStep = provider.currentStep;
+    _pageController = PageController(initialPage: initialStep);
+
+    // Defer prefillSocialData so notifyListeners() inside it (and the
+    // downstream checkUsername call) never fires during the build phase.
     if (provider.displayName.isEmpty &&
         (auth.pendingSocialName != null ||
             auth.user?.displayName != null ||
             auth.pendingSocialEmail != null ||
             auth.user?.email != null)) {
-      provider.prefillSocialData(
-        displayName: auth.pendingSocialName ?? auth.user?.displayName,
-        email: auth.pendingSocialEmail ?? auth.user?.email,
-        avatarUrl: auth.pendingSocialAvatar,
-      );
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<ProfileSetupProvider>().prefillSocialData(
+          displayName: auth.pendingSocialName ?? auth.user?.displayName,
+          email: auth.pendingSocialEmail ?? auth.user?.email,
+          avatarUrl: auth.pendingSocialAvatar,
+        );
+      });
     }
-    final int initialStep = provider.currentStep;
-    _pageController = PageController(initialPage: initialStep);
   }
 
   @override
@@ -88,14 +95,18 @@ class _ProfileSetupFlowScreenState extends State<ProfileSetupFlowScreen> {
     final ProfileSetupProvider provider =
         context.watch<ProfileSetupProvider>();
 
-    // Smoothly animate if provider step changes from external screen without post-frame flicker
+    // Smoothly animate if provider step changes — defer to avoid calling
+    // animateToPage() synchronously inside a build call.
     if (_pageController.hasClients &&
         _pageController.page?.round() != provider.currentStep) {
-      _pageController.animateToPage(
-        provider.currentStep,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _pageController.animateToPage(
+          provider.currentStep,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      });
     }
 
     return Scaffold(
