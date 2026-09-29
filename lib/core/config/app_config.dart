@@ -8,7 +8,9 @@ abstract final class AppConfig {
     defaultValue: 'staging',
   );
 
-  static const String baseUrl = String.fromEnvironment('BASE_URL');
+  static const String _rawBaseUrl = String.fromEnvironment('BASE_URL');
+  static String get baseUrl =>
+      _rawBaseUrl.isNotEmpty ? _rawBaseUrl : 'http://3.208.100.236:3001';
   static const String cdnUrl = 'https://d1gkk7mpfaivqk.cloudfront.net';
 
   static String get socketUrl {
