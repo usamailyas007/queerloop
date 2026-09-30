@@ -265,7 +265,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                         '• Search & Interaction History: Searches, keywords, and hashtags you enter in Discover, along with post engagement history, to provide search results and relevant community content.\n'
                         '• Safety & Moderation Reports: Details of reports you file against abusive users or content (including reason and description), used strictly by human moderators to investigate safety violations.\n'
                         '• Activity Status & Read Receipts: Indicators showing when you are active and whether direct messages have been read (which you can toggle off at any time in Settings → Privacy).\n'
-                        '• Device & Technical Data: IP address, device hardware model, operating system version, push notification tokens (Firebase Cloud Messaging / APNs), language preferences, and anonymized diagnostic crash logs.\n'
+                        '• Device & Technical Data: IP address, device hardware model, operating system version, push notification tokens (Firebase Cloud Messaging / APNs), and language preferences.\n'
                         '• Guest Browsing: When using the App as a guest, you can view public content without creating an account. We do not track personal identities or link browsing history to guest sessions.',
                   ),
 
@@ -337,23 +337,14 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     numberAndTitle: '8. Data Security & Storage Standards',
                     bodyText:
                         'We implement industry-standard administrative, physical, and technical safeguards to protect your personal data:\n'
-                        '• Encryption in Transit: All data transferred between your mobile device and our servers is encrypted using modern Transport Layer Security (HTTPS / TLS 1.3).\n'
                         '• Encryption at Rest: Media and database records are stored with advanced encryption standards (AES-256).\n'
                         '• Password Protection: All user passwords are encrypted using one-way cryptographic hashing algorithms and are never stored in plaintext.',
                   ),
 
-                  // 9. Children's Privacy (Strict 18+ Policy)
+                  // 9. Your Rights (GDPR, CCPA / CPRA & Global Rights)
                   _buildSection(
                     context: context,
-                    numberAndTitle: '9. Children\'s Online Privacy Protection (18+ Only)',
-                    bodyText:
-                        'QueerLoop+ is strictly intended for adults who are 18 years of age or older. We do not knowingly solicit or collect personal information from children or minors under 18. If we learn that personal data of a user under 18 has been collected or that an account belongs to a minor, we will immediately deactivate the account and delete all associated information.',
-                  ),
-
-                  // 10. Your Rights (GDPR, CCPA / CPRA & Global Rights)
-                  _buildSection(
-                    context: context,
-                    numberAndTitle: '10. Your Privacy Rights (GDPR & CCPA/CPRA)',
+                    numberAndTitle: '9. Your Privacy Rights (GDPR & CCPA/CPRA)',
                     bodyText:
                         'Depending on your location, you may have specific statutory privacy rights:\n'
                         '• Right to Access: You can review all personal data stored in your profile at any time in Settings.\n'
@@ -362,18 +353,18 @@ class PrivacyPolicyScreen extends StatelessWidget {
                         '• Right to Restrict or Object: You can restrict who can message you or view your content through in-app visibility toggles.',
                   ),
 
-                  // 11. Changes to This Privacy Policy
+                  // 10. Changes to This Privacy Policy
                   _buildSection(
                     context: context,
-                    numberAndTitle: '11. Changes to This Privacy Policy',
+                    numberAndTitle: '10. Changes to This Privacy Policy',
                     bodyText:
                         'We may update this Privacy Policy periodically to reflect changes in our practices or applicable legal requirements. When updates are published, the "Effective Date" at the top of this policy will be revised, and in-app notifications will be displayed for significant updates.',
                   ),
 
-                  // 12. Contact Information & Data Protection Officer
+                  // 11. Contact Information & Data Protection Officer
                   _buildSection(
                     context: context,
-                    numberAndTitle: '12. Contact Information & Data Inquiries',
+                    numberAndTitle: '11. Contact Information & Data Inquiries',
                     bodyText:
                         'If you have any questions, concerns, or requests regarding this Privacy Policy or how your personal information is handled, please reach out to our team directly:',
                     customContent: _buildEmailCard(

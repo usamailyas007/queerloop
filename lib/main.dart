@@ -26,6 +26,10 @@ void main() {
       // ensureInitialized() and runApp() must be called in the same zone.
       WidgetsFlutterBinding.ensureInitialized();
 
+      await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+        DeviceOrientation.portraitUp,
+      ]);
+
       await FirebaseService.initialize();
       await CacheManager.instance.init();
       await SharedPostCache.init();

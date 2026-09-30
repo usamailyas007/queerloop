@@ -38,15 +38,13 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 
-	<!-- Camera, Microphone, and Photo Library Permissions -->
+	<!-- Camera and Photo Library Permissions -->
 	<key>NSCameraUsageDescription</key>
-	<string>QueerLoop+ requires access to your camera to take profile photos and capture video reels.</string>
+	<string>QueerLoop+ requires access to your camera to take profile and post photos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>QueerLoop+ requires access to your photo library to select and upload photos and videos for your profile and posts.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>QueerLoop+ requires permission to save photos and videos to your photo library.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>QueerLoop+ requires access to your microphone to record audio when capturing video reels.</string>
 
 	<!-- App Transport Security (Allows backend and CDN traffic) -->
 	<key>NSAppTransportSecurity</key>
@@ -75,15 +73,10 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
