@@ -102,6 +102,12 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         appRouteObserver.subscribe(this, route);
       } catch (_) {}
     }
+    final bool isCurrent = route == null || route.isCurrent;
+    if (!isCurrent) {
+      _isCoveredByRoute = true;
+      _videoController?.pause();
+      _videoController?.setVolume(0);
+    }
   }
 
   @override
@@ -167,8 +173,10 @@ class _ReelFeedCardState extends State<ReelFeedCard>
       _videoInitialized = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _isDisposed) return;
-        if (widget.isActive && !_isPaused && !_isCoveredByRoute) {
-          ReelVideoPreloader.instance.setFeedVisible(true);
+        if (widget.isActive &&
+            !_isPaused &&
+            !_isCoveredByRoute &&
+            ReelVideoPreloader.instance.isFeedVisible) {
           ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
           existing.play();
         } else {
@@ -188,12 +196,15 @@ class _ReelFeedCardState extends State<ReelFeedCard>
       if (_isDisposed || !mounted) return;
       _videoController = existing;
       setState(() => _videoInitialized = true);
-      if (widget.isActive && !_isPaused && !_isCoveredByRoute) {
-        ReelVideoPreloader.instance.setFeedVisible(true);
+      if (widget.isActive &&
+          !_isPaused &&
+          !_isCoveredByRoute &&
+          ReelVideoPreloader.instance.isFeedVisible) {
         ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
         existing.play();
       } else {
         existing.pause();
+        existing.setVolume(0);
       }
       return;
     }
@@ -212,8 +223,10 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         }
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted || _isDisposed) return;
-          if (widget.isActive && !_isPaused && !_isCoveredByRoute) {
-            ReelVideoPreloader.instance.setFeedVisible(true);
+          if (widget.isActive &&
+              !_isPaused &&
+              !_isCoveredByRoute &&
+              ReelVideoPreloader.instance.isFeedVisible) {
             ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
             controller.play();
           } else {
@@ -236,8 +249,10 @@ class _ReelFeedCardState extends State<ReelFeedCard>
             setState(() => _videoInitialized = true);
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted || _isDisposed) return;
-              if (widget.isActive && !_isPaused && !_isCoveredByRoute) {
-                ReelVideoPreloader.instance.setFeedVisible(true);
+              if (widget.isActive &&
+                  !_isPaused &&
+                  !_isCoveredByRoute &&
+                  ReelVideoPreloader.instance.isFeedVisible) {
                 ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
                 controller.play();
               } else {

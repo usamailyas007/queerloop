@@ -331,12 +331,8 @@ class ReelVideoPreloader {
     void execute() {
       for (final VideoPlayerController c in _controllers.values) {
         try {
-          if (c.value.isInitialized && c.value.isPlaying) {
-            c.pause();
-          }
-          if (c.value.isInitialized && c.value.volume != 0) {
-            c.setVolume(0);
-          }
+          c.pause();
+          c.setVolume(0);
         } catch (_) {}
       }
     }
@@ -354,9 +350,7 @@ class ReelVideoPreloader {
     void execute() {
       for (final VideoPlayerController c in _controllers.values) {
         try {
-          if (c.value.isInitialized && c.value.volume != 0) {
-            c.setVolume(0);
-          }
+          c.setVolume(0);
         } catch (_) {}
       }
     }
@@ -411,7 +405,10 @@ class ReelVideoPreloader {
   void pause(String id) {
     try {
       final VideoPlayerController? c = _controllers[id];
-      if (c != null && c.value.isInitialized) c.pause();
+      if (c != null) {
+        c.pause();
+        c.setVolume(0);
+      }
     } catch (_) {}
   }
 
@@ -420,15 +417,18 @@ class ReelVideoPreloader {
     for (final VideoPlayerController c in _controllers.values) {
       try {
         c.pause();
+        c.setVolume(0);
         c.dispose();
       } catch (_) {}
     }
     _controllers.clear();
     _initializing.clear();
+    _activeReelIds.clear();
   }
 
   /// Clear ALL caches — call on logout to free memory + disk.
   Future<void> clearAllCaches() async {
+    setFeedVisible(false);
     disposeAll();
     _diskCachePathMap.clear();
     _cachingUrls.clear();

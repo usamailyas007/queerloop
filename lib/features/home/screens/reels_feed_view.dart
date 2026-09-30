@@ -73,17 +73,25 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
     super.initState();
     _activePage = widget.initialPage;
     _pageController = PageController(initialPage: widget.initialPage);
-    // Ensure feed is visible so reel starts playing automatically on entry or login
-    ReelVideoPreloader.instance.setFeedVisible(true);
     if (widget.customReels != null) {
       _localReels = List<ReelItemModel>.from(widget.customReels!);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        final ModalRoute<void>? route = ModalRoute.of(context);
+        final bool isCurrent = route == null || route.isCurrent;
+        if (isCurrent && ReelVideoPreloader.instance.isFeedVisible) {
+          ReelVideoPreloader.instance.setFeedVisible(true);
+        } else if (!isCurrent) {
+          ReelVideoPreloader.instance.setFeedVisible(false);
+          ReelVideoPreloader.instance.pauseAll();
+          ReelVideoPreloader.instance.muteAll();
+        }
+
         final HomeFeedProvider provider = context.read<HomeFeedProvider>();
         final List<ReelItemModel> reels =
             widget.customReels != null ? _localReels : provider.reels;
-        if (reels.isNotEmpty) {
+        if (reels.isNotEmpty && isCurrent && ReelVideoPreloader.instance.isFeedVisible) {
           ReelVideoPreloader.instance.preloadSurrounding(reels, _activePage);
           if (_activePage < reels.length) {
             provider.recordView(reels[_activePage].id);
@@ -91,6 +99,17 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
         }
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ModalRoute<void>? route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
+      ReelVideoPreloader.instance.setFeedVisible(false);
+      ReelVideoPreloader.instance.pauseAll();
+      ReelVideoPreloader.instance.muteAll();
+    }
   }
 
   @override
