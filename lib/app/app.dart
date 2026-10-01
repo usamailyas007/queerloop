@@ -37,7 +37,7 @@ import 'router.dart';
 import 'routes.dart';
 
 class App extends StatelessWidget {
-  const App({super.key, this.initialThemeMode = ThemeMode.dark});
+  const App({super.key, this.initialThemeMode = ThemeMode.light});
 
   final ThemeMode initialThemeMode;
 

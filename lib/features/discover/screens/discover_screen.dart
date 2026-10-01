@@ -30,55 +30,32 @@ class DiscoverScreen extends StatefulWidget {
 }
 
 class _DiscoverScreenState extends State<DiscoverScreen> {
-  bool _isLoadingAll = true;
   bool _isRefreshing = false;
 
-  Future<void> _fetchAllApis({bool isPullToRefresh = false}) async {
-    final DiscoverProvider discover = context.read<DiscoverProvider>();
-    final CotdProvider cotd = context.read<CotdProvider>();
-    final SpotlightsProvider spotlights = context.read<SpotlightsProvider>();
-
-    final bool hasExistingContent = discover.trendingItems.isNotEmpty ||
-        discover.communities.isNotEmpty ||
-        discover.creatorsToWatch.isNotEmpty ||
-        discover.newCreators.isNotEmpty ||
-        cotd.currentQuestion != null ||
-        spotlights.liveSpotlight != null;
-
-    if (isPullToRefresh) {
-      setState(() {
-        _isRefreshing = true;
-      });
-    } else if (!hasExistingContent) {
-      setState(() {
-        _isLoadingAll = true;
-      });
-    }
-
+  Future<void> _handleRefresh() async {
+    if (_isRefreshing) return;
+    setState(() {
+      _isRefreshing = true;
+    });
     try {
       final AuthProvider auth = context.read<AuthProvider>();
       final ProfileProvider profile = context.read<ProfileProvider>();
       final String? myId = auth.userId ?? profile.profile?.id;
-      final String myUsername = (auth.user?.displayName ?? profile.username)
-          .replaceAll('@', '')
-          .trim();
-      discover.setCurrentUser(userId: myId, username: myUsername);
       final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+      final DiscoverProvider discover = context.read<DiscoverProvider>();
+
       discover.syncHomeFeedContent(posts: homeFeed.posts, reels: homeFeed.reels);
 
       await Future.wait<void>(<Future<void>>[
         discover.fetchDiscoverData(refresh: true),
-        cotd.refresh(),
-        spotlights.refresh(),
+        context.read<CotdProvider>().refresh(),
+        context.read<SpotlightsProvider>().refresh(),
         if (myId != null && myId.isNotEmpty)
           profile.fetchUserCommunities(myId),
       ]);
-    } catch (e) {
-      debugPrint('⚠️ [DiscoverScreen] Error fetching all discover APIs: $e');
     } finally {
       if (mounted) {
         setState(() {
-          _isLoadingAll = false;
           _isRefreshing = false;
         });
       }
@@ -90,7 +67,30 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _fetchAllApis();
+        final AuthProvider auth = context.read<AuthProvider>();
+        final ProfileProvider profile = context.read<ProfileProvider>();
+        final String? myId = auth.userId ?? profile.profile?.id;
+        final String myUsername = (auth.user?.displayName ?? profile.username)
+            .replaceAll('@', '')
+            .trim();
+        final DiscoverProvider discover = context.read<DiscoverProvider>();
+        discover.setCurrentUser(userId: myId, username: myUsername);
+        final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+        discover.syncHomeFeedContent(posts: homeFeed.posts, reels: homeFeed.reels);
+        if (!discover.hasLoadedDiscoverOnce || discover.isInitialLoading) {
+          discover.fetchDiscoverData();
+        }
+        final CotdProvider cotd = context.read<CotdProvider>();
+        if (!cotd.hasLoadedOnce && !cotd.isLoading) {
+          cotd.refresh();
+        }
+        final SpotlightsProvider spotlights = context.read<SpotlightsProvider>();
+        if (!spotlights.hasLoadedOnce && !spotlights.isLoading) {
+          spotlights.loadInitial();
+        }
+        if (myId != null && myId.isNotEmpty) {
+          profile.fetchUserCommunities(myId);
+        }
       }
     });
   }
@@ -98,9 +98,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   @override
   Widget build(BuildContext context) {
     return _DiscoverScreenBody(
-      onRefresh: () => _fetchAllApis(isPullToRefresh: true),
+      onRefresh: _handleRefresh,
       isRefreshing: _isRefreshing,
-      isLoadingAll: _isLoadingAll,
     );
   }
 }
@@ -109,12 +108,10 @@ class _DiscoverScreenBody extends StatelessWidget {
   const _DiscoverScreenBody({
     required this.onRefresh,
     required this.isRefreshing,
-    required this.isLoadingAll,
   });
 
   final RefreshCallback onRefresh;
   final bool isRefreshing;
-  final bool isLoadingAll;
 
   static const List<Color> _rankColors = <Color>[
     AppColors.gradientPink,
@@ -131,23 +128,22 @@ class _DiscoverScreenBody extends StatelessWidget {
     final CotdProvider cotd = context.watch<CotdProvider>();
     final AppLocalizations l10n = AppLocalizations.of(context);
 
-    final bool hasAnyData = provider.trendingItems.isNotEmpty ||
-        provider.communities.isNotEmpty ||
-        provider.creatorsToWatch.isNotEmpty ||
-        provider.newCreators.isNotEmpty ||
-        cotd.currentQuestion != null ||
-        spotlights.liveSpotlight != null;
-
+    // Wait until ALL discover data is loaded before hiding shimmer:
+    // 1. Hashtags (trending items)
+    // 2. Today's question (CotdProvider)
+    // 3. Communities to explore
+    // 4. Creators to watch
+    // 5. New creators
+    // 6. Community spotlight (SpotlightsProvider)
     final bool isAllDataLoaded = provider.hasLoadedDiscoverOnce &&
         !provider.isDiscoverLoading &&
         cotd.hasLoadedOnce &&
         !cotd.isLoading &&
         spotlights.hasLoadedOnce &&
         !spotlights.isLoading &&
-        !isRefreshing &&
-        !isLoadingAll;
+        !isRefreshing;
 
-    final bool showShimmer = !isAllDataLoaded && (!hasAnyData || isLoadingAll);
+    final bool showShimmer = !isAllDataLoaded;
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -393,44 +389,6 @@ class _DiscoverScreenBody extends StatelessWidget {
                 ),
               ),
             ],
-
-            // ── Fallback when all sections are empty ──────────────────────
-            if (!hasAnyData)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xxl,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        Icon(
-                          Icons.explore_outlined,
-                          size: 56,
-                          color: context.themeIconMuted,
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        Text(
-                          'No trending content yet',
-                          style: AppTextStyles.titleMedium.copyWith(
-                            color: context.themeTextPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          'Check back soon for new questions, creators, and communities.',
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: context.themeTextSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
 
             const SliverToBoxAdapter(
               child: SizedBox(height: AppSpacing.xxxxxl),
