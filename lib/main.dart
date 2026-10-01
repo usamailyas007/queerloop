@@ -68,3 +68,8 @@ void main() {
     ),
   );
 }
+
+// Before Pushing Testflight 
+
+// flutter build ios --release --dart-define-from-file=env/prod.json
+// 

@@ -3,6 +3,7 @@
 enum Env { staging, prod }
 
 abstract final class AppConfig {
+  
   static const String _envName = String.fromEnvironment(
     'ENV',
     defaultValue: 'staging',

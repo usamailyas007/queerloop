@@ -20,3 +20,9 @@ void main() async {
 // flutter run -d chrome -t lib/main_admin.dart --dart-define-from-file=env/staging.json \
 //   --web-browser-flag "--disable-web-security" \
 //   --web-browser-flag "--user-data-dir=/tmp/ql-admin-dev"
+
+// Command for running admin production web in sandbox
+
+// flutter run -d chrome -t lib/main_admin.dart --dart-define-from-file=env/prod.json \
+//   --web-browser-flag "--disable-web-security" \
+//   --web-browser-flag "--user-data-dir=/tmp/ql-admin-prod"
