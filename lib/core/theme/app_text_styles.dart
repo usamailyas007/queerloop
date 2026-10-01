@@ -23,6 +23,14 @@ abstract final class AppTextStyles {
     color: Colors.white,
   );
 
+  static const TextStyle headingSmall = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 18,
+    height: 1.3,
+    fontWeight: FontWeight.w600,
+    color: AppColors.textPrimary,
+  );
+
   static const TextStyle titleLarge = TextStyle(
     fontFamily: fontFamily,
     fontSize: 24,

@@ -41,7 +41,7 @@ void main() {
         'dark' => ThemeMode.dark,
         'light' => ThemeMode.light,
         'system' => ThemeMode.system,
-        _ => ThemeMode.light,
+        _ => ThemeMode.dark,
       };
 
       SystemChrome.setSystemUIOverlayStyle(
