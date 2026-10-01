@@ -330,8 +330,12 @@ class ProfileSetupProvider extends ChangeNotifier {
         }
       }
 
-      base64String ??=
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+      if (base64String == null || base64String.isEmpty) {
+        // User did not select any photo — do not upload dummy black image to server
+        _error = null;
+        notifyListeners();
+        return true;
+      }
 
       final UserProfile result = await _service.saveAvatar(
         userId: userId,

@@ -41,11 +41,19 @@ class DiscoverProvider extends ChangeNotifier {
   bool _isLoadingNewCreators = false;
   bool _isLoadingSearch = false;
   bool _isLoadingRecentSearches = false;
+  bool _hasLoadedDiscoverOnce = false;
 
+  bool get hasLoadedDiscoverOnce => _hasLoadedDiscoverOnce;
   bool get isInitialLoading => _isInitialLoading;
   bool get isRefreshing => _isRefreshing;
   bool get isDiscoverLoading =>
-      _isInitialLoading || _isRefreshing || (_isLoadingTrending && _trendingItems.isEmpty);
+      !_hasLoadedDiscoverOnce ||
+      _isInitialLoading ||
+      _isRefreshing ||
+      _isLoadingTrending ||
+      _isLoadingCommunities ||
+      _isLoadingCreatorsToWatch ||
+      _isLoadingNewCreators;
   bool get isLoadingTrending => _isLoadingTrending;
   bool get isLoadingCreatorsToWatch => _isLoadingCreatorsToWatch;
   bool get isLoadingNewCreators => _isLoadingNewCreators;
@@ -73,6 +81,7 @@ class DiscoverProvider extends ChangeNotifier {
     _currentUsername = null;
     _isInitialLoading = true;
     _isRefreshing = false;
+    _hasLoadedDiscoverOnce = false;
     _isLoadingTrending = false;
     _isLoadingCreatorsToWatch = false;
     _isLoadingNewCreators = false;
@@ -807,6 +816,7 @@ class DiscoverProvider extends ChangeNotifier {
     } finally {
       _isInitialLoading = false;
       _isRefreshing = false;
+      _hasLoadedDiscoverOnce = true;
       notifyListeners();
     }
   }

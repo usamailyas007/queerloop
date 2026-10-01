@@ -25,6 +25,7 @@ class CotdProvider extends ChangeNotifier {
     _isLoading = false;
     _isSubmitting = false;
     _hasAnswered = false;
+    _hasLoadedOnce = false;
     _error = null;
     _currentUserId = null;
     _currentUsername = null;
@@ -38,6 +39,7 @@ class CotdProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isSubmitting = false;
   bool _hasAnswered = false;
+  bool _hasLoadedOnce = false;
   String? _error;
   String? _currentUserId;
   String? _currentUsername;
@@ -47,6 +49,7 @@ class CotdProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isSubmitting => _isSubmitting;
   bool get hasAnswered => _hasAnswered;
+  bool get hasLoadedOnce => _hasLoadedOnce;
   String? get error => _error;
 
   void updateUserInfo({String? userId, String? username}) {
@@ -97,6 +100,7 @@ class CotdProvider extends ChangeNotifier {
       debugPrint('❌ [CotdProvider] _loadCurrentQuestion: $e');
     } finally {
       _isLoading = false;
+      _hasLoadedOnce = true;
       notifyListeners();
     }
   }

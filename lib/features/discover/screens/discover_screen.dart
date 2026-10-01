@@ -77,10 +77,17 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         discover.setCurrentUser(userId: myId, username: myUsername);
         final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
         discover.syncHomeFeedContent(posts: homeFeed.posts, reels: homeFeed.reels);
-        if (discover.isInitialLoading) {
+        if (!discover.hasLoadedDiscoverOnce || discover.isInitialLoading) {
           discover.fetchDiscoverData();
         }
-        context.read<SpotlightsProvider>().loadInitial();
+        final CotdProvider cotd = context.read<CotdProvider>();
+        if (!cotd.hasLoadedOnce && !cotd.isLoading) {
+          cotd.refresh();
+        }
+        final SpotlightsProvider spotlights = context.read<SpotlightsProvider>();
+        if (!spotlights.hasLoadedOnce && !spotlights.isLoading) {
+          spotlights.loadInitial();
+        }
         if (myId != null && myId.isNotEmpty) {
           profile.fetchUserCommunities(myId);
         }
@@ -118,11 +125,25 @@ class _DiscoverScreenBody extends StatelessWidget {
     final DiscoverProvider provider = context.watch<DiscoverProvider>();
     final ProfileProvider profile = context.watch<ProfileProvider>();
     final SpotlightsProvider spotlights = context.watch<SpotlightsProvider>();
+    final CotdProvider cotd = context.watch<CotdProvider>();
     final AppLocalizations l10n = AppLocalizations.of(context);
 
-    final bool isInitialLoading = provider.isDiscoverLoading ||
-        (!spotlights.hasLoadedOnce && spotlights.isLoading) ||
-        isRefreshing;
+    // Wait until ALL discover data is loaded before hiding shimmer:
+    // 1. Hashtags (trending items)
+    // 2. Today's question (CotdProvider)
+    // 3. Communities to explore
+    // 4. Creators to watch
+    // 5. New creators
+    // 6. Community spotlight (SpotlightsProvider)
+    final bool isAllDataLoaded = provider.hasLoadedDiscoverOnce &&
+        !provider.isDiscoverLoading &&
+        cotd.hasLoadedOnce &&
+        !cotd.isLoading &&
+        spotlights.hasLoadedOnce &&
+        !spotlights.isLoading &&
+        !isRefreshing;
+
+    final bool showShimmer = !isAllDataLoaded;
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -131,7 +152,7 @@ class _DiscoverScreenBody extends StatelessWidget {
           onRefresh: onRefresh,
           color: AppColors.gradientCyan,
           backgroundColor: context.themeCardBackground,
-          child: isInitialLoading
+          child: showShimmer
               ? const DiscoverShimmerSkeleton()
               : CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(
@@ -230,7 +251,7 @@ class _DiscoverScreenBody extends StatelessWidget {
             ],
 
             // ── Conversation of the Day ────────────────────────────────────
-            if (context.watch<CotdProvider>().currentQuestion != null) ...<Widget>[
+            if (cotd.currentQuestion != null) ...<Widget>[
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
               const SliverToBoxAdapter(
                 child: Padding(
@@ -352,7 +373,7 @@ class _DiscoverScreenBody extends StatelessWidget {
             ],
 
             // ── COMMUNITY SPOTLIGHT ────────────────────────────────────────
-            if (context.watch<SpotlightsProvider>().liveSpotlight != null) ...<Widget>[
+            if (spotlights.liveSpotlight != null) ...<Widget>[
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
               const SliverToBoxAdapter(
                 child: Padding(

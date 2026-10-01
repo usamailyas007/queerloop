@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
+import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_gradient_button.dart';
@@ -140,31 +141,20 @@ class _Step2AddPhotoScreenState extends State<Step2AddPhotoScreen> {
                                 child: Container(
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: context.themeBackground,
-                                    image: hasPhoto
-                                        ? DecorationImage(
-                                            image: provider.profilePhotoPath != null
-                                                ? FileImage(
-                                                    File(provider.profilePhotoPath!),
-                                                  ) as ImageProvider
-                                                : NetworkImage(provider.avatarUrl!),
-                                            fit: BoxFit.cover,
-                                          )
-                                        : null,
+                                    color: context.themeCardBackground,
+                                    image: DecorationImage(
+                                      image: provider.profilePhotoPath != null
+                                          ? FileImage(
+                                              File(provider.profilePhotoPath!),
+                                            ) as ImageProvider
+                                          : (provider.avatarUrl != null &&
+                                                  provider.avatarUrl!.isNotEmpty)
+                                              ? NetworkImage(provider.avatarUrl!)
+                                              : const AssetImage(AppImages.defaultAvatar)
+                                                  as ImageProvider,
+                                      fit: BoxFit.cover,
+                                    ),
                                   ),
-                                  child: hasPhoto
-                                      ? null
-                                      : Center(
-                                          child: SvgPicture.asset(
-                                            AppIcons.user,
-                                            width: 48,
-                                            height: 48,
-                                            colorFilter: ColorFilter.mode(
-                                              context.themeIconMuted,
-                                              BlendMode.srcIn,
-                                            ),
-                                          ),
-                                        ),
                                 ),
                               ),
                             ),
