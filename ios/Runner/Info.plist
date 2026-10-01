@@ -46,13 +46,6 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>QueerLoop+ requires permission to save photos and videos to your photo library.</string>
 
-	<!-- App Transport Security (Allows backend and CDN traffic) -->
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
-
 	<!-- Background Modes for Push Notifications -->
 	<key>UIBackgroundModes</key>
 	<array>

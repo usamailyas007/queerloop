@@ -8,18 +8,17 @@ This is a pre-submission risk analysis, ranked by likelihood of causing an App S
 
 ## 🔴 Critical — fix before submitting
 
-### 1. Backend traffic is plaintext HTTP, not HTTPS — this is the #1 issue
+### 1. ✅ Fixed — backend is now HTTPS/WSS
 
-- [app_config.dart](lib/core/config/app_config.dart): `baseUrl` fallback is `http://3.208.100.236:3001`, `socketUrl` fallback is `http://3.208.100.236:3018`.
-- [env/prod.json](env/prod.json) and [env/staging.json](env/staging.json) both explicitly set `BASE_URL` and `SOCKET_URL` to `http://...` — **this is not a fallback-only issue, your actual production config points at plain HTTP.**
-- [ios/Runner/Info.plist](ios/Runner/Info.plist): `NSAppTransportSecurity → NSAllowsArbitraryLoads = true` — a blanket App Transport Security exception that disables Apple's HTTPS enforcement entirely.
-- [android/app/src/main/AndroidManifest.xml:16](android/app/src/main/AndroidManifest.xml): `android:usesCleartextTraffic="true"` confirms the same thing on Android.
+This was the single biggest issue in the whole audit, and it's now resolved end to end:
 
-**Why this matters more than a typical ATS warning:** every login, auth token, private message, sexual-orientation/gender-identity label, and uploaded photo/video is transmitted unencrypted between the app and `3.208.100.236`. Anyone on the same Wi‑Fi/network path (coffee shop, hostile ISP, a country where being LGBTQ+ is criminalized) can intercept it. This isn't hypothetical for this app in particular — it's the exact user population most exposed by a MITM leak of identity data.
+- [env/prod.json](env/prod.json): `BASE_URL` is `https://api.queerloopplus.com`, `SOCKET_URL` is `wss://api.queerloopplus.com`.
+- [env/staging.json](env/staging.json): `BASE_URL` is `https://api-test.queerloopplus.com`, `SOCKET_URL` is `wss://api-test.queerloopplus.com`.
+- [app_config.dart](lib/core/config/app_config.dart): the insecure hardcoded `http://3.208.100.236...` fallback is gone — `baseUrl`/`socketUrl` are now plain `String.fromEnvironment` reads with no default, and `assertValid()` hard-fails the build if `BASE_URL` is empty rather than silently falling back to plaintext.
+- [ios/Runner/Info.plist](ios/Runner/Info.plist): removed the blanket `NSAppTransportSecurity → NSAllowsArbitraryLoads` exception — no longer needed now that all traffic is HTTPS, and leaving it in would've stayed a reviewer red flag for no reason.
+- [android/app/src/main/AndroidManifest.xml](android/app/src/main/AndroidManifest.xml): removed `android:usesCleartextTraffic="true"` for the same reason.
 
-The Privacy Policy previously claimed *"Encryption in Transit: ... HTTPS / TLS 1.3"* — that line has since been removed from [privacy_policy_screen.dart](lib/features/profile/screens/privacy_policy_screen.dart) and [legal/PRIVACY_POLICY.md](legal/PRIVACY_POLICY.md) so the policy no longer states something false. **That only fixes the misrepresentation, not the underlying exposure** — the traffic itself is still plaintext, still interceptable, and a blanket ATS exception is still a visible red flag to reviewers regardless of what the policy says. Treat this as unresolved until the backend is actually behind TLS.
-
-**Fix:** put the backend behind TLS (an ALB/API Gateway with an ACM cert, or Cloudflare/nginx with Let's Encrypt in front of the EC2 box is enough), switch `BASE_URL`/`SOCKET_URL` to `https://`/`wss://`, then remove `NSAllowsArbitraryLoads` and `usesCleartextTraffic` entirely. This is backend infra work, not just a plist toggle — budget real time for it before submission.
+The Privacy Policy's "Encryption in Transit" claim, removed earlier in this process for being false at the time, could reasonably be re-added now that it's actually true — your call whether to restore it.
 
 ### 2. No age restriction anywhere — this is now a confirmed product decision, not a gap
 
@@ -99,7 +98,7 @@ If native in-app video/audio recording gets built later (rather than picking exi
 
 ## Suggested order of work
 
-1. Fix the HTTPS/TLS issue (#1) — this is both the biggest security exposure and the biggest reviewer red flag if noticed. **Still open.**
+1. ~~Fix the HTTPS/TLS issue~~ — done (#1); this was the biggest security exposure and reviewer red flag in the whole audit, and it's now fully closed.
 2. ~~Resolve the age-gate inconsistency~~ — done; app is deliberately open to all ages (#2), reflect this honestly in App Store Connect's age rating and Privacy Nutrition Label.
 3. ~~Add the app-level Privacy Manifest~~ — done (#3); just keep `NSPrivacyCollectedDataTypes` in sync with whatever gets declared in App Store Connect.
 4. ~~Add proactive image/nudity filtering~~ — done for media (#4); text (captions/bios/comments/DMs) still has no proactive filter. **Partially open.**
@@ -107,4 +106,4 @@ If native in-app video/audio recording gets built later (rather than picking exi
 6. Do a full manual pass of Sign in with Apple, report flows, and block/mute on a real device.
 7. Fill in App Store Connect: age rating, support URL, reviewer notes with test credentials.
 
-Given this is an individual developer account (not an organization), Apple tends to scrutinize completeness a little more closely on first submissions — closing out the 🔴 items above is worth the extra time before you hit submit.
+All three 🔴 Critical items are now resolved — what's left is the #4 text-filtering gap (optional, not a 🔴), a manual real-device test pass, and App Store Connect metadata/questionnaire work. Given this is an individual developer account (not an organization), Apple tends to scrutinize completeness a little more closely on first submissions — don't skip step 6 (the real-device pass) just because the code-level risks are closed out.

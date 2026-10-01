@@ -290,8 +290,8 @@ class _DotsIndicator extends StatelessWidget {
             color: isActive
                 ? null
                 : (isDark
-                    ? Colors.white.withValues(alpha: 0.25)
-                    : Colors.black.withValues(alpha: 0.15)),
+                      ? Colors.white.withValues(alpha: 0.25)
+                      : Colors.black.withValues(alpha: 0.15)),
             borderRadius: BorderRadius.circular(AppRadius.pill),
           ),
         );
