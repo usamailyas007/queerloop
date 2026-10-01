@@ -1,6 +1,6 @@
 {
   "ENV": "staging",
-  "BASE_URL": "http://3.208.100.236:3001",
-  "SOCKET_URL": "http://3.208.100.236:3018",
+  "BASE_URL": "https://api-test.queerloopplus.com",
+  "SOCKET_URL": "wss://api-test.queerloopplus.com",
   "USE_MOCK_API": false
 }

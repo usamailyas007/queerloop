@@ -14,6 +14,8 @@ class AuthorInfo {
     this.hideMyLikes,
     this.isPrivate = false,
     this.allowCommentsFrom = 'everyone',
+    this.profileVisibility = 'everyone',
+    this.allowMessagesFrom = 'everyone',
   });
 
   final String id;
@@ -23,6 +25,8 @@ class AuthorInfo {
   final bool? hideMyLikes;
   final bool isPrivate;
   final String allowCommentsFrom;
+  final String profileVisibility;
+  final String allowMessagesFrom;
 }
 
 class AuthorProfileCache {
@@ -285,6 +289,9 @@ class PostResponseModel {
     this.allowDownloads = true,
     this.isAuthorPrivate = false,
     this.allowCommentsFrom = 'everyone',
+    this.profileVisibility = 'everyone',
+    this.allowMessagesFrom = 'everyone',
+    this.hideMyLikes = false,
     this.hasLikeCount = true,
     this.likesCount = 0,
     this.commentsCount = 0,
@@ -316,6 +323,9 @@ class PostResponseModel {
   final bool allowDownloads;
   final bool isAuthorPrivate;
   final String allowCommentsFrom;
+  final String profileVisibility;
+  final String allowMessagesFrom;
+  final bool hideMyLikes;
   final bool hasLikeCount;
   final int likesCount;
   final int commentsCount;
@@ -354,6 +364,9 @@ class PostResponseModel {
     bool? allowDownloads,
     bool? isAuthorPrivate,
     String? allowCommentsFrom,
+    String? profileVisibility,
+    String? allowMessagesFrom,
+    bool? hideMyLikes,
     bool? hasLikeCount,
     int? likesCount,
     int? commentsCount,
@@ -385,6 +398,9 @@ class PostResponseModel {
       allowDownloads: allowDownloads ?? this.allowDownloads,
       isAuthorPrivate: isAuthorPrivate ?? this.isAuthorPrivate,
       allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
+      profileVisibility: profileVisibility ?? this.profileVisibility,
+      allowMessagesFrom: allowMessagesFrom ?? this.allowMessagesFrom,
+      hideMyLikes: hideMyLikes ?? this.hideMyLikes,
       hasLikeCount: hasLikeCount ?? this.hasLikeCount,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
@@ -737,6 +753,37 @@ class PostResponseModel {
         .trim()
         .toLowerCase();
 
+    final String resolvedProfileVisibility = (map['author'] is Map
+            ? (map['author']['profileVisibility'] ?? map['author']['profile_visibility'])
+            : null)?.toString() ??
+        (map['user'] is Map
+            ? (map['user']['profileVisibility'] ?? map['user']['profile_visibility'])
+            : null)?.toString() ??
+        map['profileVisibility']?.toString() ??
+        map['profile_visibility']?.toString() ??
+        cachedAuthor?.profileVisibility ??
+        'everyone';
+
+    final String resolvedAllowMessagesFrom = (map['author'] is Map
+            ? (map['author']['allowMessagesFrom'] ?? map['author']['allow_messages_from'])
+            : null)?.toString() ??
+        (map['user'] is Map
+            ? (map['user']['allowMessagesFrom'] ?? map['user']['allow_messages_from'])
+            : null)?.toString() ??
+        map['allowMessagesFrom']?.toString() ??
+        map['allow_messages_from']?.toString() ??
+        cachedAuthor?.allowMessagesFrom ??
+        'everyone';
+
+    final bool? resolvedHideMyLikes = (map['author'] is Map
+            ? (map['author']['hideMyLikes'] ?? map['author']['hide_my_likes'] ?? map['author']['hideLikes'])
+            : null) as bool? ??
+        (map['user'] is Map
+            ? (map['user']['hideMyLikes'] ?? map['user']['hide_my_likes'] ?? map['user']['hideLikes'])
+            : null) as bool? ??
+        (map['hideMyLikes'] ?? map['hide_my_likes'] ?? map['hideLikes']) as bool? ??
+        cachedAuthor?.hideMyLikes;
+
     final bool resolvedIsAuthorPrivate = (map['author'] is Map
             ? (map['author']['isPrivate'] ?? map['author']['is_private'])
             : null) == true ||
@@ -754,20 +801,20 @@ class PostResponseModel {
         username: finalAuthorName,
         isPrivate: resolvedIsAuthorPrivate,
       );
-      if (cachedAuthor == null && (finalAuthorName != null || finalAuthorDisplayName != null)) {
-        AuthorProfileCache.set(
-          finalAuthorId,
-          AuthorInfo(
-            id: finalAuthorId,
-            username: finalAuthorName ?? '',
-            displayName: finalAuthorDisplayName ?? finalAuthorName ?? '',
-            avatarUrl: finalAuthorAvatar,
-            hideMyLikes: (map['hideLikes'] ?? map['hideMyLikes']) as bool?,
-            isPrivate: resolvedIsAuthorPrivate,
-            allowCommentsFrom: resolvedAllowCommentsFrom,
-          ),
-        );
-      }
+      AuthorProfileCache.set(
+        finalAuthorId,
+        AuthorInfo(
+          id: finalAuthorId,
+          username: finalAuthorName ?? cachedAuthor?.username ?? '',
+          displayName: finalAuthorDisplayName ?? finalAuthorName ?? cachedAuthor?.displayName ?? '',
+          avatarUrl: finalAuthorAvatar ?? cachedAuthor?.avatarUrl,
+          hideMyLikes: resolvedHideMyLikes ?? cachedAuthor?.hideMyLikes,
+          isPrivate: resolvedIsAuthorPrivate,
+          allowCommentsFrom: resolvedAllowCommentsFrom,
+          profileVisibility: resolvedProfileVisibility,
+          allowMessagesFrom: resolvedAllowMessagesFrom,
+        ),
+      );
     }
 
     final PostResponseModel post = PostResponseModel(
@@ -795,6 +842,9 @@ class PostResponseModel {
       allowDownloads: (map['allowDownloads'] ?? map['allowSharing'] ?? map['allowDownload']) as bool? ?? true,
       isAuthorPrivate: resolvedIsAuthorPrivate,
       allowCommentsFrom: resolvedAllowCommentsFrom,
+      profileVisibility: resolvedProfileVisibility,
+      allowMessagesFrom: resolvedAllowMessagesFrom,
+      hideMyLikes: resolvedHideMyLikes == true,
       hasLikeCount: rawLikes != null,
       likesCount: () {
         if (rawLikes is num) return rawLikes.toInt();
@@ -879,6 +929,7 @@ class PostResponseModel {
         return raw == true || raw == 1 || raw == 'true';
       }(),
       hideLikes: rawLikes == null ||
+          (resolvedHideMyLikes == true) ||
           (map['hideLikes'] ??
               map['hideMyLikes'] ??
               (map['author'] is Map
@@ -977,6 +1028,9 @@ class PostResponseModel {
         likesCount: post.likesCount,
         commentsCount: post.commentsCount,
       );
+      if (post.hideMyLikes || post.hideLikes) {
+        PostInteractionRegistry.setLikeCountHidden(cleanPostId, true);
+      }
     }
     return post;
   }

@@ -636,6 +636,16 @@ class HomeFeedProvider extends ChangeNotifier {
         (post.allowCommentsFrom.isNotEmpty && post.allowCommentsFrom != 'everyone')
             ? post.allowCommentsFrom
             : (cachedAuthor?.allowCommentsFrom ?? post.allowCommentsFrom);
+    final String resolvedProfileVisibility =
+        (post.profileVisibility.isNotEmpty && post.profileVisibility != 'everyone')
+            ? post.profileVisibility
+            : (cachedAuthor?.profileVisibility ?? 'everyone');
+    final String resolvedAllowMessagesFrom =
+        (post.allowMessagesFrom.isNotEmpty && post.allowMessagesFrom != 'everyone')
+            ? post.allowMessagesFrom
+            : (cachedAuthor?.allowMessagesFrom ?? 'everyone');
+    final bool resolvedHideMyLikes =
+        post.hideMyLikes || (cachedAuthor?.hideMyLikes == true);
 
     return ReelItemModel(
       id: post.id,
@@ -657,8 +667,11 @@ class HomeFeedProvider extends ChangeNotifier {
       allowDownloads: post.allowDownloads,
       isAuthorPrivate: resolvedIsAuthorPrivate,
       allowCommentsFrom: resolvedAllowCommentsFrom,
+      profileVisibility: resolvedProfileVisibility,
+      allowMessagesFrom: resolvedAllowMessagesFrom,
+      hideMyLikes: resolvedHideMyLikes,
       hasLikeCount: post.hasLikeCount,
-      hideLikes: post.hideLikes || (cachedAuthor?.hideMyLikes == true),
+      hideLikes: post.hideLikes || resolvedHideMyLikes,
       visibility: post.visibility,
       tags: post.tags,
       communityId: post.communityId,
@@ -820,6 +833,16 @@ class HomeFeedProvider extends ChangeNotifier {
         (post.allowCommentsFrom.isNotEmpty && post.allowCommentsFrom != 'everyone')
             ? post.allowCommentsFrom
             : (cachedAuthor?.allowCommentsFrom ?? post.allowCommentsFrom);
+    final String resolvedProfileVisibility =
+        (post.profileVisibility.isNotEmpty && post.profileVisibility != 'everyone')
+            ? post.profileVisibility
+            : (cachedAuthor?.profileVisibility ?? 'everyone');
+    final String resolvedAllowMessagesFrom =
+        (post.allowMessagesFrom.isNotEmpty && post.allowMessagesFrom != 'everyone')
+            ? post.allowMessagesFrom
+            : (cachedAuthor?.allowMessagesFrom ?? 'everyone');
+    final bool resolvedHideMyLikes =
+        post.hideMyLikes || (cachedAuthor?.hideMyLikes == true);
 
     return PostItemModel(
       id: post.id,
@@ -841,8 +864,11 @@ class HomeFeedProvider extends ChangeNotifier {
       allowDownloads: post.allowDownloads,
       isAuthorPrivate: resolvedIsAuthorPrivate,
       allowCommentsFrom: resolvedAllowCommentsFrom,
+      profileVisibility: resolvedProfileVisibility,
+      allowMessagesFrom: resolvedAllowMessagesFrom,
+      hideMyLikes: resolvedHideMyLikes,
       hasLikeCount: post.hasLikeCount,
-      hideLikes: post.hideLikes || (cachedAuthor?.hideMyLikes == true),
+      hideLikes: post.hideLikes || resolvedHideMyLikes,
       visibility: post.visibility,
       status: post.status,
     );

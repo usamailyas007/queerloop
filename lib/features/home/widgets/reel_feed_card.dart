@@ -9,6 +9,7 @@ import '../../../app/routes.dart';
 import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_icons.dart';
+import '../../../core/theme/app_images.dart';
 import '../../../core/widgets/app_follow_button.dart';
 import '../../../core/widgets/app_user_avatar.dart';
 import '../../../core/widgets/safe_value_listenable_builder.dart';
@@ -570,10 +571,11 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         ? AuthorProfileCache.get(reelAuthorId)
         : null;
     final bool authorHidesLikes =
-        item.hideLikes || !item.hasLikeCount || (cachedAuthor?.hideMyLikes == true);
+        item.hideLikes || item.hideMyLikes || !item.hasLikeCount || (cachedAuthor?.hideMyLikes == true);
     final bool myProfileHidesLikes = profileProvider.hideMyLikes;
     final bool shouldHideLikes = !item.hasLikeCount ||
         item.hideLikes ||
+        item.hideMyLikes ||
         authorHidesLikes ||
         PostInteractionRegistry.isLikeCountHidden(item.id) ||
         (!isOwnReel &&
@@ -714,7 +716,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                 // Like
                 _RightActionButton(
                   onTap: widget.onLikeToggle,
-                  label: (shouldHideLikes || !item.hasLikeCount || item.hideLikes)
+                  label: (shouldHideLikes || !item.hasLikeCount || item.hideLikes || item.hideMyLikes)
                       ? ''
                       : '${item.likesCount}',
                   child: Image.asset(
@@ -958,6 +960,15 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                             ),
                           );
                         } else {
+                          final String resolvedProfileVis =
+                              (item.profileVisibility.isNotEmpty && item.profileVisibility != 'everyone')
+                                  ? item.profileVisibility
+                                  : (cachedAuthor?.profileVisibility ?? 'everyone');
+                          final String resolvedAllowMsgs =
+                              (item.allowMessagesFrom.isNotEmpty && item.allowMessagesFrom != 'everyone')
+                                  ? item.allowMessagesFrom
+                                  : (cachedAuthor?.allowMessagesFrom ?? 'everyone');
+
                           Navigator.push<void>(
                             context,
                             MaterialPageRoute<void>(
@@ -973,6 +984,10 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                                           .split('.')
                                           .first,
                                 avatarAsset: item.avatarAsset,
+                                isPrivate: item.isAuthorPrivate || (cachedAuthor?.isPrivate == true),
+                                profileVisibility: resolvedProfileVis,
+                                allowMessagesFrom: resolvedAllowMsgs,
+                                allowCommentsFrom: item.allowCommentsFrom,
                               ),
                             ),
                           );
@@ -981,7 +996,23 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          AppUserAvatar(imageAsset: item.avatarAsset, size: 38),
+                          Builder(
+                            builder: (BuildContext context) {
+                              final String resolvedProfileVis =
+                                  (item.profileVisibility.isNotEmpty && item.profileVisibility != 'everyone')
+                                      ? item.profileVisibility
+                                      : (cachedAuthor?.profileVisibility ?? 'everyone');
+                              final bool canSeeAvatar = isOwnReel ||
+                                  UserPrivacyPolicy.canViewProfilePhoto(
+                                    profileVisibility: resolvedProfileVis,
+                                    targetUserId: item.authorId,
+                                    targetUsername: item.username,
+                                  );
+                              final String displayAvatar =
+                                  canSeeAvatar ? item.avatarAsset : AppImages.defaultAvatar;
+                              return AppUserAvatar(imageAsset: displayAvatar, size: 38);
+                            },
+                          ),
                           const SizedBox(width: 8),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,

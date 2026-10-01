@@ -100,12 +100,15 @@ class PostFeedCard extends StatelessWidget {
         commentsCount: commentsCount,
         isLiked: isLiked,
         isSaved: isSaved,
-        hideLikes: post.hideLikes,
+        hideLikes: post.hideLikes || post.hideMyLikes,
         communityId: post.communityId,
         allowComments: post.allowComments,
         allowDownloads: post.allowDownloads,
         isAuthorPrivate: post.isAuthorPrivate,
         allowCommentsFrom: post.allowCommentsFrom,
+        profileVisibility: post.profileVisibility,
+        allowMessagesFrom: post.allowMessagesFrom,
+        hideMyLikes: post.hideMyLikes,
       );
       Navigator.push<void>(
         context,
@@ -207,10 +210,11 @@ class PostFeedCard extends StatelessWidget {
 
     final AuthorInfo? cachedAuthor =
         (authorId != null && authorId.isNotEmpty) ? AuthorProfileCache.get(authorId) : null;
-    final bool authorHidesLikes = post.hideLikes || !post.hasLikeCount || (cachedAuthor?.hideMyLikes == true);
+    final bool authorHidesLikes = post.hideLikes || post.hideMyLikes || !post.hasLikeCount || (cachedAuthor?.hideMyLikes == true);
     final bool myProfileHidesLikes = profileProvider.hideMyLikes;
     final bool shouldHideLikes = !post.hasLikeCount ||
         post.hideLikes ||
+        post.hideMyLikes ||
         authorHidesLikes ||
         PostInteractionRegistry.isLikeCountHidden(post.id) ||
         (!isCurrentUser &&
@@ -218,6 +222,23 @@ class PostFeedCard extends StatelessWidget {
                 currentUserId != null &&
                 authorId.trim().toLowerCase() == currentUserId.trim().toLowerCase() &&
                 myProfileHidesLikes));
+
+    final String resolvedProfileVis =
+        (post.profileVisibility.isNotEmpty && post.profileVisibility != 'everyone')
+            ? post.profileVisibility
+            : (cachedAuthor?.profileVisibility ?? 'everyone');
+    final String resolvedAllowMsgs =
+        (post.allowMessagesFrom.isNotEmpty && post.allowMessagesFrom != 'everyone')
+            ? post.allowMessagesFrom
+            : (cachedAuthor?.allowMessagesFrom ?? 'everyone');
+    final bool canSeeAvatar = isCurrentUser ||
+        UserPrivacyPolicy.canViewProfilePhoto(
+          profileVisibility: resolvedProfileVis,
+          targetUserId: authorId,
+          targetUsername: post.username,
+        );
+    final String displayAvatar =
+        canSeeAvatar ? post.avatarAsset : AppImages.defaultAvatar;
 
     final Widget card = Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -258,6 +279,10 @@ class PostFeedCard extends StatelessWidget {
                           ? post.authorDisplayName!.trim()
                           : post.username.replaceAll('@', '').split('.').first,
                       avatarAsset: post.avatarAsset,
+                      isPrivate: post.isAuthorPrivate || (cachedAuthor?.isPrivate == true),
+                      profileVisibility: resolvedProfileVis,
+                      allowMessagesFrom: resolvedAllowMsgs,
+                      allowCommentsFrom: post.allowCommentsFrom,
                     ),
                   ),
                 );
@@ -266,30 +291,30 @@ class PostFeedCard extends StatelessWidget {
             child: Row(
               children: <Widget>[
                 ClipOval(
-                  child: (post.avatarAsset.startsWith('http://') ||
-                          post.avatarAsset.startsWith('https://'))
+                  child: (displayAvatar.startsWith('http://') ||
+                          displayAvatar.startsWith('https://'))
                       ? Image.network(
-                          post.avatarAsset,
+                          displayAvatar,
                           width: 40,
                           height: 40,
                           fit: BoxFit.cover,
                           gaplessPlayback: true,
                           errorBuilder: (_, _, _) => Image.asset(
-                            AppImages.user1,
+                            AppImages.defaultAvatar,
                             width: 40,
                             height: 40,
                             fit: BoxFit.cover,
                           ),
                         )
                       : Image.asset(
-                          post.avatarAsset.trim().startsWith('assets/')
-                              ? post.avatarAsset.trim()
-                              : AppImages.user1,
+                          displayAvatar.trim().startsWith('assets/')
+                              ? displayAvatar.trim()
+                              : AppImages.defaultAvatar,
                           width: 40,
                           height: 40,
                           fit: BoxFit.cover,
                           errorBuilder: (_, _, _) => Image.asset(
-                            AppImages.user1,
+                            AppImages.defaultAvatar,
                             width: 40,
                             height: 40,
                             fit: BoxFit.cover,
@@ -501,7 +526,7 @@ class PostFeedCard extends StatelessWidget {
                       width: 22,
                       height: 22,
                     ),
-                    if (!shouldHideLikes && post.hasLikeCount && !post.hideLikes && effectiveLikesCount > 0) ...<Widget>[
+                    if (!shouldHideLikes && post.hasLikeCount && !post.hideLikes && !post.hideMyLikes && effectiveLikesCount > 0) ...<Widget>[
                       const SizedBox(width: 6),
                       Text(
                         '${effectiveLikesCount > 1000 ? '${(effectiveLikesCount / 1000).toStringAsFixed(1)}K' : effectiveLikesCount}',

@@ -12,8 +12,16 @@ import '../widgets/search_tag_tile.dart';
 class DiscoverProvider extends ChangeNotifier {
   DiscoverProvider({DiscoverService? discoverService})
       : _discoverService = discoverService {
+    _activeInstance = this;
     PostInteractionRegistry.notifier.addListener(_onRegistryChanged);
     fetchDiscoverData();
+  }
+
+  static DiscoverProvider? _activeInstance;
+
+  /// Clear all discover cache and state (call on logout).
+  static void clearGlobalCache() {
+    _activeInstance?.clearAll();
   }
 
   void _onRegistryChanged() {
@@ -27,6 +35,7 @@ class DiscoverProvider extends ChangeNotifier {
 
   // ── Loading States ──────────────────────────────────────────────────────────
   bool _isInitialLoading = true;
+  bool _isRefreshing = false;
   bool _isLoadingTrending = false;
   bool _isLoadingCreatorsToWatch = false;
   bool _isLoadingNewCreators = false;
@@ -34,13 +43,44 @@ class DiscoverProvider extends ChangeNotifier {
   bool _isLoadingRecentSearches = false;
 
   bool get isInitialLoading => _isInitialLoading;
+  bool get isRefreshing => _isRefreshing;
   bool get isDiscoverLoading =>
-      _isInitialLoading || (_isLoadingTrending && _trendingItems.isEmpty);
+      _isInitialLoading || _isRefreshing || (_isLoadingTrending && _trendingItems.isEmpty);
   bool get isLoadingTrending => _isLoadingTrending;
   bool get isLoadingCreatorsToWatch => _isLoadingCreatorsToWatch;
   bool get isLoadingNewCreators => _isLoadingNewCreators;
   bool get isLoadingSearch => _isLoadingSearch;
   bool get isLoadingRecentSearches => _isLoadingRecentSearches;
+
+  /// Full reset of discover state and caches (e.g. on logout / switch user).
+  void clearAll() {
+    _debounceTimer?.cancel();
+    _searchCache.clear();
+    _searchResults = const MultiTabSearchResults();
+    _trendingItems = const <TrendingItem>[];
+    _creatorsToWatch = const <DiscoverCreator>[];
+    _newCreators = const <DiscoverCreator>[];
+    _recentSearches.clear();
+    _communities = const <DiscoverCommunity>[];
+    _liveHomePosts = const <PostItemModel>[];
+    _liveHomeReels = const <ReelItemModel>[];
+    _followStates.clear();
+    _joinStates.clear();
+    _searchQuery = '';
+    _isSearchFocused = false;
+    _selectedSearchTab = 0;
+    _currentUserId = null;
+    _currentUsername = null;
+    _isInitialLoading = true;
+    _isRefreshing = false;
+    _isLoadingTrending = false;
+    _isLoadingCreatorsToWatch = false;
+    _isLoadingNewCreators = false;
+    _isLoadingSearch = false;
+    _isLoadingRecentSearches = false;
+    _isLoadingCommunities = false;
+    notifyListeners();
+  }
 
   // ── Search State ────────────────────────────────────────────────────────────
   bool _isSearchFocused = false;
@@ -681,11 +721,13 @@ class DiscoverProvider extends ChangeNotifier {
   List<DiscoverCreator> _creatorsToWatch = const <DiscoverCreator>[];
 
   List<DiscoverCreator> get creatorsToWatch {
+    final Iterable<DiscoverCreator> visible =
+        _creatorsToWatch.where((DiscoverCreator c) => c.showInDiscover);
     if (_currentUsername == null || _currentUsername!.isEmpty) {
-      return _creatorsToWatch;
+      return visible.toList();
     }
     final String cleanUname = _currentUsername!.replaceAll('@', '').trim().toLowerCase();
-    return _creatorsToWatch.where((DiscoverCreator c) =>
+    return visible.where((DiscoverCreator c) =>
       c.username.replaceAll('@', '').trim().toLowerCase() != cleanUname
     ).toList();
   }
@@ -698,7 +740,8 @@ class DiscoverProvider extends ChangeNotifier {
     try {
       final List<DiscoverCreator> creators =
           await _discoverService.getCreators(type: 'to_watch');
-      _creatorsToWatch = creators;
+      _creatorsToWatch =
+          creators.where((DiscoverCreator c) => c.showInDiscover).toList();
     } catch (_) {
     } finally {
       _isLoadingCreatorsToWatch = false;
@@ -709,11 +752,13 @@ class DiscoverProvider extends ChangeNotifier {
   List<DiscoverCreator> _newCreators = const <DiscoverCreator>[];
 
   List<DiscoverCreator> get newCreators {
+    final Iterable<DiscoverCreator> visible =
+        _newCreators.where((DiscoverCreator c) => c.showInDiscover);
     if (_currentUsername == null || _currentUsername!.isEmpty) {
-      return _newCreators;
+      return visible.toList();
     }
     final String cleanUname = _currentUsername!.replaceAll('@', '').trim().toLowerCase();
-    return _newCreators.where((DiscoverCreator c) =>
+    return visible.where((DiscoverCreator c) =>
       c.username.replaceAll('@', '').trim().toLowerCase() != cleanUname
     ).toList();
   }
@@ -726,7 +771,8 @@ class DiscoverProvider extends ChangeNotifier {
     try {
       final List<DiscoverCreator> creators =
           await _discoverService.getCreators(type: 'new');
-      _newCreators = creators;
+      _newCreators =
+          creators.where((DiscoverCreator c) => c.showInDiscover).toList();
     } catch (_) {
     } finally {
       _isLoadingNewCreators = false;
@@ -736,12 +782,17 @@ class DiscoverProvider extends ChangeNotifier {
 
   // ── Unified Initial / Refresh Fetch ──────────────────────────────────────────
   Future<void> fetchDiscoverData({bool refresh = false}) async {
-    if (!refresh && _trendingItems.isEmpty) {
+    if (refresh) {
+      _isRefreshing = true;
+      _searchCache.clear();
+      notifyListeners();
+    } else if (_trendingItems.isEmpty) {
       _isInitialLoading = true;
       notifyListeners();
     }
     if (_discoverService == null) {
       _isInitialLoading = false;
+      _isRefreshing = false;
       notifyListeners();
       return;
     }
@@ -755,6 +806,7 @@ class DiscoverProvider extends ChangeNotifier {
       ]);
     } finally {
       _isInitialLoading = false;
+      _isRefreshing = false;
       notifyListeners();
     }
   }
@@ -771,7 +823,7 @@ class DiscoverProvider extends ChangeNotifier {
     return const <String>[];
   }
 
-  List<DiscoverCreator> get youMightLike => _creatorsToWatch;
+  List<DiscoverCreator> get youMightLike => creatorsToWatch;
 
   bool _isLoadingCommunities = false;
   bool get isLoadingCommunities => _isLoadingCommunities;
@@ -844,6 +896,9 @@ class DiscoverProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_activeInstance == this) {
+      _activeInstance = null;
+    }
     PostInteractionRegistry.notifier.removeListener(_onRegistryChanged);
     _debounceTimer?.cancel();
     super.dispose();

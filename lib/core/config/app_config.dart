@@ -8,22 +8,11 @@ abstract final class AppConfig {
     defaultValue: 'staging',
   );
 
-  static const String _rawBaseUrl = String.fromEnvironment('BASE_URL');
-  static String get baseUrl =>
-      _rawBaseUrl.isNotEmpty ? _rawBaseUrl : 'http://3.208.100.236:3001';
+  static const String baseUrl = String.fromEnvironment('BASE_URL');
+
   static const String cdnUrl = 'https://d1gkk7mpfaivqk.cloudfront.net';
 
-  static String get socketUrl {
-    const String customSocket = String.fromEnvironment('SOCKET_URL');
-    if (customSocket.isNotEmpty) return customSocket;
-    if (baseUrl.isNotEmpty) {
-      try {
-        final Uri uri = Uri.parse(baseUrl);
-        return uri.replace(port: 3018).toString();
-      } catch (_) {}
-    }
-    return 'http://3.208.100.236:3018';
-  }
+  static const String socketUrl = String.fromEnvironment('SOCKET_URL');
 
   static const bool useMockApi = bool.fromEnvironment(
     'USE_MOCK_API',
@@ -44,7 +33,7 @@ abstract final class AppConfig {
   static void assertValid() {
     assert(
       baseUrl.isNotEmpty,
-      'BASE_URL is empty. Run with --dart-define-from-file=env/staging.json',
+      'BASE_URL is empty. Run with --dart-define-from-file=env/staging.json or env/prod.json',
     );
     assert(
       !(isProd && useMockApi),

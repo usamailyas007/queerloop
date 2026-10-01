@@ -30,6 +30,38 @@ class DiscoverScreen extends StatefulWidget {
 }
 
 class _DiscoverScreenState extends State<DiscoverScreen> {
+  bool _isRefreshing = false;
+
+  Future<void> _handleRefresh() async {
+    if (_isRefreshing) return;
+    setState(() {
+      _isRefreshing = true;
+    });
+    try {
+      final AuthProvider auth = context.read<AuthProvider>();
+      final ProfileProvider profile = context.read<ProfileProvider>();
+      final String? myId = auth.userId ?? profile.profile?.id;
+      final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
+      final DiscoverProvider discover = context.read<DiscoverProvider>();
+
+      discover.syncHomeFeedContent(posts: homeFeed.posts, reels: homeFeed.reels);
+
+      await Future.wait<void>(<Future<void>>[
+        discover.fetchDiscoverData(refresh: true),
+        context.read<CotdProvider>().refresh(),
+        context.read<SpotlightsProvider>().refresh(),
+        if (myId != null && myId.isNotEmpty)
+          profile.fetchUserCommunities(myId),
+      ]);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+        });
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -58,12 +90,21 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const _DiscoverScreenBody();
+    return _DiscoverScreenBody(
+      onRefresh: _handleRefresh,
+      isRefreshing: _isRefreshing,
+    );
   }
 }
 
 class _DiscoverScreenBody extends StatelessWidget {
-  const _DiscoverScreenBody();
+  const _DiscoverScreenBody({
+    required this.onRefresh,
+    required this.isRefreshing,
+  });
+
+  final RefreshCallback onRefresh;
+  final bool isRefreshing;
 
   static const List<Color> _rankColors = <Color>[
     AppColors.gradientPink,
@@ -80,19 +121,14 @@ class _DiscoverScreenBody extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     final bool isInitialLoading = provider.isDiscoverLoading ||
-        (!spotlights.hasLoadedOnce && spotlights.isLoading);
+        (!spotlights.hasLoadedOnce && spotlights.isLoading) ||
+        isRefreshing;
 
     return Scaffold(
       backgroundColor: context.themeBackground,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async {
-            await Future.wait<void>(<Future<void>>[
-              context.read<DiscoverProvider>().fetchDiscoverData(refresh: true),
-              context.read<CotdProvider>().refresh(),
-              context.read<SpotlightsProvider>().refresh(),
-            ]);
-          },
+          onRefresh: onRefresh,
           color: AppColors.gradientCyan,
           backgroundColor: context.themeCardBackground,
           child: isInitialLoading

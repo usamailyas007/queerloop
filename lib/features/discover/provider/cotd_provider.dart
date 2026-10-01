@@ -7,7 +7,28 @@ import '../services/cotd_service.dart';
 /// Manages the Conversation of the Day state and answer submissions.
 class CotdProvider extends ChangeNotifier {
   CotdProvider({required CotdService service}) : _service = service {
+    _activeInstance = this;
     _loadCurrentQuestion();
+  }
+
+  static CotdProvider? _activeInstance;
+
+  /// Clear in-memory COTD state and cache (e.g. on logout).
+  static void clearGlobalCache() {
+    _activeInstance?.clearAll();
+  }
+
+  /// Full reset of COTD state.
+  void clearAll() {
+    _currentQuestion = null;
+    _answers = <CotdAnswer>[];
+    _isLoading = false;
+    _isSubmitting = false;
+    _hasAnswered = false;
+    _error = null;
+    _currentUserId = null;
+    _currentUsername = null;
+    notifyListeners();
   }
 
   final CotdService _service;
@@ -222,5 +243,13 @@ class CotdProvider extends ChangeNotifier {
     if (_error == null) return;
     _error = null;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    if (_activeInstance == this) {
+      _activeInstance = null;
+    }
+    super.dispose();
   }
 }

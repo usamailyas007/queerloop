@@ -390,14 +390,34 @@ class _PostFullscreenImageViewerScreenState
         ),
       );
     } else {
+      final AuthorInfo? cachedAuthor =
+          (_post.authorId != null && _post.authorId!.isNotEmpty)
+              ? AuthorProfileCache.get(_post.authorId!)
+              : null;
+      final String resolvedProfileVis =
+          (_post.profileVisibility.isNotEmpty && _post.profileVisibility != 'everyone')
+              ? _post.profileVisibility
+              : (cachedAuthor?.profileVisibility ?? 'everyone');
+      final String resolvedAllowMsgs =
+          (_post.allowMessagesFrom.isNotEmpty && _post.allowMessagesFrom != 'everyone')
+              ? _post.allowMessagesFrom
+              : (cachedAuthor?.allowMessagesFrom ?? 'everyone');
+
       Navigator.push<void>(
         context,
         MaterialPageRoute<void>(
           builder: (_) => UserProfileScreen(
             userId: _post.authorId,
             username: _post.username.replaceAll('@', ''),
-            name: _post.username.replaceAll('@', '').split('.').first,
+            name: (_post.authorDisplayName != null &&
+                    _post.authorDisplayName!.trim().isNotEmpty)
+                ? _post.authorDisplayName!.trim()
+                : _post.username.replaceAll('@', '').split('.').first,
             avatarAsset: _post.avatarAsset,
+            isPrivate: _post.isAuthorPrivate || (cachedAuthor?.isPrivate == true),
+            profileVisibility: resolvedProfileVis,
+            allowMessagesFrom: resolvedAllowMsgs,
+            allowCommentsFrom: _post.allowCommentsFrom,
           ),
         ),
       );

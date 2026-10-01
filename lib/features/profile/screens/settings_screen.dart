@@ -16,6 +16,9 @@ import '../provider/profile_provider.dart';
 
 import '../widgets/logout_confirmation_modal_dialog.dart';
 import 'blocked_accounts_screen.dart';
+import '../../../admin/admin_view/community_spotlight/provider/spotlights_provider.dart';
+import '../../discover/provider/cotd_provider.dart';
+import '../../discover/provider/discover_provider.dart';
 import '../../home/services/reel_video_preloader.dart';
 import 'delete_account_screen.dart';
 import 'edit_profile_screen.dart';
@@ -471,6 +474,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           try {
                             await context.read<NotificationsProvider>().unregisterDeviceToken();
                           } catch (_) {}
+                          if (context.mounted) {
+                            try {
+                              context.read<DiscoverProvider>().clearAll();
+                              context.read<CotdProvider>().clearAll();
+                              context.read<SpotlightsProvider>().clearAll();
+                            } catch (_) {}
+                          }
                           if (context.mounted) {
                             await context.read<AuthProvider>().signOut();
                           }

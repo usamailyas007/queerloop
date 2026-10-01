@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/cache/user_relationship_cache.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_images.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_follow_button.dart';
@@ -37,6 +39,30 @@ class SearchPersonTile extends StatelessWidget {
 
     final bool isMe = (myId.isNotEmpty && person.id != null && person.id == myId) ||
         (myUsername.isNotEmpty && tileUsername == myUsername);
+
+    final bool canSeePhoto = isMe ||
+        UserPrivacyPolicy.canViewProfilePhoto(
+          profileVisibility: person.profileVisibility,
+          targetUserId: person.id,
+          targetUsername: person.username,
+          isViewerFollowing: isFollowing,
+        );
+
+    final String effectiveAvatar =
+        canSeePhoto ? person.avatarAsset : AppImages.defaultAvatar;
+
+    final String cleanName = (person.displayName != null &&
+            person.displayName!.trim().isNotEmpty &&
+            person.displayName!.trim().toLowerCase() !=
+                person.username.replaceAll('@', '').trim().toLowerCase())
+        ? person.displayName!.trim()
+        : '';
+    final String subtitle = cleanName.isNotEmpty
+        ? (person.pronouns.trim().isNotEmpty
+            ? '$cleanName · ${person.pronouns.trim()}'
+            : cleanName)
+        : person.pronouns.trim();
+
     return Row(
       children: <Widget>[
         Expanded(
@@ -51,8 +77,11 @@ class SearchPersonTile extends StatelessWidget {
                     name: (person.displayName != null && person.displayName!.trim().isNotEmpty)
                         ? person.displayName!.trim()
                         : person.username.replaceAll('@', '').split('.').first,
-                    avatarAsset: person.avatarAsset,
+                    avatarAsset: effectiveAvatar,
                     isPrivate: person.isPrivate,
+                    profileVisibility: person.profileVisibility,
+                    allowMessagesFrom: person.allowMessagesFrom,
+                    allowCommentsFrom: person.allowCommentsFrom,
                   ),
                 ),
               );
@@ -60,7 +89,7 @@ class SearchPersonTile extends StatelessWidget {
             child: Row(
               children: <Widget>[
                 AppUserAvatar(
-                  imageAsset: person.avatarAsset,
+                  imageAsset: effectiveAvatar,
                   size: AppSizes.avatarMd,
                 ),
                 const SizedBox(width: AppSpacing.md),
@@ -91,13 +120,17 @@ class SearchPersonTile extends StatelessWidget {
                           ],
                         ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${person.pronouns} · ${person.followers}',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: context.themeTextSecondary,
+                      if (subtitle.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: context.themeTextSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),

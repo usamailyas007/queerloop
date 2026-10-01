@@ -154,6 +154,12 @@ class UserRelationshipCache {
     return false;
   }
 
+  /// Checks if both users follow each other.
+  static bool isMutual({String? userId, String? username}) {
+    return isFollowing(userId: userId, username: username) &&
+        isFollowedBy(userId: userId, username: username);
+  }
+
   /// Clears cache on logout.
   static void clear() {
     _followingUserIds.clear();
@@ -162,6 +168,123 @@ class UserRelationshipCache {
     _followerUsernames.clear();
     _privateUserIds.clear();
     _privateUsernames.clear();
+  }
+}
+
+/// Centralized evaluator for user profile privacy rules:
+/// 1. Profile photo visibility (`profileVisibility`):
+///    - 'everyone' / default: visible to all users.
+///    - 'nobody': hidden from other users (shows default avatar).
+///    - 'mutual' / 'mutuals': visible only if mutual follows.
+///    - 'following' / 'people you follow': visible only to users in a following relationship.
+/// 2. Message permission (`allowMessagesFrom`):
+///    - 'everyone' / default: all users can message.
+///    - 'nobody': no message option on profile for other users.
+///    - 'mutual' / 'mutuals': message option only if mutual follows.
+///    - 'following' / 'people you follow': message option only if in a following relationship.
+class UserPrivacyPolicy {
+  UserPrivacyPolicy._();
+
+  static bool canViewProfilePhoto({
+    required String? profileVisibility,
+    required String? targetUserId,
+    required String? targetUsername,
+    bool isOwnProfile = false,
+    bool isViewerFollowing = false,
+    bool isTargetFollowing = false,
+  }) {
+    if (isOwnProfile) return true;
+
+    final String vis = (profileVisibility ?? 'everyone').trim().toLowerCase();
+
+    // 1. 'nobody': hide profile photo
+    if (vis == 'nobody' || vis.contains('nobody')) {
+      return false;
+    }
+
+    // 2. 'mutual' / 'mutuals': visible only if both follow each other
+    if (vis.contains('mutual')) {
+      final bool viewerFollowing = isViewerFollowing ||
+          UserRelationshipCache.isFollowing(
+            userId: targetUserId,
+            username: targetUsername,
+          );
+      final bool targetFollowing = isTargetFollowing ||
+          UserRelationshipCache.isFollowedBy(
+            userId: targetUserId,
+            username: targetUsername,
+          );
+      return viewerFollowing && targetFollowing;
+    }
+
+    // 3. 'following' / 'people you follow': visible if in a following relationship
+    if (vis.contains('follow')) {
+      final bool viewerFollowing = isViewerFollowing ||
+          UserRelationshipCache.isFollowing(
+            userId: targetUserId,
+            username: targetUsername,
+          );
+      final bool targetFollowing = isTargetFollowing ||
+          UserRelationshipCache.isFollowedBy(
+            userId: targetUserId,
+            username: targetUsername,
+          );
+      return viewerFollowing || targetFollowing;
+    }
+
+    // 4. 'everyone' / default: visible to all
+    return true;
+  }
+
+  static bool canMessage({
+    required String? allowMessagesFrom,
+    required String? targetUserId,
+    required String? targetUsername,
+    bool isOwnProfile = false,
+    bool isViewerFollowing = false,
+    bool isTargetFollowing = false,
+  }) {
+    if (isOwnProfile) return false;
+
+    final String rule = (allowMessagesFrom ?? 'everyone').trim().toLowerCase();
+
+    // 1. 'nobody': no message option
+    if (rule == 'nobody' || rule.contains('nobody')) {
+      return false;
+    }
+
+    // 2. 'mutual' / 'mutuals': message option only if mutual follows
+    if (rule.contains('mutual')) {
+      final bool viewerFollowing = isViewerFollowing ||
+          UserRelationshipCache.isFollowing(
+            userId: targetUserId,
+            username: targetUsername,
+          );
+      final bool targetFollowing = isTargetFollowing ||
+          UserRelationshipCache.isFollowedBy(
+            userId: targetUserId,
+            username: targetUsername,
+          );
+      return viewerFollowing && targetFollowing;
+    }
+
+    // 3. 'following' / 'people you follow': message option if in following relationship
+    if (rule.contains('follow')) {
+      final bool viewerFollowing = isViewerFollowing ||
+          UserRelationshipCache.isFollowing(
+            userId: targetUserId,
+            username: targetUsername,
+          );
+      final bool targetFollowing = isTargetFollowing ||
+          UserRelationshipCache.isFollowedBy(
+            userId: targetUserId,
+            username: targetUsername,
+          );
+      return viewerFollowing || targetFollowing;
+    }
+
+    // 4. 'everyone' / default: message option enabled
+    return true;
   }
 }
 

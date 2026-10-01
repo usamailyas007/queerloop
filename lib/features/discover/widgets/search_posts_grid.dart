@@ -144,6 +144,10 @@ class SearchPostsGrid extends StatelessWidget {
         allowDownloads: res.allowDownloads,
         allowCommentsFrom: res.allowCommentsFrom,
         isAuthorPrivate: res.isAuthorPrivate,
+        profileVisibility: res.profileVisibility,
+        allowMessagesFrom: res.allowMessagesFrom,
+        hideMyLikes: res.hideMyLikes,
+        hideLikes: res.hideMyLikes,
         communityId: res.communityId,
         status: res.status,
         tags: const <String>[],
@@ -299,6 +303,10 @@ class SearchPostsGrid extends StatelessWidget {
       allowDownloads: item.allowDownloads,
       allowCommentsFrom: item.allowCommentsFrom,
       isAuthorPrivate: item.isAuthorPrivate,
+      profileVisibility: item.profileVisibility,
+      allowMessagesFrom: item.allowMessagesFrom,
+      hideMyLikes: item.hideMyLikes,
+      hideLikes: item.hideMyLikes,
       status: item.status,
     );
 

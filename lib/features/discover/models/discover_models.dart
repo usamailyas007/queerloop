@@ -7,6 +7,7 @@ import '../../../core/theme/app_images.dart';
 import '../../../core/cache/user_relationship_cache.dart';
 import '../../home/models/post_item_model.dart';
 import '../../home/models/reel_item_model.dart';
+import '../../create_post/models/create_post_models.dart' show AuthorInfo, AuthorProfileCache;
 
 class DiscoverSearchResult {
   const DiscoverSearchResult({
@@ -33,6 +34,9 @@ class DiscoverSearchResult {
     this.allowDownloads = true,
     this.allowCommentsFrom = 'everyone',
     this.isAuthorPrivate = false,
+    this.profileVisibility = 'everyone',
+    this.allowMessagesFrom = 'everyone',
+    this.hideMyLikes = false,
     this.status,
   });
 
@@ -59,6 +63,9 @@ class DiscoverSearchResult {
   final bool allowDownloads;
   final String allowCommentsFrom;
   final bool isAuthorPrivate;
+  final String profileVisibility;
+  final String allowMessagesFrom;
+  final bool hideMyLikes;
   final String? status;
 
   bool get isPublished => (status ?? '').toLowerCase().trim() == 'published';
@@ -109,6 +116,9 @@ class DiscoverSearchResult {
     bool? allowDownloads,
     String? allowCommentsFrom,
     bool? isAuthorPrivate,
+    String? profileVisibility,
+    String? allowMessagesFrom,
+    bool? hideMyLikes,
     String? status,
   }) {
     return DiscoverSearchResult(
@@ -135,6 +145,9 @@ class DiscoverSearchResult {
       allowDownloads: allowDownloads ?? this.allowDownloads,
       allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
       isAuthorPrivate: isAuthorPrivate ?? this.isAuthorPrivate,
+      profileVisibility: profileVisibility ?? this.profileVisibility,
+      allowMessagesFrom: allowMessagesFrom ?? this.allowMessagesFrom,
+      hideMyLikes: hideMyLikes ?? this.hideMyLikes,
       status: status ?? this.status,
     );
   }
@@ -169,6 +182,9 @@ class DiscoverSearchResult {
       allowDownloads: post.allowDownloads,
       allowCommentsFrom: post.allowCommentsFrom,
       isAuthorPrivate: post.isAuthorPrivate,
+      profileVisibility: post.profileVisibility,
+      allowMessagesFrom: post.allowMessagesFrom,
+      hideMyLikes: post.hideMyLikes,
       status: post.status,
     );
   }
@@ -212,6 +228,9 @@ class DiscoverSearchResult {
       allowDownloads: reel.allowDownloads,
       allowCommentsFrom: reel.allowCommentsFrom,
       isAuthorPrivate: reel.isAuthorPrivate,
+      profileVisibility: reel.profileVisibility,
+      allowMessagesFrom: reel.allowMessagesFrom,
+      hideMyLikes: reel.hideMyLikes,
       status: reel.status,
     );
   }
@@ -475,6 +494,49 @@ class DiscoverSearchResult {
             ? '${(views / 1000).toStringAsFixed(1)}K'
             : (views > 0 ? '$views' : null));
 
+    final String rawProfVis = (json['profileVisibility'] ??
+            json['profile_visibility'] ??
+            (json['author'] is Map
+                ? (json['author']['profileVisibility'] ??
+                    json['author']['profile_visibility'])
+                : null) ??
+            (json['user'] is Map
+                ? (json['user']['profileVisibility'] ??
+                    json['user']['profile_visibility'])
+                : null) ??
+            'everyone')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final String resolvedProfVis = rawProfVis.isNotEmpty ? rawProfVis : 'everyone';
+
+    final String rawMsgFrom = (json['allowMessagesFrom'] ??
+            json['allow_messages_from'] ??
+            (json['author'] is Map
+                ? (json['author']['allowMessagesFrom'] ??
+                    json['author']['allow_messages_from'])
+                : null) ??
+            (json['user'] is Map
+                ? (json['user']['allowMessagesFrom'] ??
+                    json['user']['allow_messages_from'])
+                : null) ??
+            'everyone')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final String resolvedMsgFrom = rawMsgFrom.isNotEmpty ? rawMsgFrom : 'everyone';
+
+    final bool resolvedHideMyLikes = (json['author'] is Map
+            ? (json['author']['hideMyLikes'] ?? json['author']['hide_my_likes'])
+            : null) ==
+        true ||
+        (json['user'] is Map
+            ? (json['user']['hideMyLikes'] ?? json['user']['hide_my_likes'])
+            : null) ==
+        true ||
+        json['hideMyLikes'] == true ||
+        json['hide_my_likes'] == true;
+
     final DiscoverSearchResult result = DiscoverSearchResult(
       id: json['id']?.toString() ?? json['_id']?.toString(),
       refId: refId,
@@ -614,11 +676,38 @@ class DiscoverSearchResult {
           json['isPrivate'] == true ||
           json['is_private'] == true ||
           json['isAuthorPrivate'] == true,
+      profileVisibility: resolvedProfVis,
+      allowMessagesFrom: resolvedMsgFrom,
+      hideMyLikes: resolvedHideMyLikes,
       status: json['status']?.toString().trim(),
     );
 
     final String? cleanId = result.id?.trim();
     final String? cleanRef = result.refId?.trim();
+    if (resolvedAuthorId != null && resolvedAuthorId.isNotEmpty) {
+      AuthorProfileCache.set(
+        resolvedAuthorId,
+        AuthorInfo(
+          id: resolvedAuthorId,
+          username: resolvedAuthorUsername ?? '',
+          displayName: resolvedAuthorUsername ?? '',
+          avatarUrl: resolvedAuthorAvatar,
+          isPrivate: result.isAuthorPrivate,
+          profileVisibility: resolvedProfVis,
+          allowMessagesFrom: resolvedMsgFrom,
+          allowCommentsFrom: result.allowCommentsFrom,
+          hideMyLikes: resolvedHideMyLikes,
+        ),
+      );
+    }
+    if (resolvedHideMyLikes) {
+      if (cleanRef != null && cleanRef.isNotEmpty) {
+        PostInteractionRegistry.setLikeCountHidden(cleanRef, true);
+      }
+      if (cleanId != null && cleanId.isNotEmpty) {
+        PostInteractionRegistry.setLikeCountHidden(cleanId, true);
+      }
+    }
     if (cleanRef != null && cleanRef.isNotEmpty) {
       PostInteractionRegistry.seedFromServer(
         cleanRef,
@@ -661,6 +750,9 @@ class DiscoverPerson {
     this.bio,
     this.isPrivate = false,
     this.allowCommentsFrom = 'everyone',
+    this.profileVisibility = 'everyone',
+    this.allowMessagesFrom = 'everyone',
+    this.showInDiscover = true,
   });
 
   final String avatarAsset;
@@ -673,6 +765,9 @@ class DiscoverPerson {
   final String? bio;
   final bool isPrivate;
   final String allowCommentsFrom;
+  final String profileVisibility;
+  final String allowMessagesFrom;
+  final bool showInDiscover;
 
   factory DiscoverPerson.fromJson(Map<String, dynamic> json) {
     final String unameRaw = (json['username'] ??
@@ -738,6 +833,50 @@ class DiscoverPerson {
         .trim()
         .toLowerCase();
 
+    final String profVis = ((json['profileVisibility'] ??
+                json['profile_visibility'] ??
+                (json['privacySettings'] is Map
+                    ? (json['privacySettings']['profileVisibility'] ??
+                        json['privacySettings']['profile_visibility'])
+                    : null) ??
+                (json['user'] is Map
+                    ? (json['user']['profileVisibility'] ??
+                        json['user']['profile_visibility'])
+                    : null) ??
+                'everyone')
+            .toString())
+        .trim()
+        .toLowerCase();
+
+    final String msgFrom = ((json['allowMessagesFrom'] ??
+                json['allow_messages_from'] ??
+                json['whoCanMessage'] ??
+                json['who_can_message'] ??
+                (json['privacySettings'] is Map
+                    ? (json['privacySettings']['allowMessagesFrom'] ??
+                        json['privacySettings']['allow_messages_from'] ??
+                        json['privacySettings']['whoCanMessage'] ??
+                        json['privacySettings']['who_can_message'])
+                    : null) ??
+                (json['user'] is Map
+                    ? (json['user']['allowMessagesFrom'] ??
+                        json['user']['allow_messages_from'])
+                    : null) ??
+                'everyone')
+            .toString())
+        .trim()
+        .toLowerCase();
+
+    final bool showInDisc = !(json['showInDiscover'] == false ||
+        json['show_in_discover'] == false ||
+        json['appearInExplore'] == false ||
+        json['appear_in_explore'] == false ||
+        (json['privacySettings'] is Map &&
+            (json['privacySettings']['showInDiscover'] == false ||
+                json['privacySettings']['show_in_discover'] == false ||
+                json['privacySettings']['appearInExplore'] == false ||
+                json['privacySettings']['appear_in_explore'] == false)));
+
     return DiscoverPerson(
       id: resolvedId,
       avatarAsset: (json['avatarUrl'] ??
@@ -753,6 +892,9 @@ class DiscoverPerson {
       bio: json['bio']?.toString(),
       isPrivate: isPriv,
       allowCommentsFrom: commentsFrom,
+      profileVisibility: profVis,
+      allowMessagesFrom: msgFrom,
+      showInDiscover: showInDisc,
     );
   }
 }
@@ -840,6 +982,9 @@ class DiscoverCreator {
     this.isFollowing = false,
     this.isPrivate = false,
     this.allowCommentsFrom = 'everyone',
+    this.profileVisibility = 'everyone',
+    this.allowMessagesFrom = 'everyone',
+    this.showInDiscover = true,
   });
 
   final String avatarAsset;
@@ -851,6 +996,9 @@ class DiscoverCreator {
   final bool isFollowing;
   final bool isPrivate;
   final String allowCommentsFrom;
+  final String profileVisibility;
+  final String allowMessagesFrom;
+  final bool showInDiscover;
 
   factory DiscoverCreator.fromJson(Map<String, dynamic> json) {
     final String unameRaw = (json['username'] ??
@@ -912,6 +1060,50 @@ class DiscoverCreator {
         .trim()
         .toLowerCase();
 
+    final String profVis = ((json['profileVisibility'] ??
+                json['profile_visibility'] ??
+                (json['privacySettings'] is Map
+                    ? (json['privacySettings']['profileVisibility'] ??
+                        json['privacySettings']['profile_visibility'])
+                    : null) ??
+                (json['user'] is Map
+                    ? (json['user']['profileVisibility'] ??
+                        json['user']['profile_visibility'])
+                    : null) ??
+                'everyone')
+            .toString())
+        .trim()
+        .toLowerCase();
+
+    final String msgFrom = ((json['allowMessagesFrom'] ??
+                json['allow_messages_from'] ??
+                json['whoCanMessage'] ??
+                json['who_can_message'] ??
+                (json['privacySettings'] is Map
+                    ? (json['privacySettings']['allowMessagesFrom'] ??
+                        json['privacySettings']['allow_messages_from'] ??
+                        json['privacySettings']['whoCanMessage'] ??
+                        json['privacySettings']['who_can_message'])
+                    : null) ??
+                (json['user'] is Map
+                    ? (json['user']['allowMessagesFrom'] ??
+                        json['user']['allow_messages_from'])
+                    : null) ??
+                'everyone')
+            .toString())
+        .trim()
+        .toLowerCase();
+
+    final bool showInDisc = !(json['showInDiscover'] == false ||
+        json['show_in_discover'] == false ||
+        json['appearInExplore'] == false ||
+        json['appear_in_explore'] == false ||
+        (json['privacySettings'] is Map &&
+            (json['privacySettings']['showInDiscover'] == false ||
+                json['privacySettings']['show_in_discover'] == false ||
+                json['privacySettings']['appearInExplore'] == false ||
+                json['privacySettings']['appear_in_explore'] == false)));
+
     return DiscoverCreator(
       id: resolvedId,
       username: uname,
@@ -926,6 +1118,9 @@ class DiscoverCreator {
       isFollowing: json['isFollowing'] == true,
       isPrivate: isPriv,
       allowCommentsFrom: commentsFrom,
+      profileVisibility: profVis,
+      allowMessagesFrom: msgFrom,
+      showInDiscover: showInDisc,
     );
   }
 }

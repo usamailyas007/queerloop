@@ -88,6 +88,7 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
             .toLowerCase();
 
         final List<DiscoverCreator> filtered = creators.where((DiscoverCreator c) {
+          if (!c.showInDiscover) return false;
           if (myUsername.isNotEmpty &&
               c.username.replaceAll('@', '').trim().toLowerCase() == myUsername) {
             return false;
@@ -578,18 +579,6 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
                                 fontSize: 12,
                               ),
                             ),
-                            if (person.followers.isNotEmpty) ...<Widget>[
-                              const SizedBox(height: 2),
-                              Text(
-                                person.followers,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.caption.copyWith(
-                                  color: AppColors.gradientCyan,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
                           ],
                         ),
                       ),

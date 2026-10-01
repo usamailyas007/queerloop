@@ -449,6 +449,9 @@ class DiscoverService {
           allowDownloads: matchingLive?.allowDownloads ?? p.allowDownloads,
           allowCommentsFrom: matchingLive?.allowCommentsFrom ?? p.allowCommentsFrom,
           isAuthorPrivate: matchingLive?.isAuthorPrivate ?? p.isAuthorPrivate,
+          profileVisibility: matchingLive?.profileVisibility ?? p.profileVisibility,
+          allowMessagesFrom: matchingLive?.allowMessagesFrom ?? p.allowMessagesFrom,
+          hideMyLikes: matchingLive?.hideMyLikes ?? p.hideMyLikes,
           communityId: matchingLive?.communityId ?? p.communityId,
         ));
 
@@ -516,6 +519,9 @@ class DiscoverService {
               isLiked: isLpLiked,
               isSaved: isLpSaved,
               communityId: lp.communityId,
+              profileVisibility: lp.profileVisibility,
+              allowMessagesFrom: lp.allowMessagesFrom,
+              hideMyLikes: lp.hideMyLikes,
             ));
             seenPostKeys.add('id:$lpIdLower');
             if (ref != null && ref.trim().isNotEmpty) {
@@ -691,6 +697,9 @@ class DiscoverService {
           allowComments: matchingLive?.allowComments ?? r.allowComments,
           allowDownloads: matchingLive?.allowDownloads ?? r.allowDownloads,
           allowCommentsFrom: matchingLive?.allowCommentsFrom ?? r.allowCommentsFrom,
+          profileVisibility: matchingLive?.profileVisibility ?? r.profileVisibility,
+          allowMessagesFrom: matchingLive?.allowMessagesFrom ?? r.allowMessagesFrom,
+          hideMyLikes: matchingLive?.hideMyLikes ?? r.hideMyLikes,
         ));
       }
 

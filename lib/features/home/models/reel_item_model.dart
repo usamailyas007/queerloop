@@ -23,6 +23,9 @@ class ReelItemModel {
     this.allowDownloads = true,
     this.isAuthorPrivate = false,
     this.allowCommentsFrom = 'everyone',
+    this.profileVisibility = 'everyone',
+    this.allowMessagesFrom = 'everyone',
+    this.hideMyLikes = false,
     this.hasLikeCount = true,
     this.hideLikes = false,
     this.viewsCount = 0,
@@ -49,6 +52,9 @@ class ReelItemModel {
   final bool isFollowing;
   final bool isAuthorPrivate;
   final String allowCommentsFrom;
+  final String profileVisibility;
+  final String allowMessagesFrom;
+  final bool hideMyLikes;
   final bool hasLikeCount;
   final List<String> tags;
   final String durationText;
@@ -72,6 +78,9 @@ class ReelItemModel {
     bool? isFollowing,
     bool? isAuthorPrivate,
     String? allowCommentsFrom,
+    String? profileVisibility,
+    String? allowMessagesFrom,
+    bool? hideMyLikes,
     bool? hasLikeCount,
     bool? allowComments,
     bool? allowDownloads,
@@ -109,6 +118,9 @@ class ReelItemModel {
       isFollowing: isFollowing ?? this.isFollowing,
       isAuthorPrivate: isAuthorPrivate ?? this.isAuthorPrivate,
       allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
+      profileVisibility: profileVisibility ?? this.profileVisibility,
+      allowMessagesFrom: allowMessagesFrom ?? this.allowMessagesFrom,
+      hideMyLikes: hideMyLikes ?? this.hideMyLikes,
       hasLikeCount: hasLikeCount ?? this.hasLikeCount,
       tags: tags ?? this.tags,
       durationText: durationText ?? this.durationText,

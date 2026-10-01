@@ -19,6 +19,9 @@ class PostItemModel {
     this.allowDownloads = true,
     this.isAuthorPrivate = false,
     this.allowCommentsFrom = 'everyone',
+    this.profileVisibility = 'everyone',
+    this.allowMessagesFrom = 'everyone',
+    this.hideMyLikes = false,
     this.hasLikeCount = true,
     this.hideLikes = false,
     this.viewsCount = 0,
@@ -46,6 +49,9 @@ class PostItemModel {
   final bool allowDownloads;
   final bool isAuthorPrivate;
   final String allowCommentsFrom;
+  final String profileVisibility;
+  final String allowMessagesFrom;
+  final bool hideMyLikes;
   final bool hasLikeCount;
   final bool hideLikes;
   final int viewsCount;
@@ -78,6 +84,9 @@ class PostItemModel {
     bool? allowDownloads,
     bool? isAuthorPrivate,
     String? allowCommentsFrom,
+    String? profileVisibility,
+    String? allowMessagesFrom,
+    bool? hideMyLikes,
     bool? hasLikeCount,
     bool? hideLikes,
     int? likesCount,
@@ -112,6 +121,9 @@ class PostItemModel {
       allowDownloads: allowDownloads ?? this.allowDownloads,
       isAuthorPrivate: isAuthorPrivate ?? this.isAuthorPrivate,
       allowCommentsFrom: allowCommentsFrom ?? this.allowCommentsFrom,
+      profileVisibility: profileVisibility ?? this.profileVisibility,
+      allowMessagesFrom: allowMessagesFrom ?? this.allowMessagesFrom,
+      hideMyLikes: hideMyLikes ?? this.hideMyLikes,
       hasLikeCount: hasLikeCount ?? this.hasLikeCount,
       hideLikes: hideLikes ?? this.hideLikes,
       visibility: visibility ?? this.visibility,

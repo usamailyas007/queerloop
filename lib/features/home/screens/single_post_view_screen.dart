@@ -160,8 +160,11 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
             allowDownloads: raw.allowDownloads,
             allowCommentsFrom: raw.allowCommentsFrom,
             isAuthorPrivate: raw.isAuthorPrivate,
+            profileVisibility: raw.profileVisibility,
+            allowMessagesFrom: raw.allowMessagesFrom,
+            hideMyLikes: raw.hideMyLikes,
             hasLikeCount: raw.hasLikeCount,
-            hideLikes: raw.hideLikes,
+            hideLikes: raw.hideLikes || raw.hideMyLikes,
           );
           _isLoading = false;
         });
@@ -301,6 +304,10 @@ class _SinglePostViewScreenState extends State<SinglePostViewScreen> {
         allowDownloads: _post!.allowDownloads,
         allowCommentsFrom: _post!.allowCommentsFrom,
         isAuthorPrivate: _post!.isAuthorPrivate,
+        profileVisibility: _post!.profileVisibility,
+        allowMessagesFrom: _post!.allowMessagesFrom,
+        hideMyLikes: _post!.hideMyLikes,
+        hideLikes: _post!.hideLikes || _post!.hideMyLikes,
       );
 
       return Scaffold(

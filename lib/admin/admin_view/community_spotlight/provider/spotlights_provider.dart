@@ -13,7 +13,30 @@ import '../spotlights_service.dart';
 
 class SpotlightsProvider extends ChangeNotifier {
   SpotlightsProvider({required ApiClient client, SpotlightsService? service})
-      : _service = service ?? SpotlightsService(client);
+      : _service = service ?? SpotlightsService(client) {
+    _activeInstance = this;
+  }
+
+  static SpotlightsProvider? _activeInstance;
+
+  /// Clear in-memory spotlights state and cache (e.g. on logout).
+  static void clearGlobalCache() {
+    _activeInstance?.clearAll();
+  }
+
+  /// Full reset of spotlights state.
+  void clearAll() {
+    _spotlights = <Spotlight>[];
+    _isLoading = false;
+    _isSaving = false;
+    _error = null;
+    _hasLoadedOnce = false;
+    _search = '';
+    _searchTimer?.cancel();
+    _rerunningIds.clear();
+    _deletingIds.clear();
+    notifyListeners();
+  }
 
   final SpotlightsService _service;
 
@@ -187,6 +210,9 @@ class SpotlightsProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_activeInstance == this) {
+      _activeInstance = null;
+    }
     _searchTimer?.cancel();
     super.dispose();
   }

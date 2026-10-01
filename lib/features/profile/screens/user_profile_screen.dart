@@ -48,6 +48,9 @@ class UserProfileScreen extends StatefulWidget {
     this.name = 'Rowan',
     this.avatarAsset = AppImages.defaultAvatar,
     this.isPrivate = false,
+    this.profileVisibility,
+    this.allowMessagesFrom,
+    this.allowCommentsFrom,
     this.initialReel,
     this.initialPost,
     super.key,
@@ -58,6 +61,9 @@ class UserProfileScreen extends StatefulWidget {
   final String name;
   final String avatarAsset;
   final bool isPrivate;
+  final String? profileVisibility;
+  final String? allowMessagesFrom;
+  final String? allowCommentsFrom;
   final ReelItemModel? initialReel;
   final PostItemModel? initialPost;
 
@@ -69,6 +75,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   int _selectedTabIndex = 0; // Default: Posts
   bool _isRequested = false; // Default: Not requested (shows Follow initially)
   bool _isFollowing = false; // Default: Not following (shows Follow initially)
+  bool _isFollowedBy = false; // Whether this profile user follows the viewer
   bool _isLoading = true;
   bool _isFetchingProfile = false;
   bool _isStartingChat = false;
@@ -260,7 +267,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           allowDownloads: post.allowDownloads,
           isAuthorPrivate: resolvedIsAuthorPrivate,
           allowCommentsFrom: resolvedAllowCommentsFrom,
-          hideLikes: _profile?.hideMyLikes ?? false,
+          profileVisibility: _profile?.profileVisibility ?? widget.profileVisibility ?? post.profileVisibility,
+          allowMessagesFrom: _profile?.allowMessagesFrom ?? widget.allowMessagesFrom ?? post.allowMessagesFrom,
+          hideMyLikes: post.hideMyLikes || (_profile?.hideMyLikes ?? false),
+          hideLikes: post.hideLikes || post.hideMyLikes || (_profile?.hideMyLikes ?? false),
           tags: post.tags,
           communityId: post.communityId,
           durationText: (post.duration != null && post.duration!.isNotEmpty)
@@ -338,6 +348,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             hideMyLikes: loadedProfile.hideMyLikes,
             isPrivate: isPriv,
             allowCommentsFrom: commentRule,
+            profileVisibility: loadedProfile.profileVisibility ?? 'everyone',
+            allowMessagesFrom: loadedProfile.allowMessagesFrom ?? 'everyone',
           ),
         );
         UserRelationshipCache.markPrivate(
@@ -420,9 +432,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             widget.username.replaceAll('@', '').toLowerCase() ==
                 myName.replaceAll('@', '').toLowerCase());
 
-    final String? pVis = loadedProfile?.profileVisibility?.toLowerCase();
     final bool isPrivateProfile = (loadedProfile?.isPrivate ?? false) ||
-        (pVis != null && (pVis.contains('nobody') || pVis.contains('private'))) ||
         widget.isPrivate;
 
     final bool shouldRestrictPrivatePosts =
@@ -686,6 +696,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       _followersCount = calculatedFollowers;
       _followingCount = calculatedFollowing;
       _isFollowing = isCurrentlyFollowing;
+      _isFollowedBy = isAuthorFollowingMe;
       _isRequested = loadedProfile?.isPending == true ||
           loadedProfile?.relationship == 'pending';
       _isLoading = false;
@@ -768,27 +779,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String? profVis = _profile?.profileVisibility?.toLowerCase();
     final bool isPrivateAccount = (_profile != null)
-        ? (_profile!.isPrivate == true ||
-            (profVis != null &&
-                (profVis.contains('nobody') || profVis.contains('private'))))
+        ? (_profile!.isPrivate ?? widget.isPrivate)
         : (widget.isPrivate || widget.username.contains('kit.lumen'));
     final String currentUsername = _profile?.username ?? widget.username;
     final String currentName = _profile?.displayName ?? widget.name;
-    final String currentAvatar = (_profile != null)
-        ? ((_profile!.avatarUrl != null && _profile!.avatarUrl!.trim().isNotEmpty)
-            ? _profile!.avatarUrl!.trim()
-            : AppImages.defaultAvatar)
-        : ((widget.avatarAsset.isNotEmpty && widget.avatarAsset != AppImages.user1)
-            ? widget.avatarAsset
-            : AppImages.defaultAvatar);
-    final String currentBio = _profile?.bio ??
-        (isPrivateAccount
-            ? 'Private account.'
-            : (widget.userId != null ? '' : 'Documenting recovery, one honest video at a time.'));
-    final String currentPronouns = _profile?.formattedPronouns ??
-        (isPrivateAccount ? 'he / him' : '');
 
     final AuthProvider auth = context.watch<AuthProvider>();
     final ProfileProvider profile = context.watch<ProfileProvider>();
@@ -802,6 +797,52 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             myName.isNotEmpty &&
             widget.username.replaceAll('@', '').toLowerCase() ==
                 myName.replaceAll('@', '').toLowerCase());
+
+    final bool isTargetFollowingMe = _isFollowedBy ||
+        UserRelationshipCache.isFollowedBy(
+          userId: _effectiveUserId,
+          username: currentUsername,
+        );
+
+    final String? profVis =
+        _profile?.profileVisibility ?? widget.profileVisibility;
+    final bool canSeePhoto = isOwnProfile ||
+        UserPrivacyPolicy.canViewProfilePhoto(
+          profileVisibility: profVis,
+          targetUserId: _effectiveUserId,
+          targetUsername: currentUsername,
+          isViewerFollowing: _isFollowing,
+          isTargetFollowing: isTargetFollowingMe,
+        );
+
+    final String rawAvatar = (_profile != null)
+        ? ((_profile!.avatarUrl != null && _profile!.avatarUrl!.trim().isNotEmpty)
+            ? _profile!.avatarUrl!.trim()
+            : AppImages.defaultAvatar)
+        : ((widget.avatarAsset.isNotEmpty && widget.avatarAsset != AppImages.user1)
+            ? widget.avatarAsset
+            : AppImages.defaultAvatar);
+
+    final String currentAvatar =
+        canSeePhoto ? rawAvatar : AppImages.defaultAvatar;
+
+    final String? msgRule =
+        _profile?.allowMessagesFrom ?? widget.allowMessagesFrom;
+    final bool canMessageUser = !isOwnProfile &&
+        UserPrivacyPolicy.canMessage(
+          allowMessagesFrom: msgRule,
+          targetUserId: _effectiveUserId,
+          targetUsername: currentUsername,
+          isViewerFollowing: _isFollowing,
+          isTargetFollowing: isTargetFollowingMe,
+        );
+
+    final String currentBio = _profile?.bio ??
+        (isPrivateAccount
+            ? 'Private account.'
+            : (widget.userId != null ? '' : 'Documenting recovery, one honest video at a time.'));
+    final String currentPronouns = _profile?.formattedPronouns ??
+        (isPrivateAccount ? 'he / him' : '');
 
     final String cleanUsernameOnly =
         currentUsername.replaceAll('@', '').trim().toLowerCase();
@@ -1089,8 +1130,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       ),
                                     )),
                         ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
+                        if (canMessageUser) ...<Widget>[
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
                           child: AppOutlineButton(
                             text: _isStartingChat ? 'Loading...' : 'Message',
                             onPressed: _isStartingChat
@@ -1252,7 +1294,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ),
                         ),
                       ],
-                    )),
+                    ],
+                  )),
                   ),
 
                   const SizedBox(height: AppSpacing.xl),
@@ -1381,7 +1424,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     ? post.allowCommentsFrom
                                     : (_profile?.allowCommentsFrom ?? post.allowCommentsFrom),
                                 isAuthorPrivate: post.isAuthorPrivate || (_profile?.isPrivate ?? false) || isPrivateAccount,
-                                hideLikes: _profile?.hideMyLikes ?? false,
+                                profileVisibility: _profile?.profileVisibility ?? widget.profileVisibility ?? post.profileVisibility,
+                                allowMessagesFrom: _profile?.allowMessagesFrom ?? widget.allowMessagesFrom ?? post.allowMessagesFrom,
+                                hideMyLikes: post.hideMyLikes || (_profile?.hideMyLikes ?? false),
+                                hideLikes: post.hideLikes || post.hideMyLikes || (_profile?.hideMyLikes ?? false),
                               );
                               return PostFeedCard(
                                 post: postItem,

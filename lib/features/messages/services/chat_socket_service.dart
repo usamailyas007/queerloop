@@ -476,12 +476,9 @@ class ChatSocketService {
       _customUrl = serverUrl;
     }
 
-    String url = _customUrl ?? AppConfig.socketUrl;
-    if (url.isEmpty) {
-      url = 'http://3.208.100.236:3018';
-    } else if (url.contains(':3001')) {
-      url = url.replaceAll(':3001', ':3018');
-    }
+    final String url = (_customUrl != null && _customUrl!.isNotEmpty)
+        ? _customUrl!
+        : AppConfig.socketUrl;
 
     // If socket already connected with same token and url, return
     if (_socket != null && _socket!.connected) {

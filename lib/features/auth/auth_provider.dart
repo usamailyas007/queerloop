@@ -9,9 +9,12 @@ import '../../core/api/api_exception.dart';
 import '../../core/cache/user_relationship_cache.dart';
 import '../../core/services/push_notification_service.dart';
 import '../create_post/models/create_post_models.dart';
+import '../discover/provider/cotd_provider.dart';
+import '../discover/provider/discover_provider.dart';
 import '../home/services/reel_video_preloader.dart';
 import '../home/widgets/comments_bottom_sheet.dart';
 import '../messages/services/shared_post_cache.dart';
+import '../../admin/admin_view/community_spotlight/provider/spotlights_provider.dart';
 import 'auth_service.dart';
 import 'user.dart';
 
@@ -679,6 +682,9 @@ class AuthProvider extends ChangeNotifier {
     CommentLikesTracker.clear();
     DeletedPostsRegistry.clear();
     SharedPostCache.clearAll().ignore();
+    DiscoverProvider.clearGlobalCache();
+    CotdProvider.clearGlobalCache();
+    SpotlightsProvider.clearGlobalCache();
     notifyListeners();
   }
 

@@ -192,9 +192,23 @@ class App extends StatelessWidget {
         Provider<DiscoverService>(
           create: (BuildContext ctx) => DiscoverService(ctx.read<ApiClient>()),
         ),
-        ChangeNotifierProvider<DiscoverProvider>(
+        ChangeNotifierProxyProvider<AuthProvider, DiscoverProvider>(
           create: (BuildContext ctx) =>
               DiscoverProvider(discoverService: ctx.read<DiscoverService>()),
+          update: (
+            BuildContext ctx,
+            AuthProvider auth,
+            DiscoverProvider? existing,
+          ) {
+            final DiscoverProvider provider = existing ??
+                DiscoverProvider(discoverService: ctx.read<DiscoverService>());
+            if (auth.status == AuthStatus.signedOut) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                provider.clearAll();
+              });
+            }
+            return provider;
+          },
         ),
         Provider<CotdService>(
           create: (BuildContext ctx) => CotdService(ctx.read<ApiClient>()),
@@ -209,16 +223,36 @@ class App extends StatelessWidget {
           ) {
             final CotdProvider provider =
                 existing ?? CotdProvider(service: ctx.read<CotdService>());
-            provider.updateUserInfo(
-              userId: auth.userId,
-              username: auth.user?.displayName,
-            );
+            if (auth.status == AuthStatus.signedOut) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                provider.clearAll();
+              });
+            } else {
+              provider.updateUserInfo(
+                userId: auth.userId,
+                username: auth.user?.displayName,
+              );
+            }
             return provider;
           },
         ),
-        ChangeNotifierProvider<SpotlightsProvider>(
+        ChangeNotifierProxyProvider<AuthProvider, SpotlightsProvider>(
           create: (BuildContext ctx) =>
               SpotlightsProvider(client: ctx.read<ApiClient>()),
+          update: (
+            BuildContext ctx,
+            AuthProvider auth,
+            SpotlightsProvider? existing,
+          ) {
+            final SpotlightsProvider provider = existing ??
+                SpotlightsProvider(client: ctx.read<ApiClient>());
+            if (auth.status == AuthStatus.signedOut) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                provider.clearAll();
+              });
+            }
+            return provider;
+          },
         ),
         Provider<NotificationsService>(
           create: (BuildContext ctx) =>
