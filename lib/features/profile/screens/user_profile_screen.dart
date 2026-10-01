@@ -324,7 +324,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final ApiClient client = context.read<ApiClient>();
     final AuthProvider auth = context.read<AuthProvider>();
     final ProfileProvider profileProvider = context.read<ProfileProvider>();
-    final HomeFeedProvider homeFeed = context.read<HomeFeedProvider>();
     final UserRelationshipService relService = UserRelationshipService(client);
 
     // 1. Fetch user profile
@@ -489,91 +488,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       } catch (e) {
         debugPrint('⚠️ [UserProfile] Could not fetch author posts via postsByAuthor: $e');
       }
-
-      // Fallback/enrich from global feed /posts (Content Service) only for non-private or followed accounts
-      try {
-        final PostContentService contentService = PostContentService(client);
-        final List<PostResponseModel> feedPosts = await contentService.getFeedPosts();
-        final String cleanUserId = userId.trim().toLowerCase();
-        final String cleanUsername = widget.username.replaceAll('@', '').trim().toLowerCase();
-
-        for (final PostResponseModel p in feedPosts) {
-          final String? pAuthorId = p.authorId?.trim().toLowerCase();
-          final String? pAuthorName = p.authorName?.replaceAll('@', '').trim().toLowerCase();
-          final bool isMatch = (pAuthorId != null && pAuthorId == cleanUserId) ||
-              (pAuthorName != null && pAuthorName == cleanUsername);
-          if (isMatch && !p.isDeleted) {
-            if (!allPosts.any((PostResponseModel existing) => existing.id == p.id)) {
-              allPosts.add(p);
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('⚠️ [UserProfile] Fallback getFeedPosts error: $e');
-      }
-
-      // Also enrich from in-memory HomeFeedProvider posts and reels if present
-      try {
-        final String cleanUserId = userId.trim().toLowerCase();
-        final String cleanUsername = widget.username.replaceAll('@', '').trim().toLowerCase();
-
-      for (final PostItemModel p in homeFeed.posts) {
-        final String? pAuthorId = p.authorId?.trim().toLowerCase();
-        final String pUsername = p.username.replaceAll('@', '').trim().toLowerCase();
-        if ((pAuthorId == cleanUserId || pUsername == cleanUsername) &&
-            !allPosts.any((PostResponseModel existing) => existing.id == p.id)) {
-          allPosts.add(
-            PostResponseModel(
-              id: p.id,
-              authorId: p.authorId,
-              authorName: p.username,
-              authorDisplayName: p.authorDisplayName,
-              authorAvatar: p.avatarAsset,
-              caption: p.content,
-              type: p.postType.isNotEmpty ? p.postType : 'PHOTO',
-              postImageUrl: p.postImageUrl,
-              likesCount: p.likesCount,
-              commentsCount: p.commentsCount,
-              isLiked: p.isLiked,
-              isSaved: p.isSaved,
-              allowComments: p.allowComments,
-              allowDownloads: p.allowDownloads,
-            ),
-          );
-        }
-      }
-
-      for (final ReelItemModel r in homeFeed.reels) {
-        final String? rAuthorId = r.authorId?.trim().toLowerCase();
-        final String rUsername = r.username.replaceAll('@', '').trim().toLowerCase();
-        if ((rAuthorId == cleanUserId || rUsername == cleanUsername) &&
-            !allPosts.any((PostResponseModel existing) => existing.id == r.id)) {
-          allPosts.add(
-            PostResponseModel(
-              id: r.id,
-              authorId: r.authorId,
-              authorName: r.username,
-              authorDisplayName: r.authorDisplayName,
-              authorAvatar: r.avatarAsset,
-              caption: r.caption,
-              type: 'VIDEO',
-              mediaRefs: (r.videoUrl != null && r.videoUrl!.isNotEmpty)
-                  ? <String>[r.videoUrl!]
-                  : const <String>[],
-              thumbnailUrl: r.thumbnailUrl,
-              likesCount: r.likesCount,
-              commentsCount: r.commentsCount,
-              viewsCount: r.viewsCount,
-              isLiked: r.isLiked,
-              isSaved: r.isSaved,
-              allowComments: r.allowComments,
-              allowDownloads: r.allowDownloads,
-              duration: r.durationText,
-            ),
-          );
-        }
-      }
-    } catch (_) {}
     }
 
     for (final PostResponseModel p in allPosts) {
