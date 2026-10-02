@@ -28,6 +28,7 @@ class DeleteAccountScreen extends StatefulWidget {
 
 class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
   final TextEditingController _feedbackController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   String _selectedReason = 'I no longer want to use this service';
 
   final List<String> _reasons = [
@@ -41,10 +42,19 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
   @override
   void dispose() {
     _feedbackController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    if (_passwordController.text.trim().isEmpty) {
+      AppSnackBar.showError(
+        context,
+        title: 'Password Required',
+        subtitle: 'Please enter your password to confirm account deletion.',
+      );
+      return;
+    }
     await _showConfirmationDialog();
   }
 
@@ -138,6 +148,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
   Future<void> _performDeletion() async {
     final AuthProvider auth = context.read<AuthProvider>();
     final AccountDeletionResult? result = await auth.requestAccountDeletion(
+      password: _passwordController.text.trim(),
       reason: _selectedReason,
       feedback: _feedbackController.text.trim().isEmpty
           ? null
@@ -415,6 +426,27 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                           },
                         ),
                       ),
+                    ),
+
+                    const SizedBox(height: AppSpacing.xl),
+
+                    // Password confirmation
+                    Text(
+                      'Confirm your password',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: context.themeTextPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    AppTextField(
+                      controller: _passwordController,
+                      hintText: 'Enter your password',
+                      isPassword: true,
+                      keyboardType: TextInputType.visiblePassword,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: const <String>[AutofillHints.password],
                     ),
 
                     const SizedBox(height: AppSpacing.xl),
