@@ -196,7 +196,7 @@
 			buildConfigurationList = 97C147051CF9000F007C117D /* Build configuration list for PBXNativeTarget "Runner" */;
 			buildPhases = (
 				F5F2218F469190946B3E253A /* [CP] Check Pods Manifest.lock */,
-				7E0D50C3DEF4F36BE530C371 /* Auto-apply env/prod.json for Release builds */,
+				7E0D50C3DEF4F36BE530C371 /* Guard: Release must use env/prod.json */,
 				9740EEB61CF901F6004384FC /* Run Script */,
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
@@ -349,7 +349,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		7E0D50C3DEF4F36BE530C371 /* Auto-apply env/prod.json for Release builds */ = {
+		7E0D50C3DEF4F36BE530C371 /* Guard: Release must use env/prod.json */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -358,14 +358,14 @@
 			);
 			inputPaths = (
 			);
-			name = "Auto-apply env/prod.json for Release builds";
+			name = "Guard: Release must use env/prod.json";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;
-			shellScript = "if [ \"$CONFIGURATION\" = \"Release\" ]; then\n  PROJECT_ROOT=\"${SRCROOT}/..\"\n  CONFIG_FILE=\"${SRCROOT}/Flutter/Generated.xcconfig\"\n\n  if [ ! -f \"$CONFIG_FILE\" ]; then\n    echo \"error: ${CONFIG_FILE} not found. Run 'flutter pub get' once first.\"\n    exit 1\n  fi\n\n  FLUTTER_BIN=\"flutter\"\n  ROOT_LINE=$(grep \"^FLUTTER_ROOT=\" \"$CONFIG_FILE\" || true)\n  ROOT_PATH=\"${ROOT_LINE#FLUTTER_ROOT=}\"\n  if [ -n \"$ROOT_PATH\" ] && [ -x \"$ROOT_PATH/bin/flutter\" ]; then\n    FLUTTER_BIN=\"$ROOT_PATH/bin/flutter\"\n  fi\n\n  echo \"note: Refreshing Generated.xcconfig for production (env/prod.json) before archiving...\"\n  (cd \"$PROJECT_ROOT\" && \"$FLUTTER_BIN\" build ios --release --config-only --dart-define-from-file=env/prod.json)\n  BUILD_RC=$?\n  if [ \"$BUILD_RC\" -ne 0 ]; then\n    echo \"error: 'flutter build ios --config-only' failed (exit $BUILD_RC). See log above.\"\n    exit 1\n  fi\n\n  DEFINES_LINE=$(grep \"^DART_DEFINES=\" \"$CONFIG_FILE\" || true)\n  ENCODED=\"${DEFINES_LINE#DART_DEFINES=}\"\n  FOUND_PROD=0\n  IFS=',' read -ra PARTS <<< \"$ENCODED\"\n  for PART in \"${PARTS[@]}\"; do\n    DECODED=$(echo \"$PART\" | base64 --decode 2>/dev/null || true)\n    if [ \"$DECODED\" = \"ENV=prod\" ]; then\n      FOUND_PROD=1\n    fi\n  done\n  if [ \"$FOUND_PROD\" -ne 1 ]; then\n    echo \"error: Could not confirm env/prod.json was applied after refresh. Check env/prod.json and your Flutter install.\"\n    exit 1\n  fi\n  echo \"✓ Release build auto-configured with env/prod.json\"\nfi\n";
+			shellScript = "if [ \"$CONFIGURATION\" = \"Release\" ]; then\n  CONFIG_FILE=\"${SRCROOT}/Flutter/Generated.xcconfig\"\n  if [ ! -f \"$CONFIG_FILE\" ]; then\n    echo \"error: ${CONFIG_FILE} not found. Run 'flutter build ios --release --dart-define-from-file=env/prod.json' first.\"\n    exit 1\n  fi\n  DEFINES_LINE=$(grep \"^DART_DEFINES=\" \"$CONFIG_FILE\" || true)\n  ENCODED=\"${DEFINES_LINE#DART_DEFINES=}\"\n  FOUND_PROD=0\n  IFS=',' read -ra PARTS <<< \"$ENCODED\"\n  for PART in \"${PARTS[@]}\"; do\n    DECODED=$(echo \"$PART\" | base64 --decode 2>/dev/null || true)\n    if [ \"$DECODED\" = \"ENV=prod\" ]; then\n      FOUND_PROD=1\n    fi\n  done\n  if [ \"$FOUND_PROD\" -ne 1 ]; then\n    echo \"error: Release build is not using env/prod.json (no ENV=prod in DART_DEFINES).\"\n    echo \"error: Run 'flutter build ios --release --dart-define-from-file=env/prod.json' first, then Archive.\"\n    exit 1\n  fi\n  echo \"✓ Release build confirmed using env/prod.json\"\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		9740EEB61CF901F6004384FC /* Run Script */ = {
@@ -514,7 +514,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = M389SJ86Q3;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
@@ -705,7 +705,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = M389SJ86Q3;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
@@ -736,7 +736,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = M389SJ86Q3;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
