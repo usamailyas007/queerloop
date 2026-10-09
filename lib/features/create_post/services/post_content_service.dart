@@ -30,7 +30,7 @@ class PostContentService {
     bool allowDownloads = false,
   }) async {
     if (AppConfig.useMockApi) {
-      debugPrint('ℹ️ [PostContent] Mock API is ON. Returning mock created post.');
+      debugPrint('[VIDEO_UPLOAD] ℹ️ Mock API is ON. Returning mock created post.');
       return PostResponseModel(
         id: 'post_${DateTime.now().millisecondsSinceEpoch}',
         caption: body,
@@ -49,7 +49,7 @@ class PostContentService {
     final List<String> distinctMediaRefs = mediaRefs.toSet().toList();
 
     debugPrint(
-        '🚀 [PostContent] Creating post (type: $type, visibility: $visibility, mediaRefs: $distinctMediaRefs, allowComments: $allowComments, allowDownload: $allowDownloads)');
+        '[VIDEO_UPLOAD] ▶️ Creating post: type=$type visibility=$visibility mediaRefs=$distinctMediaRefs allowComments=$allowComments allowDownload=$allowDownloads');
     final Map<String, dynamic> requestBody = <String, dynamic>{
       'type': type,
       'body': body,
@@ -77,12 +77,25 @@ class PostContentService {
       requestBody['communityId'] = communityId.trim();
     }
 
-    final dynamic response = await _client.post(
-      ApiEndpoints.posts,
-      body: requestBody,
-    );
+    dynamic response;
+    try {
+      response = await _client.post(
+        ApiEndpoints.posts,
+        body: requestBody,
+      );
+    } on ApiException catch (e) {
+      // The UI only ever shows `message` (e.g. "One or more attachments
+      // failed our content checks") — `.data` is the raw response body and
+      // may contain which specific mediaRef failed and why, but it was
+      // never being logged or surfaced anywhere before this.
+      debugPrint(
+          '[VIDEO_UPLOAD] ❌ Create post FAILED: status=${e.statusCode} code=${e.code} message=${e.message}');
+      debugPrint('[VIDEO_UPLOAD]    mediaRefs sent: $distinctMediaRefs');
+      debugPrint('[VIDEO_UPLOAD]    raw error data: ${e.data}');
+      rethrow;
+    }
 
-    debugPrint('📥 [PostContent] Create Post Response: $response');
+    debugPrint('[VIDEO_UPLOAD] 📥 Create post response: $response');
     if (response is Map<String, dynamic>) {
       return PostResponseModel.fromJson(response);
     }

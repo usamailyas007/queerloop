@@ -2,7 +2,7 @@ name: queerloop
 description: "QueerLoop+ — social app (user app + admin console)."
 publish_to: "none"
 
-version: 1.0.0+1
+version: 1.0.0+3
 
 environment:
   sdk: ^3.10.1

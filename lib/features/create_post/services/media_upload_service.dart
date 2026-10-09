@@ -39,7 +39,7 @@ class MediaUploadService {
     int? fileSize,
   }) async {
     if (AppConfig.useMockApi) {
-      debugPrint('ℹ️ [MediaUpload] Mock API is ON. Returning mock upload URL.');
+      debugPrint('[VIDEO_UPLOAD] ℹ️ Mock API is ON. Returning mock upload URL.');
       final String mockId = 'media_${DateTime.now().millisecondsSinceEpoch}';
       return MediaUploadResult(
         id: mockId,
@@ -54,22 +54,27 @@ class MediaUploadService {
       'type': type,
     };
 
-    debugPrint('🚀 [MediaUpload] Requesting upload URL with type: $type');
+    debugPrint(
+        '[VIDEO_UPLOAD] ▶️ Requesting upload URL: type=$type filename=$filename contentType=$contentType fileSize=${fileSize != null ? '${(fileSize / (1024 * 1024)).toStringAsFixed(2)} MB' : 'n/a (not sent to backend)'}');
     final dynamic response = await _apiClient.post(
       ApiEndpoints.mediaUploadUrl,
       body: requestBody,
       timeout: const Duration(minutes: 2),
     );
 
-    debugPrint('📥 [MediaUpload] Upload URL Response: $response');
+    debugPrint('[VIDEO_UPLOAD] 📥 Upload URL response: $response');
     if (response is Map<String, dynamic>) {
       final MediaUploadResult result = MediaUploadResult.fromJson(response);
-      debugPrint('🔑 [MediaUpload] Parsed Media ID: "${result.id}", uploadUrl: "${result.uploadUrl}"');
+      debugPrint(
+          '[VIDEO_UPLOAD] 🔑 Parsed media id="${result.id}" uploadUrl="${result.uploadUrl}"');
       if (result.id.trim().isEmpty) {
-        debugPrint('⚠️ [MediaUpload] Warning: ID could not be extracted from keys: ${response.keys}');
+        debugPrint(
+            '[VIDEO_UPLOAD] ⚠️ WARNING: id could not be extracted from response keys: ${response.keys}');
       }
       return result;
     }
+    debugPrint(
+        '[VIDEO_UPLOAD] ❌ FAILED: unexpected response shape from upload-url endpoint: $response');
     throw const ApiException('Invalid response format from upload-url endpoint.');
   }
 
@@ -82,7 +87,7 @@ class MediaUploadService {
     void Function(int sent, int total)? onProgress,
   }) async {
     if (AppConfig.useMockApi) {
-      debugPrint('ℹ️ [MediaUpload] Mock S3 Upload simulating...');
+      debugPrint('[VIDEO_UPLOAD] ℹ️ Mock S3 upload simulating...');
       final int total = await file.length();
       onProgress?.call(total ~/ 2, total);
       await Future<void>.delayed(const Duration(milliseconds: 600));
@@ -90,10 +95,14 @@ class MediaUploadService {
       return;
     }
 
-    debugPrint('🚀 [MediaUpload] Starting direct Amazon S3 upload (size: ${await file.length()} bytes)');
     final int fileLength = await file.length();
+    final double fileMb = fileLength / (1024 * 1024);
+    final Stopwatch stopwatch = Stopwatch()..start();
+    debugPrint(
+        '[VIDEO_UPLOAD] ▶️ Starting S3 upload: path=${file.path} size=${fileMb.toStringAsFixed(2)} MB ($fileLength bytes) contentType=$contentType');
     final Stream<List<int>> stream = file.openRead();
 
+    int lastLoggedPercent = -1;
     try {
       await _s3Dio.put<dynamic>(
         uploadUrl,
@@ -104,11 +113,29 @@ class MediaUploadService {
             'Content-Length': fileLength,
           },
         ),
-        onSendProgress: onProgress,
+        onSendProgress: (int sent, int total) {
+          if (total > 0) {
+            final int percent = ((sent / total) * 100).floor();
+            // Log every ~20% so progress is visible without flooding the console.
+            if (percent >= lastLoggedPercent + 20) {
+              lastLoggedPercent = percent;
+              debugPrint(
+                  '[VIDEO_UPLOAD] 📶 S3 upload progress: $percent% ($sent/$total bytes, ${stopwatch.elapsed.inSeconds}s elapsed)');
+            }
+          }
+          onProgress?.call(sent, total);
+        },
       );
-      debugPrint('✅ [MediaUpload] Direct S3 upload complete.');
+      stopwatch.stop();
+      final double speedMbps = stopwatch.elapsed.inMilliseconds > 0
+          ? (fileMb * 1000) / stopwatch.elapsed.inMilliseconds
+          : 0;
+      debugPrint(
+          '[VIDEO_UPLOAD] ✅ S3 upload complete: ${fileMb.toStringAsFixed(2)} MB in ${stopwatch.elapsed.inSeconds}s (~${speedMbps.toStringAsFixed(2)} MB/s)');
     } on DioException catch (e) {
-      debugPrint('❌ [MediaUpload] S3 upload failed: ${e.message}');
+      stopwatch.stop();
+      debugPrint(
+          '[VIDEO_UPLOAD] ❌ S3 upload FAILED after ${stopwatch.elapsed.inSeconds}s: status=${e.response?.statusCode} message=${e.message} responseBody=${e.response?.data}');
       throw ApiException(
         'Failed to upload media to storage: ${e.message}',
         statusCode: e.response?.statusCode,
@@ -129,15 +156,15 @@ class MediaUploadService {
     }
 
     if (AppConfig.useMockApi) {
-      debugPrint('ℹ️ [MediaUpload] Mock complete upload for $cleanId');
+      debugPrint('[VIDEO_UPLOAD] ℹ️ Mock complete upload for $cleanId');
       return MediaUploadResult(id: cleanId, status: 'ready');
     }
 
-    debugPrint('🚀 [MediaUpload] Completing upload for media: $cleanId');
+    debugPrint('[VIDEO_UPLOAD] ▶️ Completing upload for media: $cleanId');
     final dynamic response = await _apiClient.post(
       ApiEndpoints.mediaComplete(cleanId),
     );
-    debugPrint('📥 [MediaUpload] Complete upload response: $response');
+    debugPrint('[VIDEO_UPLOAD] 📥 Complete upload response: $response');
     if (response is Map<String, dynamic>) {
       return MediaUploadResult.fromJson(response);
     }
@@ -163,6 +190,10 @@ class MediaUploadService {
       ApiEndpoints.mediaStatus(cleanId),
       useCache: false,
     );
+    // Logged RAW (not just the parsed status) because rejection reasons
+    // (e.g. content-moderation failures) may be present in fields the
+    // MediaUploadResult model doesn't currently parse out.
+    debugPrint('[VIDEO_UPLOAD] 📡 Raw status response for $cleanId: $response');
     if (response is Map<String, dynamic>) {
       return MediaUploadResult.fromJson(response);
     }
@@ -175,10 +206,10 @@ class MediaUploadService {
   void cancelPolling([String? mediaId]) {
     if (mediaId != null && mediaId.trim().isNotEmpty) {
       _cancelledMediaIds.add(mediaId.trim());
-      debugPrint('🛑 [MediaUpload] Cancelled polling for: $mediaId');
+      debugPrint('[VIDEO_UPLOAD] 🛑 Cancelled polling for: $mediaId');
     } else {
       _cancelledMediaIds.add('*');
-      debugPrint('🛑 [MediaUpload] Cancelled all active media polling.');
+      debugPrint('[VIDEO_UPLOAD] 🛑 Cancelled all active media polling.');
     }
   }
 
@@ -203,14 +234,16 @@ class MediaUploadService {
     _cancelledMediaIds.remove('*');
 
     if (AppConfig.useMockApi) {
-      debugPrint('ℹ️ [MediaUpload] Mock transcoding delay...');
+      debugPrint('[VIDEO_UPLOAD] ℹ️ Mock transcoding delay...');
       onStatusChange?.call('transcoding');
       await Future<void>.delayed(const Duration(seconds: 2));
       onStatusChange?.call('ready');
       return MediaUploadResult(id: cleanId, status: 'ready');
     }
 
-    debugPrint('⏳ [MediaUpload] Starting status polling for $cleanId...');
+    debugPrint(
+        '[VIDEO_UPLOAD] ⏳ Starting status polling for $cleanId (timeout=${timeout.inSeconds}s, interval=${interval.inSeconds}s)...');
+    final Stopwatch pollStopwatch = Stopwatch()..start();
     final DateTime deadline = DateTime.now().add(timeout);
     int consecutive404Count = 0;
 
@@ -218,7 +251,7 @@ class MediaUploadService {
       if (_cancelledMediaIds.contains(cleanId) ||
           _cancelledMediaIds.contains('*') ||
           (isCancelled != null && isCancelled())) {
-        debugPrint('🛑 [MediaUpload] Stopped polling for $cleanId: cancelled.');
+        debugPrint('[VIDEO_UPLOAD] 🛑 Stopped polling for $cleanId: cancelled.');
         throw const ApiException(
           'Media status polling cancelled.',
           kind: ApiErrorKind.client,
@@ -229,7 +262,8 @@ class MediaUploadService {
         final MediaUploadResult current = await getMediaStatus(cleanId);
         consecutive404Count = 0;
         final String statusLower = current.status.toLowerCase();
-        debugPrint('📡 [MediaUpload] Status poll for $cleanId: $statusLower');
+        debugPrint(
+            '[VIDEO_UPLOAD] 📡 Status poll for $cleanId: $statusLower (${pollStopwatch.elapsed.inSeconds}s elapsed)');
         onStatusChange?.call(current.status);
 
         if (statusLower == 'ready' ||
@@ -237,10 +271,18 @@ class MediaUploadService {
             statusLower == 'completed' ||
             statusLower == 'done' ||
             statusLower == 'active') {
+          debugPrint(
+              '[VIDEO_UPLOAD] ✅ Media $cleanId ready after ${pollStopwatch.elapsed.inSeconds}s: downloadUrl=${current.downloadUrl}');
           return current;
         }
 
         if (statusLower == 'failed' || statusLower == 'error') {
+          // The raw response (logged above in getMediaStatus) is the place
+          // to look for *why* — e.g. a content-moderation rejection — since
+          // MediaUploadResult doesn't currently parse a rejection-reason
+          // field out of the backend's response.
+          debugPrint(
+              '[VIDEO_UPLOAD] ❌ Media $cleanId REJECTED by server after ${pollStopwatch.elapsed.inSeconds}s (status=$statusLower). See the raw status response logged above for the reason.');
           throw ApiException(
             'Media transcoding failed on server.',
             kind: ApiErrorKind.server,
@@ -256,7 +298,7 @@ class MediaUploadService {
         if (e is ApiException && e.statusCode == 404) {
           consecutive404Count++;
           debugPrint(
-              '⚠️ [MediaUpload] Status poll 404 ($consecutive404Count/5) for media ID: $cleanId');
+              '[VIDEO_UPLOAD] ⚠️ Status poll 404 ($consecutive404Count/5) for media ID: $cleanId');
           if (consecutive404Count >= 5) {
             throw ApiException(
               'Media not found on server (404) after 5 polling attempts for ID: $cleanId',
@@ -265,14 +307,14 @@ class MediaUploadService {
             );
           }
         } else {
-          debugPrint('⚠️ [MediaUpload] Poll attempt error (retrying): $e');
+          debugPrint('[VIDEO_UPLOAD] ⚠️ Poll attempt error (retrying): $e');
         }
       }
 
       if (_cancelledMediaIds.contains(cleanId) ||
           _cancelledMediaIds.contains('*') ||
           (isCancelled != null && isCancelled())) {
-        debugPrint('🛑 [MediaUpload] Stopped polling for $cleanId: cancelled.');
+        debugPrint('[VIDEO_UPLOAD] 🛑 Stopped polling for $cleanId: cancelled.');
         throw const ApiException(
           'Media status polling cancelled.',
           kind: ApiErrorKind.client,
@@ -282,6 +324,8 @@ class MediaUploadService {
       await Future<void>.delayed(interval);
     }
 
+    debugPrint(
+        '[VIDEO_UPLOAD] ❌ Media $cleanId TIMED OUT after ${pollStopwatch.elapsed.inSeconds}s with no terminal status.');
     throw const ApiException(
       'Media processing timed out. Please try again.',
       kind: ApiErrorKind.timeout,

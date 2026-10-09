@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
@@ -35,6 +36,12 @@ class ReelVideoCacheManager extends CacheManager with ImageCacheManager {
 class ReelVideoPreloader {
   ReelVideoPreloader._();
   static final ReelVideoPreloader instance = ReelVideoPreloader._();
+
+  /// Native player init can hang indefinitely (no error, no completion) on a
+  /// broken/unreachable stream URL — most often seen on iOS/AVPlayer with
+  /// HLS manifests. Without this timeout, `await controller.initialize()`
+  /// never resolves and the reel spins forever with no fallback.
+  static const Duration _initTimeout = Duration(seconds: 12);
 
   final Map<String, VideoPlayerController> _controllers =
       <String, VideoPlayerController>{};
@@ -130,7 +137,7 @@ class ReelVideoPreloader {
       if (!existing.value.isInitialized && !_initializing.contains(key)) {
         try {
           _initializing.add(key);
-          await existing.initialize();
+          await existing.initialize().timeout(_initTimeout);
           if (!_isFeedVisible || !_activeReelIds.contains(reel.id)) {
             existing.pause();
             existing.setVolume(0);
@@ -149,6 +156,13 @@ class ReelVideoPreloader {
         } catch (e) {
           debugPrint(
               '⚠️ [ReelVideoPreloader] Error re-initializing controller $key: $e');
+          VideoSizeLogger.logInitError(
+            id: key,
+            platform: Platform.isIOS ? 'iOS' : (Platform.isAndroid ? 'Android' : 'Other'),
+            stage: 'Re-init existing controller',
+            url: reel.videoUrl,
+            error: e,
+          );
         } finally {
           _initializing.remove(key);
         }
@@ -191,11 +205,24 @@ class ReelVideoPreloader {
 
           if (controller != null) {
             _controllers[key] = controller;
-            await controller.initialize();
+            VideoSizeLogger.logInitAttempt(
+              id: key,
+              platform: Platform.isIOS ? 'iOS' : (Platform.isAndroid ? 'Android' : 'Other'),
+              url: source.uri?.toString(),
+              formatHint: source.formatHint?.toString(),
+            );
+            await controller.initialize().timeout(_initTimeout);
             initializedSuccessfully = true;
           }
         } catch (initErr) {
           debugPrint('⚠️ [ReelVideoPreloader] Primary source init failed for $key: $initErr');
+          VideoSizeLogger.logInitError(
+            id: key,
+            platform: Platform.isIOS ? 'iOS' : (Platform.isAndroid ? 'Android' : 'Other'),
+            stage: 'Primary network source',
+            url: source.uri?.toString(),
+            error: initErr,
+          );
           _controllers.remove(key);
           try {
             await controller?.dispose();
@@ -209,7 +236,7 @@ class ReelVideoPreloader {
         try {
           controller = VideoPlayerController.asset(reel.videoAsset);
           _controllers[key] = controller;
-          await controller.initialize();
+          await controller.initialize().timeout(_initTimeout);
           initializedSuccessfully = true;
           debugPrint('🎬 [ReelVideoPreloader] Asset loaded for $key: ${reel.videoAsset}');
         } catch (assetErr) {
@@ -248,6 +275,13 @@ class ReelVideoPreloader {
       return null;
     } catch (e) {
       debugPrint('⚠️ [ReelVideoPreloader] Failed to initialize reel $key: $e');
+      VideoSizeLogger.logInitError(
+        id: key,
+        platform: Platform.isIOS ? 'iOS' : (Platform.isAndroid ? 'Android' : 'Other'),
+        stage: 'Outer getOrCreate',
+        url: reel.videoUrl,
+        error: e,
+      );
       _controllers.remove(key);
       try {
         await controller?.dispose();

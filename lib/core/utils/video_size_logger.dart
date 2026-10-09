@@ -154,4 +154,38 @@ class VideoSizeLogger {
     // ignore: avoid_print
     print('[VIDEO_SIZE] ==============================================================');
   }
+
+  /// Logs that a native player init attempt is starting — printed BEFORE the
+  /// (possibly hanging) `controller.initialize()` call, so even if it never
+  /// completes and never hits a catch block, we still see what URL/format
+  /// was attempted.
+  static void logInitAttempt({
+    required String id,
+    required String platform,
+    String? url,
+    String? formatHint,
+  }) {
+    // ignore: avoid_print
+    print('[VIDEO_SIZE] ▶️ INIT START     : id=$id platform=$platform format=${formatHint ?? "auto"}');
+    // ignore: avoid_print
+    print('[VIDEO_SIZE]    URL            : ${url ?? "n/a"}');
+  }
+
+  /// Logs a failed/timed-out native player init with the real underlying
+  /// error, so iOS-only playback failures are actually visible in the
+  /// console instead of being silently swallowed.
+  static void logInitError({
+    required String id,
+    required String platform,
+    required String stage,
+    String? url,
+    Object? error,
+  }) {
+    // ignore: avoid_print
+    print('[VIDEO_SIZE] ❌ INIT FAILED    : id=$id platform=$platform stage=$stage');
+    // ignore: avoid_print
+    print('[VIDEO_SIZE]    URL            : ${url ?? "n/a"}');
+    // ignore: avoid_print
+    print('[VIDEO_SIZE]    Error          : $error');
+  }
 }

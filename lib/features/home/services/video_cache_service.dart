@@ -81,15 +81,74 @@ class VideoCacheService {
     return id.replaceAll(RegExp(r'[^\w\-]'), '_');
   }
 
-  /// Check if local cached file exists for this reel/video
+  /// Check if local cached file exists for this reel/video.
+  ///
+  /// HLS content is NEVER cached to disk (see [resolveVideoSource]) —
+  /// concatenating independently-encoded HLS segments into one file isn't
+  /// reliable, confirmed with real device evidence: byte-perfect, fully
+  /// 188-byte-aligned stitched files still failed to open on iOS. Any
+  /// `.ts` file found here is a stale leftover from an earlier build and
+  /// is always discarded, never trusted, regardless of how "valid" it
+  /// looks structurally. Direct-downloaded (non-HLS) content is cached as
+  /// its real format (`.mp4`).
   File? getLocalCachedFile(String id) {
     if (_cacheDir == null) return null;
     final String clean = _cleanKey(id);
-    final File f = File('${_cacheDir!.path}/$clean.mp4');
-    if (f.existsSync() && f.lengthSync() > 10240) {
-      return f;
+
+    final File tsFile = File('${_cacheDir!.path}/$clean.ts');
+    if (tsFile.existsSync()) {
+      try {
+        tsFile.deleteSync();
+      } catch (_) {}
     }
+
+    final File mp4File = File('${_cacheDir!.path}/$clean.mp4');
+    if (mp4File.existsSync() && mp4File.lengthSync() > 10240) {
+      if (_looksLikeRawMpegTs(mp4File)) {
+        // Leftover corrupted cache from an earlier build — stitched MPEG-TS
+        // segments were mislabeled with a .mp4 extension. Delete so it
+        // re-caches correctly under the corrected extension.
+        try {
+          mp4File.deleteSync();
+        } catch (_) {}
+        return null;
+      }
+      return mp4File;
+    }
+
     return null;
+  }
+
+  /// Raw MPEG-TS packets start with sync byte 0x47 at the start of every
+  /// 188-byte packet. A genuine MP4 file never starts this way (it starts
+  /// with a 4-byte box size followed by an ASCII box type like `ftyp`).
+  bool _looksLikeRawMpegTs(File file) {
+    try {
+      final RandomAccessFile raf = file.openSync();
+      final List<int> header = raf.readSync(189);
+      raf.closeSync();
+      return header.length > 188 && header[0] == 0x47 && header[188] == 0x47;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// A complete, non-corrupted stitched TS file must: start with the TS
+  /// sync byte, and have a total length that's an exact multiple of 188
+  /// bytes (the fixed TS packet size) — any truncation from an interrupted
+  /// write breaks that alignment, which is exactly how a half-written file
+  /// from an app reload gets caught here instead of being played.
+  bool _isValidMpegTs(File file) {
+    try {
+      final int length = file.lengthSync();
+      if (length < 188 || length % 188 != 0) return false;
+      final RandomAccessFile raf = file.openSync();
+      final List<int> header = raf.readSync(1);
+      raf.closeSync();
+      return header.isNotEmpty && header[0] == 0x47;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Check connection to determine if user is on mobile/slow data or WiFi
@@ -137,6 +196,7 @@ class VideoCacheService {
 
       if (isMaster) {
         String? selectedVariant;
+        String? capVariant; // 480p — the feed-playback quality ceiling
         int lowestBandwidth = 999999999;
         int highestBandwidth = -1;
         String? lowestVariant;
@@ -171,6 +231,21 @@ class VideoCacheService {
                         nextLine.contains('480'))) {
                   selectedVariant = resolved;
                 }
+                // Cap feed playback at 480p even on fast networks. This is
+                // partly a performance choice (a reels-style small
+                // on-screen tile doesn't benefit from 1080p) and partly a
+                // reliability one right now: 480p is the only rendition
+                // confirmed to have both a correctly RFC-6381-formatted
+                // CODECS string and a 16-pixel-aligned width (272px,
+                // 272/16=17 exactly) — 720p's master-playlist codec tag is
+                // malformed (`avc1.77.30`, not valid hex) and 1080p (610px
+                // width, not 16-aligned) is the exact rendition currently
+                // failing to initialize on iOS. Revisit this cap once the
+                // 720p/1080p encodes are confirmed clean.
+                if (!isMobile &&
+                    (line.contains('480') || nextLine.contains('480'))) {
+                  capVariant = resolved;
+                }
                 break;
               }
             }
@@ -178,10 +253,14 @@ class VideoCacheService {
           }
         }
 
-        // On mobile / slow network, pick 360p/480p or lowest bandwidth variant
-        // On fast WiFi, pick highest / 720p variant
+        // On mobile / slow network, pick 360p/480p or lowest bandwidth variant.
+        // On fast WiFi, prefer the 720p cap; only fall back to the true
+        // highest-bandwidth variant (which may be 1080p+) if no 720p
+        // rendition exists at all.
         final String chosen = selectedVariant ??
-            (isMobile ? (lowestVariant ?? originalUrl) : (highestVariant ?? originalUrl));
+            (isMobile
+                ? (lowestVariant ?? originalUrl)
+                : (capVariant ?? highestVariant ?? originalUrl));
         _resolvedAdaptiveUrls[originalUrl] = chosen;
         return chosen;
       }
@@ -193,14 +272,21 @@ class VideoCacheService {
     return originalUrl;
   }
 
-  /// Saves the video to local disk cache in background so next time no internet is needed
+  /// Saves the video to local disk cache in background so next time no internet is needed.
+  ///
+  /// HLS sources get stitched from raw MPEG-TS segments, so they're saved
+  /// with a `.ts` extension to match their real format — labeling stitched
+  /// TS data as `.mp4` is what caused "Cannot Open: media may be damaged"
+  /// on iOS. Direct (non-HLS) downloads keep `.mp4`.
   void cacheVideoInBackground(String id, String videoUrl) {
     if (videoUrl.isEmpty) return;
     final String clean = _cleanKey(id);
     if (_currentlyCaching.contains(clean)) return;
 
     if (_cacheDir == null) return;
-    final File destFile = File('${_cacheDir!.path}/$clean.mp4');
+    final bool isHls = videoUrl.contains('.m3u8');
+    final File destFile =
+        File('${_cacheDir!.path}/$clean${isHls ? '.ts' : '.mp4'}');
     if (destFile.existsSync() && destFile.lengthSync() > 10240) return;
 
     _currentlyCaching.add(clean);
@@ -220,8 +306,9 @@ class VideoCacheService {
         } catch (_) {}
       }
 
-      if (videoUrl.contains('.m3u8')) {
-        // HLS Stream caching: parse segments and stitch into local .mp4
+      final bool isHls = videoUrl.contains('.m3u8');
+      if (isHls) {
+        // HLS Stream caching: parse segments and stitch into local .ts
         final Uri playlistUri = Uri.parse(videoUrl);
         final Response<String> res = await _dio.get<String>(
           videoUrl,
@@ -283,13 +370,24 @@ class VideoCacheService {
         await _dio.download(videoUrl, tempFile.path);
       }
 
-      if (tempFile.existsSync() && tempFile.lengthSync() > 10240) {
+      final bool complete = tempFile.existsSync() &&
+          tempFile.lengthSync() > 10240 &&
+          (!isHls || _isValidMpegTs(tempFile));
+
+      if (complete) {
         if (destFile.existsSync()) {
           try {
             destFile.deleteSync();
           } catch (_) {}
         }
         await tempFile.rename(destFile.path);
+      } else {
+        // Partial/corrupted write (e.g. interrupted by an app reload mid
+        // segment download) — discard rather than ever finalize a file
+        // that could crash native playback.
+        try {
+          if (tempFile.existsSync()) tempFile.deleteSync();
+        } catch (_) {}
       }
     } catch (_) {
       try {
@@ -315,6 +413,8 @@ class VideoCacheService {
     // 2. Check local disk cache (WORKS OFFLINE WITHOUT INTERNET!)
     final File? cached = getLocalCachedFile(reel.id);
     if (cached != null) {
+      // ignore: avoid_print
+      print('[VIDEO_SIZE] 💽 USING CACHE FILE : id=${reel.id} path=${cached.path} size=${cached.existsSync() ? cached.lengthSync() : -1} bytes');
       return ResolvedVideoSource.file(cached, isLocalCache: true);
     }
 
@@ -323,15 +423,38 @@ class VideoCacheService {
       final bool isHls =
           videoUrl.contains('.m3u8') || videoUrl.contains('m3u8');
 
-      // Resolve adaptive quality URL (360p on slow/mobile, 720p on fast)
-      final String adaptiveUrl = isHls
-          ? await resolveAdaptiveUrl(videoUrl)
-          : videoUrl;
+      // Live playback: for HLS, feed the player a specific resolution's
+      // MEDIA (sub) playlist directly — NOT the master playlist.
+      //
+      // This backend's master playlist has a malformed CODECS attribute on
+      // its 720p variant (`avc1.77.30` — old-style dot-decimal, not valid
+      // RFC 6381 hex like the other three variants' `avc1.4d40xx`).
+      // AVPlayer (iOS) parses every variant's codec string when it loads a
+      // master playlist, even ones it never ends up selecting, and can
+      // stall indefinitely on a non-conformant one; ExoPlayer (Android) is
+      // far more lenient, which is why this only ever broke iOS. A media
+      // playlist has no CODECS declarations at all (verified against the
+      // real backend response), so going straight to one sidesteps the bad
+      // variant entirely instead of working around broken manifest data.
+      final String playbackUrl =
+          isHls ? await resolveAdaptiveUrl(videoUrl) : videoUrl;
 
-      // Start background caching to disk for subsequent instant offline playback
-      cacheVideoInBackground(reel.id, isHls ? adaptiveUrl : videoUrl);
+      // Background-cache for instant replay / offline viewing — NON-HLS
+      // only. Proven, with real cached files on a real device: byte-level
+      // concatenation of independently-encoded HLS segments does NOT
+      // reliably produce one valid continuous TS file, even when every
+      // segment is individually perfect and the result is fully
+      // byte-aligned (confirmed — files that passed every integrity check
+      // still failed to open on iOS identically to corrupted ones). Each
+      // segment is self-contained for proper HLS streaming; concatenating
+      // them for single-pass file playback isn't guaranteed to work and
+      // isn't worth re-attempting. Live network streaming (above) is the
+      // only reliable path for HLS now.
+      if (!isHls) {
+        cacheVideoInBackground(reel.id, playbackUrl);
+      }
 
-      final Uri uri = Uri.parse(adaptiveUrl);
+      final Uri uri = Uri.parse(playbackUrl);
       return ResolvedVideoSource.network(
         uri,
         formatHint: isHls ? VideoFormat.hls : null,
