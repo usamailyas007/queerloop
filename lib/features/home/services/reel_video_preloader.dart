@@ -187,6 +187,24 @@ class ReelVideoPreloader {
       final ResolvedVideoSource source = await _resolveSource(reel);
       bool initializedSuccessfully = false;
 
+      switch (source.type) {
+        case VideoSourceType.file:
+          if (source.isLocalCache) {
+            debugPrint(
+                '[VIDEO_SIZE] 💽 PLAYING FROM CACHE : id=$key path=${source.file?.path}');
+          } else {
+            debugPrint(
+                '[VIDEO_SIZE] 📁 PLAYING FROM LOCAL FILE (not cache) : id=$key path=${source.file?.path}');
+          }
+        case VideoSourceType.network:
+          debugPrint(
+              '[VIDEO_SIZE] 🌐 PLAYING FROM NETWORK (not cached) : id=$key url=${source.uri}');
+        case VideoSourceType.asset:
+          debugPrint('[VIDEO_SIZE] 📦 PLAYING FROM BUNDLED ASSET : id=$key path=${source.assetPath}');
+        case VideoSourceType.none:
+          debugPrint('[VIDEO_SIZE] ⚠️ NO VIDEO SOURCE RESOLVED : id=$key');
+      }
+
       if (source.type != VideoSourceType.none) {
         try {
           switch (source.type) {

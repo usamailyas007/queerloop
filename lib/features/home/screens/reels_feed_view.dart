@@ -80,9 +80,15 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
       if (mounted) {
         final ModalRoute<void>? route = ModalRoute.of(context);
         final bool isCurrent = route == null || route.isCurrent;
-        if (isCurrent && ReelVideoPreloader.instance.isFeedVisible) {
+        // Always set the flag explicitly from `isCurrent` — the old
+        // `isCurrent && isFeedVisible` check here meant that once some other
+        // screen's didPushNext() flipped the global flag to false (e.g.
+        // pushing this very screen on top of the home feed), no subsequent
+        // ReelsFeedView could ever turn it back on, permanently stuck paused
+        // until the user manually tapped to play.
+        if (isCurrent) {
           ReelVideoPreloader.instance.setFeedVisible(true);
-        } else if (!isCurrent) {
+        } else {
           ReelVideoPreloader.instance.setFeedVisible(false);
           ReelVideoPreloader.instance.pauseAll();
           ReelVideoPreloader.instance.muteAll();
@@ -91,7 +97,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
         final HomeFeedProvider provider = context.read<HomeFeedProvider>();
         final List<ReelItemModel> reels =
             widget.customReels != null ? _localReels : provider.reels;
-        if (reels.isNotEmpty && isCurrent && ReelVideoPreloader.instance.isFeedVisible) {
+        if (reels.isNotEmpty && isCurrent) {
           ReelVideoPreloader.instance.preloadSurrounding(reels, _activePage);
           if (_activePage < reels.length) {
             provider.recordView(reels[_activePage].id);

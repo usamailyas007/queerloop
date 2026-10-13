@@ -14,11 +14,12 @@ import 'features/home/services/video_cache_service.dart';
 
 void main() {
   // Completely silence all prints, debugPrints, socket logs, and API logs across the entire app
-  // ONLY allow [VIDEO_SIZE] and [VIDEO_UPLOAD] logs to be printed
+  // ONLY allow [VIDEO_SIZE], [VIDEO_UPLOAD], and [VIDEO_FEED] logs to be printed
   debugPrint = (String? message, {int? wrapWidth}) {
     if (message != null &&
         (message.contains('[VIDEO_SIZE]') ||
-            message.contains('[VIDEO_UPLOAD]'))) {
+            message.contains('[VIDEO_UPLOAD]') ||
+            message.contains('[VIDEO_FEED]'))) {
       debugPrintSynchronously(message, wrapWidth: wrapWidth);
     }
   };
@@ -63,7 +64,9 @@ void main() {
     (Object error, StackTrace stack) {},
     zoneSpecification: ZoneSpecification(
       print: (Zone self, ZoneDelegate parent, Zone zone, String line) {
-        if (line.contains('[VIDEO_SIZE]') || line.contains('[VIDEO_UPLOAD]')) {
+        if (line.contains('[VIDEO_SIZE]') ||
+            line.contains('[VIDEO_UPLOAD]') ||
+            line.contains('[VIDEO_FEED]')) {
           parent.print(zone, line);
         }
       },

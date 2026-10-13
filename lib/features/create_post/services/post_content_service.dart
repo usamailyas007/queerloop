@@ -1,7 +1,6 @@
 // Post Content Service — manages post publishing and engagement actions.
 // Interfaces with Content Service on Port 3013.
 
-
 import 'package:flutter/foundation.dart';
 
 import '../../../core/api/api_client.dart';
@@ -30,7 +29,9 @@ class PostContentService {
     bool allowDownloads = false,
   }) async {
     if (AppConfig.useMockApi) {
-      debugPrint('[VIDEO_UPLOAD] ℹ️ Mock API is ON. Returning mock created post.');
+      debugPrint(
+        '[VIDEO_UPLOAD] ℹ️ Mock API is ON. Returning mock created post.',
+      );
       return PostResponseModel(
         id: 'post_${DateTime.now().millisecondsSinceEpoch}',
         caption: body,
@@ -49,7 +50,8 @@ class PostContentService {
     final List<String> distinctMediaRefs = mediaRefs.toSet().toList();
 
     debugPrint(
-        '[VIDEO_UPLOAD] ▶️ Creating post: type=$type visibility=$visibility mediaRefs=$distinctMediaRefs allowComments=$allowComments allowDownload=$allowDownloads');
+      '[VIDEO_UPLOAD] ▶️ Creating post: type=$type visibility=$visibility mediaRefs=$distinctMediaRefs allowComments=$allowComments allowDownload=$allowDownloads',
+    );
     final Map<String, dynamic> requestBody = <String, dynamic>{
       'type': type,
       'body': body,
@@ -71,25 +73,24 @@ class PostContentService {
 
     // Only send communityId if provided and valid UUID or Mongo ObjectId
     if (communityId != null &&
-        (RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
-                .hasMatch(communityId.trim()) ||
+        (RegExp(
+              r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+            ).hasMatch(communityId.trim()) ||
             RegExp(r'^[0-9a-fA-F]{24}$').hasMatch(communityId.trim()))) {
       requestBody['communityId'] = communityId.trim();
     }
 
     dynamic response;
     try {
-      response = await _client.post(
-        ApiEndpoints.posts,
-        body: requestBody,
-      );
+      response = await _client.post(ApiEndpoints.posts, body: requestBody);
     } on ApiException catch (e) {
       // The UI only ever shows `message` (e.g. "One or more attachments
       // failed our content checks") — `.data` is the raw response body and
       // may contain which specific mediaRef failed and why, but it was
       // never being logged or surfaced anywhere before this.
       debugPrint(
-          '[VIDEO_UPLOAD] ❌ Create post FAILED: status=${e.statusCode} code=${e.code} message=${e.message}');
+        '[VIDEO_UPLOAD] ❌ Create post FAILED: status=${e.statusCode} code=${e.code} message=${e.message}',
+      );
       debugPrint('[VIDEO_UPLOAD]    mediaRefs sent: $distinctMediaRefs');
       debugPrint('[VIDEO_UPLOAD]    raw error data: ${e.data}');
       rethrow;
@@ -127,35 +128,45 @@ class PostContentService {
 
     // Check persistent CacheManager
     try {
-      final dynamic cachedData =
-          CacheManager.instance.get('profile_details_$cleanId');
+      final dynamic cachedData = CacheManager.instance.get(
+        'profile_details_$cleanId',
+      );
       if (cachedData is Map) {
         final Map<String, dynamic> c = Map<String, dynamic>.from(cachedData);
         final dynamic userObj = c['data'] ?? c['user'] ?? c['profile'] ?? c;
         if (userObj is Map) {
-          final String? u = (userObj['username'] ??
-                  userObj['userName'] ??
-                  userObj['handle'])
-              ?.toString();
+          final String? u =
+              (userObj['username'] ?? userObj['userName'] ?? userObj['handle'])
+                  ?.toString();
           if (u != null && u.trim().isNotEmpty) {
-            final String? d = (userObj['displayName'] ??
-                    userObj['display_name'] ??
-                    userObj['name'] ??
-                    userObj['fullName'])
-                ?.toString();
-            final String? a = (userObj['avatarUrl'] ??
-                    userObj['avatar'] ??
-                    userObj['profilePic'])
-                ?.toString();
+            final String? d =
+                (userObj['displayName'] ??
+                        userObj['display_name'] ??
+                        userObj['name'] ??
+                        userObj['fullName'])
+                    ?.toString();
+            final String? a =
+                (userObj['avatarUrl'] ??
+                        userObj['avatar'] ??
+                        userObj['profilePic'])
+                    ?.toString();
             final bool? hideLikes =
                 (userObj['hideMyLikes'] ?? userObj['hideLikes']) as bool?;
-            final bool isPrivate = (userObj['isPrivate'] ?? userObj['is_private']) == true;
-            final String allowCommentsFrom = (userObj['allowCommentsFrom'] ?? userObj['allow_comments_from'] ?? 'everyone').toString().trim().toLowerCase();
+            final bool isPrivate =
+                (userObj['isPrivate'] ?? userObj['is_private']) == true;
+            final String allowCommentsFrom =
+                (userObj['allowCommentsFrom'] ??
+                        userObj['allow_comments_from'] ??
+                        'everyone')
+                    .toString()
+                    .trim()
+                    .toLowerCase();
             final AuthorInfo info = AuthorInfo(
               id: cleanId,
               username: u.trim(),
-              displayName:
-                  (d != null && d.trim().isNotEmpty) ? d.trim() : u.trim(),
+              displayName: (d != null && d.trim().isNotEmpty)
+                  ? d.trim()
+                  : u.trim(),
               avatarUrl: a,
               hideMyLikes: hideLikes,
               isPrivate: isPrivate,
@@ -178,44 +189,57 @@ class PostContentService {
         final Map<String, dynamic> c = Map<String, dynamic>.from(data);
         final dynamic userObj = c['data'] ?? c['user'] ?? c['profile'] ?? c;
         if (userObj is Map) {
-          final String? u = (userObj['username'] ??
-                  userObj['userName'] ??
-                  userObj['handle'])
-              ?.toString();
+          final String? u =
+              (userObj['username'] ?? userObj['userName'] ?? userObj['handle'])
+                  ?.toString();
           if (u != null && u.trim().isNotEmpty) {
-            final String? d = (userObj['displayName'] ??
-                    userObj['display_name'] ??
-                    userObj['name'] ??
-                    userObj['fullName'])
-                ?.toString();
-            final String? a = (userObj['avatarUrl'] ??
-                    userObj['avatar'] ??
-                    userObj['profilePic'])
-                ?.toString();
+            final String? d =
+                (userObj['displayName'] ??
+                        userObj['display_name'] ??
+                        userObj['name'] ??
+                        userObj['fullName'])
+                    ?.toString();
+            final String? a =
+                (userObj['avatarUrl'] ??
+                        userObj['avatar'] ??
+                        userObj['profilePic'])
+                    ?.toString();
             final bool? hideLikes =
                 (userObj['hideMyLikes'] ?? userObj['hideLikes']) as bool?;
-            final bool isPrivate = (userObj['isPrivate'] ?? userObj['is_private']) == true;
-            final String allowCommentsFrom = (userObj['allowCommentsFrom'] ?? userObj['allow_comments_from'] ?? 'everyone').toString().trim().toLowerCase();
+            final bool isPrivate =
+                (userObj['isPrivate'] ?? userObj['is_private']) == true;
+            final String allowCommentsFrom =
+                (userObj['allowCommentsFrom'] ??
+                        userObj['allow_comments_from'] ??
+                        'everyone')
+                    .toString()
+                    .trim()
+                    .toLowerCase();
             final AuthorInfo info = AuthorInfo(
               id: cleanId,
               username: u.trim(),
-              displayName:
-                  (d != null && d.trim().isNotEmpty) ? d.trim() : u.trim(),
+              displayName: (d != null && d.trim().isNotEmpty)
+                  ? d.trim()
+                  : u.trim(),
               avatarUrl: a,
               hideMyLikes: hideLikes,
               isPrivate: isPrivate,
               allowCommentsFrom: allowCommentsFrom,
             );
             AuthorProfileCache.set(cleanId, info);
-            CacheManager.instance.put('profile_details_$cleanId', data,
-                ttl: const Duration(days: 7));
+            CacheManager.instance.put(
+              'profile_details_$cleanId',
+              data,
+              ttl: const Duration(days: 7),
+            );
             return info;
           }
         }
       }
     } catch (e) {
       debugPrint(
-          '⚠️ [PostContentService] Failed to resolve author info for $cleanId: $e');
+        '⚠️ [PostContentService] Failed to resolve author info for $cleanId: $e',
+      );
     }
 
     return null;
@@ -231,9 +255,7 @@ class PostContentService {
     }
     if (needed.isEmpty) return;
 
-    await Future.wait(
-      needed.map((String id) => getAuthorInfo(id)),
-    );
+    await Future.wait(needed.map((String id) => getAuthorInfo(id)));
   }
 
   // ── List Posts by Author ──────────────────────────────────────────────────
@@ -243,8 +265,9 @@ class PostContentService {
       return const <PostResponseModel>[];
     }
 
-    final dynamic response =
-        await _client.get(ApiEndpoints.postsByAuthor(authorId));
+    final dynamic response = await _client.get(
+      ApiEndpoints.postsByAuthor(authorId),
+    );
     return _parsePostsList(response);
   }
 
@@ -263,7 +286,9 @@ class PostContentService {
         response = await _client.get(ApiEndpoints.posts, useCache: false);
       } catch (authErr) {
         if (!_client.isAuthenticated) {
-          debugPrint('📡 [FeedAPI] Unauthenticated GET ${ApiEndpoints.posts} failed, falling back to no-auth: $authErr');
+          debugPrint(
+            '📡 [FeedAPI] Unauthenticated GET ${ApiEndpoints.posts} failed, falling back to no-auth: $authErr',
+          );
           response = await _client.getNoAuth(ApiEndpoints.posts);
         } else {
           rethrow;
@@ -276,8 +301,13 @@ class PostContentService {
       } else if (resToLog is List) {
         debugPrint('📦 [FeedPosts] List length: ${resToLog.length}');
       }
-      final List<PostResponseModel> posts = _parsePostsList(response, tag: 'FeedPosts');
-      debugPrint('📡 [FeedAPI] GET ${ApiEndpoints.posts} returned ${posts.length} parsed items');
+      final List<PostResponseModel> posts = _parsePostsList(
+        response,
+        tag: 'FeedPosts',
+      );
+      debugPrint(
+        '📡 [FeedAPI] GET ${ApiEndpoints.posts} returned ${posts.length} parsed items',
+      );
       return posts;
     }
 
@@ -287,7 +317,9 @@ class PostContentService {
       // Log full error details to help diagnose auth vs backend issues
       if (e is ApiException) {
         debugPrint('📡 [FeedAPI] /posts FAILED: $e');
-        debugPrint('📡 [FeedAPI]   status=${e.statusCode}, kind=${e.kind}, code=${e.code}');
+        debugPrint(
+          '📡 [FeedAPI]   status=${e.statusCode}, kind=${e.kind}, code=${e.code}',
+        );
         debugPrint('📡 [FeedAPI]   data=${e.data}');
 
         // Retry once after 1s on 5xx server errors (transient gateway issues)
@@ -322,7 +354,9 @@ class PostContentService {
       debugPrint('📦 [TrendingPosts] RAW type: ${response.runtimeType}');
       return _parsePostsList(response, tag: 'TrendingPosts');
     } catch (e) {
-      debugPrint('⚠️ [PostContent] Failed to fetch trending posts (/posts/trending): $e');
+      debugPrint(
+        '⚠️ [PostContent] Failed to fetch trending posts (/posts/trending): $e',
+      );
       return const <PostResponseModel>[];
     }
   }
@@ -337,27 +371,29 @@ class PostContentService {
       _client.authToken = authToken;
     }
     debugPrint(
-        '🚀 [PostContent] Fetching For You Feed (GET ${ApiEndpoints.feedForYou})');
+      '🚀 [PostContent] Fetching For You Feed (GET ${ApiEndpoints.feedForYou})',
+    );
     try {
       final dynamic response = await _client.get(
         ApiEndpoints.feedForYou,
         useCache: false,
       );
-      // ── DEBUG: Print raw For You feed response ──────────────────────────
-      debugPrint('📦 [ForYouFeed] RAW response type: ${response.runtimeType}');
-      if (response is Map) {
-        debugPrint('📦 [ForYouFeed] Top-level keys: ${response.keys.toList()}');
-        final dynamic data = response['data'];
-        if (data is Map) {
-          debugPrint('📦 [ForYouFeed] data keys: ${data.keys.toList()}');
-        } else if (data is List) {
-          debugPrint('📦 [ForYouFeed] data is List, length: ${data.length}');
-        }
-      } else if (response is List) {
-        debugPrint('📦 [ForYouFeed] response is List, length: ${response.length}');
+
+      debugPrint(
+        '[VIDEO_FEED] 📦 For You feed — EXACT raw response (${response.runtimeType}):\n$response',
+      );
+      final List<PostResponseModel> posts = _parsePostsList(
+        response,
+        tag: 'ForYouFeed',
+      );
+      debugPrint(
+        '[VIDEO_FEED] 📦 For You feed — parsed ${posts.length} posts. mediaRefs per post:',
+      );
+      for (final PostResponseModel p in posts) {
+        debugPrint(
+          '[VIDEO_FEED]    id=${p.id} type=${p.type} mediaRefs=${p.mediaRefs} videoUrl=${p.videoUrl} thumbnailUrl=${p.thumbnailUrl} postImageUrl=${p.postImageUrl}',
+        );
       }
-      // ───────────────────────────────────────────────────────────────────
-      final List<PostResponseModel> posts = _parsePostsList(response, tag: 'ForYouFeed');
       return posts;
     } catch (e) {
       debugPrint('⚠️ [PostContent] Failed to fetch for-you feed: $e');
@@ -372,19 +408,29 @@ class PostContentService {
       return const <PostResponseModel>[];
     }
     debugPrint(
-        '🚀 [PostContent] Fetching Following Feed (GET ${ApiEndpoints.feedFollowing})');
+      '🚀 [PostContent] Fetching Following Feed (GET ${ApiEndpoints.feedFollowing})',
+    );
     try {
-      final dynamic response =
-          await _client.get(ApiEndpoints.feedFollowing, useCache: false);
-      // ── DEBUG: Print raw Following feed response ────────────────────────
-      debugPrint('📦 [FollowingFeed] RAW type: ${response.runtimeType}');
-      if (response is Map) {
-        debugPrint('📦 [FollowingFeed] keys: ${response.keys.toList()}');
-      } else if (response is List) {
-        debugPrint('📦 [FollowingFeed] list length: ${response.length}');
+      final dynamic response = await _client.get(
+        ApiEndpoints.feedFollowing,
+        useCache: false,
+      );
+      debugPrint(
+        '[VIDEO_FEED] 📦 Following feed — EXACT raw response (${response.runtimeType}):\n$response',
+      );
+      final List<PostResponseModel> posts = _parsePostsList(
+        response,
+        tag: 'FollowingFeed',
+      );
+      debugPrint(
+        '[VIDEO_FEED] 📦 Following feed — parsed ${posts.length} posts. mediaRefs per post:',
+      );
+      for (final PostResponseModel p in posts) {
+        debugPrint(
+          '[VIDEO_FEED]    id=${p.id} type=${p.type} mediaRefs=${p.mediaRefs} videoUrl=${p.videoUrl} thumbnailUrl=${p.thumbnailUrl} postImageUrl=${p.postImageUrl}',
+        );
       }
-      // ───────────────────────────────────────────────────────────────────
-      return _parsePostsList(response, tag: 'FollowingFeed');
+      return posts;
     } catch (e) {
       debugPrint('⚠️ [PostContent] Failed to fetch following feed: $e');
       return const <PostResponseModel>[];
@@ -422,7 +468,8 @@ class PostContentService {
       if (cached is List && cached.isNotEmpty) {
         for (final dynamic item in cached) {
           if (item is Map) {
-            final String? id = item['id']?.toString() ?? item['_id']?.toString();
+            final String? id =
+                item['id']?.toString() ?? item['_id']?.toString();
             if (id != null && id.trim().isNotEmpty) {
               communityIds.add(id.trim());
             }
@@ -432,15 +479,17 @@ class PostContentService {
 
       if (communityIds.isEmpty) {
         try {
-          final dynamic commsRes =
-              await _client.get(ApiEndpoints.communities, useCache: true);
+          final dynamic commsRes = await _client.get(
+            ApiEndpoints.communities,
+            useCache: true,
+          );
           final List<dynamic> list = (commsRes is List)
               ? commsRes
               : (commsRes is Map
-                  ? ((commsRes['data'] ?? commsRes['communities'])
-                          as List<dynamic>? ??
-                      <dynamic>[])
-                  : <dynamic>[]);
+                    ? ((commsRes['data'] ?? commsRes['communities'])
+                              as List<dynamic>? ??
+                          <dynamic>[])
+                    : <dynamic>[]);
           for (final dynamic item in list) {
             if (item is Map) {
               final String? id =
@@ -452,16 +501,19 @@ class PostContentService {
           }
         } catch (e) {
           debugPrint(
-              '⚠️ [PostContentService] Failed to fetch communities for all-posts: $e');
+            '⚠️ [PostContentService] Failed to fetch communities for all-posts: $e',
+          );
         }
       }
 
       // 2. Fetch posts per community in parallel (these include authenticated `likedByMe` and full author)
       if (communityIds.isNotEmpty) {
-        final List<List<PostResponseModel>> perCommResults =
-            await Future.wait(
-          communityIds.map((String cid) => getPostsByCommunity(cid)
-              .catchError((_) => <PostResponseModel>[])),
+        final List<List<PostResponseModel>> perCommResults = await Future.wait(
+          communityIds.map(
+            (String cid) => getPostsByCommunity(
+              cid,
+            ).catchError((_) => <PostResponseModel>[]),
+          ),
         );
 
         final Map<String, PostResponseModel> postMap =
@@ -486,16 +538,19 @@ class PostContentService {
 
         final List<PostResponseModel> combined = postMap.values.toList();
         combined.sort((PostResponseModel a, PostResponseModel b) {
-          final DateTime dtA = DateTime.tryParse(a.createdAt ?? '') ??
+          final DateTime dtA =
+              DateTime.tryParse(a.createdAt ?? '') ??
               DateTime.fromMillisecondsSinceEpoch(0);
-          final DateTime dtB = DateTime.tryParse(b.createdAt ?? '') ??
+          final DateTime dtB =
+              DateTime.tryParse(b.createdAt ?? '') ??
               DateTime.fromMillisecondsSinceEpoch(0);
           return dtB.compareTo(dtA);
         });
 
         if (combined.isNotEmpty) {
           debugPrint(
-              '🏘️ [PostContentService] getAllCommunityPosts fetched ${combined.length} posts across ${communityIds.length} communities');
+            '🏘️ [PostContentService] getAllCommunityPosts fetched ${combined.length} posts across ${communityIds.length} communities',
+          );
           return combined;
         }
       }
@@ -507,7 +562,10 @@ class PostContentService {
     return await getFeedPosts();
   }
 
-  List<PostResponseModel> _parsePostsList(dynamic response, {String tag = 'Posts'}) {
+  List<PostResponseModel> _parsePostsList(
+    dynamic response, {
+    String tag = 'Posts',
+  }) {
     List<dynamic> rawList = <dynamic>[];
     if (response is List) {
       rawList = response;
@@ -577,16 +635,19 @@ class PostContentService {
             continue;
           }
           final Map<String, dynamic> rawMap = item.map<String, dynamic>(
-            (dynamic k, dynamic v) => MapEntry<String, dynamic>(k.toString(), v),
+            (dynamic k, dynamic v) =>
+                MapEntry<String, dynamic>(k.toString(), v),
           );
-          final dynamic nested = rawMap['post'] ??
+          final dynamic nested =
+              rawMap['post'] ??
               rawMap['item'] ??
               rawMap['savedPost'] ??
               rawMap['likedPost'] ??
               rawMap['like'];
           final Map<String, dynamic> typed = (nested is Map)
               ? nested.map<String, dynamic>(
-                  (dynamic k, dynamic v) => MapEntry<String, dynamic>(k.toString(), v),
+                  (dynamic k, dynamic v) =>
+                      MapEntry<String, dynamic>(k.toString(), v),
                 )
               : rawMap;
 
@@ -724,18 +785,20 @@ class PostContentService {
     if (AppConfig.useMockApi) return const <dynamic>[];
     dynamic response;
     try {
-      response =
-          await _client.get(ApiEndpoints.postComments(postId), useCache: false);
+      response = await _client.get(
+        ApiEndpoints.postComments(postId),
+        useCache: false,
+      );
     } catch (e) {
       debugPrint(
-          '⚠️ [PostContentService] getComments with auth failed: $e. Falling back to getNoAuth...');
+        '⚠️ [PostContentService] getComments with auth failed: $e. Falling back to getNoAuth...',
+      );
       try {
-        response = await _client.getNoAuth(
-          ApiEndpoints.postComments(postId),
-        );
+        response = await _client.getNoAuth(ApiEndpoints.postComments(postId));
       } catch (fallbackError) {
         debugPrint(
-            '⚠️ [PostContentService] getComments getNoAuth failed: $fallbackError');
+          '⚠️ [PostContentService] getComments getNoAuth failed: $fallbackError',
+        );
         return const <dynamic>[];
       }
     }
@@ -774,7 +837,9 @@ class PostContentService {
           return;
         } catch (_) {}
       }
-      debugPrint('⚠️ [PostContentService] Failed to like comment $commentId: $e');
+      debugPrint(
+        '⚠️ [PostContentService] Failed to like comment $commentId: $e',
+      );
       rethrow;
     }
   }
@@ -792,7 +857,9 @@ class PostContentService {
           return;
         } catch (_) {}
       }
-      debugPrint('⚠️ [PostContentService] Failed to unlike comment $commentId: $e');
+      debugPrint(
+        '⚠️ [PostContentService] Failed to unlike comment $commentId: $e',
+      );
       rethrow;
     }
   }
@@ -805,7 +872,9 @@ class PostContentService {
       await _client.delete(ApiEndpoints.comment(commentId));
       return;
     } catch (e) {
-      debugPrint('⚠️ [PostContent] DELETE /comment/$commentId failed: $e, trying /comments/$commentId');
+      debugPrint(
+        '⚠️ [PostContent] DELETE /comment/$commentId failed: $e, trying /comments/$commentId',
+      );
     }
 
     try {
@@ -820,14 +889,18 @@ class PostContentService {
         await _client.delete('/posts/$postId/comments/$commentId');
         return;
       } catch (e) {
-        debugPrint('⚠️ [PostContent] DELETE /posts/$postId/comments/$commentId failed: $e');
+        debugPrint(
+          '⚠️ [PostContent] DELETE /posts/$postId/comments/$commentId failed: $e',
+        );
       }
 
       try {
         await _client.delete('/posts/$postId/comment/$commentId');
         return;
       } catch (e) {
-        debugPrint('⚠️ [PostContent] DELETE /posts/$postId/comment/$commentId failed: $e');
+        debugPrint(
+          '⚠️ [PostContent] DELETE /posts/$postId/comment/$commentId failed: $e',
+        );
       }
     }
   }
@@ -835,7 +908,8 @@ class PostContentService {
   // ── List Posts by Community ───────────────────────────────────────────────
   // GET /posts?communityId=:communityId
   Future<List<PostResponseModel>> getPostsByCommunity(
-      String communityId) async {
+    String communityId,
+  ) async {
     if (AppConfig.useMockApi) return const <PostResponseModel>[];
     try {
       final dynamic response = await _client.get(
@@ -862,8 +936,10 @@ class PostContentService {
   Future<List<PostResponseModel>> getLikedPosts() async {
     if (AppConfig.useMockApi) return const <PostResponseModel>[];
     try {
-      final dynamic response =
-          await _client.get(ApiEndpoints.userLikes, useCache: false);
+      final dynamic response = await _client.get(
+        ApiEndpoints.userLikes,
+        useCache: false,
+      );
       debugPrint('📦 [UserLikes] RAW type: ${response.runtimeType}');
       return _parsePostsList(response, tag: 'UserLikes');
     } catch (e) {
@@ -877,8 +953,10 @@ class PostContentService {
   Future<List<PostResponseModel>> getSavedPosts() async {
     if (AppConfig.useMockApi) return const <PostResponseModel>[];
     try {
-      final dynamic response =
-          await _client.get(ApiEndpoints.userSaved, useCache: false);
+      final dynamic response = await _client.get(
+        ApiEndpoints.userSaved,
+        useCache: false,
+      );
       debugPrint('📦 [UserSaved] RAW type: ${response.runtimeType}');
       return _parsePostsList(response, tag: 'UserSaved');
     } catch (e) {

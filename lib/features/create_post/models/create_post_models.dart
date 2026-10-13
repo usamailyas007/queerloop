@@ -302,6 +302,7 @@ class PostResponseModel {
     this.duration,
     this.postImageUrl,
     this.thumbnailUrl,
+    this.videoUrl,
     this.status,
     this.deletedAt,
   });
@@ -336,6 +337,11 @@ class PostResponseModel {
   final String? duration;
   final String? postImageUrl;
   final String? thumbnailUrl;
+  /// Direct, ready-to-play video URL (e.g. a fast-start MP4) the backend
+  /// may provide alongside [mediaRefs]. Preferred over reconstructing an
+  /// HLS URL from mediaRefs when present and non-empty — see
+  /// `_buildReelItem` in home_feed_provider.dart.
+  final String? videoUrl;
   final String? status;
   final String? deletedAt;
 
@@ -377,6 +383,7 @@ class PostResponseModel {
     String? duration,
     String? postImageUrl,
     String? thumbnailUrl,
+    String? videoUrl,
     String? status,
     String? deletedAt,
   }) {
@@ -411,6 +418,7 @@ class PostResponseModel {
       duration: duration ?? this.duration,
       postImageUrl: postImageUrl ?? this.postImageUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      videoUrl: videoUrl ?? this.videoUrl,
       status: status ?? this.status,
       deletedAt: deletedAt ?? this.deletedAt,
     );
@@ -1014,6 +1022,10 @@ class PostResponseModel {
           }
         }
         return resolvedThumb;
+      }(),
+      videoUrl: () {
+        final String? raw = map['videoUrl']?.toString().trim();
+        return (raw == null || raw.isEmpty) ? null : raw;
       }(),
       status: map['status']?.toString(),
       deletedAt: map['deletedAt']?.toString() ?? map['deleted_at']?.toString(),

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -74,6 +76,16 @@ class _ReelFeedCardState extends State<ReelFeedCard>
   bool _isPaused = false;
   bool _isDisposed = false;
   bool _isCoveredByRoute = false;
+
+  /// Restarts playback from the beginning. Used whenever this reel *becomes*
+  /// the active one (freshly scrolled to, or opened for the first time) so
+  /// it never resumes mid-way from a stale position left over from a
+  /// previous time it was active — unlike a simple tap-to-resume or an
+  /// app-lifecycle resume, which should continue from where they left off.
+  void _playFromStart(VideoPlayerController controller) {
+    controller.seekTo(Duration.zero);
+    controller.play();
+  }
 
   bool get _canPlayAudio =>
       widget.isActive &&
@@ -179,7 +191,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
             !_isCoveredByRoute &&
             ReelVideoPreloader.instance.isFeedVisible) {
           ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
-          existing.play();
+          _playFromStart(existing);
         } else {
           existing.pause();
           existing.setVolume(0);
@@ -202,7 +214,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
           !_isCoveredByRoute &&
           ReelVideoPreloader.instance.isFeedVisible) {
         ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
-        existing.play();
+        _playFromStart(existing);
       } else {
         existing.pause();
         existing.setVolume(0);
@@ -229,7 +241,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
               !_isCoveredByRoute &&
               ReelVideoPreloader.instance.isFeedVisible) {
             ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
-            controller.play();
+            _playFromStart(controller);
           } else {
             controller.pause();
             controller.setVolume(0);
@@ -255,7 +267,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                   !_isCoveredByRoute &&
                   ReelVideoPreloader.instance.isFeedVisible) {
                 ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
-                controller.play();
+                _playFromStart(controller);
               } else {
                 controller.pause();
                 controller.setVolume(0);
@@ -308,7 +320,7 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         if (_videoInitialized && _videoController != null) {
           if (!_isCoveredByRoute) {
             ReelVideoPreloader.instance.muteAllExcept(widget.reel.id);
-            _videoController?.play();
+            _playFromStart(_videoController!);
           } else {
             _videoController?.pause();
             _videoController?.setVolume(0);
@@ -571,9 +583,13 @@ class _ReelFeedCardState extends State<ReelFeedCard>
         ? AuthorProfileCache.get(reelAuthorId)
         : null;
     final bool authorHidesLikes =
-        item.hideLikes || item.hideMyLikes || !item.hasLikeCount || (cachedAuthor?.hideMyLikes == true);
+        item.hideLikes ||
+        item.hideMyLikes ||
+        !item.hasLikeCount ||
+        (cachedAuthor?.hideMyLikes == true);
     final bool myProfileHidesLikes = profileProvider.hideMyLikes;
-    final bool shouldHideLikes = !item.hasLikeCount ||
+    final bool shouldHideLikes =
+        !item.hasLikeCount ||
         item.hideLikes ||
         item.hideMyLikes ||
         authorHidesLikes ||
@@ -636,17 +652,6 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                   child: VideoPlayer(_videoController!),
                 ),
               ),
-            )
-          else if (widget.isActive)
-            const Center(
-              child: SizedBox(
-                width: 32,
-                height: 32,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
-                ),
-              ),
             ),
 
           // ── 2. Top & Bottom Dark Gradient Overlay ─────────────────────────
@@ -704,6 +709,16 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                 bufferedColor: Colors.white24,
                 backgroundColor: Colors.white12,
               ),
+            )
+          else if (widget.isActive)
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _VideoLoadingBar(
+                trackColor: Colors.white12,
+                highlightColor: Colors.white70,
+              ),
             ),
 
           // ── 6. Right Side Action Bar ───────────────────────────────────────
@@ -716,7 +731,11 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                 // Like
                 _RightActionButton(
                   onTap: widget.onLikeToggle,
-                  label: (shouldHideLikes || !item.hasLikeCount || item.hideLikes || item.hideMyLikes)
+                  label:
+                      (shouldHideLikes ||
+                          !item.hasLikeCount ||
+                          item.hideLikes ||
+                          item.hideMyLikes)
                       ? ''
                       : '${item.likesCount}',
                   child: Image.asset(
@@ -929,155 +948,94 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                 const SizedBox(height: 6),
 
                 // User info row
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    GestureDetector(
-                      onTap: () {
-                        ReelVideoPreloader.instance.pauseAll();
-                        final AuthProvider auth = context.read<AuthProvider>();
-                        final String? currentUserId = auth.userId;
-                        final String? authorId = item.authorId;
+                LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints constraints) {
+                    final AppLocalizations l10n = AppLocalizations.of(context);
+                    final String displayName =
+                        (item.authorDisplayName != null &&
+                            item.authorDisplayName!.trim().isNotEmpty)
+                        ? item.authorDisplayName!.trim()
+                        : item.username;
+                    final bool showUsername =
+                        item.authorDisplayName != null &&
+                        item.authorDisplayName!.trim().isNotEmpty &&
+                        item.authorDisplayName!.trim().toLowerCase() !=
+                            item.username
+                                .replaceAll('@', '')
+                                .trim()
+                                .toLowerCase();
 
-                        final bool isCurrentUser =
-                            authorId != null &&
-                            currentUserId != null &&
-                            authorId.trim().toLowerCase() ==
-                                currentUserId.trim().toLowerCase();
+                    double measureTextWidth(String text, TextStyle style) {
+                      final TextPainter painter = TextPainter(
+                        text: TextSpan(text: text, style: style),
+                        textDirection: TextDirection.ltr,
+                        maxLines: 1,
+                      )..layout();
+                      return painter.width;
+                    }
 
-                        ReelVideoPreloader.instance.setFeedVisible(false);
-                        ReelVideoPreloader.instance.pauseAll();
-                        ReelVideoPreloader.instance.muteAll();
-                        if (isCurrentUser) {
-                          if (widget.isProfileScreen) {
-                            Navigator.pop(context);
-                            return;
-                          }
-                          Navigator.push<void>(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) => const ProfileTabScreen(),
-                            ),
-                          );
-                        } else {
-                          final String resolvedProfileVis =
-                              (item.profileVisibility.isNotEmpty && item.profileVisibility != 'everyone')
-                                  ? item.profileVisibility
-                                  : (cachedAuthor?.profileVisibility ?? 'everyone');
-                          final String resolvedAllowMsgs =
-                              (item.allowMessagesFrom.isNotEmpty && item.allowMessagesFrom != 'everyone')
-                                  ? item.allowMessagesFrom
-                                  : (cachedAuthor?.allowMessagesFrom ?? 'everyone');
+                    const TextStyle nameStyle = TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    );
+                    const TextStyle usernameStyle = TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                    );
+                    const TextStyle followStyle = TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    );
 
-                          Navigator.push<void>(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) => UserProfileScreen(
-                                userId: item.authorId,
-                                username: item.username.replaceAll('@', ''),
-                                name:
-                                    (item.authorDisplayName != null &&
-                                        item.authorDisplayName!.isNotEmpty)
-                                    ? item.authorDisplayName!
-                                    : item.username
-                                          .replaceAll('@', '')
-                                          .split('.')
-                                          .first,
-                                avatarAsset: item.avatarAsset,
-                                isPrivate: item.isAuthorPrivate || (cachedAuthor?.isPrivate == true),
-                                profileVisibility: resolvedProfileVis,
-                                allowMessagesFrom: resolvedAllowMsgs,
-                                allowCommentsFrom: item.allowCommentsFrom,
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Builder(
-                            builder: (BuildContext context) {
-                              final String resolvedProfileVis =
-                                  (item.profileVisibility.isNotEmpty && item.profileVisibility != 'everyone')
-                                      ? item.profileVisibility
-                                      : (cachedAuthor?.profileVisibility ?? 'everyone');
-                              final bool canSeeAvatar = isOwnReel ||
-                                  UserPrivacyPolicy.canViewProfilePhoto(
-                                    profileVisibility: resolvedProfileVis,
-                                    targetUserId: item.authorId,
-                                    targetUsername: item.username,
-                                  );
-                              final String displayAvatar =
-                                  canSeeAvatar ? item.avatarAsset : AppImages.defaultAvatar;
-                              return AppUserAvatar(imageAsset: displayAvatar, size: 38);
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: <Widget>[
-                                  Flexible(
-                                    child: Text(
-                                      (item.authorDisplayName != null &&
-                                              item.authorDisplayName!
-                                                  .trim()
-                                                  .isNotEmpty)
-                                          ? item.authorDisplayName!.trim()
-                                          : item.username,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w700,
-                                        shadows: <Shadow>[
-                                          Shadow(
-                                            color: Colors.black54,
-                                            blurRadius: 4,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  if (item.authorDisplayName != null &&
-                                      item.authorDisplayName!
-                                          .trim()
-                                          .isNotEmpty &&
-                                      item.authorDisplayName!
-                                              .trim()
-                                              .toLowerCase() !=
-                                          item.username
-                                              .replaceAll('@', '')
-                                              .trim()
-                                              .toLowerCase()) ...<Widget>[
-                                    const SizedBox(width: 6),
-                                    Flexible(
-                                      child: Text(
-                                        item.username,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w400,
-                                          shadows: <Shadow>[
-                                            Shadow(
-                                              color: Colors.black54,
-                                              blurRadius: 4,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              Text(
+                    final double nameWidth = measureTextWidth(
+                      displayName,
+                      nameStyle,
+                    );
+                    final double usernameWidth = showUsername
+                        ? measureTextWidth(item.username, usernameStyle)
+                        : 0;
+                    // Use the longer of "Follow"/"Following" so the layout
+                    // doesn't jump between inline/wrapped when the state
+                    // toggles after a tap.
+                    final double followLabelWidth = math.max(
+                      measureTextWidth('Follow', followStyle),
+                      measureTextWidth(l10n.homeFollowing, followStyle),
+                    );
+                    // Pill horizontal padding (16 * 2) + border allowance.
+                    final double followButtonWidth = followLabelWidth + 34;
+
+                    const double avatarAndSpacing = 46; // 38 avatar + 8 gap
+                    const double usernameSpacing = 6;
+                    const double followSpacing = 12;
+
+                    final double neededWidth =
+                        avatarAndSpacing +
+                        nameWidth +
+                        (showUsername ? usernameSpacing + usernameWidth : 0) +
+                        (isOwnReel ? 0 : followSpacing + followButtonWidth);
+
+                    final bool fitsInline =
+                        isOwnReel || neededWidth <= constraints.maxWidth;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        _buildUserRow(
+                          context: context,
+                          item: item,
+                          isOwnReel: isOwnReel,
+                          cachedAuthor: cachedAuthor,
+                          includeFollowButton: fitsInline,
+                        ),
+                        // const SizedBox(height: 4),
+                        Row(
+                          children: <Widget>[
+                            const SizedBox(width: avatarAndSpacing),
+                            Expanded(
+                              child: Text(
                                 item.pronounsTime,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 11,
@@ -1089,20 +1047,20 @@ class _ReelFeedCardState extends State<ReelFeedCard>
                                   ],
                                 ),
                               ),
+                            ),
+                            if (!isOwnReel && !fitsInline) ...<Widget>[
+                              const SizedBox(width: followSpacing),
+                              AppFollowButton(
+                                isFollowing: item.isFollowing,
+                                isOverMedia: true,
+                                onTap: widget.onFollowToggle,
+                              ),
                             ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (!isOwnReel) ...<Widget>[
-                      const SizedBox(width: 12),
-                      AppFollowButton(
-                        isFollowing: item.isFollowing,
-                        isOverMedia: true,
-                        onTap: widget.onFollowToggle,
-                      ),
-                    ],
-                  ],
+                          ],
+                        ),
+                      ],
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 6),
@@ -1124,6 +1082,155 @@ class _ReelFeedCardState extends State<ReelFeedCard>
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserRow({
+    required BuildContext context,
+    required ReelItemModel item,
+    required bool isOwnReel,
+    required AuthorInfo? cachedAuthor,
+    required bool includeFollowButton,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        ReelVideoPreloader.instance.pauseAll();
+        final AuthProvider auth = context.read<AuthProvider>();
+        final String? currentUserId = auth.userId;
+        final String? authorId = item.authorId;
+
+        final bool isCurrentUser =
+            authorId != null &&
+            currentUserId != null &&
+            authorId.trim().toLowerCase() == currentUserId.trim().toLowerCase();
+
+        ReelVideoPreloader.instance.setFeedVisible(false);
+        ReelVideoPreloader.instance.pauseAll();
+        ReelVideoPreloader.instance.muteAll();
+        if (isCurrentUser) {
+          if (widget.isProfileScreen) {
+            Navigator.pop(context);
+            return;
+          }
+          Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(builder: (_) => const ProfileTabScreen()),
+          );
+        } else {
+          final String resolvedProfileVis =
+              (item.profileVisibility.isNotEmpty &&
+                  item.profileVisibility != 'everyone')
+              ? item.profileVisibility
+              : (cachedAuthor?.profileVisibility ?? 'everyone');
+          final String resolvedAllowMsgs =
+              (item.allowMessagesFrom.isNotEmpty &&
+                  item.allowMessagesFrom != 'everyone')
+              ? item.allowMessagesFrom
+              : (cachedAuthor?.allowMessagesFrom ?? 'everyone');
+
+          Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => UserProfileScreen(
+                userId: item.authorId,
+                username: item.username.replaceAll('@', ''),
+                name:
+                    (item.authorDisplayName != null &&
+                        item.authorDisplayName!.isNotEmpty)
+                    ? item.authorDisplayName!
+                    : item.username.replaceAll('@', '').split('.').first,
+                avatarAsset: item.avatarAsset,
+                isPrivate:
+                    item.isAuthorPrivate || (cachedAuthor?.isPrivate == true),
+                profileVisibility: resolvedProfileVis,
+                allowMessagesFrom: resolvedAllowMsgs,
+                allowCommentsFrom: item.allowCommentsFrom,
+              ),
+            ),
+          );
+        }
+      },
+      child: Row(
+        children: <Widget>[
+          Builder(
+            builder: (BuildContext context) {
+              final String resolvedProfileVis =
+                  (item.profileVisibility.isNotEmpty &&
+                      item.profileVisibility != 'everyone')
+                  ? item.profileVisibility
+                  : (cachedAuthor?.profileVisibility ?? 'everyone');
+              final bool canSeeAvatar =
+                  isOwnReel ||
+                  UserPrivacyPolicy.canViewProfilePhoto(
+                    profileVisibility: resolvedProfileVis,
+                    targetUserId: item.authorId,
+                    targetUsername: item.username,
+                  );
+              final String displayAvatar = canSeeAvatar
+                  ? item.avatarAsset
+                  : AppImages.defaultAvatar;
+              return AppUserAvatar(imageAsset: displayAvatar, size: 38);
+            },
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Row(
+              children: <Widget>[
+                Flexible(
+                  child: Text(
+                    (item.authorDisplayName != null &&
+                            item.authorDisplayName!.trim().isNotEmpty)
+                        ? item.authorDisplayName!.trim()
+                        : item.username,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      shadows: <Shadow>[
+                        Shadow(color: Colors.black54, blurRadius: 4),
+                      ],
+                    ),
+                  ),
+                ),
+                if (item.authorDisplayName != null &&
+                    item.authorDisplayName!.trim().isNotEmpty &&
+                    item.authorDisplayName!.trim().toLowerCase() !=
+                        item.username
+                            .replaceAll('@', '')
+                            .trim()
+                            .toLowerCase()) ...<Widget>[
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      item.username,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        shadows: <Shadow>[
+                          Shadow(color: Colors.black54, blurRadius: 4),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (includeFollowButton && !isOwnReel) ...<Widget>[
+            const SizedBox(width: 12),
+            AppFollowButton(
+              isFollowing: item.isFollowing,
+              isOverMedia: true,
+              onTap: widget.onFollowToggle,
+            ),
+          ],
         ],
       ),
     );
@@ -1161,6 +1268,92 @@ class _RightActionButton extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// TikTok/Instagram-style indeterminate loading bar shown in place of the
+/// scrub bar while the video is still initializing — a soft highlight
+/// sweeps left-to-right across the track instead of a center spinner, so
+/// the bar occupies the exact slot the real progress indicator will take
+/// over once playback is ready (no layout jump).
+class _VideoLoadingBar extends StatefulWidget {
+  const _VideoLoadingBar({
+    required this.trackColor,
+    required this.highlightColor,
+  });
+
+  final Color trackColor;
+  final Color highlightColor;
+
+  @override
+  State<_VideoLoadingBar> createState() => _VideoLoadingBarState();
+}
+
+class _VideoLoadingBarState extends State<_VideoLoadingBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 14,
+      alignment: Alignment.bottomCenter,
+      color: Colors.transparent,
+      child: SizedBox(
+        height: 2.5,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double width = constraints.maxWidth;
+            const double segmentFraction = 0.35;
+            final double segmentWidth = width * segmentFraction;
+            final double travel = width + segmentWidth;
+            return Stack(
+              children: <Widget>[
+                Container(width: width, color: widget.trackColor),
+                AnimatedBuilder(
+                  animation: _controller,
+                  builder: (BuildContext context, Widget? child) {
+                    final double left = -segmentWidth + _controller.value * travel;
+                    return Positioned(
+                      left: left,
+                      width: segmentWidth,
+                      top: 0,
+                      bottom: 0,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: <Color>[
+                              widget.trackColor,
+                              widget.highlightColor,
+                              widget.trackColor,
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

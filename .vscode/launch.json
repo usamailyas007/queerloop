@@ -17,6 +17,13 @@
       "args": ["--dart-define-from-file", "env/prod.json"]
     },
     {
+      "name": "App (prod) — Debug",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": ["--dart-define-from-file", "env/prod.json"]
+    },
+    {
       "name": "Admin (staging) — Chrome",
       "request": "launch",
       "type": "dart",

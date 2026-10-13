@@ -513,7 +513,24 @@ class HomeFeedProvider extends ChangeNotifier {
     String? videoUrl;
     String? thumbnailUrl;
 
-    if (post.mediaRefs.isNotEmpty) {
+    // Prefer the backend-provided direct video URL (a fast-start MP4) when
+    // present — it's plain progressive playback, not HLS, so it starts
+    // faster (no master/sub-playlist round trips) and benefits from the
+    // existing local-disk caching path (non-HLS downloads were never the
+    // part that broke — see VideoCacheService). Only fall back to
+    // reconstructing an HLS URL from mediaRefs when the backend hasn't
+    // supplied this field for a given post (e.g. older, non-backfilled
+    // uploads).
+    if (post.videoUrl != null && post.videoUrl!.trim().isNotEmpty) {
+      videoUrl = post.videoUrl!.trim();
+      thumbnailUrl = (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty)
+          ? post.thumbnailUrl
+          : (post.postImageUrl != null &&
+                  !post.postImageUrl!.endsWith('.mp4') &&
+                  !post.postImageUrl!.endsWith('.m3u8'))
+              ? post.postImageUrl
+              : null;
+    } else if (post.mediaRefs.isNotEmpty) {
       final String mediaId = post.mediaRefs.first.trim();
       if (mediaId.startsWith('http://') || mediaId.startsWith('https://')) {
         videoUrl = mediaId;
@@ -560,6 +577,11 @@ class HomeFeedProvider extends ChangeNotifier {
         videoUrl != null &&
         videoUrl.contains('/videos/processed/')) {
       thumbnailUrl = videoUrl.replaceAll(RegExp(r'/master\.m3u8.*$'), '/thumb.0000000.jpg');
+    }
+
+    if (post.type == 'VIDEO') {
+      debugPrint(
+          '[VIDEO_FEED] 🎬 Resolved reel id=${post.id} rawMediaRefs=${post.mediaRefs} backendVideoUrl=${post.videoUrl} -> videoUrl=$videoUrl thumbnailUrl=$thumbnailUrl');
     }
 
     final bool isLiked = PostInteractionRegistry.isLiked(
